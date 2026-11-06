@@ -11,20 +11,28 @@
   header{background:#fff;border-bottom:1px solid #d8dce3;padding:12px 16px;font-weight:700;font-size:18px}
   main{padding:12px;max-width:560px;margin:0 auto}
   .card{background:#fff;border:1px solid #d8dce3;border-radius:10px;padding:14px;margin-bottom:12px}
-  .big{font-size:110px;font-weight:800;text-align:center;line-height:1;margin:6px 0;font-variant-numeric:tabular-nums}
+  .big{font-size:100px;font-weight:800;text-align:center;line-height:1;margin:6px 0;font-variant-numeric:tabular-nums}
   .sub{text-align:center;color:#5a6474;font-size:15px}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   button{font:inherit;font-weight:600;border:1px solid #b9c0cc;background:#fff;border-radius:8px;padding:12px 14px;font-size:16px}
   button.go{background:#1f8a3b;border-color:#1f8a3b;color:#fff;flex:1;font-size:20px;padding:16px}
   button.stop{background:#c0392b;border-color:#c0392b;color:#fff;flex:1;font-size:20px;padding:16px}
   button.blue{background:#1d5fbf;border-color:#1d5fbf;color:#fff}
+  .seg{display:flex;border:1px solid #b9c0cc;border-radius:8px;overflow:hidden}
+  .seg button{flex:1;border:0;border-radius:0;padding:10px 6px;font-size:15px}
+  .seg button.on{background:#1d5fbf;color:#fff}
   label{font-size:14px;color:#5a6474}
   input[type=number]{font:inherit;font-size:18px;width:80px;padding:8px;border:1px solid #b9c0cc;border-radius:6px}
-  input[type=range]{width:100%}
-  .bar{position:relative;height:26px;background:#e9ecf1;border-radius:6px;overflow:hidden;margin-top:6px}
+  input[type=range]{width:100%;height:36px}
+  .step{display:flex;gap:6px;align-items:center}
+  .step button{padding:8px 14px;font-size:20px}
+  .bar{position:relative;height:30px;background:#e9ecf1;border-radius:6px;overflow:hidden;margin-top:6px}
   .bar .fill{position:absolute;left:0;top:0;bottom:0;background:#1d5fbf;width:0}
-  .bar .mark{position:absolute;top:0;bottom:0;width:3px;background:#c0392b}
+  .bar .peak{position:absolute;top:0;bottom:0;width:3px;background:#f0a500}
+  .bar .mark{position:absolute;top:0;bottom:0;width:4px;background:#c0392b}
   .bar .markup{position:absolute;top:0;bottom:0;width:3px;background:#1f8a3b}
+  .live{display:flex;justify-content:space-between;font-size:15px;margin-top:6px}
+  .live b{font-size:20px;font-variant-numeric:tabular-nums}
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{border:1px solid #c9ced8;padding:6px 8px;text-align:center}
   th{background:#eef1f5}
@@ -41,11 +49,30 @@
 <main>
 
   <div class="card">
+    <div class="seg" id="modeSeg">
+      <button data-mode="hand">✋ En main / contre le torse</button>
+      <button data-mode="pocket">👖 Dans la poche</button>
+    </div>
+    <p class="hint" id="modeHint"></p>
+
     <div class="big" id="count">0</div>
     <div class="sub">Série <b id="setNo">1</b> · objectif <b id="goalTxt">15</b> · total <b id="totalTxt">0</b></div>
     <div class="state" id="state">Prêt</div>
-    <div class="bar"><div class="fill" id="fill"></div><div class="markup" id="markUp"></div><div class="mark" id="markDown"></div></div>
-    <p class="hint">Barre bleue = flexion de ta cuisse. Trait rouge = profondeur à atteindre. Trait vert = remonté.</p>
+
+    <div class="bar"><div class="fill" id="fill"></div><div class="peak" id="peakMark"></div><div class="markup" id="markUp"></div><div class="mark" id="markDown"></div></div>
+    <div class="live"><span>Maintenant : <b id="nowVal">0</b></span><span>Dernière descente : <b id="peakVal">–</b></span></div>
+    <p class="hint">Bleu = mouvement actuel · Orange = ta dernière descente · <span style="color:#c0392b"><b>Rouge = seuil</b></span>. Si l'orange ne dépasse pas le rouge, baisse le seuil.</p>
+
+    <div style="margin-top:10px">
+      <label><b id="sensLabel">Seuil</b> : <b id="sensTxt"></b></label>
+      <div class="step">
+        <button id="sensMinus">−</button>
+        <input type="range" id="sens">
+        <button id="sensPlus">+</button>
+      </div>
+      <p class="hint" id="sensHint"></p>
+    </div>
+
     <div class="row" style="margin-top:10px">
       <button class="go" id="startBtn">▶ Démarrer</button>
     </div>
@@ -60,17 +87,13 @@
     <b>Réglages</b>
     <div class="row" style="margin-top:8px">
       <label>Objectif par série<br><input type="number" id="goal" min="1" value="15"></label>
-      <label>Compte à rebours (s)<br><input type="number" id="delay" min="0" value="5"></label>
+      <label>Compte à rebours (s)<br><input type="number" id="delay" min="0" value="3"></label>
     </div>
-    <div style="margin-top:10px">
-      <label>Profondeur demandée : <b id="depthTxt">60</b>°</label>
-      <input type="range" id="depth" min="25" max="85" value="60">
-    </div>
-    <div class="row" style="margin-top:6px">
+    <div class="row" style="margin-top:8px">
       <label><input type="checkbox" id="voice" checked> Annonce vocale</label>
       <label><input type="checkbox" id="vib" checked> Vibration</label>
+      <label><input type="checkbox" id="lockOpt"> Écran protégé pendant la séance (utile dans la poche)</label>
     </div>
-    <p class="hint">📱 Mets le téléphone <b>dans la poche avant du pantalon</b>, écran contre la cuisse. Au démarrage, reste <b>debout et immobile</b> pendant le compte à rebours : l'appli prend ta position de référence.</p>
   </div>
 
   <div class="card">
@@ -104,31 +127,69 @@
   function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
   let db = load();
   const st = db.settings || (db.settings = {});
+
+  // ---------- modes ----------
+  // hand  : mouvement vertical (accélération en m/s²) — téléphone/tablette tenu contre le torse
+  // pocket: angle de la cuisse (degrés) — téléphone dans la poche avant
+  const MODES = {
+    hand:   {label:'Sensibilité (plus petit = plus sensible)', unit:' m/s²', min:0.2, max:4,  step:0.1, def:1.0, scale:5,
+             hint:"Tiens le téléphone ou la tablette <b>à deux mains contre la poitrine</b>, ou glisse-le dans une poche de veste. Fais des squats normaux : l'appli sent la descente et la remontée.",
+             sens:"Fais 2-3 squats et regarde le chiffre orange. Mets le seuil un peu en dessous (environ 70 % de ce chiffre)."},
+    pocket: {label:'Profondeur demandée', unit:'°', min:10, max:85, step:1, def:45, scale:90,
+             hint:"Mets le téléphone <b>dans la poche avant du pantalon</b>. Au démarrage, reste <b>debout et immobile</b> pendant le compte à rebours.",
+             sens:"Fais 2-3 squats et regarde le chiffre orange. Mets le seuil un peu en dessous."}
+  };
+  let mode = st.mode || 'hand';
+  if(!st.sens) st.sens = {};
+
+  function applyMode(){
+    const M=MODES[mode];
+    [...$('modeSeg').children].forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+    $('modeHint').innerHTML=M.hint; $('sensHint').textContent=M.sens; $('sensLabel').textContent=M.label;
+    const s=$('sens'); s.min=M.min; s.max=M.max; s.step=M.step; s.value = st.sens[mode]!=null? st.sens[mode] : M.def;
+    $('markUp').style.display = mode==='pocket'?'block':'none';
+    lastPeak=null; $('peakVal').textContent='–'; $('peakMark').style.left='-10px';
+    refreshLabels();
+  }
+  $('modeSeg').addEventListener('click',e=>{
+    const m=e.target.dataset.mode; if(!m||m===mode) return;
+    if(running) stop();
+    mode=m; st.mode=m; if(m==='pocket' && st.lock==null) $('lockOpt').checked=true; save(); applyMode();
+  });
+
+  function thr(){ return +$('sens').value; }
+  function setSens(v){ const M=MODES[mode]; v=Math.round(Math.min(M.max,Math.max(M.min,v))/M.step)*M.step; $('sens').value=v; st.sens[mode]=+v; save(); refreshLabels(); }
+  $('sens').addEventListener('input',()=>setSens(+$('sens').value));
+  $('sensMinus').onclick=()=>setSens(thr()-MODES[mode].step);
+  $('sensPlus').onclick=()=>setSens(thr()+MODES[mode].step);
+
   if(st.goal) $('goal').value = st.goal;
   if(st.delay!=null) $('delay').value = st.delay;
-  if(st.depth) $('depth').value = st.depth;
   if(st.voice===false) $('voice').checked=false;
   if(st.vib===false) $('vib').checked=false;
+  $('lockOpt').checked = st.lock!=null ? st.lock : false;
   function saveSettings(){
-    st.goal=+$('goal').value||15; st.delay=+$('delay').value||0; st.depth=+$('depth').value;
-    st.voice=$('voice').checked; st.vib=$('vib').checked; save(); refreshLabels();
+    st.goal=+$('goal').value||15; st.delay=+$('delay').value||0;
+    st.voice=$('voice').checked; st.vib=$('vib').checked; st.lock=$('lockOpt').checked; save(); refreshLabels();
   }
-  ['goal','delay','depth','voice','vib'].forEach(id=>$(id).addEventListener('input',saveSettings));
+  ['goal','delay','voice','vib','lockOpt'].forEach(id=>$(id).addEventListener('input',saveSettings));
 
   // ---------- état ----------
-  let running=false, phase='up', count=0, sets=[], ref=null, g=null, angle=0, startTime=0, wakeLock=null, calibrating=false;
-  const UP_ANGLE = 20; // remonté si angle < 20°
+  let running=false, phase='up', count=0, sets=[], g=null, gSlow=null, lin=0, angle=0, ref=null, startTime=0, wakeLock=null;
+  let curPeak=0, lastPeak=null, lastRep=0;
+  const UP_ANGLE_RATIO = 0.35; // poche : remonté quand l'angle < 35 % du seuil
 
+  function fmt(v){ return mode==='hand'? v.toFixed(1) : Math.round(v)+'°'; }
+  function pct(v){ return Math.min(Math.max(v,0)/MODES[mode].scale,1)*100+'%'; }
   function refreshLabels(){
-    $('depthTxt').textContent=$('depth').value;
+    $('sensTxt').textContent = mode==='hand'? thr().toFixed(1)+' m/s²' : Math.round(thr())+'°';
     $('goalTxt').textContent=$('goal').value;
-    $('markDown').style.left = (Math.min(+$('depth').value,90)/90*100)+'%';
-    $('markUp').style.left = (UP_ANGLE/90*100)+'%';
+    $('markDown').style.left = pct(thr());
+    $('markUp').style.left = pct(thr()*UP_ANGLE_RATIO);
     $('count').textContent=count; $('lockCount').textContent=count;
     $('setNo').textContent=sets.length+1;
     $('totalTxt').textContent=sets.reduce((a,b)=>a+b,0)+count;
   }
-  refreshLabels();
 
   function say(t){
     if(!$('voice').checked || !('speechSynthesis' in window)) return;
@@ -137,26 +198,53 @@
   function buzz(p){ if($('vib').checked && navigator.vibrate) navigator.vibrate(p); }
   function setState(t){ $('state').textContent=t; $('lockState').textContent=t; }
 
+  function rep(){
+    count++; lastRep=Date.now(); refreshLabels(); say(count); buzz(80);
+    if(count===+$('goal').value){ setTimeout(()=>say('Objectif atteint, '+count),600); buzz([200,100,200]); }
+  }
+  function showPeak(){
+    lastPeak=curPeak; $('peakVal').textContent=fmt(curPeak); $('peakMark').style.left=pct(curPeak); curPeak=0;
+  }
+
   // ---------- capteur ----------
+  let sensorSeen=false;
   function onMotion(e){
     const a=e.accelerationIncludingGravity; if(!a||a.x==null) return;
+    sensorSeen=true;
     const v=[a.x,a.y,a.z];
-    if(!g) g=v.slice(); else for(let i=0;i<3;i++) g[i]=g[i]*0.85+v[i]*0.15; // filtre passe-bas = gravité
-    if(calibrating){ calib.push(g.slice()); return; }
-    if(!ref) return;
-    const dot=g[0]*ref[0]+g[1]*ref[1]+g[2]*ref[2];
-    const n=Math.hypot(...g)*Math.hypot(...ref);
-    angle = n? Math.acos(Math.max(-1,Math.min(1,dot/n)))*180/Math.PI : 0;
-    $('fill').style.width=Math.min(angle,90)/90*100+'%';
-    if(!running) return;
-    const depth=+$('depth').value;
-    if(phase==='up' && angle>=depth){ phase='down'; setState('⬇ En bas — remonte'); buzz(30); }
-    else if(phase==='down' && angle<=UP_ANGLE){
-      phase='up'; count++; refreshLabels(); say(count); buzz(80); setState('⬆ Debout — descends');
-      if(count===+$('goal').value){ setTimeout(()=>say('Objectif atteint, '+count),600); buzz([200,100,200]); }
+    if(!g){ g=v.slice(); gSlow=v.slice(); }
+    for(let i=0;i<3;i++){ g[i]=g[i]*0.85+v[i]*0.15; gSlow[i]=gSlow[i]*0.995+v[i]*0.005; }
+
+    if(mode==='hand'){
+      // accélération verticale (vers le haut = positif), lissée
+      const n=Math.hypot(...gSlow)||1;
+      const proj=((v[0]-gSlow[0])*gSlow[0]+(v[1]-gSlow[1])*gSlow[1]+(v[2]-gSlow[2])*gSlow[2])/n;
+      lin = lin*0.75 + proj*0.25;
+      const shown=Math.abs(lin);
+      $('fill').style.width=pct(shown); $('nowVal').textContent=shown.toFixed(1);
+      if(lin>curPeak) curPeak=lin;
+      if(!running) { if(lin<-0.3 && curPeak>0.4) showPeak(); return; }
+      const T=thr();
+      // en bas du squat : poussée vers le haut (positive) ; arrivée en haut : freinage (négatif)
+      if(phase==='up' && lin>T && Date.now()-lastRep>600){ phase='down'; setState('⬇ En bas — remonte'); }
+      else if(phase==='down' && lin<-T*0.6){ phase='up'; showPeak(); rep(); setState('⬆ Debout — descends'); }
+      else if(phase==='up' && lin<-0.3 && curPeak>0.4 && curPeak<=T){ showPeak(); } // descente trop faible : affichée mais pas comptée
+    } else {
+      if(!ref) ref=g.slice();
+      const dot=g[0]*ref[0]+g[1]*ref[1]+g[2]*ref[2];
+      const n=Math.hypot(...g)*Math.hypot(...ref);
+      angle = n? Math.acos(Math.max(-1,Math.min(1,dot/n)))*180/Math.PI : 0;
+      $('fill').style.width=pct(angle); $('nowVal').textContent=Math.round(angle)+'°';
+      if(angle>curPeak) curPeak=angle;
+      const T=thr(), up=T*UP_ANGLE_RATIO;
+      if(!running){ if(angle<up && curPeak>up+5) showPeak(); return; }
+      if(phase==='up' && angle>=T){ phase='down'; setState('⬇ En bas — remonte'); buzz(30); }
+      else if(angle<=up){
+        if(phase==='down'){ phase='up'; showPeak(); rep(); setState('⬆ Debout — descends'); }
+        else if(curPeak>up+5){ showPeak(); }
+      }
     }
   }
-  let calib=[];
 
   async function askPermission(){
     if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
@@ -171,16 +259,15 @@
   // ---------- démarrer / arrêter ----------
   async function start(){
     try{ await askPermission(); }catch(e){ alert('Il faut autoriser les capteurs de mouvement.'); return; }
-    if(!window.DeviceMotionEvent){ alert("Ce téléphone ne donne pas accès aux capteurs."); return; }
     await keepAwake();
-    $('lock').style.display='flex';
-    count=0; sets=[]; phase='up'; ref=null; startTime=Date.now(); refreshLabels();
-    let d=Math.max(+$('delay').value,2);
-    setState('Mets le téléphone en poche… '+d); say('Prépare-toi');
-    await new Promise(res=>{ const t=setInterval(()=>{ d--; setState(d>0?'Mets le téléphone en poche… '+d:'Reste debout, immobile'); if(d<=0){clearInterval(t);res();} },1000); });
-    calib=[]; calibrating=true; await new Promise(r=>setTimeout(r,1500)); calibrating=false;
-    if(!calib.length){ $('lock').style.display='none'; setState('Aucun signal du capteur'); alert("Aucun signal du capteur. Ouvre l'appli depuis le lien https dans Chrome."); return; }
-    ref=[0,1,2].map(i=>calib.reduce((s,v)=>s+v[i],0)/calib.length);
+    if($('lockOpt').checked) $('lock').style.display='flex';
+    count=0; sets=[]; phase='up'; startTime=Date.now(); curPeak=0; refreshLabels();
+    let d=Math.max(+$('delay').value,1);
+    setState('Mets-toi en place… '+d);
+    await new Promise(res=>{ const t=setInterval(()=>{ d--; setState(d>0?'Mets-toi en place… '+d:'Reste immobile'); if(d<=0){clearInterval(t);res();} },1000); });
+    await new Promise(r=>setTimeout(r,1200));
+    if(!sensorSeen){ $('lock').style.display='none'; setState('Aucun signal du capteur'); alert("Aucun signal du capteur. Ouvre l'appli depuis le lien https dans Chrome."); return; }
+    ref=g.slice(); gSlow=g.slice(); lin=0; curPeak=0; // position de référence
     running=true; setState('⬆ Debout — descends'); say('C\'est parti'); buzz(150);
     $('startBtn').textContent='■ Arrêter et enregistrer'; $('startBtn').className='stop';
   }
@@ -190,7 +277,7 @@
     if(count>0) sets.push(count);
     const total=sets.reduce((a,b)=>a+b,0);
     if(total>0){
-      db.sessions.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), date:new Date(startTime).toISOString(), sets:sets.slice(), total, duree:Math.round((Date.now()-startTime)/1000), profondeur:+$('depth').value});
+      db.sessions.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), date:new Date(startTime).toISOString(), sets:sets.slice(), total, duree:Math.round((Date.now()-startTime)/1000), mode, seuil:thr()});
       save(); say('Terminé, '+total+' squats');
     }
     count=0; sets=[]; refreshLabels(); renderHist();
@@ -199,7 +286,6 @@
   }
   $('startBtn').onclick=()=> running? stop() : start();
 
-  // 3 appuis rapides pour quitter l'écran protégé
   let taps=[];
   $('lock').addEventListener('click',()=>{ const n=Date.now(); taps=taps.filter(t=>n-t<900); taps.push(n); if(taps.length>=3){ taps=[]; stop(); } });
 
@@ -218,7 +304,6 @@
     const id=e.target.dataset.del; if(!id) return;
     if(confirm('Supprimer cette séance ?')){ db.sessions=db.sessions.filter(s=>s.id!==id); save(); renderHist(); }
   });
-  renderHist();
 
   // ---------- sauvegarde / fusion ----------
   $('exportBtn').onclick=()=>{
@@ -237,6 +322,9 @@
     r.textContent='Fusion terminée\n• Séances ajoutées : '+added.length+(added.length? '\n'+added.map(s=>'   – '+fmtDate(s.date)+' : '+s.total+' squats ('+s.sets.join(' + ')+')').join('\n'):'')+'\n• Déjà présentes (ignorées) : '+dup+'\n• Total maintenant : '+db.sessions.length+' séances';
     e.target.value='';
   };
+
+  applyMode(); renderHist();
+  askPermission().catch(()=>{});
 })();
 </script>
 </body>
