@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>Compteur de squats</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f4f5f7;color:#1d2330}
+  header{background:#fff;border-bottom:1px solid #d8dce3;padding:12px 16px;font-weight:700;font-size:18px}
+  main{padding:12px;max-width:560px;margin:0 auto}
+  .card{background:#fff;border:1px solid #d8dce3;border-radius:10px;padding:14px;margin-bottom:12px}
+  .big{font-size:110px;font-weight:800;text-align:center;line-height:1;margin:6px 0;font-variant-numeric:tabular-nums}
+  .sub{text-align:center;color:#5a6474;font-size:15px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font:inherit;font-weight:600;border:1px solid #b9c0cc;background:#fff;border-radius:8px;padding:12px 14px;font-size:16px}
+  button.go{background:#1f8a3b;border-color:#1f8a3b;color:#fff;flex:1;font-size:20px;padding:16px}
+  button.stop{background:#c0392b;border-color:#c0392b;color:#fff;flex:1;font-size:20px;padding:16px}
+  button.blue{background:#1d5fbf;border-color:#1d5fbf;color:#fff}
+  label{font-size:14px;color:#5a6474}
+  input[type=number]{font:inherit;font-size:18px;width:80px;padding:8px;border:1px solid #b9c0cc;border-radius:6px}
+  input[type=range]{width:100%}
+  .bar{position:relative;height:26px;background:#e9ecf1;border-radius:6px;overflow:hidden;margin-top:6px}
+  .bar .fill{position:absolute;left:0;top:0;bottom:0;background:#1d5fbf;width:0}
+  .bar .mark{position:absolute;top:0;bottom:0;width:3px;background:#c0392b}
+  .bar .markup{position:absolute;top:0;bottom:0;width:3px;background:#1f8a3b}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border:1px solid #c9ced8;padding:6px 8px;text-align:center}
+  th{background:#eef1f5}
+  .hint{font-size:14px;color:#5a6474;margin:6px 0 0}
+  .state{font-weight:700;text-align:center;font-size:18px;margin-top:4px}
+  #lock{position:fixed;inset:0;background:rgba(255,255,255,.97);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9;user-select:none}
+  #lock .big{font-size:140px}
+  #lock p{color:#5a6474;text-align:center;padding:0 20px}
+  #report{white-space:pre-wrap;font-size:14px;background:#f7f9fc;border:1px solid #d8dce3;border-radius:6px;padding:8px;display:none}
+</style>
+</head>
+<body>
+<header>🦵 Compteur de squats</header>
+<main>
+
+  <div class="card">
+    <div class="big" id="count">0</div>
+    <div class="sub">Série <b id="setNo">1</b> · objectif <b id="goalTxt">15</b> · total <b id="totalTxt">0</b></div>
+    <div class="state" id="state">Prêt</div>
+    <div class="bar"><div class="fill" id="fill"></div><div class="markup" id="markUp"></div><div class="mark" id="markDown"></div></div>
+    <p class="hint">Barre bleue = flexion de ta cuisse. Trait rouge = profondeur à atteindre. Trait vert = remonté.</p>
+    <div class="row" style="margin-top:10px">
+      <button class="go" id="startBtn">▶ Démarrer</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="nextSetBtn" style="flex:1">Série suivante</button>
+      <button id="minusBtn">−1</button>
+      <button id="plusBtn">+1</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <b>Réglages</b>
+    <div class="row" style="margin-top:8px">
+      <label>Objectif par série<br><input type="number" id="goal" min="1" value="15"></label>
+      <label>Compte à rebours (s)<br><input type="number" id="delay" min="0" value="5"></label>
+    </div>
+    <div style="margin-top:10px">
+      <label>Profondeur demandée : <b id="depthTxt">60</b>°</label>
+      <input type="range" id="depth" min="25" max="85" value="60">
+    </div>
+    <div class="row" style="margin-top:6px">
+      <label><input type="checkbox" id="voice" checked> Annonce vocale</label>
+      <label><input type="checkbox" id="vib" checked> Vibration</label>
+    </div>
+    <p class="hint">📱 Mets le téléphone <b>dans la poche avant du pantalon</b>, écran contre la cuisse. Au démarrage, reste <b>debout et immobile</b> pendant le compte à rebours : l'appli prend ta position de référence.</p>
+  </div>
+
+  <div class="card">
+    <b>Historique</b>
+    <div style="overflow-x:auto;margin-top:8px">
+      <table><thead><tr><th>Date</th><th>Séries</th><th>Total</th><th>Durée</th><th></th></tr></thead><tbody id="hist"></tbody></table>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="blue" id="exportBtn">💾 Sauvegarder</button>
+      <button id="importBtn">🔀 Fusionner une sauvegarde</button>
+      <input type="file" id="file" accept=".json,application/json" style="display:none">
+    </div>
+    <div id="report" style="margin-top:8px"></div>
+  </div>
+
+</main>
+
+<div id="lock">
+  <div class="big" id="lockCount">0</div>
+  <div class="state" id="lockState">…</div>
+  <p>Écran protégé contre les appuis dans la poche.<br><b>Touche 3 fois rapidement</b> pour arrêter.</p>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const KEY = 'squats_v1';
+
+  // ---------- stockage ----------
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)) || {sessions:[], settings:{}}; }catch(e){ return {sessions:[], settings:{}}; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+  let db = load();
+  const st = db.settings || (db.settings = {});
+  if(st.goal) $('goal').value = st.goal;
+  if(st.delay!=null) $('delay').value = st.delay;
+  if(st.depth) $('depth').value = st.depth;
+  if(st.voice===false) $('voice').checked=false;
+  if(st.vib===false) $('vib').checked=false;
+  function saveSettings(){
+    st.goal=+$('goal').value||15; st.delay=+$('delay').value||0; st.depth=+$('depth').value;
+    st.voice=$('voice').checked; st.vib=$('vib').checked; save(); refreshLabels();
+  }
+  ['goal','delay','depth','voice','vib'].forEach(id=>$(id).addEventListener('input',saveSettings));
+
+  // ---------- état ----------
+  let running=false, phase='up', count=0, sets=[], ref=null, g=null, angle=0, startTime=0, wakeLock=null, calibrating=false;
+  const UP_ANGLE = 20; // remonté si angle < 20°
+
+  function refreshLabels(){
+    $('depthTxt').textContent=$('depth').value;
+    $('goalTxt').textContent=$('goal').value;
+    $('markDown').style.left = (Math.min(+$('depth').value,90)/90*100)+'%';
+    $('markUp').style.left = (UP_ANGLE/90*100)+'%';
+    $('count').textContent=count; $('lockCount').textContent=count;
+    $('setNo').textContent=sets.length+1;
+    $('totalTxt').textContent=sets.reduce((a,b)=>a+b,0)+count;
+  }
+  refreshLabels();
+
+  function say(t){
+    if(!$('voice').checked || !('speechSynthesis' in window)) return;
+    try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(String(t)); u.lang='fr-FR'; u.rate=1.15; speechSynthesis.speak(u);}catch(e){}
+  }
+  function buzz(p){ if($('vib').checked && navigator.vibrate) navigator.vibrate(p); }
+  function setState(t){ $('state').textContent=t; $('lockState').textContent=t; }
+
+  // ---------- capteur ----------
+  function onMotion(e){
+    const a=e.accelerationIncludingGravity; if(!a||a.x==null) return;
+    const v=[a.x,a.y,a.z];
+    if(!g) g=v.slice(); else for(let i=0;i<3;i++) g[i]=g[i]*0.85+v[i]*0.15; // filtre passe-bas = gravité
+    if(calibrating){ calib.push(g.slice()); return; }
+    if(!ref) return;
+    const dot=g[0]*ref[0]+g[1]*ref[1]+g[2]*ref[2];
+    const n=Math.hypot(...g)*Math.hypot(...ref);
+    angle = n? Math.acos(Math.max(-1,Math.min(1,dot/n)))*180/Math.PI : 0;
+    $('fill').style.width=Math.min(angle,90)/90*100+'%';
+    if(!running) return;
+    const depth=+$('depth').value;
+    if(phase==='up' && angle>=depth){ phase='down'; setState('⬇ En bas — remonte'); buzz(30); }
+    else if(phase==='down' && angle<=UP_ANGLE){
+      phase='up'; count++; refreshLabels(); say(count); buzz(80); setState('⬆ Debout — descends');
+      if(count===+$('goal').value){ setTimeout(()=>say('Objectif atteint, '+count),600); buzz([200,100,200]); }
+    }
+  }
+  let calib=[];
+
+  async function askPermission(){
+    if(typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      const r=await DeviceMotionEvent.requestPermission(); if(r!=='granted') throw new Error('refus');
+    }
+  }
+  window.addEventListener('devicemotion',onMotion);
+
+  async function keepAwake(){ try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
+  document.addEventListener('visibilitychange',()=>{ if(running && document.visibilityState==='visible') keepAwake(); });
+
+  // ---------- démarrer / arrêter ----------
+  async function start(){
+    try{ await askPermission(); }catch(e){ alert('Il faut autoriser les capteurs de mouvement.'); return; }
+    if(!window.DeviceMotionEvent){ alert("Ce téléphone ne donne pas accès aux capteurs."); return; }
+    await keepAwake();
+    $('lock').style.display='flex';
+    count=0; sets=[]; phase='up'; ref=null; startTime=Date.now(); refreshLabels();
+    let d=Math.max(+$('delay').value,2);
+    setState('Mets le téléphone en poche… '+d); say('Prépare-toi');
+    await new Promise(res=>{ const t=setInterval(()=>{ d--; setState(d>0?'Mets le téléphone en poche… '+d:'Reste debout, immobile'); if(d<=0){clearInterval(t);res();} },1000); });
+    calib=[]; calibrating=true; await new Promise(r=>setTimeout(r,1500)); calibrating=false;
+    if(!calib.length){ $('lock').style.display='none'; setState('Aucun signal du capteur'); alert("Aucun signal du capteur. Ouvre l'appli depuis le lien https dans Chrome."); return; }
+    ref=[0,1,2].map(i=>calib.reduce((s,v)=>s+v[i],0)/calib.length);
+    running=true; setState('⬆ Debout — descends'); say('C\'est parti'); buzz(150);
+    $('startBtn').textContent='■ Arrêter et enregistrer'; $('startBtn').className='stop';
+  }
+  function stop(){
+    running=false; $('lock').style.display='none';
+    if(wakeLock){ try{wakeLock.release();}catch(e){} wakeLock=null; }
+    if(count>0) sets.push(count);
+    const total=sets.reduce((a,b)=>a+b,0);
+    if(total>0){
+      db.sessions.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6), date:new Date(startTime).toISOString(), sets:sets.slice(), total, duree:Math.round((Date.now()-startTime)/1000), profondeur:+$('depth').value});
+      save(); say('Terminé, '+total+' squats');
+    }
+    count=0; sets=[]; refreshLabels(); renderHist();
+    setState(total? 'Enregistré : '+total+' squats' : 'Prêt');
+    $('startBtn').textContent='▶ Démarrer'; $('startBtn').className='go';
+  }
+  $('startBtn').onclick=()=> running? stop() : start();
+
+  // 3 appuis rapides pour quitter l'écran protégé
+  let taps=[];
+  $('lock').addEventListener('click',()=>{ const n=Date.now(); taps=taps.filter(t=>n-t<900); taps.push(n); if(taps.length>=3){ taps=[]; stop(); } });
+
+  $('nextSetBtn').onclick=()=>{ if(count>0){ sets.push(count); count=0; refreshLabels(); say('Série '+(sets.length+1)); } };
+  $('plusBtn').onclick=()=>{ count++; refreshLabels(); };
+  $('minusBtn').onclick=()=>{ if(count>0){count--; refreshLabels();} };
+
+  // ---------- historique ----------
+  function fmtDate(iso){ const d=new Date(iso); return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+  function fmtDur(s){ return Math.floor(s/60)+' min '+String(s%60).padStart(2,'0'); }
+  function renderHist(){
+    const rows=db.sessions.slice().sort((a,b)=>b.date.localeCompare(a.date));
+    $('hist').innerHTML = rows.length? rows.map(s=>`<tr><td>${fmtDate(s.date)}</td><td>${s.sets.join(' + ')}</td><td><b>${s.total}</b></td><td>${fmtDur(s.duree||0)}</td><td><button data-del="${s.id}" style="padding:4px 8px">✕</button></td></tr>`).join('') : '<tr><td colspan="5">Aucune séance pour l\'instant</td></tr>';
+  }
+  $('hist').addEventListener('click',e=>{
+    const id=e.target.dataset.del; if(!id) return;
+    if(confirm('Supprimer cette séance ?')){ db.sessions=db.sessions.filter(s=>s.id!==id); save(); renderHist(); }
+  });
+  renderHist();
+
+  // ---------- sauvegarde / fusion ----------
+  $('exportBtn').onclick=()=>{
+    const blob=new Blob([JSON.stringify({app:'squats',version:1,exporte:new Date().toISOString(),...db},null,1)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download='squats-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+  };
+  $('importBtn').onclick=()=>$('file').click();
+  $('file').onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    let data; try{ data=JSON.parse(await f.text()); }catch(err){ alert('Fichier illisible'); return; }
+    const have=new Set(db.sessions.map(s=>s.id)); const added=[]; let dup=0;
+    (data.sessions||[]).forEach(s=>{ if(!s||!s.id) return; if(have.has(s.id)) dup++; else { db.sessions.push(s); have.add(s.id); added.push(s); } });
+    save(); renderHist();
+    const r=$('report'); r.style.display='block';
+    r.textContent='Fusion terminée\n• Séances ajoutées : '+added.length+(added.length? '\n'+added.map(s=>'   – '+fmtDate(s.date)+' : '+s.total+' squats ('+s.sets.join(' + ')+')').join('\n'):'')+'\n• Déjà présentes (ignorées) : '+dup+'\n• Total maintenant : '+db.sessions.length+' séances';
+    e.target.value='';
+  };
+})();
+</script>
+</body>
+</html>
