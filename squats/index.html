@@ -333,6 +333,8 @@
 <script>
   // Appli installable + fonctionne sans réseau
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+  // Demande à la tablette de ne jamais effacer d'elle-même l'appli et ses séances (manque de place)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 </script>
 </body>
 </html>
