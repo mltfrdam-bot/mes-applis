@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#1f8a3b">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
 <title>Compteur de squats</title>
 <style>
   *{box-sizing:border-box}
@@ -326,6 +329,10 @@
   applyMode(); renderHist();
   askPermission().catch(()=>{});
 })();
+</script>
+<script>
+  // Appli installable + fonctionne sans réseau
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
 </script>
 </body>
 </html>
