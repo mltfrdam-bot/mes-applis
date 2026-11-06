@@ -31,7 +31,10 @@ jobs:
           CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
           CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
         run: |
-          if [ -z "$CLE_MOT_DE_PASSE" ]; then echo "::error::Le secret CLE_MOT_DE_PASSE manque (Settings > Secrets and variables > Actions)"; exit 1; fi
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PappId=fr.mesapplis.squats -PappNom=Squats -PnumVersion=${{ github.run_number }}
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
           gradle --no-daemon assembleRelease -PappId=fr.mesapplis.squats -PappNom=Squats -PnumVersion=${{ github.run_number }}
           cp app/build/outputs/apk/release/app-release.apk ../Squats.apk
       - name: Mettre en téléchargement
