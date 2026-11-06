@@ -194,11 +194,14 @@
     $('totalTxt').textContent=sets.reduce((a,b)=>a+b,0)+count;
   }
 
+  const APP = window.AndroidApp || null; // présent quand l'appli tourne en APK installé
   function say(t){
-    if(!$('voice').checked || !('speechSynthesis' in window)) return;
+    if(!$('voice').checked) return;
+    if(APP){ try{ APP.parler(String(t)); }catch(e){} return; }
+    if(!('speechSynthesis' in window)) return;
     try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(String(t)); u.lang='fr-FR'; u.rate=1.15; speechSynthesis.speak(u);}catch(e){}
   }
-  function buzz(p){ if($('vib').checked && navigator.vibrate) navigator.vibrate(p); }
+  function buzz(p){ if(!$('vib').checked) return; if(APP){ try{ APP.vibrer(Array.isArray(p)? p.reduce((a,b)=>a+b,0) : p); }catch(e){} return; } if(navigator.vibrate) navigator.vibrate(p); }
   function setState(t){ $('state').textContent=t; $('lockState').textContent=t; }
 
   function rep(){
@@ -310,7 +313,9 @@
 
   // ---------- sauvegarde / fusion ----------
   $('exportBtn').onclick=()=>{
-    const blob=new Blob([JSON.stringify({app:'squats',version:1,exporte:new Date().toISOString(),...db},null,1)],{type:'application/json'});
+    const txt=JSON.stringify({app:'squats',version:1,exporte:new Date().toISOString(),...db},null,1), nom='squats-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json';
+    if(APP){ const ou=APP.enregistrer(nom,txt,'application/json'); const r=$('report'); r.style.display='block'; r.textContent= ou? 'Sauvegarde enregistrée : '+ou : "La sauvegarde n'a pas pu être enregistrée."; return; }
+    const blob=new Blob([txt],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download='squats-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
   };
@@ -332,7 +337,7 @@
 </script>
 <script>
   // Appli installable + fonctionne sans réseau
-  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+  if (!window.AndroidApp && 'serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
   // Demande à la tablette de ne jamais effacer d'elle-même l'appli et ses séances (manque de place)
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 </script>

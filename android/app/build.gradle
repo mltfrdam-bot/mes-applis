@@ -1,0 +1,37 @@
+plugins { id "com.android.application" }
+
+// Nom, identifiant et numéro de version donnés par la fabrication (GitHub)
+def appId = project.findProperty("appId") ?: "fr.mesapplis.squats"
+def appNom = project.findProperty("appNom") ?: "Squats"
+def numVersion = (project.findProperty("numVersion") ?: "1") as int
+
+android {
+    namespace "fr.mesapplis.app"
+    compileSdk 34
+    defaultConfig {
+        applicationId appId
+        minSdk 24
+        targetSdk 34
+        versionCode numVersion
+        versionName "1." + numVersion
+        resValue "string", "app_name", appNom
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("CLE_FICHIER") ?: "../../signature/mes-applis.keystore")
+            storePassword System.getenv("CLE_MOT_DE_PASSE")
+            keyAlias "mesapplis"
+            keyPassword System.getenv("CLE_MOT_DE_PASSE")
+            storeType "pkcs12"
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    lint { checkReleaseBuilds false; abortOnError false }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.11.0"
+}

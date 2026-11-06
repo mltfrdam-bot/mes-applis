@@ -1,0 +1,44 @@
+# Fabrique les applis Android (APK) et les met en téléchargement dans « Releases ».
+# Se lance tout seul à chaque modification d'une appli, ou à la main (onglet Actions).
+name: Fabrication APK
+
+on:
+  push:
+    branches: [main]
+    paths: ["squats/**", "android/**", ".github/workflows/apk.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  squats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Copier l'appli dans l'APK
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp -r squats/* android/app/src/main/assets/www/
+          rm -f android/app/src/main/assets/www/sw.js
+      - name: Fabriquer et signer
+        working-directory: android
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then echo "::error::Le secret CLE_MOT_DE_PASSE manque (Settings > Secrets and variables > Actions)"; exit 1; fi
+          gradle --no-daemon assembleRelease -PappId=fr.mesapplis.squats -PappNom=Squats -PnumVersion=${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../Squats.apk
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: squats-v${{ github.run_number }}
+          name: "Compteur de squats — version ${{ github.run_number }}"
+          body: "Télécharge **Squats.apk** ci-dessous et ouvre-le sur la tablette pour l'installer (ou le mettre à jour : tes séances sont gardées)."
+          files: Squats.apk
+          make_latest: true
