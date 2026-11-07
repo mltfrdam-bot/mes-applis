@@ -1,0 +1,4 @@
+{
+  "info": "Catalogue des applis de Mon Hub. Chaque appli : id, nom, icone, version, fichier (dans modules/), description.",
+  "applis": []
+}

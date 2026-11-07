@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1d5fbf">
+<title>Mon Hub</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icone-192.png">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f4f5f7;color:#1d2330;font-size:17px}
+  button{font:inherit;cursor:pointer}
+  #entete{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;background:#1d5fbf;color:#fff;padding:10px 12px;min-height:56px}
+  #entete h1{font-size:20px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #entete button{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:8px 11px;font-size:16px}
+  main{padding:14px;max-width:900px;margin:0 auto}
+  .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+  .tuile{position:relative;background:#fff;border:1px solid #d3d8e0;border-radius:14px;padding:14px 6px 10px;text-align:center;min-height:112px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+  .tuile:active{background:#e9f0fb}
+  .tuile .ico{font-size:40px;line-height:1}
+  .tuile .nom{font-size:14px;font-weight:600;word-break:break-word}
+  .tuile.ajout{border:2px dashed #1d5fbf;color:#1d5fbf;background:#f7faff}
+  .badge{position:absolute;top:6px;right:6px;background:#d9480f;color:#fff;font-size:11px;font-weight:700;border-radius:8px;padding:2px 6px}
+  .carte{background:#fff;border:1px solid #d3d8e0;border-radius:12px;padding:14px;margin-bottom:14px}
+  .carte h2{font-size:18px;margin:0 0 10px}
+  .aide{color:#4a5466;font-size:15px;line-height:1.4}
+  .btn{background:#1d5fbf;color:#fff;border:0;border-radius:10px;padding:12px 16px;font-size:17px;font-weight:600;margin:4px 6px 4px 0}
+  .btn.gris{background:#e8ecf2;color:#1d2330;border:1px solid #c9ced6}
+  .btn.rouge{background:#c92a2a}
+  .btn.vert{background:#2b8a3e}
+  .btn.petit{padding:7px 10px;font-size:14px;border-radius:8px;margin:2px}
+  table{border-collapse:collapse;width:100%;font-size:15px;background:#fff}
+  th,td{border:1px solid #c9ced6;padding:7px 8px;text-align:left;vertical-align:middle}
+  th{background:#e8ecf2;font-weight:700}
+  .tablo{overflow-x:auto}
+  .ok{color:#2b8a3e;font-weight:700}
+  .ko{color:#c92a2a;font-weight:700}
+  .att{color:#d9480f;font-weight:700}
+  input[type=text]{font:inherit;padding:10px;border:1px solid #c9ced6;border-radius:8px;width:100%}
+  label{display:block;font-weight:600;margin:10px 0 4px}
+  .emojis{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .emojis button{font-size:24px;background:#fff;border:1px solid #d3d8e0;border-radius:8px;padding:4px 7px}
+  #bandeau{display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px}
+  #vueApp{position:fixed;left:0;right:0;bottom:0;top:56px;background:#fff;display:none}
+  #vueApp iframe{border:0;width:100%;height:100%;display:block}
+  #voile{position:fixed;inset:0;background:rgba(20,25,35,.45);display:none;align-items:center;justify-content:center;z-index:20;padding:14px}
+  #fenetre{background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px}
+  #fenetre h3{margin:0 0 10px;font-size:19px}
+  #fenetre .btn{display:block;width:100%;margin:6px 0}
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;display:none;z-index:30;max-width:92%;text-align:center}
+  .cache{display:none}
+</style>
+</head>
+<body>
+<header id="entete">
+  <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
+  <h1 id="titre">Mon Hub</h1>
+  <button id="btnGerer" title="Gérer les applis">⚙️</button>
+  <button id="btnSauv" title="Sauvegarde">💾</button>
+</header>
+<div id="bandeau"></div>
+<main id="contenu"></main>
+<div id="vueApp"></div>
+<div id="voile"><div id="fenetre"></div></div>
+<div id="toast"></div>
+<input type="file" id="choixFichier" class="cache">
+
+<script>
+'use strict';
+/* =====================================================================
+   MON HUB — coquille qui range des applis (modules) séparées.
+   - Chaque appli est un fichier HTML rangé dans le téléphone (base « mon-hub »).
+   - Chaque appli tourne dans son propre cadre, avec son propre espace de données :
+     ses clés localStorage et ses bases IndexedDB reçoivent le préfixe « hubapp:<id>: ».
+   - Le registre partagé permet aux applis d'échanger des données (ex. regards).
+   - Sauvegarde / fusion / restauration communes à toutes les applis.
+   ===================================================================== */
+const HUB_VERSION = '1.0';
+const PREFIXE = 'hubapp:';
+const APP_ANDROID = window.AndroidApp || null;
+
+/* ---------- Petits outils ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t, ms){ const e=$('#toast'); e.textContent=t; e.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>e.style.display='none', ms||3200); }
+function dateFr(iso){ if(!iso) return '—'; const d=new Date(iso); return d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function horodatage(){ const d=new Date(), z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+'_'+z(d.getHours())+'h'+z(d.getMinutes()); }
+function slug(t){ return String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30) || 'appli'; }
+function promReq(r){ return new Promise((ok,ko)=>{ r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); }); }
+function egal(a,b){ return JSON.stringify(a)===JSON.stringify(b); }
+
+/* Fenêtre de dialogue (remplace alert/confirm) : renvoie la valeur du bouton choisi. */
+function fenetre(titre, html, boutons){
+  return new Promise(ok=>{
+    const f=$('#fenetre');
+    f.innerHTML='<h3>'+esc(titre)+'</h3><div>'+html+'</div><div style="margin-top:14px">'+
+      boutons.map((b,i)=>'<button class="btn '+(b.classe||'')+'" data-i="'+i+'">'+esc(b.texte)+'</button>').join('')+'</div>';
+    $('#voile').style.display='flex';
+    f.querySelectorAll('button[data-i]').forEach(btn=>btn.onclick=()=>{
+      const b=boutons[+btn.dataset.i];
+      const v=typeof b.valeur==='function'?b.valeur(f):b.valeur;
+      $('#voile').style.display='none'; ok(v);
+    });
+  });
+}
+const info = (titre, html) => fenetre(titre, html, [{texte:'OK', valeur:true}]);
+
+/* Choisir un fichier sur le téléphone. */
+function choisirFichier(accept){
+  return new Promise(ok=>{
+    const inp=$('#choixFichier'); inp.value=''; inp.accept=accept||'';
+    inp.onchange=()=>ok(inp.files[0]||null);
+    inp.click();
+  });
+}
+const lireTexte = f => new Promise((ok,ko)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=()=>ko(r.error); r.readAsText(f); });
+
+/* Enregistrer un fichier (Téléchargements, ou pont Android dans l'APK). */
+function enregistrerFichier(nom, contenu, type){
+  if(APP_ANDROID && APP_ANDROID.enregistrer){
+    try{ toast(APP_ANDROID.enregistrer(nom, contenu, type) || ('Fichier « '+nom+' » enregistré')); return; }catch(e){}
+  }
+  const b=new Blob([contenu],{type:type||'application/octet-stream'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=nom;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  toast('Fichier « '+nom+' » enregistré dans Téléchargements', 4500);
+}
+
+/* ---------- Base du hub (IndexedDB « mon-hub ») ---------- */
+let baseHub=null;
+function ouvrirBase(){
+  if(baseHub) return Promise.resolve(baseHub);
+  const r=indexedDB.open('mon-hub',1);
+  r.onupgradeneeded=()=>{
+    const db=r.result;
+    db.createObjectStore('apps',{keyPath:'id'});
+    db.createObjectStore('registre',{keyPath:'cle'});
+    db.createObjectStore('meta',{keyPath:'cle'});
+  };
+  return promReq(r).then(db=>(baseHub=db));
+}
+async function tous(store){ const db=await ouvrirBase(); return promReq(db.transaction(store).objectStore(store).getAll()); }
+async function un(store,cle){ const db=await ouvrirBase(); return promReq(db.transaction(store).objectStore(store).get(cle)); }
+async function poser(store,val){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).put(val); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+async function enlever(store,cle){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).delete(cle); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+async function vider(store){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).clear(); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+async function lireMeta(cle,def){ const m=await un('meta',cle); return m?m.valeur:def; }
+const ecrireMeta=(cle,valeur)=>poser('meta',{cle,valeur});
+async function listeApps(){ return (await tous('apps')).sort((a,b)=>(a.ordre||0)-(b.ordre||0) || a.nom.localeCompare(b.nom)); }
+
+/* ---------- Registre partagé (accessible aux applis par window.Hub) ---------- */
+function HubPourApp(appId){
+  return {
+    version: HUB_VERSION,
+    appId,
+    registre: {
+      lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
+      ecrire: (cle,valeur) => poser('registre',{cle, valeur, app:appId, maj:new Date().toISOString()}),
+      supprimer: cle => enlever('registre',cle),
+      liste: async (prefixe='') => (await tous('registre')).filter(e=>e.cle.startsWith(prefixe)).map(e=>({cle:e.cle, valeur:e.valeur, app:e.app, maj:e.maj}))
+    }
+  };
+}
+window.HubPourApp = HubPourApp;
+
+/* ---------- Le « compartiment » de chaque appli ----------
+   Ce code est placé AU DÉBUT de chaque appli avant de la lancer.
+   Il range ses données sous « hubapp:<id>: » pour qu'aucune appli ne voie celles des autres. */
+function compartiment(ID){
+  var P='hubapp:'+ID+':';
+  function fabriquer(reel){
+    function cles(){ var a=[]; for(var i=0;i<reel.length;i++){ var k=reel.key(i); if(k && k.indexOf(P)===0) a.push(k.slice(P.length)); } return a; }
+    var api={
+      getItem:function(k){ return reel.getItem(P+k); },
+      setItem:function(k,v){ reel.setItem(P+k,String(v)); },
+      removeItem:function(k){ reel.removeItem(P+k); },
+      clear:function(){ cles().forEach(function(k){ reel.removeItem(P+k); }); },
+      key:function(i){ var c=cles(); return i<c.length?c[i]:null; }
+    };
+    return new Proxy(api,{
+      get:function(t,p){ if(p==='length') return cles().length; if(typeof p==='symbol' || p in t) return t[p]; var v=reel.getItem(P+p); return v===null?undefined:v; },
+      set:function(t,p,v){ if(typeof p==='symbol' || p in t || p==='length') return true; reel.setItem(P+p,String(v)); return true; },
+      deleteProperty:function(t,p){ reel.removeItem(P+String(p)); return true; },
+      has:function(t,p){ return p in t || p==='length' || reel.getItem(P+String(p))!==null; },
+      ownKeys:function(){ return cles(); },
+      getOwnPropertyDescriptor:function(t,p){ var v=reel.getItem(P+String(p)); return v===null?undefined:{value:v,writable:true,enumerable:true,configurable:true}; }
+    });
+  }
+  try{ var ls=window.localStorage; Object.defineProperty(window,'localStorage',{value:fabriquer(ls),configurable:true,enumerable:true}); }catch(e){}
+  try{ var ss=window.sessionStorage; Object.defineProperty(window,'sessionStorage',{value:fabriquer(ss),configurable:true,enumerable:true}); }catch(e){}
+  try{
+    var f=window.indexedDB, o=f.open.bind(f), d=f.deleteDatabase.bind(f), l=f.databases?f.databases.bind(f):null;
+    f.open=function(n,v){ return v===undefined?o(P+n):o(P+n,v); };
+    f.deleteDatabase=function(n){ return d(P+n); };
+    if(l) f.databases=function(){ return l().then(function(a){ return a.filter(function(x){ return x.name && x.name.indexOf(P)===0; }).map(function(x){ return {name:x.name.slice(P.length), version:x.version}; }); }); };
+  }catch(e){}
+  try{ window.Hub = parent.HubPourApp ? parent.HubPourApp(ID) : null; }catch(e){}
+  try{ if(parent.AndroidApp && !window.AndroidApp) window.AndroidApp = parent.AndroidApp; }catch(e){}
+}
+function preparerCode(html, id){
+  const s='<scr'+'ipt>('+compartiment.toString()+')('+JSON.stringify(id)+');</scr'+'ipt>';
+  const m=html.match(/<head[^>]*>/i);
+  if(m) return html.replace(m[0], m[0]+s);
+  const h=html.match(/<html[^>]*>/i);
+  if(h) return html.replace(h[0], h[0]+'<head>'+s+'</head>');
+  return s+html;
+}
+
+/* Repère ce qu'une appli va chercher sur internet (ne marchera pas hors ligne). */
+function elementsInternet(html){
+  const hotes=new Set();
+  const motifs=[
+    /<script[^>]+src\s*=\s*["'](?:https?:)?\/\/([^\/"'?#]+)/gi,
+    /<link[^>]+href\s*=\s*["'](?:https?:)?\/\/([^\/"'?#]+)/gi,
+    /<img[^>]+src\s*=\s*["'](?:https?:)?\/\/([^\/"'?#]+)/gi,
+    /url\(\s*["']?(?:https?:)?\/\/([^\/"')?#]+)/gi,
+    /@import\s+(?:url\()?["']?(?:https?:)?\/\/([^\/"')?#]+)/gi,
+    /fetch\(\s*["'`]https?:\/\/([^\/"'`?#]+)/gi
+  ];
+  motifs.forEach(m=>{ let r; while((r=m.exec(html))) hotes.add(r[1]); });
+  return [...hotes];
+}
+const titreDuCode = html => { const m=html.match(/<title[^>]*>([\s\S]*?)<\/title>/i); return m ? m[1].replace(/\s+/g,' ').trim() : ''; };
+
+/* ---------- Catalogue en ligne (dossier GitHub du hub) ---------- */
+async function chargerCatalogue(){
+  try{
+    const ctrl=new AbortController(); const t=setTimeout(()=>ctrl.abort(),7000);
+    const r=await fetch('catalogue.json?t='+Date.now(),{cache:'no-store',signal:ctrl.signal});
+    clearTimeout(t);
+    if(!r.ok) return null;
+    const j=await r.json();
+    await ecrireMeta('catalogue', j);
+    return j;
+  }catch(e){ return null; }
+}
+let majDispo={};   // id -> version disponible dans le catalogue
+async function verifierMisesAJour(){
+  const cat=await chargerCatalogue(); if(!cat) return;
+  const apps=await listeApps(); majDispo={};
+  (cat.applis||[]).forEach(c=>{ const a=apps.find(x=>x.id===c.id && x.source==='catalogue'); if(a && String(a.version)!==String(c.version)) majDispo[a.id]=c.version; });
+  if(vueCourante==='accueil') vueAccueil();
+}
+
+/* ---------- Navigation ---------- */
+let vueCourante='accueil', urlApp=null;
+function montrer(vue, rendu, titre){
+  vueCourante=vue;
+  $('#titre').textContent=titre||'Mon Hub';
+  $('#vueApp').style.display='none';
+  $('#contenu').style.display='block';
+  $('#btnRetour').classList.toggle('cache', vue==='accueil');
+  $('#btnGerer').classList.toggle('cache', vue!=='accueil');
+  $('#btnSauv').classList.toggle('cache', vue!=='accueil');
+  if(vue!=='accueil' && !(history.state && history.state.v)) history.pushState({v:vue},'');
+  rendu();
+  window.scrollTo(0,0);
+}
+function retourAccueil(){ fermerApp(); vueAccueil(); }
+window.addEventListener('popstate',()=>{ if(vueCourante!=='accueil') retourAccueil(); });
+$('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(); else retourAccueil(); };
+$('#btnGerer').onclick=()=>vueGerer();
+$('#btnSauv').onclick=()=>vueSauvegarde();
+
+/* ---------- Accueil ---------- */
+async function vueAccueil(){
+  vueCourante='accueil';
+  $('#titre').textContent='Mon Hub';
+  $('#btnRetour').classList.add('cache'); $('#btnGerer').classList.remove('cache'); $('#btnSauv').classList.remove('cache');
+  $('#vueApp').style.display='none'; $('#contenu').style.display='block';
+  const apps=await listeApps();
+  const derniere=await lireMeta('derniereSauvegarde',null);
+  let rappel='';
+  if(apps.length){
+    const jours = derniere ? Math.floor((Date.now()-new Date(derniere))/864e5) : null;
+    if(jours===null) rappel='<div class="carte att">⚠️ Aucune sauvegarde faite pour l\'instant. Appuie sur 💾 en haut.</div>';
+    else if(jours>=7) rappel='<div class="carte att">⚠️ Dernière sauvegarde il y a '+jours+' jours. Pense à appuyer sur 💾.</div>';
+  }
+  const tuiles=apps.map(a=>'<button class="tuile" data-id="'+esc(a.id)+'">'+(majDispo[a.id]?'<span class="badge">MAJ</span>':'')+
+    '<span class="ico">'+esc(a.icone||'📦')+'</span><span class="nom">'+esc(a.nom)+'</span></button>').join('');
+  const vide = apps.length ? '' : '<div class="carte aide">👋 Ton hub est prêt.<br>Appuie sur <b>➕ Ajouter</b> pour ranger ta première appli : depuis un fichier HTML (sans internet) ou depuis le catalogue.</div>';
+  $('#contenu').innerHTML = rappel + vide + '<div class="grille">'+tuiles+
+    '<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button></div>'+
+    installAide();
+  $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
+  $('#tuileAjout').onclick=()=>vueAjouter();
+  const bi=$('#btnInstaller'); if(bi) bi.onclick=installer;
+}
+
+/* ---------- Ouvrir une appli ---------- */
+async function ouvrirApp(id){
+  const a=await un('apps',id); if(!a) return;
+  fermerApp();
+  vueCourante='app';
+  if(!(history.state && history.state.v)) history.pushState({v:'app'},'');
+  $('#titre').textContent=(a.icone||'')+' '+a.nom;
+  $('#btnRetour').classList.remove('cache'); $('#btnGerer').classList.add('cache'); $('#btnSauv').classList.add('cache');
+  $('#contenu').style.display='none';
+  const zone=$('#vueApp'); zone.style.display='block';
+  urlApp=URL.createObjectURL(new Blob([preparerCode(a.code, a.id)],{type:'text/html'}));
+  const fr=document.createElement('iframe');
+  fr.setAttribute('allow','camera *; microphone *; accelerometer *; gyroscope *; magnetometer *; geolocation *; fullscreen *; bluetooth *; screen-wake-lock *; clipboard-write *; autoplay *');
+  fr.setAttribute('allowfullscreen','');
+  fr.src=urlApp;
+  zone.innerHTML=''; zone.appendChild(fr);
+  a.ouverteLe=new Date().toISOString(); poser('apps',a);
+}
+function fermerApp(){ const z=$('#vueApp'); z.innerHTML=''; z.style.display='none'; if(urlApp){ URL.revokeObjectURL(urlApp); urlApp=null; } }
+
+/* ---------- Ajouter une appli ---------- */
+const EMOJIS=['📐','🏗️','🚧','📏','🧮','⌨️','📖','🏋️','🏃','🎾','🚴','🍚','🥗','☕','🎮','🧠','📝','📊','🔧','💡','⭐','📦'];
+function champsAppli(nom, icone, version){
+  return '<label>Nom de l\'appli</label><input type="text" id="fNom" value="'+esc(nom)+'">'+
+    '<label>Icône (un emoji)</label><input type="text" id="fIco" value="'+esc(icone)+'" style="width:90px;font-size:26px;text-align:center">'+
+    '<div class="emojis">'+EMOJIS.map(e=>'<button type="button" onclick="document.getElementById(\'fIco\').value=\''+e+'\'">'+e+'</button>').join('')+'</div>'+
+    '<label>Version</label><input type="text" id="fVer" value="'+esc(version)+'" style="width:120px">';
+}
+function avertissementInternet(hotes){
+  return hotes.length ? '<p class="att">⚠️ Cette appli va chercher '+hotes.length+' élément(s) sur internet ('+esc(hotes.join(', '))+'). Sans réseau, cette partie ne marchera pas.</p>'
+                      : '<p class="ok">✅ Cette appli contient tout ce qu\'il lui faut : elle marchera sans internet.</p>';
+}
+function vueAjouter(){
+  montrer('ajouter',()=>{
+    $('#contenu').innerHTML=
+      '<div class="carte"><h2>📁 Depuis un fichier (sans internet)</h2><p class="aide">Choisis le fichier HTML d\'une appli : une des tiennes, une que je t\'envoie, ou une page que tu as faite toi-même.</p>'+
+      '<button class="btn" id="bFichier">Choisir un fichier HTML</button></div>'+
+      '<div class="carte"><h2>🌐 Depuis le catalogue (internet)</h2><p class="aide">Les applis que je dépose dans ton GitHub apparaissent ici.</p><div id="zoneCat"><button class="btn gris" id="bCat">Afficher le catalogue</button></div></div>';
+    $('#bFichier').onclick=ajouterDepuisFichier;
+    $('#bCat').onclick=afficherCatalogue;
+  },'➕ Ajouter une appli');
+}
+async function ajouterDepuisFichier(){
+  const f=await choisirFichier('.html,.htm,text/html'); if(!f) return;
+  const code=await lireTexte(f);
+  if(!/<(html|body|head|script|div)/i.test(code)) return info('Fichier refusé','Ce fichier ne ressemble pas à une page HTML.');
+  const nomDef=titreDuCode(code) || f.name.replace(/\.html?$/i,'');
+  const v=await fenetre('Nouvelle appli', '<p class="aide">Fichier : '+esc(f.name)+'</p>'+avertissementInternet(elementsInternet(code))+champsAppli(nomDef,'📦','1'),
+    [{texte:'Ajouter au hub',classe:'vert',valeur:fe=>({nom:fe.querySelector('#fNom').value.trim(),icone:fe.querySelector('#fIco').value.trim(),version:fe.querySelector('#fVer').value.trim()})},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(!v) return;
+  const apps=await listeApps();
+  const id='f-'+slug(v.nom||nomDef)+'-'+Math.random().toString(36).slice(2,6);
+  await poser('apps',{id, nom:v.nom||nomDef, icone:v.icone||'📦', version:v.version||'1', source:'fichier', fichier:f.name, code, ordre:apps.length, ajouteeLe:new Date().toISOString(), majLe:new Date().toISOString()});
+  toast('✅ « '+(v.nom||nomDef)+' » ajoutée au hub');
+  history.back();
+}
+async function afficherCatalogue(){
+  const zone=$('#zoneCat'); zone.innerHTML='<p class="aide">Chargement…</p>';
+  let cat=await chargerCatalogue(), horsLigne=false;
+  if(!cat){ cat=await lireMeta('catalogue',null); horsLigne=true; }
+  if(!cat){ zone.innerHTML='<p class="ko">Pas de connexion : le catalogue n\'est pas disponible. Tu peux ajouter une appli depuis un fichier.</p>'; return; }
+  const apps=await listeApps(); const liste=cat.applis||[];
+  if(!liste.length){ zone.innerHTML='<p class="aide">Le catalogue est vide pour l\'instant : je n\'y ai encore déposé aucune appli.</p>'; return; }
+  zone.innerHTML=(horsLigne?'<p class="att">Hors ligne : catalogue de la dernière connexion.</p>':'')+
+    '<div class="tablo"><table><tr><th></th><th>Appli</th><th>Version</th><th>Description</th><th></th></tr>'+
+    liste.map(c=>{ const a=apps.find(x=>x.id===c.id);
+      const act = !a ? '<button class="btn petit vert" data-ajout="'+esc(c.id)+'">Ajouter</button>'
+        : (String(a.version)!==String(c.version) ? '<button class="btn petit" data-maj="'+esc(c.id)+'">Mettre à jour</button>' : '<span class="ok">Installée</span>');
+      return '<tr><td style="font-size:24px">'+esc(c.icone||'📦')+'</td><td><b>'+esc(c.nom)+'</b></td><td>'+esc(c.version)+'</td><td>'+esc(c.description||'')+'</td><td>'+act+'</td></tr>'; }).join('')+
+    '</table></div>';
+  zone.querySelectorAll('[data-ajout],[data-maj]').forEach(b=>b.onclick=async()=>{
+    const c=liste.find(x=>x.id===(b.dataset.ajout||b.dataset.maj));
+    b.disabled=true; b.textContent='…';
+    if(await installerDuCatalogue(c)) afficherCatalogue(); else { b.disabled=false; b.textContent='Réessayer'; }
+  });
+}
+async function installerDuCatalogue(c){
+  try{
+    const r=await fetch(c.fichier+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(r.status);
+    const code=await r.text();
+    const ancien=await un('apps',c.id); const apps=await listeApps();
+    await poser('apps',Object.assign({}, ancien||{ordre:apps.length, ajouteeLe:new Date().toISOString()},
+      {id:c.id, nom:ancien?ancien.nom:c.nom, icone:ancien?ancien.icone:(c.icone||'📦'), version:String(c.version), source:'catalogue', fichier:c.fichier, code, majLe:new Date().toISOString()}));
+    delete majDispo[c.id];
+    toast(ancien?'✅ « '+c.nom+' » mise à jour (version '+c.version+'). Ses données sont gardées.':'✅ « '+c.nom+' » ajoutée au hub');
+    return true;
+  }catch(e){ toast('❌ Téléchargement impossible (pas de connexion ?)'); return false; }
+}
+
+/* ---------- Gérer les applis (tableau) ---------- */
+function vueGerer(){
+  montrer('gerer', async ()=>{
+    const apps=await listeApps();
+    if(!apps.length){ $('#contenu').innerHTML='<div class="carte aide">Aucune appli pour l\'instant.</div>'; return; }
+    $('#contenu').innerHTML='<div class="carte"><h2>Mes applis</h2><p class="aide">▲▼ pour changer l\'ordre sur l\'accueil. « Options » pour mettre à jour, renommer ou retirer.</p><div class="tablo"><table><tr><th>Ordre</th><th>Appli</th><th>Version</th><th></th></tr>'+
+      apps.map((a,i)=>'<tr><td style="white-space:nowrap"><button class="btn petit gris" data-haut="'+i+'">▲</button><button class="btn petit gris" data-bas="'+i+'">▼</button></td>'+
+        '<td><span style="font-size:22px">'+esc(a.icone)+'</span> <b>'+esc(a.nom)+'</b></td>'+
+        '<td>'+esc(a.version)+(majDispo[a.id]?'<br><span class="att">→ '+esc(majDispo[a.id])+' dispo</span>':'')+'</td>'+
+        '<td><button class="btn petit" data-options="'+esc(a.id)+'">Options</button></td></tr>').join('')+
+      '</table></div></div>';
+    const C=$('#contenu');
+    const deplacer=async(i,d)=>{ const j=i+d; if(j<0||j>=apps.length) return; [apps[i],apps[j]]=[apps[j],apps[i]]; for(let k=0;k<apps.length;k++){ apps[k].ordre=k; await poser('apps',apps[k]); } vueGererRendu(); };
+    C.querySelectorAll('[data-haut]').forEach(b=>b.onclick=()=>deplacer(+b.dataset.haut,-1));
+    C.querySelectorAll('[data-bas]').forEach(b=>b.onclick=()=>deplacer(+b.dataset.bas,1));
+    C.querySelectorAll('[data-options]').forEach(b=>b.onclick=()=>optionsApp(b.dataset.options));
+  },'⚙️ Gérer les applis');
+}
+async function optionsApp(id){
+  const a=await un('apps',id);
+  const boutons=[{texte:'▶️ Ouvrir',valeur:'ouvrir'}];
+  if(majDispo[id]) boutons.push({texte:'⬆️ Mettre à jour (version '+majDispo[id]+')',classe:'vert',valeur:'majcat'});
+  boutons.push({texte:'📁 Nouvelle version depuis un fichier',classe:'gris',valeur:'majfic'},{texte:'✏️ Nom / icône / version',classe:'gris',valeur:'modif'},
+    {texte:'📤 Enregistrer le code de l\'appli',classe:'gris',valeur:'export'},{texte:'🗑️ Retirer du hub',classe:'rouge',valeur:'retirer'},{texte:'Fermer',classe:'gris',valeur:null});
+  const c=await fenetre((a.icone||'')+' '+a.nom,'<div class="tablo"><table>'+
+    '<tr><th>Version</th><td>'+esc(a.version)+'</td></tr><tr><th>Origine</th><td>'+(a.source==='catalogue'?'Catalogue':'Fichier « '+esc(a.fichier||'')+' »')+'</td></tr>'+
+    '<tr><th>Ajoutée le</th><td>'+dateFr(a.ajouteeLe)+'</td></tr><tr><th>Modifiée le</th><td>'+dateFr(a.majLe)+'</td></tr></table></div>', boutons);
+  if(c==='ouvrir'){ history.replaceState(null,''); ouvrirApp(id); }
+  else if(c==='majcat'){ const cat=await lireMeta('catalogue',{applis:[]}); const e=(cat.applis||[]).find(x=>x.id===id); if(e && await installerDuCatalogue(e)) vueGererRendu(); }
+  else if(c==='majfic') majDepuisFichier(id);
+  else if(c==='modif') modifierApp(id);
+  else if(c==='export') enregistrerFichier(slug(a.nom)+'-v'+slug(a.version)+'.html', a.code, 'text/html');
+  else if(c==='retirer') retirerApp(id);
+}
+const vueGererRendu=()=>{ history.replaceState({v:'gerer'},''); vueGerer(); };
+async function modifierApp(id){
+  const a=await un('apps',id);
+  const v=await fenetre('Modifier « '+a.nom+' »', champsAppli(a.nom,a.icone,a.version),
+    [{texte:'Enregistrer',classe:'vert',valeur:f=>({nom:f.querySelector('#fNom').value.trim(),icone:f.querySelector('#fIco').value.trim(),version:f.querySelector('#fVer').value.trim()})},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(!v) return;
+  a.nom=v.nom||a.nom; a.icone=v.icone||a.icone; a.version=v.version||a.version;
+  await poser('apps',a); vueGererRendu();
+}
+async function majDepuisFichier(id){
+  const a=await un('apps',id);
+  const f=await choisirFichier('.html,.htm,text/html'); if(!f) return;
+  const code=await lireTexte(f);
+  const suiv=/^\d+$/.test(String(a.version))?String(+a.version+1):String(a.version)+'.1';
+  const v=await fenetre('Nouvelle version de « '+a.nom+' »','<p class="aide">Fichier : '+esc(f.name)+'<br>Le code de l\'appli est remplacé. <b>Ses données sont gardées.</b></p>'+avertissementInternet(elementsInternet(code))+
+    '<label>Nouvelle version</label><input type="text" id="fVer" value="'+esc(suiv)+'" style="width:120px">',
+    [{texte:'Remplacer le code',classe:'vert',valeur:f=>f.querySelector('#fVer').value.trim()},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(v===null) return;
+  a.code=code; a.version=v||suiv; a.fichier=f.name; a.majLe=new Date().toISOString();
+  await poser('apps',a); toast('✅ « '+a.nom+' » passée en version '+a.version); vueGererRendu();
+}
+async function retirerApp(id){
+  const a=await un('apps',id);
+  const c=await fenetre('Retirer « '+a.nom+' » ?','<p>Que veux-tu faire de <b>ses données</b> ?</p><p class="aide">Si tu les gardes, elles restent dans le téléphone et dans tes sauvegardes : en remettant l\'appli plus tard, tu les retrouves.</p>',
+    [{texte:'Retirer, garder ses données',classe:'',valeur:'garder'},{texte:'Retirer ET effacer ses données',classe:'rouge',valeur:'effacer'},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(!c) return;
+  if(c==='effacer'){
+    const ok=await fenetre('Confirmation','<p class="ko">Les données de « '+esc(a.nom)+' » seront effacées définitivement (sauf si elles sont dans une sauvegarde).</p>',[{texte:'Oui, effacer',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+    if(!ok) return;
+    await effacerDonneesApp(id);
+  }
+  await enlever('apps',id); toast('« '+a.nom+' » retirée du hub'); vueGererRendu();
+}
+
+/* ---------- Données des applis : lecture / écriture génériques ---------- */
+function idsAvecDonnees(){
+  const ids=new Set();
+  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.startsWith(PREFIXE)){ ids.add(k.slice(PREFIXE.length).split(':')[0]); } }
+  return ids;
+}
+async function basesDeApp(id){
+  if(!indexedDB.databases) return [];
+  const p=PREFIXE+id+':';
+  return (await indexedDB.databases()).filter(b=>b.name && b.name.startsWith(p));
+}
+async function toutesLesBasesApps(){ if(!indexedDB.databases) return []; return (await indexedDB.databases()).filter(b=>b.name && b.name.startsWith(PREFIXE)); }
+async function effacerDonneesApp(id){
+  const p=PREFIXE+id+':';
+  Object.keys(localStorage).filter(k=>k.startsWith(p)).forEach(k=>localStorage.removeItem(k));
+  Object.keys(sessionStorage).filter(k=>k.startsWith(p)).forEach(k=>sessionStorage.removeItem(k));
+  for(const b of await basesDeApp(id)) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
+}
+
+/* Encodage des valeurs non-JSON (images, dates…) pour la sauvegarde. */
+const b64DeTampon = buf => { let s=''; const o=new Uint8Array(buf); for(let i=0;i<o.length;i+=0x8000) s+=String.fromCharCode.apply(null,o.subarray(i,i+0x8000)); return btoa(s); };
+const tamponDeB64 = b => { const s=atob(b), o=new Uint8Array(s.length); for(let i=0;i<s.length;i++) o[i]=s.charCodeAt(i); return o.buffer; };
+async function encoder(v){
+  if(v===null || typeof v!=='object') return v;
+  if(v instanceof Date) return {__hub:'date', v:v.toISOString()};
+  if(v instanceof Blob) return {__hub:'blob', type:v.type, nom:v.name||null, b64:b64DeTampon(await v.arrayBuffer())};
+  if(v instanceof ArrayBuffer) return {__hub:'ab', b64:b64DeTampon(v)};
+  if(ArrayBuffer.isView(v)) return {__hub:'ta', t:v.constructor.name, b64:b64DeTampon(v.buffer.slice(v.byteOffset, v.byteOffset+v.byteLength))};
+  if(v instanceof Map) return {__hub:'map', v:await encoder([...v])};
+  if(v instanceof Set) return {__hub:'set', v:await encoder([...v])};
+  if(Array.isArray(v)){ const a=[]; for(const x of v) a.push(await encoder(x)); return a; }
+  const o={}; for(const k of Object.keys(v)) o[k]=await encoder(v[k]); return o;
+}
+function decoder(v){
+  if(v===null || typeof v!=='object') return v;
+  if(Array.isArray(v)) return v.map(decoder);
+  switch(v.__hub){
+    case 'date': return new Date(v.v);
+    case 'blob': { const buf=tamponDeB64(v.b64); return v.nom ? new File([buf], v.nom, {type:v.type}) : new Blob([buf],{type:v.type}); }
+    case 'ab': return tamponDeB64(v.b64);
+    case 'ta': { const C=window[v.t]||Uint8Array; return new C(tamponDeB64(v.b64)); }
+    case 'map': return new Map(decoder(v.v));
+    case 'set': return new Set(decoder(v.v));
+  }
+  const o={}; for(const k of Object.keys(v)) o[k]=decoder(v[k]); return o;
+}
+
+async function exporterBase(nom){
+  const db=await promReq(indexedDB.open(nom));
+  const res={nom, version:db.version, magasins:[]};
+  for(const s of [...db.objectStoreNames]){
+    const t=db.transaction(s), st=t.objectStore(s);
+    const mag={nom:s, keyPath:st.keyPath, autoIncrement:st.autoIncrement, index:[...st.indexNames].map(n=>{ const ix=st.index(n); return {nom:n, keyPath:ix.keyPath, unique:ix.unique, multiEntry:ix.multiEntry}; }), lignes:[]};
+    const brut=await new Promise((ok,ko)=>{ const l=[]; const c=st.openCursor(); c.onsuccess=()=>{ const cu=c.result; if(cu){ l.push([cu.primaryKey, cu.value]); cu.continue(); } else ok(l); }; c.onerror=()=>ko(c.error); });
+    for(const [k,v] of brut) mag.lignes.push({k:await encoder(k), v:await encoder(v)});
+    res.magasins.push(mag);
+  }
+  db.close();
+  return res;
+}
+/* Ajoute dans une base ce qui manque (n'écrase jamais). Renvoie {ajoutes, presents, notes}. */
+async function fusionnerBase(dump){
+  const bilan={ajoutes:0, presents:0, notes:[]};
+  const existe=(await toutesLesBasesApps()).some(b=>b.name===dump.nom);
+  let creee=false;
+  const req=existe ? indexedDB.open(dump.nom) : indexedDB.open(dump.nom, dump.version||1);
+  req.onupgradeneeded=()=>{
+    creee=true;
+    const db=req.result;
+    dump.magasins.forEach(m=>{ if(db.objectStoreNames.contains(m.nom)) return;
+      const st=db.createObjectStore(m.nom, m.keyPath==null?{autoIncrement:m.autoIncrement}:{keyPath:m.keyPath, autoIncrement:m.autoIncrement});
+      (m.index||[]).forEach(ix=>st.createIndex(ix.nom, ix.keyPath, {unique:ix.unique, multiEntry:ix.multiEntry})); });
+  };
+  const db=await promReq(req);
+  for(const m of dump.magasins){
+    if(!db.objectStoreNames.contains(m.nom)){ bilan.notes.push('Partie « '+m.nom+' » absente de la base actuelle : non fusionnée ('+m.lignes.length+' éléments gardés dans le fichier).'); continue; }
+    for(const l of m.lignes){
+      const k=decoder(l.k), v=decoder(l.v);
+      const t=db.transaction(m.nom,'readwrite'), st=t.objectStore(m.nom);
+      const n=await promReq(st.count(k));
+      if(n){ bilan.presents++; continue; }
+      if(st.keyPath==null) st.add(v,k); else st.add(v);
+      await new Promise(ok=>{ t.oncomplete=()=>{ bilan.ajoutes++; ok(); }; t.onerror=e=>{ e.preventDefault(); bilan.notes.push('Un élément de « '+m.nom+' » refusé : '+(t.error&&t.error.message)); ok(); }; t.onabort=()=>ok(); });
+    }
+  }
+  db.close();
+  if(creee) bilan.notes.push('Base « '+dump.nom.split(':').slice(2).join(':')+' » recréée.');
+  return bilan;
+}
+
+/* Fusion de deux valeurs texte (localStorage / registre) sans rien perdre. */
+function fusionValeurs(actuel, entrant){
+  if(actuel===entrant) return {etat:'present'};
+  let a,b; try{ a=JSON.parse(actuel); b=JSON.parse(entrant); }catch(e){ return {etat:'conflit'}; }
+  const r=fusionObjets(a,b);
+  if(r.conflit && !r.ajouts) return {etat:'conflit'};
+  if(!r.ajouts) return {etat:'present'};
+  return {etat:'fusionne', valeur:JSON.stringify(r.valeur), ajouts:r.ajouts, conflit:r.conflit};
+}
+function fusionObjets(a,b){
+  if(Array.isArray(a) && Array.isArray(b)){
+    const res=a.slice(); let ajouts=0;
+    const cle = x => (x && typeof x==='object' && !Array.isArray(x)) ? (x.id!=null?'id:'+x.id : (x.cle!=null?'cle:'+x.cle : null)) : null;
+    const vus=new Set(a.map(x=>cle(x)||'j:'+JSON.stringify(x)));
+    b.forEach(x=>{ const c=cle(x)||'j:'+JSON.stringify(x); if(!vus.has(c)){ res.push(x); vus.add(c); ajouts++; } });
+    return {valeur:res, ajouts, conflit:false};
+  }
+  if(a && b && typeof a==='object' && typeof b==='object' && !Array.isArray(a) && !Array.isArray(b)){
+    const res=Object.assign({},a); let ajouts=0, conflit=false;
+    Object.keys(b).forEach(k=>{
+      if(!(k in a)){ res[k]=b[k]; ajouts++; }
+      else if(!egal(a[k],b[k])){ const r=fusionObjets(a[k],b[k]); res[k]=r.valeur; ajouts+=r.ajouts; conflit=conflit||r.conflit; }
+    });
+    return {valeur:res, ajouts, conflit};
+  }
+  return {valeur:a, ajouts:0, conflit:!egal(a,b)};
+}
+
+/* ---------- Sauvegarde complète ---------- */
+async function fabriquerSauvegarde(){
+  const apps=await tous('apps');
+  const ids=new Set([...apps.map(a=>a.id), ...idsAvecDonnees()]);
+  (await toutesLesBasesApps()).forEach(b=>ids.add(b.name.slice(PREFIXE.length).split(':')[0]));
+  const donnees={};
+  for(const id of ids){
+    const p=PREFIXE+id+':', ls={};
+    Object.keys(localStorage).filter(k=>k.startsWith(p)).forEach(k=>ls[k.slice(p.length)]=localStorage.getItem(k));
+    const bases=[]; for(const b of await basesDeApp(id)) bases.push(await exporterBase(b.name));
+    donnees[id]={localStorage:ls, bases};
+  }
+  return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre')};
+}
+async function sauvegarder(){
+  toast('Préparation de la sauvegarde…');
+  const s=await fabriquerSauvegarde();
+  enregistrerFichier('MonHub-sauvegarde_'+horodatage()+'.json', JSON.stringify(s), 'application/json');
+  await ecrireMeta('derniereSauvegarde', new Date().toISOString());
+  if(vueCourante==='sauvegarde') vueSauvegarde();
+}
+async function lireSauvegarde(){
+  const f=await choisirFichier('.json,application/json'); if(!f) return null;
+  try{ const j=JSON.parse(await lireTexte(f)); if(j.format!=='mon-hub-sauvegarde') throw 0; return j; }
+  catch(e){ await info('Fichier refusé','Ce fichier n\'est pas une sauvegarde de Mon Hub.'); return null; }
+}
+async function fusionner(s){
+  const lignes=[]; const nomApp=id=>{ const a=(s.applis||[]).find(x=>x.id===id); return a?a.nom:id; };
+  // 1) Applis (code)
+  const actuelles=await tous('apps'); let ordre=actuelles.length;
+  for(const a of s.applis||[]){
+    const ex=actuelles.find(x=>x.id===a.id);
+    if(!ex){ a.ordre=ordre++; await poser('apps',a); lignes.push([a.icone+' '+a.nom,'Appli ajoutée (version '+a.version+')','ok']); }
+    else if(ex.code!==a.code) lignes.push([ex.icone+' '+ex.nom,'Code différent dans le fichier : version actuelle '+ex.version+' gardée (fichier : '+a.version+')','att']);
+    else lignes.push([ex.icone+' '+ex.nom,'Appli déjà présente, identique','']);
+  }
+  // 2) Données de chaque appli
+  for(const id of Object.keys(s.donnees||{})){
+    const d=s.donnees[id], p=PREFIXE+id+':'; let aj=0, pr=0, fu=0, co=0; const notes=[];
+    Object.keys(d.localStorage||{}).forEach(k=>{
+      const cur=localStorage.getItem(p+k), inc=d.localStorage[k];
+      if(cur===null){ localStorage.setItem(p+k,inc); aj++; return; }
+      const r=fusionValeurs(cur,inc);
+      if(r.etat==='present') pr++; else if(r.etat==='conflit') co++; else { localStorage.setItem(p+k,r.valeur); fu++; if(r.conflit) co++; }
+    });
+    for(const b of d.bases||[]){ const r=await fusionnerBase(b); aj+=r.ajoutes; pr+=r.presents; notes.push(...r.notes); }
+    const txt=[aj&&('+'+aj+' élément(s) ajouté(s)'), fu&&(fu+' liste(s) complétée(s)'), pr&&(pr+' déjà présent(s)'), co&&(co+' différence(s) : valeur actuelle gardée')].filter(Boolean).join(' · ') || 'Rien à ajouter';
+    lignes.push(['Données de '+nomApp(id), txt+(notes.length?'<br><small>'+notes.map(esc).join('<br>')+'</small>':''), aj||fu?'ok':(co?'att':'')]);
+  }
+  // 3) Registre partagé
+  let ra=0, rp=0, rc=0;
+  for(const e of s.registre||[]){
+    const cur=await un('registre',e.cle);
+    if(!cur){ await poser('registre',e); ra++; continue; }
+    const r=fusionValeurs(JSON.stringify(cur.valeur), JSON.stringify(e.valeur));
+    if(r.etat==='present') rp++; else if(r.etat==='conflit') rc++; else { cur.valeur=JSON.parse(r.valeur); await poser('registre',cur); ra++; }
+  }
+  if((s.registre||[]).length) lignes.push(['Registre partagé', ['+'+ra+' ajouté(s)', rp+' déjà présent(s)', rc?rc+' différence(s) : valeur actuelle gardée':''].filter(Boolean).join(' · '), ra?'ok':'']);
+  return lignes;
+}
+function afficherBilan(titre, lignes, sauvDate){
+  return info(titre, '<p class="aide">Sauvegarde du '+dateFr(sauvDate)+'</p><div class="tablo"><table><tr><th>Élément</th><th>Résultat</th></tr>'+
+    lignes.map(l=>'<tr><td>'+esc(l[0])+'</td><td class="'+(l[2]||'')+'">'+l[1]+'</td></tr>').join('')+'</table></div>');
+}
+async function importerFusion(){
+  const s=await lireSauvegarde(); if(!s) return;
+  toast('Fusion en cours…');
+  const lignes=await fusionner(s);
+  await afficherBilan('📥 Fusion terminée — rien n\'a été écrasé', lignes, s.creeeLe);
+  vueSauvegarde();
+}
+async function restaurer(){
+  const s=await lireSauvegarde(); if(!s) return;
+  const c1=await fenetre('♻️ Restaurer : tout remplacer ?','<p class="ko">Toutes les applis et toutes les données actuelles du hub seront remplacées par celles de la sauvegarde du '+esc(dateFr(s.creeeLe))+'.</p><p class="aide">Si tu veux seulement ajouter ce qui manque, utilise plutôt « Importer / fusionner ».</p>',
+    [{texte:'Continuer',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+  if(!c1) return;
+  const c2=await fenetre('Dernière confirmation','<p class="ko">Tout ce qui n\'est pas dans ce fichier sera perdu. Conseil : fais d\'abord une sauvegarde de l\'état actuel.</p>',
+    [{texte:'Oui, tout remplacer',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+  if(!c2) return;
+  toast('Restauration en cours…');
+  Object.keys(localStorage).filter(k=>k.startsWith(PREFIXE)).forEach(k=>localStorage.removeItem(k));
+  for(const b of await toutesLesBasesApps()) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
+  await vider('apps'); await vider('registre');
+  const lignes=await fusionner(s);
+  await afficherBilan('♻️ Restauration terminée', lignes, s.creeeLe);
+  vueSauvegarde();
+}
+async function copieDeSecours(){
+  let code=null;
+  try{ const r=await fetch('index.html'); if(r.ok) code=await r.text(); }catch(e){}
+  if(!code) code='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  enregistrerFichier('MonHub-secours_v'+HUB_VERSION+'.html', code, 'text/html');
+}
+
+/* ---------- Écran Sauvegarde ---------- */
+function vueSauvegarde(){
+  montrer('sauvegarde', async ()=>{
+    const derniere=await lireMeta('derniereSauvegarde',null);
+    let protege='inconnu', espace='';
+    try{ protege = navigator.storage && navigator.storage.persisted ? (await navigator.storage.persisted() ? '<span class="ok">Oui</span>' : '<span class="att">Non</span> <button class="btn petit" id="bProteger">Protéger</button>') : 'inconnu'; }catch(e){}
+    try{ if(navigator.storage && navigator.storage.estimate){ const e=await navigator.storage.estimate(); espace=(e.usage/1048576).toFixed(1)+' Mo utilisés'; } }catch(e){}
+    const apps=await listeApps(), reg=await tous('registre');
+    $('#contenu').innerHTML=
+      '<div class="carte"><h2>État</h2><div class="tablo"><table>'+
+      '<tr><th>Dernière sauvegarde</th><td>'+(derniere?dateFr(derniere):'<span class="att">jamais</span>')+'</td></tr>'+
+      '<tr><th>Données protégées contre l\'effacement automatique</th><td>'+protege+'</td></tr>'+
+      '<tr><th>Applis rangées</th><td>'+apps.length+'</td></tr>'+
+      '<tr><th>Registre partagé</th><td>'+reg.length+' élément(s)</td></tr>'+
+      '<tr><th>Espace</th><td>'+(espace||'—')+'</td></tr>'+
+      '<tr><th>Version du hub</th><td>'+HUB_VERSION+'</td></tr></table></div></div>'+
+      '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Sauvegarder tout</button></div>'+
+      '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
+      '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
+      '<div class="carte"><h2>🆘 Copie de secours du hub</h2><p class="aide">Le hub lui-même dans un seul fichier HTML. Si tout le reste disparaît : ouvre ce fichier dans Chrome, puis « Importer une sauvegarde ».</p><button class="btn gris" id="bSecours">🆘 Enregistrer la copie de secours</button></div>';
+    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours;
+    const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
+  },'💾 Sauvegarde');
+}
+async function proteger(){ try{ return navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : false; }catch(e){ return false; } }
+
+/* ---------- Installation sur l'écran d'accueil ---------- */
+let invitationInstall=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); invitationInstall=e; if(vueCourante==='accueil') vueAccueil(); });
+const estInstalle = () => APP_ANDROID || matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+function installAide(){
+  if(estInstalle()) return '';
+  return '<div class="carte" style="margin-top:16px"><h2>📲 Installer le hub</h2>'+
+    (invitationInstall ? '<button class="btn" id="btnInstaller">📲 Installer sur l\'écran d\'accueil</button>'
+      : '<p class="aide">Dans Chrome : appuie sur <b>⋮</b> (en haut à droite), puis <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.</p>')+
+    '<p class="aide">Une fois installé, le hub s\'ouvre et marche <b>sans internet</b>.</p></div>';
+}
+async function installer(){ if(!invitationInstall) return; invitationInstall.prompt(); await invitationInstall.userChoice; invitationInstall=null; proteger(); vueAccueil(); }
+
+/* ---------- Mise à jour du hub lui-même ---------- */
+async function verifierVersionHub(){
+  try{
+    const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
+    const j=await r.json();
+    if(String(j.version)!==HUB_VERSION){
+      const b=$('#bandeau'); b.style.display='block';
+      b.innerHTML='🆕 Nouvelle version du hub disponible ('+esc(j.version)+'). <button class="btn petit" id="bMajHub">Mettre à jour maintenant</button> <span class="aide">Tes applis et tes données ne bougent pas.</span>';
+      $('#bMajHub').onclick=majHub;
+    }
+  }catch(e){}
+}
+async function majHub(){
+  toast('Mise à jour du hub…');
+  try{
+    const reg=navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if(reg && reg.active){
+      await new Promise(ok=>{ const c=new MessageChannel(); c.port1.onmessage=()=>ok(); reg.active.postMessage({type:'rafraichir'},[c.port2]); setTimeout(ok,15000); });
+    }
+  }catch(e){}
+  location.reload();
+}
+
+/* ---------- Démarrage ---------- */
+(async function demarrer(){
+  try{ await ouvrirBase(); }catch(e){ $('#contenu').innerHTML='<div class="carte ko">Impossible d\'ouvrir la mémoire du téléphone : '+esc(e&&e.message)+'</div>'; return; }
+  history.replaceState(null,'');
+  vueAccueil();
+  if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if(estInstalle()) proteger();
+  document.addEventListener('click', function premierClic(){ proteger(); document.removeEventListener('click', premierClic); }, {once:true});
+  if(navigator.onLine !== false){ verifierMisesAJour(); verifierVersionHub(); }
+})();
+</script>
+</body>
+</html>
