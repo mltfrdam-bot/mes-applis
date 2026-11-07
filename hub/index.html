@@ -90,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.7';
+const HUB_VERSION = '1.8';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -919,6 +919,10 @@ function fusionObjets(a,b){
 }
 
 /* ---------- Sauvegarde complète ---------- */
+/* Comptes, mots de passe, clés : ils restent TOUJOURS dans l'appareil, jamais dans une sauvegarde ni un tout-en-un.
+   Une appli marque une donnée comme privée en commençant son nom par « prive- » ou « prive: ». */
+const CLES_PRIVEES=/^(prive[-:]|mc-compte$)/;
+const estPrive = k => CLES_PRIVEES.test(k);
 async function fabriquerSauvegarde(){
   const apps=await tous('apps');
   const ids=new Set([...apps.map(a=>a.id), ...idsAvecDonnees()]);
@@ -926,7 +930,7 @@ async function fabriquerSauvegarde(){
   const donnees={};
   for(const id of ids){
     const p=PREFIXE+id+':', ls={};
-    Object.keys(localStorage).filter(k=>k.startsWith(p)).forEach(k=>ls[k.slice(p.length)]=localStorage.getItem(k));
+    Object.keys(localStorage).filter(k=>k.startsWith(p) && !estPrive(k.slice(p.length))).forEach(k=>ls[k.slice(p.length)]=localStorage.getItem(k));
     const bases=[]; for(const b of await basesDeApp(id)) bases.push(await exporterBase(b.name));
     donnees[id]={localStorage:ls, bases};
   }
