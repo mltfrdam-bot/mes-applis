@@ -83,7 +83,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.2';
+const HUB_VERSION = '1.3';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -449,15 +449,34 @@ function pointer(){
     let doc=document, win=window;
     try{ if(fr && fr.contentDocument && $('#vueApp').style.display!=='none'){ doc=fr.contentDocument; win=fr.contentWindow; } }catch(e){}
     const ban=document.createElement('div'); ban.id='pointage';
-    ban.innerHTML='📍 Touche l\'endroit concerné<br><button class="btn petit gris" id="pSans">Sans endroit précis</button><button class="btn petit gris" id="pAnn">Annuler</button>';
+    ban.innerHTML='📍 Touche l\'endroit concerné<br><small style="font-weight:400">(fais d\'abord défiler jusqu\'à l\'endroit, puis appuie sur 📍)</small><br><button class="btn petit gris" id="pSans">Sans endroit précis</button><button class="btn petit gris" id="pAnn">Annuler</button>';
     document.body.appendChild(ban);
     const st=doc.createElement('style'); st.textContent='.hub-pointe{outline:3px solid #d9480f!important;outline-offset:2px!important}'; (doc.head||doc.documentElement).appendChild(st);
-    const bloquer=e=>{ if(e.target.closest && e.target.closest('#pointage')) return; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
-    const clic=e=>{ if(e.target.closest && e.target.closest('#pointage')) return; bloquer(e); const el=e.target; el.classList.add('hub-pointe'); terminer(decrireElement(el,win,doc===document)); setTimeout(()=>{ el.classList.remove('hub-pointe'); st.remove(); },60000); };
-    const evts=['pointerdown','mousedown','touchstart','pointerup','mouseup','touchend'];
+    // Sur écran tactile, bloquer l'appui annule le « click » : on choisit donc l'élément au moment où le doigt se lève.
+    let fini=false;
+    const horsBandeau=e=>!(e.target && e.target.closest && e.target.closest('#pointage'));
+    const bloquer=e=>{ if(!horsBandeau(e)) return; if(e.cancelable) e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+    const choisir=e=>{
+      if(fini || !horsBandeau(e)) return;
+      bloquer(e);
+      const t=e.changedTouches && e.changedTouches[0];
+      const x=t?t.clientX:e.clientX, y=t?t.clientY:e.clientY;
+      let el=(x!=null && y!=null)?doc.elementFromPoint(x,y):null;
+      if(!el || el===doc.documentElement || el===doc.body) el=e.target;
+      if(!el || !el.classList) return;
+      fini=true;
+      el.classList.add('hub-pointe');
+      terminer(decrireElement(el,win,doc===document));
+      setTimeout(()=>{ el.classList.remove('hub-pointe'); st.remove(); },60000);
+    };
+    const evts=['pointerdown','mousedown','touchstart','mouseup','click'];
+    const fins=['pointerup','touchend'];
     evts.forEach(t=>doc.addEventListener(t,bloquer,{capture:true,passive:false}));
-    doc.addEventListener('click',clic,true);
-    function terminer(r){ evts.forEach(t=>doc.removeEventListener(t,bloquer,{capture:true})); doc.removeEventListener('click',clic,true); ban.remove(); if(r===undefined||r===null) st.remove(); fin(r); }
+    fins.forEach(t=>doc.addEventListener(t,choisir,{capture:true,passive:false}));
+    function terminer(r){ fini=true; evts.forEach(t=>doc.removeEventListener(t,bloquer,{capture:true})); fins.forEach(t=>doc.removeEventListener(t,choisir,{capture:true}));
+      // le « click » qui suit le doigt levé est encore bloqué un court instant
+      const stop=e=>{ if(horsBandeau(e) && !(e.target.closest && e.target.closest('#voile'))){ e.preventDefault(); e.stopPropagation(); doc.removeEventListener('click',stop,true); } }; doc.addEventListener('click',stop,true); setTimeout(()=>doc.removeEventListener('click',stop,true),400);
+      ban.remove(); if(r===undefined||r===null) st.remove(); fin(r); }
     ban.querySelector('#pSans').onclick=()=>terminer({aucun:true});
     ban.querySelector('#pAnn').onclick=()=>terminer(null);
   });
@@ -471,7 +490,14 @@ function decrireElement(el, win, dansHub){
     if(n.parentElement){ const fr=[...n.parentElement.children].filter(c=>c.tagName===n.tagName); if(fr.length>1) p+=':nth-of-type('+(fr.indexOf(n)+1)+')'; }
     chemin.unshift(p);
   }
-  let section=''; for(let a=el;a && !section;a=a.parentElement){ const h=a.matches && a.matches('h1,h2,h3,summary,legend')?a:(a.querySelector?a.querySelector('h1,h2,h3,summary,legend'):null); if(h) section=txt(h.innerText||h.textContent).slice(0,80); }
+  // section = dernier titre placé AVANT l'élément touché, dans le bloc le plus proche qui en contient un
+  let section='';
+  for(let a=el;a && !section;a=a.parentElement){
+    if(a.matches && a.matches('h1,h2,h3,summary,legend')){ section=txt(a.innerText||a.textContent).slice(0,80); break; }
+    if(!a.querySelectorAll) continue;
+    const avant=[...a.querySelectorAll('h1,h2,h3,summary,legend')].filter(h=>h!==el && (h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING || h.contains(el)));
+    if(avant.length) section=txt(avant[avant.length-1].innerText||avant[avant.length-1].textContent).slice(0,80);
+  }
   const r=el.getBoundingClientRect();
   return { dansHub, balise:el.tagName.toLowerCase(), texte:txt(el.innerText||el.value||el.alt||el.title||el.getAttribute('aria-label')).slice(0,140),
     section, chemin:chemin.join(' > '), position:{x:Math.round((r.left+r.width/2)/win.innerWidth*100), y:Math.round((r.top+r.height/2)/win.innerHeight*100)},
