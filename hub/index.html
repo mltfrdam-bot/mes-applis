@@ -50,17 +50,17 @@
   #fenetre h3{margin:0 0 10px;font-size:19px}
   #fenetre .btn{display:block;width:100%;margin:6px 0}
   #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;display:none;z-index:30;max-width:92%;text-align:center}
-  .cache{display:none}
+  .cache{display:none!important}
 </style>
 </head>
 <body>
 <header id="entete">
   <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
   <h1 id="titre">Mon Hub</h1>
-  <button id="btnGerer" title="Gérer les applis">⚙️</button>
-  <button id="btnSauv" title="Sauvegarde">💾</button>
+  <span id="outils" style="display:flex;gap:6px"><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button></span>
 </header>
 <div id="bandeau"></div>
+<div id="bandeauSante" style="display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px"></div>
 <main id="contenu"></main>
 <div id="vueApp"></div>
 <div id="voile"><div id="fenetre"></div></div>
@@ -77,7 +77,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.0';
+const HUB_VERSION = '1.1';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -133,12 +133,13 @@ function enregistrerFichier(nom, contenu, type){
 let baseHub=null;
 function ouvrirBase(){
   if(baseHub) return Promise.resolve(baseHub);
-  const r=indexedDB.open('mon-hub',1);
+  const r=indexedDB.open('mon-hub',2);
   r.onupgradeneeded=()=>{
     const db=r.result;
-    db.createObjectStore('apps',{keyPath:'id'});
-    db.createObjectStore('registre',{keyPath:'cle'});
-    db.createObjectStore('meta',{keyPath:'cle'});
+    if(!db.objectStoreNames.contains('apps')) db.createObjectStore('apps',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('registre')) db.createObjectStore('registre',{keyPath:'cle'});
+    if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta',{keyPath:'cle'});
+    if(!db.objectStoreNames.contains('journal')) db.createObjectStore('journal',{keyPath:'id'});   // santé des applis
   };
   return promReq(r).then(db=>(baseHub=db));
 }
@@ -199,9 +200,19 @@ function compartiment(ID){
   }catch(e){}
   try{ window.Hub = parent.HubPourApp ? parent.HubPourApp(ID) : null; }catch(e){}
   try{ if(parent.AndroidApp && !window.AndroidApp) window.AndroidApp = parent.AndroidApp; }catch(e){}
+  /* Santé : on prévient le hub des erreurs et du temps de démarrage de l'appli. */
+  var t0=Date.now();
+  function signal(type,info){ try{ if(parent.HubSignal) parent.HubSignal(ID,type,info); }catch(e){} }
+  window.addEventListener('error',function(e){
+    var cible=e.target;
+    if(cible && cible!==window && (cible.src||cible.href)) signal('ressource',{message:'Élément non chargé : '+(cible.src||cible.href)});
+    else signal('erreur',{message:String(e.message||'Erreur inconnue'),ligne:e.lineno||null,colonne:e.colno||null});
+  },true);
+  window.addEventListener('unhandledrejection',function(e){ var r=e.reason; signal('erreur',{message:'Promesse rejetée : '+String(r&&r.message?r.message:r)}); });
+  window.addEventListener('load',function(){ signal('charge',{ms:Date.now()-t0}); });
 }
 function preparerCode(html, id){
-  const s='<scr'+'ipt>('+compartiment.toString()+')('+JSON.stringify(id)+');</scr'+'ipt>';
+  const s='<scr'+'ipt>('+compartiment.toString().replace(/\n\s*/g,' ')+')('+JSON.stringify(id)+');</scr'+'ipt>';   // sur une seule ligne : les numéros de ligne des erreurs restent ceux du fichier de l'appli
   const m=html.match(/<head[^>]*>/i);
   if(m) return html.replace(m[0], m[0]+s);
   const h=html.match(/<html[^>]*>/i);
@@ -253,8 +264,7 @@ function montrer(vue, rendu, titre){
   $('#vueApp').style.display='none';
   $('#contenu').style.display='block';
   $('#btnRetour').classList.toggle('cache', vue==='accueil');
-  $('#btnGerer').classList.toggle('cache', vue!=='accueil');
-  $('#btnSauv').classList.toggle('cache', vue!=='accueil');
+  $('#outils').classList.toggle('cache', vue!=='accueil');
   if(vue!=='accueil' && !(history.state && history.state.v)) history.pushState({v:vue},'');
   rendu();
   window.scrollTo(0,0);
@@ -264,12 +274,14 @@ window.addEventListener('popstate',()=>{ if(vueCourante!=='accueil') retourAccue
 $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(); else retourAccueil(); };
 $('#btnGerer').onclick=()=>vueGerer();
 $('#btnSauv').onclick=()=>vueSauvegarde();
+$('#btnSante').onclick=()=>vueSante();
 
 /* ---------- Accueil ---------- */
 async function vueAccueil(){
   vueCourante='accueil';
+  if(history.state && history.state.v) history.replaceState(null,'');
   $('#titre').textContent='Mon Hub';
-  $('#btnRetour').classList.add('cache'); $('#btnGerer').classList.remove('cache'); $('#btnSauv').classList.remove('cache');
+  $('#btnRetour').classList.add('cache'); $('#outils').classList.remove('cache'); document.title='Mon Hub';
   $('#vueApp').style.display='none'; $('#contenu').style.display='block';
   const apps=await listeApps();
   const derniere=await lireMeta('derniereSauvegarde',null);
@@ -279,7 +291,7 @@ async function vueAccueil(){
     if(jours===null) rappel='<div class="carte att">⚠️ Aucune sauvegarde faite pour l\'instant. Appuie sur 💾 en haut.</div>';
     else if(jours>=7) rappel='<div class="carte att">⚠️ Dernière sauvegarde il y a '+jours+' jours. Pense à appuyer sur 💾.</div>';
   }
-  const tuiles=apps.map(a=>'<button class="tuile" data-id="'+esc(a.id)+'">'+(majDispo[a.id]?'<span class="badge">MAJ</span>':'')+
+  const tuiles=apps.map(a=>'<button class="tuile" data-id="'+esc(a.id)+'">'+(majDispo[a.id]?'<span class="badge">MAJ</span>':(etatsApps[a.id]==='probleme'?'<span class="badge">❌</span>':etatsApps[a.id]==='surveiller'?'<span class="badge" style="background:#f08c00">⚠️</span>':''))+
     '<span class="ico">'+esc(a.icone||'📦')+'</span><span class="nom">'+esc(a.nom)+'</span></button>').join('');
   const vide = apps.length ? '' : '<div class="carte aide">👋 Ton hub est prêt.<br>Appuie sur <b>➕ Ajouter</b> pour ranger ta première appli : depuis un fichier HTML (sans internet) ou depuis le catalogue.</div>';
   $('#contenu').innerHTML = rappel + vide + '<div class="grille">'+tuiles+
@@ -297,7 +309,7 @@ async function ouvrirApp(id){
   vueCourante='app';
   if(!(history.state && history.state.v)) history.pushState({v:'app'},'');
   $('#titre').textContent=(a.icone||'')+' '+a.nom;
-  $('#btnRetour').classList.remove('cache'); $('#btnGerer').classList.add('cache'); $('#btnSauv').classList.add('cache');
+  $('#btnRetour').classList.remove('cache'); $('#outils').classList.add('cache'); document.title=a.nom;
   $('#contenu').style.display='none';
   const zone=$('#vueApp'); zone.style.display='block';
   urlApp=URL.createObjectURL(new Blob([preparerCode(a.code, a.id)],{type:'text/html'}));
@@ -307,8 +319,116 @@ async function ouvrirApp(id){
   fr.src=urlApp;
   zone.innerHTML=''; zone.appendChild(fr);
   a.ouverteLe=new Date().toISOString(); poser('apps',a);
+  demarrerSession(a);
 }
-function fermerApp(){ const z=$('#vueApp'); z.innerHTML=''; z.style.display='none'; if(urlApp){ URL.revokeObjectURL(urlApp); urlApp=null; } }
+function fermerApp(){ terminerSession(); const z=$('#vueApp'); z.innerHTML=''; z.style.display='none'; if(urlApp){ URL.revokeObjectURL(urlApp); urlApp=null; } }
+
+/* ---------- Santé des applis : journal des ouvertures, erreurs et temps de démarrage ---------- */
+let session=null;
+function demarrerSession(a){
+  session={id:'s-'+Date.now()+'-'+Math.random().toString(36).slice(2,5), type:'session', app:a.id, nom:a.nom, version:a.version, date:new Date().toISOString(), debut:Date.now(), duree:0, chargeMs:null, bloquee:false, erreurs:0, ressources:0, messages:[]};
+  enregistrerSession();
+  const s=session;
+  setTimeout(()=>{ if(session===s && s.chargeMs===null){ s.bloquee=true; enregistrerSession(); avertirApp('⚠️ Cette appli met plus de 10 secondes à démarrer.'); } }, 10000);
+}
+function enregistrerSession(){ if(!session) return; session.duree=Math.round((Date.now()-session.debut)/1000); const c=Object.assign({},session); poser('journal',c).catch(()=>{}); }
+function terminerSession(){ if(!session) return; enregistrerSession(); session=null; }
+window.addEventListener('pagehide', enregistrerSession);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') enregistrerSession(); });
+function avertirApp(texte){
+  const z=$('#vueApp'); if(!z || z.style.display==='none') return;
+  let b=z.querySelector('.alerteApp');
+  if(!b){ b=document.createElement('div'); b.className='alerteApp'; b.style.cssText='position:absolute;left:8px;right:8px;top:8px;background:#fff4e6;border:1px solid #f0c08a;border-radius:10px;padding:10px 12px;font-size:15px;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:3'; z.appendChild(b); }
+  b.innerHTML=esc(texte)+' <button class="btn petit gris">OK</button>'; b.querySelector('button').onclick=()=>b.remove();
+}
+window.HubSignal=function(appId,type,info){
+  if(!session || session.app!==appId) return;
+  if(type==='charge'){ session.chargeMs=info.ms; if(session.bloquee){ session.bloquee=false; } }
+  else if(type==='ressource'){ session.ressources++; if(session.messages.length<20) session.messages.push({quand:new Date().toISOString(), type, message:info.message}); }
+  else if(type==='erreur'){
+    session.erreurs++;
+    if(session.messages.length<20) session.messages.push({quand:new Date().toISOString(), type, message:info.message, ligne:info.ligne||null});
+    if(session.erreurs===1) avertirApp('⚠️ Cette appli a rencontré une erreur. Elle est notée dans 🩺 Santé.');
+  }
+  enregistrerSession();
+};
+/* Erreurs du hub lui-même */
+window.addEventListener('error',e=>{ poser('journal',{id:'h-'+Date.now(),type:'erreur-hub',app:'hub',date:new Date().toISOString(),message:String(e.message||'Erreur'),ligne:e.lineno||null}).catch(()=>{}); });
+window.addEventListener('unhandledrejection',e=>{ const r=e.reason; poser('journal',{id:'h-'+Date.now(),type:'erreur-hub',app:'hub',date:new Date().toISOString(),message:'Promesse rejetée : '+String(r&&r.message?r.message:r)}).catch(()=>{}); });
+
+const JOUR=864e5;
+async function journal(){ try{ return await tous('journal'); }catch(e){ return []; } }
+async function nettoyerJournal(){ const l=await journal(), lim=Date.now()-90*JOUR; for(const e of l) if(new Date(e.date)<lim) await enlever('journal',e.id); }
+/* Verdict de viabilité d'une appli sur 30 jours. */
+function bilanApp(app, l){
+  const s30=l.filter(e=>e.type==='session' && e.app===app.id && Date.now()-new Date(e.date)<30*JOUR);
+  const s7=s30.filter(e=>Date.now()-new Date(e.date)<7*JOUR);
+  const avecErr=s30.filter(e=>e.erreurs>0).length, err7=s7.reduce((t,e)=>t+e.erreurs,0);
+  const charges=s30.map(e=>e.chargeMs).filter(x=>x!=null), chargeMoy=charges.length?Math.round(charges.reduce((a,b)=>a+b,0)/charges.length):null;
+  const bloq7=s7.filter(e=>e.bloquee).length;
+  const b={ouvertures:s30.length, temps:s30.reduce((t,e)=>t+(e.duree||0),0), erreurs:s30.reduce((t,e)=>t+e.erreurs,0), sessionsErr:avecErr, err7, chargeMoy, bloq7, ressources:s30.reduce((t,e)=>t+(e.ressources||0),0),
+    derniers:s30.flatMap(e=>(e.messages||[]).map(m=>Object.assign({version:e.version},m))).sort((x,y)=>y.quand.localeCompare(x.quand)).slice(0,10)};
+  if(bloq7 || (s30.length>=3 && avecErr/s30.length>=0.3)) { b.verdict='probleme'; b.texte='❌ Problème'; b.explic=bloq7?'Ne démarre pas toujours ('+bloq7+' fois en 7 jours).':'Erreurs dans '+Math.round(avecErr/s30.length*100)+' % des ouvertures.'; }
+  else if(err7 || (chargeMoy!=null && chargeMoy>3000)) { b.verdict='surveiller'; b.texte='⚠️ À surveiller'; b.explic=err7?err7+' erreur(s) cette semaine.':'Démarrage lent ('+(chargeMoy/1000).toFixed(1)+' s).'; }
+  else if(!s30.length) { b.verdict='inutilisee'; b.texte='💤 Peu utilisée'; b.explic='Pas ouverte depuis 30 jours.'; }
+  else { b.verdict='stable'; b.texte='✅ Stable'; b.explic='Aucune erreur cette semaine.'; }
+  return b;
+}
+const duree = s => s<60 ? s+' s' : s<3600 ? Math.round(s/60)+' min' : (s/3600).toFixed(1).replace('.',',')+' h';
+
+/* Contrôle à l'ouverture du hub. Renvoie la liste des points à vérifier. */
+async function controleDemarrage(){
+  const points=[];
+  try{ await un('meta','x'); }catch(e){ points.push({niv:'ko',texte:'La mémoire du hub ne répond pas.'}); }
+  try{ if(navigator.storage && navigator.storage.persisted && !(await navigator.storage.persisted())) points.push({niv:'att',texte:'Données pas encore protégées contre l\'effacement automatique (💾 → Protéger).'}); }catch(e){}
+  if(!APP_ANDROID && location.protocol.startsWith('http') && 'serviceWorker' in navigator && !navigator.serviceWorker.controller) points.push({niv:'info',texte:'Mode hors ligne pas encore prêt : rouvre le hub une fois avec internet.'});
+  const apps=await listeApps();
+  apps.filter(a=>!a.code || a.code.length<20).forEach(a=>points.push({niv:'ko',texte:'Le code de « '+a.nom+' » est vide ou abîmé.'}));
+  const der=await lireMeta('derniereSauvegarde',null);
+  if(apps.length && (!der || Date.now()-new Date(der)>7*JOUR)) points.push({niv:'att',texte:der?'Dernière sauvegarde il y a plus de 7 jours.':'Aucune sauvegarde faite.'});
+  const l=await journal();
+  apps.forEach(a=>{ const b=bilanApp(a,l); if(b.verdict==='probleme') points.push({niv:'ko',texte:'« '+a.nom+' » : '+b.explic}); else if(b.verdict==='surveiller') points.push({niv:'att',texte:'« '+a.nom+' » : '+b.explic}); });
+  const eh=l.filter(e=>e.type==='erreur-hub' && Date.now()-new Date(e.date)<7*JOUR).length;
+  if(eh) points.push({niv:'att',texte:'Le hub a eu '+eh+' erreur(s) cette semaine.'});
+  return points;
+}
+let etatsApps={};
+async function afficherControle(){
+  const pts=await controleDemarrage(), l=await journal();
+  etatsApps={}; (await listeApps()).forEach(a=>etatsApps[a.id]=bilanApp(a,l).verdict);
+  const graves=pts.filter(p=>p.niv!=='info');
+  const b=$('#bandeauSante');
+  if(graves.length){ b.style.display='block'; b.innerHTML='🩺 <b>'+graves.length+' point(s) à vérifier</b> <button class="btn petit" id="bVoirSante">Voir</button>'; $('#bVoirSante').onclick=()=>vueSante(); }
+  else b.style.display='none';
+  if(vueCourante==='accueil') vueAccueil(true);
+}
+
+/* ---------- Écran Santé ---------- */
+function vueSante(){
+  montrer('sante', async ()=>{
+    const apps=await listeApps(), l=await journal(), pts=await controleDemarrage();
+    const lignesPts = pts.length ? pts.map(p=>'<tr><td class="'+(p.niv==='ko'?'ko':p.niv==='att'?'att':'')+'">'+(p.niv==='ko'?'❌':p.niv==='att'?'⚠️':'ℹ️')+' '+esc(p.texte)+'</td></tr>').join('') : '<tr><td class="ok">✅ Tout va bien.</td></tr>';
+    const bil=apps.map(a=>({a, b:bilanApp(a,l)}));
+    $('#contenu').innerHTML=
+      '<div class="carte"><h2>Contrôle à l\'ouverture</h2><div class="tablo"><table>'+lignesPts+'</table></div></div>'+
+      '<div class="carte"><h2>Fonctionnement des applis (30 jours)</h2><p class="aide">Appuie sur une ligne pour voir le détail des erreurs.</p><div class="tablo"><table><tr><th>Appli</th><th>Verdict</th><th>Ouvertures</th><th>Temps</th><th>Erreurs</th><th>Démarrage</th></tr>'+
+      (bil.length?bil.map(x=>'<tr data-det="'+esc(x.a.id)+'"><td>'+esc(x.a.icone)+' '+esc(x.a.nom)+'</td><td class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':x.b.verdict==='stable'?'ok':'')+'">'+x.b.texte+'</td><td>'+x.b.ouvertures+'</td><td>'+duree(x.b.temps)+'</td><td>'+x.b.erreurs+'</td><td>'+(x.b.chargeMoy!=null?(x.b.chargeMoy/1000).toFixed(1).replace('.',',')+' s':'—')+'</td></tr>').join(''):'<tr><td colspan="6">Aucune appli pour l\'instant.</td></tr>')+
+      '</table></div><p class="aide">✅ Stable : aucune erreur cette semaine · ⚠️ À surveiller : quelques erreurs ou démarrage lent · ❌ Problème : erreurs fréquentes ou ne démarre pas · 💤 Peu utilisée : pas ouverte depuis 30 jours.</p></div>'+
+      '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan et les dernières erreurs. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
+    $('#contenu').querySelectorAll('[data-det]').forEach(tr=>tr.onclick=()=>{ const x=bil.find(y=>y.a.id===tr.dataset.det);
+      info(x.a.icone+' '+x.a.nom, '<p class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':'ok')+'">'+x.b.texte+' — '+esc(x.b.explic)+'</p>'+
+        (x.b.ressources?'<p class="aide">'+x.b.ressources+' élément(s) internet non chargé(s) (normal sans réseau).</p>':'')+
+        (x.b.derniers.length?'<div class="tablo"><table><tr><th>Quand</th><th>Version</th><th>Message</th></tr>'+x.b.derniers.map(m=>'<tr><td>'+dateFr(m.quand)+'</td><td>'+esc(m.version)+'</td><td>'+esc(m.message)+(m.ligne?' (ligne '+m.ligne+')':'')+'</td></tr>').join('')+'</table></div>':'<p>Aucune erreur notée.</p>')); });
+    $('#bRapport').onclick=async()=>{
+      const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
+        applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
+        erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20)};
+      enregistrerFichier('MonHub-rapport-sante_'+horodatage()+'.json', JSON.stringify(rapport,null,1), 'application/json');
+    };
+    $('#bVider').onclick=async()=>{ const ok=await fenetre('Remettre à zéro ?','<p>Le journal des ouvertures et des erreurs sera vidé. Tes applis et leurs données ne bougent pas.</p>',[{texte:'Remettre à zéro',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]); if(ok){ await vider('journal'); vueSanteRendu(); } };
+  },'🩺 Santé des applis');
+}
+const vueSanteRendu=()=>{ history.replaceState({v:'sante'},''); vueSante(); };
 
 /* ---------- Ajouter une appli ---------- */
 const EMOJIS=['📐','🏗️','🚧','📏','🧮','⌨️','📖','🏋️','🏃','🎾','🚴','🍚','🥗','☕','🎮','🧠','📝','📊','🔧','💡','⭐','📦'];
@@ -402,7 +522,7 @@ async function optionsApp(id){
   const boutons=[{texte:'▶️ Ouvrir',valeur:'ouvrir'}];
   if(majDispo[id]) boutons.push({texte:'⬆️ Mettre à jour (version '+majDispo[id]+')',classe:'vert',valeur:'majcat'});
   boutons.push({texte:'📁 Nouvelle version depuis un fichier',classe:'gris',valeur:'majfic'},{texte:'✏️ Nom / icône / version',classe:'gris',valeur:'modif'},
-    {texte:'📤 Enregistrer le code de l\'appli',classe:'gris',valeur:'export'},{texte:'🗑️ Retirer du hub',classe:'rouge',valeur:'retirer'},{texte:'Fermer',classe:'gris',valeur:null});
+    {texte:'📌 Raccourci sur l\'écran d\'accueil',classe:'gris',valeur:'raccourci'},{texte:'📤 Enregistrer le code de l\'appli',classe:'gris',valeur:'export'},{texte:'🗑️ Retirer du hub',classe:'rouge',valeur:'retirer'},{texte:'Fermer',classe:'gris',valeur:null});
   const c=await fenetre((a.icone||'')+' '+a.nom,'<div class="tablo"><table>'+
     '<tr><th>Version</th><td>'+esc(a.version)+'</td></tr><tr><th>Origine</th><td>'+(a.source==='catalogue'?'Catalogue':'Fichier « '+esc(a.fichier||'')+' »')+'</td></tr>'+
     '<tr><th>Ajoutée le</th><td>'+dateFr(a.ajouteeLe)+'</td></tr><tr><th>Modifiée le</th><td>'+dateFr(a.majLe)+'</td></tr></table></div>', boutons);
@@ -412,6 +532,17 @@ async function optionsApp(id){
   else if(c==='modif') modifierApp(id);
   else if(c==='export') enregistrerFichier(slug(a.nom)+'-v'+slug(a.version)+'.html', a.code, 'text/html');
   else if(c==='retirer') retirerApp(id);
+  else if(c==='raccourci') raccourciApp(a);
+}
+function adresseApp(a){ return new URL('./?app='+encodeURIComponent(a.id), location.href).href; }
+async function raccourciApp(a){
+  const adr=adresseApp(a);
+  const r=await fenetre('📌 Raccourci « '+a.nom+' »',
+    '<p class="aide">Ce raccourci ouvre le hub <b>directement sur cette appli</b>.</p>'+
+    '<ol class="aide" style="padding-left:20px"><li>Appuie sur <b>« Copier l\'adresse »</b>.</li><li>Ouvre <b>Chrome</b>, colle l\'adresse dans la barre du haut et valide.</li><li>Appuie sur <b>⋮</b> puis <b>« Ajouter à l\'écran d\'accueil »</b>.</li><li>Garde le nom proposé (« '+esc(a.nom)+' ») et appuie sur <b>Ajouter</b>.</li></ol>'+
+    '<input type="text" readonly value="'+esc(adr)+'" style="font-size:14px">',
+    [{texte:'📋 Copier l\'adresse',classe:'vert',valeur:'copier'},{texte:'Fermer',classe:'gris',valeur:null}]);
+  if(r==='copier'){ try{ await navigator.clipboard.writeText(adr); toast('✅ Adresse copiée. Colle-la dans Chrome.',4500); }catch(e){ info('Copie impossible','<p>Recopie cette adresse :</p><p style="word-break:break-all"><b>'+esc(adr)+'</b></p>'); } }
 }
 const vueGererRendu=()=>{ history.replaceState({v:'gerer'},''); vueGerer(); };
 async function modifierApp(id){
@@ -725,7 +856,10 @@ async function majHub(){
 (async function demarrer(){
   try{ await ouvrirBase(); }catch(e){ $('#contenu').innerHTML='<div class="carte ko">Impossible d\'ouvrir la mémoire du téléphone : '+esc(e&&e.message)+'</div>'; return; }
   history.replaceState(null,'');
-  vueAccueil();
+  const appDemandee=new URLSearchParams(location.search).get('app');
+  if(appDemandee && await un('apps',appDemandee)){ vueAccueil(); ouvrirApp(appDemandee); }
+  else { vueAccueil(); if(appDemandee) toast('Cette appli n\'est plus dans le hub.'); }
+  nettoyerJournal().then(afficherControle).catch(()=>{});
   if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
   if(estInstalle()) proteger();
   document.addEventListener('click', function premierClic(){ proteger(); document.removeEventListener('click', premierClic); }, {once:true});
