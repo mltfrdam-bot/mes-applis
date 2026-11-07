@@ -49,6 +49,11 @@
   #fenetre{background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px}
   #fenetre h3{margin:0 0 10px;font-size:19px}
   #fenetre .btn{display:block;width:100%;margin:6px 0}
+  #pointage{position:fixed;left:0;right:0;top:0;z-index:25;background:#d9480f;color:#fff;padding:12px;font-size:16px;font-weight:600;text-align:center}
+  #pointage .btn{margin:6px 4px 0}
+  textarea{font:inherit;width:100%;min-height:110px;padding:10px;border:1px solid #c9ced6;border-radius:8px}
+  .choix{display:flex;gap:6px;flex-wrap:wrap}
+  .choix label{font-weight:500;margin:0;border:1px solid #c9ced6;border-radius:8px;padding:8px 10px;background:#f7f8fa}
   #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;display:none;z-index:30;max-width:92%;text-align:center}
   .cache{display:none!important}
 </style>
@@ -57,6 +62,7 @@
 <header id="entete">
   <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
   <h1 id="titre">Mon Hub</h1>
+  <button id="btnSignal" title="Signaler un problème ou une idée">📍</button>
   <span id="outils" style="display:flex;gap:6px"><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button></span>
 </header>
 <div id="bandeau"></div>
@@ -77,7 +83,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.1';
+const HUB_VERSION = '1.2';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -133,13 +139,14 @@ function enregistrerFichier(nom, contenu, type){
 let baseHub=null;
 function ouvrirBase(){
   if(baseHub) return Promise.resolve(baseHub);
-  const r=indexedDB.open('mon-hub',2);
+  const r=indexedDB.open('mon-hub',3);
   r.onupgradeneeded=()=>{
     const db=r.result;
     if(!db.objectStoreNames.contains('apps')) db.createObjectStore('apps',{keyPath:'id'});
     if(!db.objectStoreNames.contains('registre')) db.createObjectStore('registre',{keyPath:'cle'});
     if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta',{keyPath:'cle'});
     if(!db.objectStoreNames.contains('journal')) db.createObjectStore('journal',{keyPath:'id'});   // santé des applis
+    if(!db.objectStoreNames.contains('signalements')) db.createObjectStore('signalements',{keyPath:'id'});   // 📍 messages pour Claude
   };
   return promReq(r).then(db=>(baseHub=db));
 }
@@ -275,6 +282,7 @@ $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(
 $('#btnGerer').onclick=()=>vueGerer();
 $('#btnSauv').onclick=()=>vueSauvegarde();
 $('#btnSante').onclick=()=>vueSante();
+$('#btnSignal').onclick=()=>signaler();
 
 /* ---------- Accueil ---------- */
 async function vueAccueil(){
@@ -414,11 +422,13 @@ function vueSante(){
       '<div class="carte"><h2>Fonctionnement des applis (30 jours)</h2><p class="aide">Appuie sur une ligne pour voir le détail des erreurs.</p><div class="tablo"><table><tr><th>Appli</th><th>Verdict</th><th>Ouvertures</th><th>Temps</th><th>Erreurs</th><th>Démarrage</th></tr>'+
       (bil.length?bil.map(x=>'<tr data-det="'+esc(x.a.id)+'"><td>'+esc(x.a.icone)+' '+esc(x.a.nom)+'</td><td class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':x.b.verdict==='stable'?'ok':'')+'">'+x.b.texte+'</td><td>'+x.b.ouvertures+'</td><td>'+duree(x.b.temps)+'</td><td>'+x.b.erreurs+'</td><td>'+(x.b.chargeMoy!=null?(x.b.chargeMoy/1000).toFixed(1).replace('.',',')+' s':'—')+'</td></tr>').join(''):'<tr><td colspan="6">Aucune appli pour l\'instant.</td></tr>')+
       '</table></div><p class="aide">✅ Stable : aucune erreur cette semaine · ⚠️ À surveiller : quelques erreurs ou démarrage lent · ❌ Problème : erreurs fréquentes ou ne démarre pas · 💤 Peu utilisée : pas ouverte depuis 30 jours.</p></div>'+
+      '<div class="carte" id="carteSignal"></div>'+
       '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan et les dernières erreurs. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
     $('#contenu').querySelectorAll('[data-det]').forEach(tr=>tr.onclick=()=>{ const x=bil.find(y=>y.a.id===tr.dataset.det);
       info(x.a.icone+' '+x.a.nom, '<p class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':'ok')+'">'+x.b.texte+' — '+esc(x.b.explic)+'</p>'+
         (x.b.ressources?'<p class="aide">'+x.b.ressources+' élément(s) internet non chargé(s) (normal sans réseau).</p>':'')+
         (x.b.derniers.length?'<div class="tablo"><table><tr><th>Quand</th><th>Version</th><th>Message</th></tr>'+x.b.derniers.map(m=>'<tr><td>'+dateFr(m.quand)+'</td><td>'+esc(m.version)+'</td><td>'+esc(m.message)+(m.ligne?' (ligne '+m.ligne+')':'')+'</td></tr>').join('')+'</table></div>':'<p>Aucune erreur notée.</p>')); });
+    afficherCarteSignal();
     $('#bRapport').onclick=async()=>{
       const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
         applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
@@ -427,6 +437,161 @@ function vueSante(){
     };
     $('#bVider').onclick=async()=>{ const ok=await fenetre('Remettre à zéro ?','<p>Le journal des ouvertures et des erreurs sera vidé. Tes applis et leurs données ne bougent pas.</p>',[{texte:'Remettre à zéro',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]); if(ok){ await vider('journal'); vueSanteRendu(); } };
   },'🩺 Santé des applis');
+}
+/* ---------- 📍 Signalements : messages pour Claude, envoyés dans un dépôt GitHub privé ---------- */
+const DEPOT_DEFAUT='mltfrdam-bot/retours-hub';
+async function reglageSignal(){ return await lireMeta('signalement',{depot:DEPOT_DEFAUT, cle:''}); }
+
+/* Étape 1 : toucher l'endroit concerné (dans l'appli ouverte, ou dans le hub). */
+function pointer(){
+  return new Promise(fin=>{
+    const fr=$('#vueApp iframe');
+    let doc=document, win=window;
+    try{ if(fr && fr.contentDocument && $('#vueApp').style.display!=='none'){ doc=fr.contentDocument; win=fr.contentWindow; } }catch(e){}
+    const ban=document.createElement('div'); ban.id='pointage';
+    ban.innerHTML='📍 Touche l\'endroit concerné<br><button class="btn petit gris" id="pSans">Sans endroit précis</button><button class="btn petit gris" id="pAnn">Annuler</button>';
+    document.body.appendChild(ban);
+    const st=doc.createElement('style'); st.textContent='.hub-pointe{outline:3px solid #d9480f!important;outline-offset:2px!important}'; (doc.head||doc.documentElement).appendChild(st);
+    const bloquer=e=>{ if(e.target.closest && e.target.closest('#pointage')) return; e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+    const clic=e=>{ if(e.target.closest && e.target.closest('#pointage')) return; bloquer(e); const el=e.target; el.classList.add('hub-pointe'); terminer(decrireElement(el,win,doc===document)); setTimeout(()=>{ el.classList.remove('hub-pointe'); st.remove(); },60000); };
+    const evts=['pointerdown','mousedown','touchstart','pointerup','mouseup','touchend'];
+    evts.forEach(t=>doc.addEventListener(t,bloquer,{capture:true,passive:false}));
+    doc.addEventListener('click',clic,true);
+    function terminer(r){ evts.forEach(t=>doc.removeEventListener(t,bloquer,{capture:true})); doc.removeEventListener('click',clic,true); ban.remove(); if(r===undefined||r===null) st.remove(); fin(r); }
+    ban.querySelector('#pSans').onclick=()=>terminer({aucun:true});
+    ban.querySelector('#pAnn').onclick=()=>terminer(null);
+  });
+}
+function decrireElement(el, win, dansHub){
+  const txt=x=>String(x||'').replace(/\s+/g,' ').trim();
+  let chemin=[], n=el;
+  for(let i=0;n && n.nodeType===1 && i<5 && n.tagName!=='BODY';i++,n=n.parentElement){
+    let p=n.tagName.toLowerCase(); if(n.id){ p+='#'+n.id; chemin.unshift(p); break; }
+    const cl=[...n.classList].filter(c=>c!=='hub-pointe').slice(0,2); if(cl.length) p+='.'+cl.join('.');
+    if(n.parentElement){ const fr=[...n.parentElement.children].filter(c=>c.tagName===n.tagName); if(fr.length>1) p+=':nth-of-type('+(fr.indexOf(n)+1)+')'; }
+    chemin.unshift(p);
+  }
+  let section=''; for(let a=el;a && !section;a=a.parentElement){ const h=a.matches && a.matches('h1,h2,h3,summary,legend')?a:(a.querySelector?a.querySelector('h1,h2,h3,summary,legend'):null); if(h) section=txt(h.innerText||h.textContent).slice(0,80); }
+  const r=el.getBoundingClientRect();
+  return { dansHub, balise:el.tagName.toLowerCase(), texte:txt(el.innerText||el.value||el.alt||el.title||el.getAttribute('aria-label')).slice(0,140),
+    section, chemin:chemin.join(' > '), position:{x:Math.round((r.left+r.width/2)/win.innerWidth*100), y:Math.round((r.top+r.height/2)/win.innerHeight*100)},
+    ecran:win.innerWidth+'×'+win.innerHeight+(win.innerHeight>win.innerWidth?' portrait':' paysage') };
+}
+
+/* Étape 2 : écrire le message, puis l'envoyer (ou le garder en attente). */
+async function signaler(){
+  const appOuverte = session ? await un('apps', session.app) : null;
+  const endroit=await pointer(); if(endroit===null) return;
+  const resume = endroit.aucun ? 'Aucun endroit précis' : ((endroit.texte?'« '+endroit.texte.slice(0,60)+' »':'élément '+endroit.balise)+(endroit.section?' — section « '+endroit.section+' »':''));
+  const v=await fenetre('📍 Signaler', '<p class="aide"><b>Où :</b> '+(appOuverte?esc(appOuverte.icone+' '+appOuverte.nom):'Mon Hub ('+esc(vueCourante)+')')+'<br><b>Endroit :</b> '+esc(resume)+'</p>'+
+    '<label>C\'est…</label><div class="choix">'+[['probleme','🐞 Un problème'],['forme','🎨 Une mise en forme'],['idee','💡 Une idée']].map((t,i)=>'<label><input type="radio" name="sType" value="'+t[0]+'"'+(i===0?' checked':'')+'> '+t[1]+'</label>').join('')+'</div>'+
+    '<label>Ton message</label><textarea id="sMsg" placeholder="Ex. : ce tableau déborde en mode portrait"></textarea>',
+    [{texte:'📨 Envoyer à Claude',classe:'vert',valeur:f=>({type:f.querySelector('input[name=sType]:checked').value, message:f.querySelector('#sMsg').value.trim()})},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(!v) return;
+  if(!v.message){ toast('Message vide : rien n\'a été envoyé.'); return; }
+  const sig={id:'sig-'+Date.now(), cree:new Date().toISOString(), statut:'attente', type:v.type, message:v.message, endroit,
+    app: appOuverte?{id:appOuverte.id, nom:appOuverte.nom, version:appOuverte.version}:{id:'hub', nom:'Mon Hub', version:HUB_VERSION, ecran:vueCourante}};
+  await poser('signalements', sig);
+  const r=await envoyerEnAttente(false);
+  if(r.envoyes) toast('✅ Signalement envoyé à Claude',4000);
+  else if(r.pasDeCle) toast('📍 Signalement gardé. Pour l\'envoyer, règle la clé dans 🩺 Santé → Signalements.',6000);
+  else toast('📍 Signalement gardé : il partira dès que internet revient.',5000);
+}
+const TYPES_SIG={probleme:'🐞 Problème', forme:'🎨 Mise en forme', idee:'💡 Idée'};
+function corpsIssue(s){
+  const e=s.endroit||{};
+  return '**Appli** : '+s.app.nom+' (version '+s.app.version+') — `'+s.app.id+'`'+(s.app.ecran?' — écran « '+s.app.ecran+' »':'')+'\n'+
+    '**Type** : '+TYPES_SIG[s.type]+'\n\n**Message** :\n> '+s.message.replace(/\n/g,'\n> ')+'\n\n'+
+    (e.aucun?'**Endroit** : aucun endroit précis\n':'**Endroit touché** : '+(e.texte?'« '+e.texte+' »':'élément `'+e.balise+'`')+(e.section?' — section « '+e.section+' »':'')+'\n'+
+      '- élément : `'+e.balise+'` — chemin : `'+e.chemin+'`\n- position : '+e.position.x+' % horizontal, '+e.position.y+' % vertical — écran '+e.ecran+'\n')+
+    '\n---\nEnvoyé depuis Mon Hub '+HUB_VERSION+' — écrit le '+dateFr(s.cree);
+}
+let envoiEnCours=false;
+async function envoyerEnAttente(silencieux){
+  const bilan={envoyes:0, echecs:0, pasDeCle:false};
+  if(envoiEnCours) return bilan; envoiEnCours=true;
+  try{
+    const reg=await reglageSignal();
+    const liste=(await tous('signalements')).filter(s=>s.statut!=='envoye').sort((a,b)=>a.cree.localeCompare(b.cree));
+    if(!liste.length) return bilan;
+    if(!reg.cle){ bilan.pasDeCle=true; return bilan; }
+    for(const s of liste){
+      try{
+        const r=await fetch('https://api.github.com/repos/'+reg.depot+'/issues',{method:'POST',headers:{'Authorization':'Bearer '+reg.cle,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+          body:JSON.stringify({title:('['+s.app.nom+'] '+TYPES_SIG[s.type].slice(3)+' : '+s.message.replace(/\s+/g,' ')).slice(0,90), body:corpsIssue(s)})});
+        if(r.ok){ const j=await r.json(); s.statut='envoye'; s.numero=j.number; s.envoyeLe=new Date().toISOString(); delete s.erreur; bilan.envoyes++; }
+        else { s.erreur=r.status===401?'Clé refusée (expirée ou mal copiée)':r.status===404?'Dépôt introuvable, ou la clé n\'y a pas accès':r.status===403?'La clé n\'a pas le droit d\'écrire les signalements (Issues)':'Erreur GitHub '+r.status; bilan.echecs++; }
+      }catch(e){ s.erreur='Pas de connexion'; bilan.echecs++; }
+      await poser('signalements', s);
+      if(s.erreur && s.erreur!=='Pas de connexion') break;
+    }
+    if(bilan.envoyes && silencieux) toast('✅ '+bilan.envoyes+' signalement(s) en attente envoyé(s)');
+  } finally { envoiEnCours=false; if(vueCourante==='sante') afficherCarteSignal(); }
+  return bilan;
+}
+async function testerCle(depot, cle){
+  try{
+    const r=await fetch('https://api.github.com/repos/'+depot,{headers:{'Authorization':'Bearer '+cle,'Accept':'application/vnd.github+json'}});
+    if(r.status===401) return {ok:false, texte:'❌ Clé refusée : elle est expirée ou mal copiée.'};
+    if(r.status===404) return {ok:false, texte:'❌ Dépôt « '+depot+' » introuvable, ou la clé n\'y a pas accès.'};
+    if(!r.ok) return {ok:false, texte:'❌ Erreur GitHub '+r.status+'.'};
+    const j=await r.json();
+    return {ok:true, texte:'✅ Connexion OK au dépôt « '+j.full_name+' »'+(j.private?' (privé 🔒).':' — ⚠️ ce dépôt est PUBLIC : tout le monde pourra lire tes signalements.')};
+  }catch(e){ return {ok:false, texte:'❌ Pas de connexion internet.'}; }
+}
+async function afficherCarteSignal(){
+  const c=$('#carteSignal'); if(!c) return;
+  const reg=await reglageSignal(), l=(await tous('signalements')).sort((a,b)=>b.cree.localeCompare(a.cree));
+  const att=l.filter(s=>s.statut!=='envoye').length;
+  c.innerHTML='<h2>📍 Signalements pour Claude</h2>'+
+    '<p class="aide">Bouton 📍 en haut de l\'écran : tu touches l\'endroit, tu écris ton message, il part dans ton dépôt GitHub privé, où je le lis.</p>'+
+    '<div class="tablo"><table><tr><th>Dépôt</th><td>'+esc(reg.depot)+'</td></tr><tr><th>Clé</th><td>'+(reg.cle?'<span class="ok">enregistrée</span>':'<span class="att">pas encore réglée</span>')+'</td></tr><tr><th>En attente</th><td>'+att+'</td></tr></table></div>'+
+    '<button class="btn" id="sGuide">📖 Guide : dépôt privé et clé</button><button class="btn gris" id="sRegl">🔑 Régler la clé</button>'+(att?'<button class="btn vert" id="sEnv">📨 Envoyer maintenant</button>':'')+
+    (l.length?'<div class="tablo" style="margin-top:10px"><table><tr><th>Écrit le</th><th>Appli</th><th>Message</th><th>État</th></tr>'+l.slice(0,15).map(s=>'<tr><td>'+dateFr(s.cree)+'</td><td>'+esc(s.app.nom)+'</td><td>'+esc(TYPES_SIG[s.type].slice(0,2)+' '+s.message.slice(0,60))+'</td><td>'+(s.statut==='envoye'?'<span class="ok">✅ envoyé n°'+s.numero+'</span>':'<span class="att">⏳ en attente'+(s.erreur?'<br><small>'+esc(s.erreur)+'</small>':'')+'</span>')+'</td></tr>').join('')+'</table></div>':'');
+  c.querySelector('#sGuide').onclick=guideSignal;
+  c.querySelector('#sRegl').onclick=reglerCle;
+  const e=c.querySelector('#sEnv'); if(e) e.onclick=async()=>{ const r=await envoyerEnAttente(false); toast(r.envoyes?'✅ '+r.envoyes+' envoyé(s)':r.pasDeCle?'Règle d\'abord la clé.':'Pas envoyé : voir l\'état dans le tableau.',4500); };
+}
+async function reglerCle(){
+  const reg=await reglageSignal();
+  const v=await fenetre('🔑 Régler la clé','<label>Dépôt (nom-du-compte/nom-du-dépôt)</label><input type="text" id="kDep" value="'+esc(reg.depot)+'">'+
+    '<label>Clé (commence par github_pat_)</label><input type="text" id="kCle" value="" placeholder="'+(reg.cle?'Clé déjà enregistrée : colle une nouvelle clé pour la remplacer':'Colle la clé ici')+'" autocomplete="off" autocapitalize="off" spellcheck="false">'+
+    '<p class="aide">La clé reste dans ton téléphone. Elle n\'est jamais mise dans les sauvegardes.</p>',
+    [{texte:'Enregistrer et tester',classe:'vert',valeur:f=>({depot:f.querySelector('#kDep').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,''), cle:f.querySelector('#kCle').value.trim()})},
+     {texte:'Effacer la clé',classe:'rouge',valeur:'effacer'},{texte:'Annuler',classe:'gris',valeur:null}]);
+  if(!v) return;
+  if(v==='effacer'){ await ecrireMeta('signalement',{depot:reg.depot, cle:''}); toast('Clé effacée'); afficherCarteSignal(); return; }
+  const nouv={depot:v.depot||reg.depot, cle:v.cle||reg.cle};
+  if(!nouv.cle){ toast('Aucune clé collée.'); return; }
+  toast('Test de la connexion…');
+  const t=await testerCle(nouv.depot, nouv.cle);
+  await ecrireMeta('signalement', nouv);
+  await info('Test de la clé','<p class="'+(t.ok?'ok':'ko')+'">'+esc(t.texte)+'</p>'+(t.ok?'<p class="aide">Tout est prêt : utilise le bouton 📍 en haut de l\'écran.</p>':'<p class="aide">Vérifie les étapes du guide, puis recommence.</p>'));
+  if(t.ok) envoyerEnAttente(false);
+  afficherCarteSignal();
+}
+function guideSignal(){
+  const E=(en,fr)=>'<b>« '+en+' »</b> <span class="aide">('+fr+')</span>';
+  info('📖 Guide : dépôt privé et clé',
+    '<p class="aide">À faire une seule fois, dans <b>Chrome</b> sur <b>github.com</b>, connecté à ton compte <b>mltfrdam-bot</b>. GitHub est en anglais : les mots à toucher sont entre « », avec la traduction à côté. Si le site s\'affiche en version mobile et que tu ne trouves pas un menu, coche dans Chrome <b>⋮ → « Version pour ordinateur »</b>.</p>'+
+    '<h3 style="font-size:17px">A. Créer le dépôt privé</h3><ol style="padding-left:20px;line-height:1.5">'+
+    '<li>Va sur <b>github.com/new</b>.</li>'+
+    '<li>Dans '+E('Repository name','nom du dépôt')+', écris <b>retours-hub</b>.</li>'+
+    '<li>Choisis '+E('Private','privé')+' (et non « Public »).</li>'+
+    '<li>Touche '+E('Create repository','créer le dépôt')+'.</li></ol>'+
+    '<h3 style="font-size:17px">B. Créer la clé (limitée à ce dépôt)</h3><ol style="padding-left:20px;line-height:1.5">'+
+    '<li>Va sur <b>github.com/settings/personal-access-tokens/new</b>.</li>'+
+    '<li>'+E('Token name','nom de la clé')+' : écris <b>Mon Hub signalements</b>.</li>'+
+    '<li>'+E('Expiration','date de fin')+' : choisis la plus longue proposée (par ex. 1 an). Le hub te préviendra quand elle ne marchera plus.</li>'+
+    '<li>'+E('Repository access','accès aux dépôts')+' : choisis '+E('Only select repositories','seulement certains dépôts')+', puis sélectionne <b>retours-hub</b>.</li>'+
+    '<li>Dans '+E('Permissions','autorisations')+' → '+E('Repository permissions','autorisations sur le dépôt')+', trouve '+E('Issues','signalements')+' et choisis '+E('Read and write','lecture et écriture')+'. Ne touche à rien d\'autre.</li>'+
+    '<li>En bas, touche '+E('Generate token','créer la clé')+', puis confirme si on te le redemande.</li>'+
+    '<li>La clé s\'affiche une seule fois (elle commence par <b>github_pat_</b>). Touche l\'icône 📋 à côté pour la <b>copier</b>.</li></ol>'+
+    '<h3 style="font-size:17px">C. La mettre dans le hub</h3><ol style="padding-left:20px;line-height:1.5">'+
+    '<li>Reviens dans le hub : 🩺 Santé → <b>🔑 Régler la clé</b>.</li>'+
+    '<li>Colle la clé, laisse le dépôt <b>'+esc(DEPOT_DEFAUT)+'</b>, puis <b>Enregistrer et tester</b>.</li>'+
+    '<li>Le test doit afficher <b>« Connexion OK… (privé 🔒) »</b>.</li></ol>'+
+    '<p class="aide">Ensuite, dis-moi dans une conversation « j\'ai créé retours-hub » : je l\'ajoute à ce que je peux lire.</p>');
 }
 const vueSanteRendu=()=>{ history.replaceState({v:'sante'},''); vueSante(); };
 
@@ -860,6 +1025,8 @@ async function majHub(){
   if(appDemandee && await un('apps',appDemandee)){ vueAccueil(); ouvrirApp(appDemandee); }
   else { vueAccueil(); if(appDemandee) toast('Cette appli n\'est plus dans le hub.'); }
   nettoyerJournal().then(afficherControle).catch(()=>{});
+  envoyerEnAttente(true);
+  window.addEventListener('online',()=>envoyerEnAttente(true));
   if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
   if(estInstalle()) proteger();
   document.addEventListener('click', function premierClic(){ proteger(); document.removeEventListener('click', premierClic); }, {once:true});
