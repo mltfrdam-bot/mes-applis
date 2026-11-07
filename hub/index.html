@@ -35,6 +35,12 @@
   th,td{border:1px solid #c9ced6;padding:7px 8px;text-align:left;vertical-align:middle}
   th{background:#e8ecf2;font-weight:700}
   .tablo{overflow-x:auto}
+  table.gerer{font-size:14px}
+  table.gerer th,table.gerer td{padding:5px 5px}
+  table.gerer td.ord{width:42px;padding:3px}
+  table.gerer td.ord .btn{display:block;width:34px;margin:2px auto;padding:3px 0;font-size:13px}
+  table.gerer td:nth-child(2){word-break:break-word}
+  table.gerer [data-options]{padding:7px 8px;margin:0}
   .ok{color:#2b8a3e;font-weight:700}
   .ko{color:#c92a2a;font-weight:700}
   .att{color:#d9480f;font-weight:700}
@@ -83,7 +89,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.4';
+const HUB_VERSION = '1.5';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -698,8 +704,8 @@ function vueGerer(){
   montrer('gerer', async ()=>{
     const apps=await listeApps();
     if(!apps.length){ $('#contenu').innerHTML='<div class="carte aide">Aucune appli pour l\'instant.</div>'; return; }
-    $('#contenu').innerHTML='<div class="carte"><h2>Mes applis</h2><p class="aide">▲▼ pour changer l\'ordre sur l\'accueil. « Options » pour mettre à jour, renommer ou retirer.</p><div class="tablo"><table><tr><th>Ordre</th><th>Appli</th><th>Version</th><th></th></tr>'+
-      apps.map((a,i)=>'<tr><td style="white-space:nowrap"><button class="btn petit gris" data-haut="'+i+'">▲</button><button class="btn petit gris" data-bas="'+i+'">▼</button></td>'+
+    $('#contenu').innerHTML='<div class="carte"><h2>Mes applis</h2><p class="aide">▲▼ pour changer l\'ordre sur l\'accueil. « Options » pour mettre à jour, renommer ou retirer.</p><div class="tablo"><table class="gerer"><tr><th>Ordre</th><th>Appli</th><th>Vers.</th><th></th></tr>'+
+      apps.map((a,i)=>'<tr><td class="ord"><button class="btn petit gris" data-haut="'+i+'">▲</button><button class="btn petit gris" data-bas="'+i+'">▼</button></td>'+
         '<td><span style="font-size:22px">'+esc(a.icone)+'</span> <b>'+esc(a.nom)+'</b></td>'+
         '<td>'+esc(a.version)+(majDispo[a.id]?'<br><span class="att">→ '+esc(majDispo[a.id])+' dispo</span>':'')+'</td>'+
         '<td><button class="btn petit" data-options="'+esc(a.id)+'">Options</button></td></tr>').join('')+
