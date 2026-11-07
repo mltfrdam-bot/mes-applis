@@ -70,7 +70,7 @@
   <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
   <h1 id="titre">Mon Hub</h1>
   <button id="btnSignal" title="Signaler un problème ou une idée">📍</button>
-  <span id="outils" style="display:flex;gap:6px"><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button></span>
+  <span id="outils" style="display:flex;gap:6px"><button id="btnSync" class="cache" title="Synchro">☁️</button><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button></span>
 </header>
 <div id="bandeau"></div>
 <div id="bandeauSante" style="display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px"></div>
@@ -90,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.8';
+const HUB_VERSION = '1.9';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -284,11 +284,12 @@ function montrer(vue, rendu, titre){
   rendu();
   window.scrollTo(0,0);
 }
-function retourAccueil(){ fermerApp(); vueAccueil(); }
+function retourAccueil(){ fermerApp(); vueAccueil(); synchroniser(); }
 window.addEventListener('popstate',()=>{ if(vueCourante!=='accueil') retourAccueil(); });
 $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(); else retourAccueil(); };
 $('#btnGerer').onclick=()=>vueGerer();
 $('#btnSauv').onclick=()=>vueSauvegarde();
+$('#btnSync').onclick=()=>synchroniser(true);
 $('#btnSante').onclick=()=>vueSante();
 $('#btnSignal').onclick=()=>signaler();
 
@@ -320,6 +321,7 @@ async function vueAccueil(){
 
 /* ---------- Ouvrir une appli ---------- */
 async function ouvrirApp(id){
+  if(syncEnCours){ toast('☁️ Synchronisation en cours, un instant…'); while(syncEnCours) await new Promise(r=>setTimeout(r,200)); }
   const a=await un('apps',id); if(!a) return;
   fermerApp();
   vueCourante='app';
@@ -1008,10 +1010,7 @@ async function restaurer(){
     [{texte:'Oui, tout remplacer',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
   if(!c2) return;
   toast('Restauration en cours…');
-  Object.keys(localStorage).filter(k=>k.startsWith(PREFIXE)).forEach(k=>localStorage.removeItem(k));
-  for(const b of await toutesLesBasesApps()) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
-  await vider('apps'); await vider('registre');
-  const lignes=await fusionner(s);
+  const lignes=await remplacerTout(s);
   await afficherBilan('♻️ Restauration terminée', lignes, s.creeeLe);
   vueSauvegarde();
 }
@@ -1051,6 +1050,179 @@ async function verifierSauvegardeIntegree(){
   vueAccueil();
 }
 
+
+/* ==========================================================================
+   ☁️ SYNCHRO LIVE via ton « petit serveur » Google (Apps Script + Drive)
+   Principe « comme un fichier Excel unique » : le serveur garde UN état à jour (et 10 versions).
+   - Rien n'a changé ici, mais le serveur oui  → on prend sa version (les suppressions suivent).
+   - Changé ici seulement                       → on envoie.
+   - Changé des deux côtés (ex. sans internet)  → fusion SANS RIEN PERDRE, puis envoi.
+   Jamais pendant qu'une appli est ouverte. Une copie locale est gardée avant chaque changement reçu.
+   ========================================================================== */
+let syncEnCours=false;
+const syncConfig = () => lireMeta('synchro', null);   // {url, cle, appareil, rev, hash, le, erreur}
+function trierCles(o){ if(Array.isArray(o)) return o.map(trierCles); if(o&&typeof o==='object'){ const r={}; Object.keys(o).sort().forEach(k=>r[k]=trierCles(o[k])); return r; } return o; }
+function empreinte(s){
+  const c=Object.assign({},s); delete c.creeeLe; delete c.hub;
+  c.applis=(c.applis||[]).map(a=>{ const b=Object.assign({},a); delete b.ouverteLe; return b; });
+  const t=JSON.stringify(trierCles(c)); let h1=0xdeadbeef, h2=0x41c6ce57;
+  for(let i=0;i<t.length;i++){ const ch=t.charCodeAt(i); h1=Math.imul(h1^ch,2654435761); h2=Math.imul(h2^ch,1597334677); }
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return (h2>>>0).toString(16)+(h1>>>0).toString(16)+':'+t.length;
+}
+async function appelServeur(cfg, corps){
+  let r;
+  try{ r=await fetch(cfg.url,{method:'POST', body:JSON.stringify(Object.assign({cle:cfg.cle},corps))}); }
+  catch(e){ throw new Error(navigator.onLine===false?'Pas d\'internet.':'Serveur Google injoignable (adresse ou réseau).'); }
+  const t=await r.text(); let j;
+  try{ j=JSON.parse(t); }catch(e){ throw new Error('Réponse illisible du serveur Google : vérifie l\'adresse (elle finit par /exec) et que l\'accès est « Tout le monde ».'); }
+  if(!j.ok && !j.conflit) throw new Error(j.erreur||'Erreur du serveur Google.');
+  return j;
+}
+function iconeSync(etat, detail){
+  const b=$('#btnSync'); if(!b) return;
+  b.classList.toggle('cache', etat==='off');
+  b.textContent={ok:'☁️✅', encours:'☁️🔄', attente:'☁️⏳', erreur:'☁️⚠️'}[etat]||'☁️';
+  b.title={ok:'Synchronisé', encours:'Synchronisation…', attente:'En attente d\'internet', erreur:'Problème : '+(detail||'')}[etat]||'Synchro';
+}
+async function garderCopieLocale(s){ await ecrireMeta('syncFilet', {le:new Date().toISOString(), etat:s}); }
+async function journalSync(t){ const l=await lireMeta('syncJournal',[]); l.unshift({le:new Date().toISOString(), t}); await ecrireMeta('syncJournal', l.slice(0,30)); }
+
+async function synchroniser(manuel){
+  const cfg=await syncConfig();
+  if(!cfg || !cfg.url){ iconeSync('off'); return; }
+  if(vueCourante==='app'){ iconeSync('attente'); return; }          // jamais sous une appli ouverte
+  if(syncEnCours) return;
+  if(navigator.onLine===false){ iconeSync('attente'); if(manuel) toast('☁️ Pas d\'internet : la synchro se fera au retour du réseau.'); return; }
+  syncEnCours=true; iconeSync('encours');
+  let message='☁️ Déjà à jour';
+  try{
+    for(let essai=0; essai<3; essai++){
+      const local=await fabriquerSauvegarde(), h=empreinte(local);
+      const et=await appelServeur(cfg,{action:'etat'});
+      const localModif = h!==cfg.hash, distantModif = (et.rev||0)!==(cfg.rev||0);
+      if(!localModif && !distantModif) break;
+      if(localModif && !distantModif){                                   // 1) envoyer
+        const r=await appelServeur(cfg,{action:'ecrire', baseRev:cfg.rev||0, appareil:cfg.appareil, donnees:JSON.stringify(local)});
+        if(r.conflit) continue;
+        cfg.rev=r.rev; cfg.hash=h; await ecrireMeta('synchro',cfg);
+        await journalSync('⬆️ Envoyé : version '+r.rev); message='☁️ Envoyé (version '+r.rev+')'; break;
+      }
+      const lu=await appelServeur(cfg,{action:'lire'});
+      const dist=lu.donnees ? JSON.parse(lu.donnees) : null;
+      if(!dist){ cfg.rev=lu.rev||0; continue; }
+      if(vueCourante==='app') break;
+      const qui=(lu.info&&lu.info.appareil)||'l\'autre appareil';
+      if(!localModif){                                                   // 2) recevoir (remplace : les suppressions suivent)
+        await garderCopieLocale(local);
+        await remplacerTout(dist);
+        cfg.rev=lu.rev; cfg.hash=empreinte(await fabriquerSauvegarde()); await ecrireMeta('synchro',cfg);
+        await journalSync('⬇️ Reçu : version '+lu.rev+' ('+qui+')'); message='☁️ Mis à jour depuis '+qui;
+        if(vueCourante==='accueil') vueAccueil();
+        break;
+      }
+      await garderCopieLocale(local);                                    // 3) les deux ont changé : fusion sans perte
+      const lignes=await fusionner(dist);
+      const fus=await fabriquerSauvegarde();
+      const r=await appelServeur(cfg,{action:'ecrire', baseRev:lu.rev, appareil:cfg.appareil, donnees:JSON.stringify(fus)});
+      if(r.conflit) continue;
+      cfg.rev=r.rev; cfg.hash=empreinte(fus); await ecrireMeta('synchro',cfg);
+      await journalSync('🔀 Changements des deux côtés ('+qui+') : fusionnés, version '+r.rev); message='☁️ Fusionné avec '+qui;
+      if(vueCourante==='accueil') vueAccueil();
+      if(cfg.dejaSynchro) afficherBilan('☁️ Des changements ont été faits sur les deux appareils : tout est gardé', lignes.concat([['ℹ️ À savoir','Si tu avais supprimé quelque chose d\'un seul côté, il peut être revenu : supprime-le à nouveau.','']]), dist.creeeLe);
+      break;
+    }
+    cfg.le=new Date().toISOString(); cfg.erreur=null; cfg.dejaSynchro=true; await ecrireMeta('synchro',cfg); await ecrireMeta('derniereSauvegarde', cfg.le);
+    iconeSync('ok'); if(manuel) toast(message);
+  }catch(e){
+    cfg.erreur=e.message; await ecrireMeta('synchro',cfg);
+    iconeSync(navigator.onLine===false?'attente':'erreur', e.message); if(manuel) toast('☁️ '+e.message, 6000);
+  }finally{ syncEnCours=false; if(vueCourante==='sauvegarde') vueSauvegarde(); }
+}
+
+/* Remplace tout le contenu du hub par une sauvegarde (sans question : utilisé par la synchro et par « Restaurer »).
+   Les données privées (comptes, mots de passe) restent en place. */
+async function remplacerTout(s){
+  Object.keys(localStorage).filter(k=>{ if(!k.startsWith(PREFIXE)) return false; const r=k.slice(PREFIXE.length), i=r.indexOf(':'); return !estPrive(i>=0?r.slice(i+1):r); })
+    .forEach(k=>localStorage.removeItem(k));
+  for(const b of await toutesLesBasesApps()) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
+  await vider('apps'); await vider('registre');
+  return fusionner(s);
+}
+
+function guideSynchro(){
+  return info('📖 Brancher le petit serveur Google (environ 5 min, une seule fois)',
+    '<p class="aide">À faire de préférence sur ordinateur, ou dans Chrome avec <b>⋮ → Version ordinateur</b>. Les mots entre « » sont ceux à toucher.</p><ol style="padding-left:20px;line-height:1.5">'+
+    '<li>Touche <b>📋 Copier le code du serveur</b> (en bas de cette fenêtre).</li>'+
+    '<li>Ouvre <b>script.google.com</b>, connecté à ton Gmail → « <b>Nouveau projet</b> ».</li>'+
+    '<li>Efface tout le texte déjà présent, puis <b>colle</b> le code. Touche 💾 « <b>Enregistrer</b> ». Tu peux renommer le projet « Mon Hub serveur ».</li>'+
+    '<li>En haut, à côté de ▶ « <b>Exécuter</b> », choisis la fonction <b>autoriser</b>, puis ▶ « Exécuter ». Google demande la permission : « <b>Examiner les autorisations</b> » → ton compte → « <b>Paramètres avancés</b> » → « <b>Accéder à Mon Hub serveur (non sécurisé)</b> » → « <b>Autoriser</b> ». <span class="aide">C\'est normal : c\'est ton propre programme, il n\'a accès qu\'à ton Drive.</span></li>'+
+    '<li>« <b>Déployer</b> » → « <b>Nouveau déploiement</b> » → ⚙️ « Sélectionner le type » → « <b>Application Web</b> ».<br>• Exécuter en tant que : « <b>Moi</b> »<br>• Qui a accès : « <b>Tout le monde</b> »<br>→ « <b>Déployer</b> ».</li>'+
+    '<li>Copie l\'« <b>URL de l\'application Web</b> » (elle finit par <b>/exec</b>).</li>'+
+    '<li>Dans le hub : 💾 → ☁️ Synchro live → colle l\'adresse, choisis un <b>mot de passe</b> (le même sur tous tes appareils) → « <b>Brancher</b> ». Refais l\'étape 7 sur la tablette.</li></ol>'+
+    '<p class="aide">Tes données iront dans ton Drive, dossier « Mon Hub - synchro » (10 dernières versions gardées). Les comptes et mots de passe des applis n\'y vont jamais.</p>'+
+    '<button class="btn" id="bCopieServeur">📋 Copier le code du serveur</button>').then(()=>{});
+}
+document.addEventListener('click', async e=>{
+  if(!e.target || e.target.id!=='bCopieServeur') return;
+  try{ const r=await fetch('serveur-google/MonHub-serveur.gs'); const t=await r.text(); if(!r.ok||!t.includes('doPost')) throw 0;
+       await navigator.clipboard.writeText(t); toast('📋 Code du serveur copié : colle-le dans script.google.com', 5000); }
+  catch(err){ toast('Impossible de copier : ouvre le hub avec internet, puis réessaie.', 5000); }
+});
+
+async function carteSynchro(){
+  const cfg=await syncConfig();
+  if(!cfg || !cfg.url){
+    const nomDef = Math.min(screen.width,screen.height)>=600 ? 'Tablette' : 'Téléphone';
+    return '<div class="carte"><h2>☁️ Synchro live (Google)</h2><p class="aide">Ton téléphone et ta tablette restent <b>à jour tout seuls</b> grâce à un petit serveur gratuit sur ton compte Google. Sans internet, tout marche comme avant et la synchro se fait au retour du réseau.</p>'+
+      '<button class="btn gris" id="bGuideSync">📖 Guide : brancher le serveur (5 min)</button>'+
+      '<label>Adresse du serveur (finit par /exec)</label><input id="sUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec">'+
+      '<label>Mot de passe (le même sur tous tes appareils, 6 caractères minimum)</label><input id="sCle" type="password">'+
+      '<label>Nom de cet appareil</label><input id="sApp" value="'+esc(nomDef)+'">'+
+      '<button class="btn vert" id="bBrancher">🔌 Brancher</button></div>';
+  }
+  const filet=await lireMeta('syncFilet',null), jl=await lireMeta('syncJournal',[]);
+  return '<div class="carte"><h2>☁️ Synchro live (Google)</h2><div class="tablo"><table>'+
+    '<tr><th>Cet appareil</th><td>'+esc(cfg.appareil)+'</td></tr>'+
+    '<tr><th>Dernière synchro</th><td>'+(cfg.le?dateFr(cfg.le):'jamais')+'</td></tr>'+
+    '<tr><th>Version sur le serveur</th><td>'+(cfg.rev||0)+'</td></tr>'+
+    '<tr><th>État</th><td>'+(cfg.erreur?'<span class="ko">⚠️ '+esc(cfg.erreur)+'</span>':'<span class="ok">✅ OK</span>')+'</td></tr></table></div>'+
+    '<button class="btn" id="bSyncMain">☁️ Synchroniser maintenant</button>'+
+    (filet?'<button class="btn gris" id="bSyncAnnul">↩ Revenir à l\'état d\'avant ('+esc(dateFr(filet.le))+')</button>':'')+
+    '<button class="btn rouge petit" id="bDebrancher">Débrancher</button>'+
+    (jl.length?'<details style="margin-top:8px"><summary>Historique de la synchro</summary><div class="tablo"><table>'+jl.map(x=>'<tr><td>'+dateFr(x.le)+'</td><td>'+esc(x.t)+'</td></tr>').join('')+'</table></div></details>':'')+
+    '</div>';
+}
+function brancherCarteSynchro(){
+  const g=$('#bGuideSync'); if(g) g.onclick=guideSynchro;
+  const b=$('#bBrancher'); if(b) b.onclick=async()=>{
+    const url=$('#sUrl').value.trim(), cle=$('#sCle').value, appareil=$('#sApp').value.trim()||'Appareil';
+    if(!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(url)){ toast('L\'adresse doit commencer par https://script.google.com/', 5000); return; }
+    if(cle.length<6){ toast('Mot de passe : 6 caractères minimum.'); return; }
+    b.disabled=true; toast('Connexion au serveur…');
+    try{
+      const r=await appelServeur({url,cle},{action:'init'});
+      await ecrireMeta('synchro',{url,cle,appareil,rev:0,hash:null});
+      toast(r.nouveau?'✅ Serveur branché. Première synchro…':'✅ Branché au serveur existant. Récupération…',4000);
+      await synchroniser(true);
+    }catch(e){ toast('❌ '+e.message,6000); b.disabled=false; }
+  };
+  const m=$('#bSyncMain'); if(m) m.onclick=()=>synchroniser(true);
+  const d=$('#bDebrancher'); if(d) d.onclick=async()=>{
+    const ok=await fenetre('Débrancher la synchro ?','<p>Cet appareil ne se synchronisera plus. Rien n\'est effacé, ni ici ni sur Google.</p>',[{texte:'Débrancher',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+    if(ok){ await ecrireMeta('synchro',null); iconeSync('off'); vueSauvegarde(); }
+  };
+  const a=$('#bSyncAnnul'); if(a) a.onclick=async()=>{
+    const filet=await lireMeta('syncFilet',null); if(!filet) return;
+    const ok=await fenetre('↩ Revenir à l\'état d\'avant ?','<p>Le hub revient à son état du <b>'+esc(dateFr(filet.le))+'</b>, juste avant la dernière synchro. Cet état sera ensuite envoyé aux autres appareils.</p><p class="aide">Conseil : fais d\'abord une sauvegarde 💾 si tu as un doute.</p>',
+      [{texte:'Oui, revenir',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+    if(!ok) return;
+    await remplacerTout(filet.etat); await journalSync('↩ Retour à l\'état du '+dateFr(filet.le));
+    toast('↩ État précédent remis. Envoi aux autres appareils…'); await synchroniser(true);
+  };
+}
+
 /* ---------- Écran Sauvegarde ---------- */
 function vueSauvegarde(){
   montrer('sauvegarde', async ()=>{
@@ -1059,7 +1231,8 @@ function vueSauvegarde(){
     try{ protege = navigator.storage && navigator.storage.persisted ? (await navigator.storage.persisted() ? '<span class="ok">Oui</span>' : '<span class="att">Non</span> <button class="btn petit" id="bProteger">Protéger</button>') : 'inconnu'; }catch(e){}
     try{ if(navigator.storage && navigator.storage.estimate){ const e=await navigator.storage.estimate(); espace=(e.usage/1048576).toFixed(1)+' Mo utilisés'; } }catch(e){}
     const apps=await listeApps(), reg=await tous('registre');
-    $('#contenu').innerHTML=
+    const cSync=await carteSynchro();
+    $('#contenu').innerHTML=cSync+
       '<div class="carte"><h2>État</h2><div class="tablo"><table>'+
       '<tr><th>Dernière sauvegarde</th><td>'+(derniere?dateFr(derniere):'<span class="att">jamais</span>')+'</td></tr>'+
       '<tr><th>Données protégées contre l\'effacement automatique</th><td>'+protege+'</td></tr>'+
@@ -1071,7 +1244,7 @@ function vueSauvegarde(){
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
       '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
-    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn;
+    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
     const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
   },'💾 Sauvegarde');
 }
@@ -1123,7 +1296,10 @@ async function majHub(){
   nettoyerJournal().then(afficherControle).catch(()=>{});
   verifierSauvegardeIntegree().catch(e=>console.warn(e));
   envoyerEnAttente(true);
-  window.addEventListener('online',()=>envoyerEnAttente(true));
+  window.addEventListener('online',()=>{ envoyerEnAttente(true); synchroniser(); });
+  if(!appDemandee) synchroniser(); else syncConfig().then(c=>{ if(c&&c.url) iconeSync('attente'); });
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && vueCourante==='accueil') synchroniser(); });
+  setInterval(()=>{ if(document.visibilityState==='visible' && vueCourante==='accueil') synchroniser(); }, 60000);
   if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
   if(estInstalle()) proteger();
   document.addEventListener('click', function premierClic(){ proteger(); document.removeEventListener('click', premierClic); }, {once:true});
