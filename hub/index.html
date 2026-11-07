@@ -83,7 +83,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.3';
+const HUB_VERSION = '1.4';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -423,7 +423,7 @@ function vueSante(){
       (bil.length?bil.map(x=>'<tr data-det="'+esc(x.a.id)+'"><td>'+esc(x.a.icone)+' '+esc(x.a.nom)+'</td><td class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':x.b.verdict==='stable'?'ok':'')+'">'+x.b.texte+'</td><td>'+x.b.ouvertures+'</td><td>'+duree(x.b.temps)+'</td><td>'+x.b.erreurs+'</td><td>'+(x.b.chargeMoy!=null?(x.b.chargeMoy/1000).toFixed(1).replace('.',',')+' s':'—')+'</td></tr>').join(''):'<tr><td colspan="6">Aucune appli pour l\'instant.</td></tr>')+
       '</table></div><p class="aide">✅ Stable : aucune erreur cette semaine · ⚠️ À surveiller : quelques erreurs ou démarrage lent · ❌ Problème : erreurs fréquentes ou ne démarre pas · 💤 Peu utilisée : pas ouverte depuis 30 jours.</p></div>'+
       '<div class="carte" id="carteSignal"></div>'+
-      '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan et les dernières erreurs. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
+      '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan, les dernières erreurs <b>et tes signalements 📍</b>. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
     $('#contenu').querySelectorAll('[data-det]').forEach(tr=>tr.onclick=()=>{ const x=bil.find(y=>y.a.id===tr.dataset.det);
       info(x.a.icone+' '+x.a.nom, '<p class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':'ok')+'">'+x.b.texte+' — '+esc(x.b.explic)+'</p>'+
         (x.b.ressources?'<p class="aide">'+x.b.ressources+' élément(s) internet non chargé(s) (normal sans réseau).</p>':'')+
@@ -432,7 +432,10 @@ function vueSante(){
     $('#bRapport').onclick=async()=>{
       const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
         applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
-        erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20)};
+        erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20),
+        // 📍 signalements : tous ceux pas encore envoyés par GitHub, + les 10 derniers envoyés
+        signalements:(await tous('signalements')).sort((x,y)=>y.cree.localeCompare(x.cree)).filter((x,i,arr)=>x.statut!=='envoye' || arr.filter(z=>z.statut==='envoye').indexOf(x)<10)
+          .map(x=>({ecritLe:x.cree, etat:x.statut==='envoye'?'envoyé n°'+x.numero:'en attente', type:TYPES_SIG[x.type], message:x.message, appli:x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''), endroit:x.endroit}))};
       enregistrerFichier('MonHub-rapport-sante_'+horodatage()+'.json', JSON.stringify(rapport,null,1), 'application/json');
     };
     $('#bVider').onclick=async()=>{ const ok=await fenetre('Remettre à zéro ?','<p>Le journal des ouvertures et des erreurs sera vidé. Tes applis et leurs données ne bougent pas.</p>',[{texte:'Remettre à zéro',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]); if(ok){ await vider('journal'); vueSanteRendu(); } };
