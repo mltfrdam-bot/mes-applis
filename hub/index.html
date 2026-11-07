@@ -43,6 +43,7 @@
   table.gerer [data-options]{padding:7px 8px;margin:0}
   .ok{color:#2b8a3e;font-weight:700}
   .ko{color:#c92a2a;font-weight:700}
+  table.sigs tr[data-sig]{cursor:pointer} table.sigs tr.regle td{color:#868e96} table.sigs td{white-space:nowrap;font-size:14px} table.sigs td:nth-child(2){white-space:normal;word-break:break-word}
   .att{color:#d9480f;font-weight:700}
   input[type=text]{font:inherit;padding:10px;border:1px solid #c9ced6;border-radius:8px;width:100%}
   label{display:block;font-weight:600;margin:10px 0 4px}
@@ -89,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.5';
+const HUB_VERSION = '1.6';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -247,6 +248,7 @@ function elementsInternet(html){
   motifs.forEach(m=>{ let r; while((r=m.exec(html))) hotes.add(r[1]); });
   return [...hotes];
 }
+function versionDuNom(n){ const m=/(?:^|[^a-z])v(?:ersion)?[\s_-]?(\d+)(?=[^\d]|$)/i.exec(n||''); return m?+m[1]:0; }
 const titreDuCode = html => { const m=html.match(/<title[^>]*>([\s\S]*?)<\/title>/i); return m ? m[1].replace(/\s+/g,' ').trim() : ''; };
 
 /* ---------- Catalogue en ligne (dossier GitHub du hub) ---------- */
@@ -440,7 +442,7 @@ function vueSante(){
         applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
         erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20),
         // 📍 signalements : tous ceux pas encore envoyés par GitHub, + les 10 derniers envoyés
-        signalements:(await tous('signalements')).sort((x,y)=>y.cree.localeCompare(x.cree)).filter((x,i,arr)=>x.statut!=='envoye' || arr.filter(z=>z.statut==='envoye').indexOf(x)<10)
+        signalements:(await tous('signalements')).sort((x,y)=>y.cree.localeCompare(x.cree)).filter((x,i,arr)=>x.statut==='attente' || (x.statut==='envoye' && arr.filter(z=>z.statut==='envoye').indexOf(x)<10))
           .map(x=>({ecritLe:x.cree, etat:x.statut==='envoye'?'envoyé n°'+x.numero:'en attente', type:TYPES_SIG[x.type], message:x.message, appli:x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''), endroit:x.endroit}))};
       enregistrerFichier('MonHub-rapport-sante_'+horodatage()+'.json', JSON.stringify(rapport,null,1), 'application/json');
     };
@@ -547,7 +549,7 @@ async function envoyerEnAttente(silencieux){
   if(envoiEnCours) return bilan; envoiEnCours=true;
   try{
     const reg=await reglageSignal();
-    const liste=(await tous('signalements')).filter(s=>s.statut!=='envoye').sort((a,b)=>a.cree.localeCompare(b.cree));
+    const liste=(await tous('signalements')).filter(s=>s.statut==='attente').sort((a,b)=>a.cree.localeCompare(b.cree));
     if(!liste.length) return bilan;
     if(!reg.cle){ bilan.pasDeCle=true; return bilan; }
     for(const s of liste){
@@ -577,15 +579,35 @@ async function testerCle(depot, cle){
 async function afficherCarteSignal(){
   const c=$('#carteSignal'); if(!c) return;
   const reg=await reglageSignal(), l=(await tous('signalements')).sort((a,b)=>b.cree.localeCompare(a.cree));
-  const att=l.filter(s=>s.statut!=='envoye').length;
+  const att=l.filter(s=>s.statut==='attente').length;
   c.innerHTML='<h2>📍 Signalements pour Claude</h2>'+
     '<p class="aide">Bouton 📍 en haut de l\'écran : tu touches l\'endroit, tu écris ton message, il part dans ton dépôt GitHub privé, où je le lis.</p>'+
     '<div class="tablo"><table><tr><th>Dépôt</th><td>'+esc(reg.depot)+'</td></tr><tr><th>Clé</th><td>'+(reg.cle?'<span class="ok">enregistrée</span>':'<span class="att">pas encore réglée</span>')+'</td></tr><tr><th>En attente</th><td>'+att+'</td></tr></table></div>'+
     '<button class="btn" id="sGuide">📖 Guide : dépôt privé et clé</button><button class="btn gris" id="sRegl">🔑 Régler la clé</button>'+(att?'<button class="btn vert" id="sEnv">📨 Envoyer maintenant</button>':'')+
-    (l.length?'<div class="tablo" style="margin-top:10px"><table><tr><th>Écrit le</th><th>Appli</th><th>Message</th><th>État</th></tr>'+l.slice(0,15).map(s=>'<tr><td>'+dateFr(s.cree)+'</td><td>'+esc(s.app.nom)+'</td><td>'+esc(TYPES_SIG[s.type].slice(0,2)+' '+s.message.slice(0,60))+'</td><td>'+(s.statut==='envoye'?'<span class="ok">✅ envoyé n°'+s.numero+'</span>':'<span class="att">⏳ en attente'+(s.erreur?'<br><small>'+esc(s.erreur)+'</small>':'')+'</span>')+'</td></tr>').join('')+'</table></div>':'');
+    (l.length?'<p class="aide" style="margin-top:12px">Touche une ligne pour <b>modifier</b>, marquer <b>✅ réglé</b> (il sort du rapport) ou <b>supprimer</b>.</p>'+
+      (att?'<button class="btn petit gris" id="sToutRegle">✅ Tout marquer réglé</button>':'')+
+      '<div class="tablo"><table class="sigs"><tr><th>Écrit le</th><th>Message</th><th>État</th></tr>'+l.slice(0,30).map(s=>'<tr data-sig="'+s.id+'"'+(s.statut==='regle'?' class="regle"':'')+'><td>'+dateFr(s.cree).replace(/\/\d{4}/,'').replace(' ','<br>')+'</td><td><small>'+esc(s.app.nom)+'</small><br>'+esc(TYPES_SIG[s.type].slice(0,2)+' '+s.message.slice(0,80))+'</td><td>'+(s.statut==='envoye'?'<span class="ok">✅ envoyé n°'+s.numero+'</span>':s.statut==='regle'?'✔ réglé':'<span class="att">⏳ attente'+(s.erreur?'<br><small>'+esc(s.erreur)+'</small>':'')+'</span>')+'</td></tr>').join('')+'</table></div>':'');
   c.querySelector('#sGuide').onclick=guideSignal;
+  c.querySelectorAll('tr[data-sig]').forEach(tr=>tr.onclick=()=>gererSignal(tr.dataset.sig));
+  const tr=c.querySelector('#sToutRegle'); if(tr) tr.onclick=async()=>{ const l2=(await tous('signalements')).filter(x=>x.statut==='attente'); for(const x of l2){ x.statut='regle'; x.regleLe=new Date().toISOString(); await poser('signalements',x); } toast('✅ '+l2.length+' marqué(s) réglé(s)'); afficherCarteSignal(); };
   c.querySelector('#sRegl').onclick=reglerCle;
   const e=c.querySelector('#sEnv'); if(e) e.onclick=async()=>{ const r=await envoyerEnAttente(false); toast(r.envoyes?'✅ '+r.envoyes+' envoyé(s)':r.pasDeCle?'Règle d\'abord la clé.':'Pas envoyé : voir l\'état dans le tableau.',4500); };
+}
+async function gererSignal(id){
+  const s=await un('signalements',id); if(!s) return;
+  const envoye=s.statut==='envoye';
+  const v=await fenetre('📍 Signalement du '+dateFr(s.cree),'<p class="aide"><b>Appli :</b> '+esc(s.app.nom)+(envoye?'<br>Déjà envoyé (n°'+s.numero+') : le modifier ici ne change pas ce que Claude a reçu.':'')+'</p>'+
+    '<label>C\'est…</label><div class="choix">'+[['probleme','🐞 Un problème'],['forme','🎨 Une mise en forme'],['idee','💡 Une idée']].map(t=>'<label><input type="radio" name="gType" value="'+t[0]+'"'+(s.type===t[0]?' checked':'')+'> '+t[1]+'</label>').join('')+'</div>'+
+    '<label>Message</label><textarea id="gMsg">'+esc(s.message)+'</textarea>',
+    [{texte:'Enregistrer',classe:'vert',valeur:f=>({act:'enr',type:f.querySelector('input[name=gType]:checked').value,message:f.querySelector('#gMsg').value.trim()})},
+     s.statut==='regle'?{texte:'↩ Remettre en attente',classe:'',valeur:{act:'attente'}}:(envoye?null:{texte:'✅ Réglé',classe:'',valeur:{act:'regle'}}),
+     {texte:'🗑 Supprimer',classe:'rouge',valeur:{act:'suppr'}},{texte:'Annuler',classe:'gris',valeur:null}].filter(Boolean));
+  if(!v) return;
+  if(v.act==='suppr'){ await enlever('signalements',id); toast('🗑 Signalement supprimé'); }
+  else if(v.act==='regle'){ s.statut='regle'; s.regleLe=new Date().toISOString(); await poser('signalements',s); toast('✅ Marqué réglé : il sort du rapport'); }
+  else if(v.act==='attente'){ s.statut='attente'; delete s.regleLe; await poser('signalements',s); toast('Remis en attente'); }
+  else { if(!v.message){ toast('Message vide : rien changé.'); return; } s.type=v.type; s.message=v.message; await poser('signalements',s); toast('✅ Modifié'); }
+  afficherCarteSignal();
 }
 async function reglerCle(){
   const reg=await reglageSignal();
@@ -657,7 +679,7 @@ async function ajouterDepuisFichier(){
   const code=await lireTexte(f);
   if(!/<(html|body|head|script|div)/i.test(code)) return info('Fichier refusé','Ce fichier ne ressemble pas à une page HTML.');
   const nomDef=titreDuCode(code) || f.name.replace(/\.html?$/i,'');
-  const v=await fenetre('Nouvelle appli', '<p class="aide">Fichier : '+esc(f.name)+'</p>'+avertissementInternet(elementsInternet(code))+champsAppli(nomDef,'📦','1'),
+  const v=await fenetre('Nouvelle appli', '<p class="aide">Fichier : '+esc(f.name)+'</p>'+avertissementInternet(elementsInternet(code))+champsAppli(nomDef,'📦',String(versionDuNom(f.name)||1)),
     [{texte:'Ajouter au hub',classe:'vert',valeur:fe=>({nom:fe.querySelector('#fNom').value.trim(),icone:fe.querySelector('#fIco').value.trim(),version:fe.querySelector('#fVer').value.trim()})},{texte:'Annuler',classe:'gris',valeur:null}]);
   if(!v) return;
   const apps=await listeApps();
@@ -757,7 +779,7 @@ async function majDepuisFichier(id){
   const a=await un('apps',id);
   const f=await choisirFichier('.html,.htm,text/html'); if(!f) return;
   const code=await lireTexte(f);
-  const suiv=/^\d+$/.test(String(a.version))?String(+a.version+1):String(a.version)+'.1';
+  const suiv=/^\d+$/.test(String(a.version))?String(Math.max(+a.version+1, versionDuNom(f.name))):(versionDuNom(f.name)?String(versionDuNom(f.name)):String(a.version)+'.1');
   const v=await fenetre('Nouvelle version de « '+a.nom+' »','<p class="aide">Fichier : '+esc(f.name)+'<br>Le code de l\'appli est remplacé. <b>Ses données sont gardées.</b></p>'+avertissementInternet(elementsInternet(code))+
     '<label>Nouvelle version</label><input type="text" id="fVer" value="'+esc(suiv)+'" style="width:120px">',
     [{texte:'Remplacer le code',classe:'vert',valeur:f=>f.querySelector('#fVer').value.trim()},{texte:'Annuler',classe:'gris',valeur:null}]);
