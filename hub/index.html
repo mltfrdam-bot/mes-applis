@@ -90,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.6';
+const HUB_VERSION = '1.7';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -939,9 +939,15 @@ async function sauvegarder(){
   await ecrireMeta('derniereSauvegarde', new Date().toISOString());
   if(vueCourante==='sauvegarde') vueSauvegarde();
 }
+/* Une sauvegarde peut être un .json, ou un fichier « tout-en-un » (.html = hub + sauvegarde intégrée). */
+const ID_INTEGREE='sauvegarde-'+'integree';
+function sauvegardeDansHtml(texte){
+  const el=new DOMParser().parseFromString(texte,'text/html').getElementById(ID_INTEGREE);
+  return el ? JSON.parse(el.textContent) : null;
+}
 async function lireSauvegarde(){
-  const f=await choisirFichier('.json,application/json'); if(!f) return null;
-  try{ const j=JSON.parse(await lireTexte(f)); if(j.format!=='mon-hub-sauvegarde') throw 0; return j; }
+  const f=await choisirFichier('.json,.html,.htm,application/json,text/html'); if(!f) return null;
+  try{ const t=await lireTexte(f); const j=/^\s*\{/.test(t) ? JSON.parse(t) : sauvegardeDansHtml(t); if(!j || j.format!=='mon-hub-sauvegarde') throw 0; return j; }
   catch(e){ await info('Fichier refusé','Ce fichier n\'est pas une sauvegarde de Mon Hub.'); return null; }
 }
 async function fusionner(s){
@@ -1005,11 +1011,40 @@ async function restaurer(){
   await afficherBilan('♻️ Restauration terminée', lignes, s.creeeLe);
   vueSauvegarde();
 }
-async function copieDeSecours(){
+async function codeDuHub(){
   let code=null;
   try{ const r=await fetch('index.html'); if(r.ok) code=await r.text(); }catch(e){}
-  if(!code) code='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-  enregistrerFichier('MonHub-secours_v'+HUB_VERSION+'.html', code, 'text/html');
+  if(!code){ const copie=document.documentElement.cloneNode(true); const v=copie.querySelector('#'+ID_INTEGREE); if(v) v.remove(); code='<!DOCTYPE html>\n'+copie.outerHTML; }
+  return code;
+}
+async function copieDeSecours(){
+  enregistrerFichier('MonHub-secours_v'+HUB_VERSION+'.html', await codeDuHub(), 'text/html');
+}
+/* 📦 Tout-en-un : le hub + toutes les applis + toutes leurs données, dans UN seul fichier HTML. */
+async function toutEnUn(){
+  toast('Préparation du fichier tout-en-un…');
+  const s=await fabriquerSauvegarde();
+  const balise='<script type="application/json" id="'+ID_INTEGREE+'">'+JSON.stringify(s).replace(/</g,'\\u003c')+'</'+'script>';
+  let code=await codeDuHub();
+  const i=code.lastIndexOf('</body>');
+  code = i>=0 ? code.slice(0,i)+balise+'\n'+code.slice(i) : code+balise;
+  enregistrerFichier('MonHub-tout-en-un_'+horodatage()+'.html', code, 'text/html');
+  await ecrireMeta('derniereSauvegarde', new Date().toISOString());
+  if(vueCourante==='sauvegarde') vueSauvegarde();
+}
+/* Au démarrage : si ce fichier est un tout-en-un, proposer de fusionner sa sauvegarde (une seule fois par sauvegarde). */
+async function verifierSauvegardeIntegree(){
+  const el=document.getElementById(ID_INTEGREE); if(!el) return;
+  let s; try{ s=JSON.parse(el.textContent); }catch(e){ return; }
+  if(!s || s.format!=='mon-hub-sauvegarde') return;
+  if(await lireMeta('integreeImportee',null)===s.creeeLe) return;
+  const ok=await fenetre('📦 Fichier tout-en-un','<p>Ce fichier contient une sauvegarde du <b>'+esc(dateFr(s.creeeLe))+'</b> : '+(s.applis||[]).length+' appli(s) et toutes leurs données.</p><p class="aide">La fusion ajoute ce qui manque, <b>sans rien écraser</b>, puis affiche le détail.</p>',
+    [{texte:'📥 Fusionner maintenant',classe:'vert',valeur:true},{texte:'Plus tard',classe:'gris',valeur:false}]);
+  if(!ok) return;
+  const lignes=await fusionner(s);
+  await ecrireMeta('integreeImportee', s.creeeLe);
+  await afficherBilan('📥 Fusion terminée — rien n\'a été écrasé', lignes, s.creeeLe);
+  vueAccueil();
 }
 
 /* ---------- Écran Sauvegarde ---------- */
@@ -1031,8 +1066,8 @@ function vueSauvegarde(){
       '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Sauvegarder tout</button></div>'+
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
-      '<div class="carte"><h2>🆘 Copie de secours du hub</h2><p class="aide">Le hub lui-même dans un seul fichier HTML. Si tout le reste disparaît : ouvre ce fichier dans Chrome, puis « Importer une sauvegarde ».</p><button class="btn gris" id="bSecours">🆘 Enregistrer la copie de secours</button></div>';
-    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours;
+      '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
+    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn;
     const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
   },'💾 Sauvegarde');
 }
@@ -1082,6 +1117,7 @@ async function majHub(){
   if(appDemandee && await un('apps',appDemandee)){ vueAccueil(); ouvrirApp(appDemandee); }
   else { vueAccueil(); if(appDemandee) toast('Cette appli n\'est plus dans le hub.'); }
   nettoyerJournal().then(afficherControle).catch(()=>{});
+  verifierSauvegardeIntegree().catch(e=>console.warn(e));
   envoyerEnAttente(true);
   window.addEventListener('online',()=>envoyerEnAttente(true));
   if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
