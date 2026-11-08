@@ -90,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.10';
+const HUB_VERSION = '1.11';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -956,16 +956,32 @@ async function lireSauvegarde(){
   try{ const t=await lireTexte(f); const j=/^\s*\{/.test(t) ? JSON.parse(t) : sauvegardeDansHtml(t); if(!j || j.format!=='mon-hub-sauvegarde') throw 0; return j; }
   catch(e){ await info('Fichier refusé','Ce fichier n\'est pas une sauvegarde de Mon Hub.'); return null; }
 }
+/* Laquelle de deux versions d'une même appli est la plus récente ? (numéro de version, sinon date de mise à jour) */
+function plusRecente(a,b){
+  const va=parseFloat(a.version), vb=parseFloat(b.version);
+  if(!isNaN(va) && !isNaN(vb) && va!==vb) return va>vb;
+  return String(a.majLe||'')>String(b.majLe||'');
+}
+const nomNorm = n => String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
 async function fusionner(s){
   const lignes=[]; const nomApp=id=>{ const a=(s.applis||[]).find(x=>x.id===id); return a?a.nom:id; };
-  // 1) Applis (code)
-  const actuelles=await tous('apps'); let ordre=actuelles.length;
+  // 1) Applis (code) : la version la plus récente gagne ; une même appli ajoutée sur deux appareils n'est gardée qu'une fois
+  const actuelles=await tous('apps'); let ordre=actuelles.length; const alias={};
   for(const a of s.applis||[]){
-    const ex=actuelles.find(x=>x.id===a.id);
-    if(!ex){ a.ordre=ordre++; await poser('apps',a); lignes.push([a.icone+' '+a.nom,'Appli ajoutée (version '+a.version+')','ok']); }
-    else if(ex.code!==a.code) lignes.push([ex.icone+' '+ex.nom,'Code différent dans le fichier : version actuelle '+ex.version+' gardée (fichier : '+a.version+')','att']);
-    else lignes.push([ex.icone+' '+ex.nom,'Appli déjà présente, identique','']);
+    let ex=actuelles.find(x=>x.id===a.id);
+    if(!ex){ ex=actuelles.find(x=>x.source==='fichier' && a.source==='fichier' && nomNorm(x.nom)===nomNorm(a.nom)); if(ex) alias[a.id]=ex.id; }
+    if(!ex){ a.ordre=ordre++; await poser('apps',a); actuelles.push(a); lignes.push([a.icone+' '+a.nom,'Appli ajoutée (version '+a.version+')','ok']); }
+    else if(ex.code!==a.code && plusRecente(a,ex)){ const avant=ex.version; Object.assign(ex,{code:a.code, version:a.version, fichier:a.fichier, majLe:a.majLe}); await poser('apps',ex);
+      lignes.push([ex.icone+' '+ex.nom,'Mise à jour : version '+avant+' → '+a.version,'ok']); }
+    else if(ex.code!==a.code) lignes.push([ex.icone+' '+ex.nom,'Version actuelle '+ex.version+' gardée (plus récente que '+a.version+')','']);
+    else lignes.push([ex.icone+' '+ex.nom,alias[a.id]?'Même appli ajoutée sur les deux appareils : réunies en une seule':'Appli déjà présente, identique',alias[a.id]?'ok':'']);
   }
+  // les données d'une appli « en double » vont dans l'appli gardée
+  if(Object.keys(alias).length){ const d2={}; Object.keys(s.donnees||{}).forEach(id=>{ const cible=alias[id]||id, d=s.donnees[id];
+      const bases=(d.bases||[]).map(b=>Object.assign({},b,{nom:b.nom.replace('hubapp:'+id+':','hubapp:'+cible+':')}));
+      if(!d2[cible]) d2[cible]={localStorage:{},bases:[]};
+      Object.assign(d2[cible].localStorage, d.localStorage||{}); d2[cible].bases.push(...bases); });
+    s=Object.assign({},s,{donnees:d2}); }
   // 2) Données de chaque appli
   for(const id of Object.keys(s.donnees||{})){
     const d=s.donnees[id], p=PREFIXE+id+':'; let aj=0, pr=0, fu=0, co=0; const notes=[];
@@ -1139,7 +1155,7 @@ async function synchroniser(manuel){
         break;
       }
       await garderCopieLocale(local);                                    // 3) les deux ont changé : fusion sans perte
-      const lignes=await fusionner(dist);
+      const lignes=await fusionner(dist); await reunirDoublons();
       const fus=await fabriquerSauvegarde();
       const r=await appelServeur(cfg,{action:'ecrire', baseRev:lu.rev, appareil:cfg.appareil, donnees:JSON.stringify(fus)});
       if(r.conflit) continue;
@@ -1241,6 +1257,28 @@ function brancherCarteSynchro(){
   };
 }
 
+/* Réunit les applis ajoutées en double (même nom, ajoutées par fichier sur deux appareils) : la plus récente est gardée,
+   les données de l'autre y sont fusionnées sans rien perdre, puis le double est retiré. */
+async function reunirDoublons(){
+  const apps=await tous('apps'), groupes={};
+  apps.filter(a=>a.source==='fichier').forEach(a=>{ (groupes[nomNorm(a.nom)]=groupes[nomNorm(a.nom)]||[]).push(a); });
+  let n=0;
+  for(const g of Object.values(groupes)){
+    if(g.length<2) continue;
+    g.sort((x,y)=>plusRecente(x,y)?-1:plusRecente(y,x)?1:String(x.ajouteeLe||'').localeCompare(String(y.ajouteeLe||'')));
+    const garde=g[0];
+    for(const dbl of g.slice(1)){
+      const p=PREFIXE+dbl.id+':', ls={};
+      Object.keys(localStorage).filter(k=>k.startsWith(p)).forEach(k=>ls[k.slice(p.length)]=localStorage.getItem(k));
+      const bases=[]; for(const b of await toutesLesBasesApps()) if(b.name.startsWith('hubapp:'+dbl.id+':')){ const dump=await exporterBase(b.name); dump.nom=b.name.replace('hubapp:'+dbl.id+':','hubapp:'+garde.id+':'); bases.push(dump); }
+      await fusionner({applis:[], donnees:{[garde.id]:{localStorage:ls,bases}}});
+      await effacerDonneesApp(dbl.id); await enlever('apps',dbl.id); n++;
+    }
+  }
+  if(n) toast('🧩 '+n+' appli(s) en double réunie(s), données gardées');
+  return n;
+}
+
 /* ---------- Écran Sauvegarde ---------- */
 function vueSauvegarde(){
   montrer('sauvegarde', async ()=>{
@@ -1312,6 +1350,7 @@ async function majHub(){
   if(appDemandee && await un('apps',appDemandee)){ vueAccueil(); ouvrirApp(appDemandee); }
   else { vueAccueil(); if(appDemandee) toast('Cette appli n\'est plus dans le hub.'); }
   nettoyerJournal().then(afficherControle).catch(()=>{});
+  reunirDoublons().then(n=>{ if(n && vueCourante==='accueil') vueAccueil(); }).catch(e=>console.warn(e));
   verifierSauvegardeIntegree().catch(e=>console.warn(e));
   envoyerEnAttente(true);
   window.addEventListener('online',()=>{ envoyerEnAttente(true); synchroniser(); });
