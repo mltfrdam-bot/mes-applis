@@ -90,7 +90,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.9';
+const HUB_VERSION = '1.10';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -1089,9 +1089,25 @@ function iconeSync(etat, detail){
 async function garderCopieLocale(s){ await ecrireMeta('syncFilet', {le:new Date().toISOString(), etat:s}); }
 async function journalSync(t){ const l=await lireMeta('syncJournal',[]); l.unshift({le:new Date().toISOString(), t}); await ecrireMeta('syncJournal', l.slice(0,30)); }
 
+/* Mode manuel (par défaut) : la synchro ne se lance que quand tu touches ☁️.
+   Le nuage indique seulement s'il y a quelque chose à envoyer (⬆️) ou à recevoir (⬇️). */
+const modeSync = cfg => (cfg && cfg.mode==='auto') ? 'auto' : 'manuel';
+async function etatLeger(avecServeur){
+  const cfg=await syncConfig(); if(!cfg || !cfg.url){ iconeSync('off'); return; }
+  if(syncEnCours) return;
+  try{
+    const aEnvoyer = empreinte(await fabriquerSauvegarde())!==cfg.hash;
+    let aRecevoir=false;
+    if(avecServeur && navigator.onLine!==false){ try{ const et=await appelServeur(cfg,{action:'etat'}); aRecevoir=(et.rev||0)!==(cfg.rev||0); }catch(e){} }
+    const b=$('#btnSync'); if(!b) return; b.classList.remove('cache');
+    b.textContent = aEnvoyer&&aRecevoir ? '☁️⬆️⬇️' : aEnvoyer ? '☁️⬆️' : aRecevoir ? '☁️⬇️' : '☁️✅';
+    b.title = aEnvoyer&&aRecevoir ? 'Changements ici et sur l\'autre appareil : touche pour synchroniser' : aEnvoyer ? 'Changements à envoyer : touche pour synchroniser' : aRecevoir ? 'Nouvelle version sur le serveur : touche pour la récupérer' : 'À jour';
+  }catch(e){}
+}
 async function synchroniser(manuel){
   const cfg=await syncConfig();
   if(!cfg || !cfg.url){ iconeSync('off'); return; }
+  if(!manuel && modeSync(cfg)==='manuel'){ if(vueCourante!=='app') etatLeger(false); return; }
   if(vueCourante==='app'){ iconeSync('attente'); return; }          // jamais sous une appli ouverte
   if(syncEnCours) return;
   if(navigator.onLine===false){ iconeSync('attente'); if(manuel) toast('☁️ Pas d\'internet : la synchro se fera au retour du réseau.'); return; }
@@ -1187,7 +1203,8 @@ async function carteSynchro(){
     '<tr><th>Cet appareil</th><td>'+esc(cfg.appareil)+'</td></tr>'+
     '<tr><th>Dernière synchro</th><td>'+(cfg.le?dateFr(cfg.le):'jamais')+'</td></tr>'+
     '<tr><th>Version sur le serveur</th><td>'+(cfg.rev||0)+'</td></tr>'+
-    '<tr><th>État</th><td>'+(cfg.erreur?'<span class="ko">⚠️ '+esc(cfg.erreur)+'</span>':'<span class="ok">✅ OK</span>')+'</td></tr></table></div>'+
+    '<tr><th>État</th><td>'+(cfg.erreur?'<span class="ko">⚠️ '+esc(cfg.erreur)+'</span>':'<span class="ok">✅ OK</span>')+'</td></tr>'+
+    '<tr><th>Mode</th><td><label style="display:inline-flex;gap:6px;align-items:center;margin-right:12px"><input type="radio" name="sMode" value="manuel"'+(modeSync(cfg)==='manuel'?' checked':'')+'> Manuel (je touche ☁️)</label><label style="display:inline-flex;gap:6px;align-items:center"><input type="radio" name="sMode" value="auto"'+(modeSync(cfg)==='auto'?' checked':'')+'> Automatique</label></td></tr></table></div>'+
     '<button class="btn" id="bSyncMain">☁️ Synchroniser maintenant</button>'+
     (filet?'<button class="btn gris" id="bSyncAnnul">↩ Revenir à l\'état d\'avant ('+esc(dateFr(filet.le))+')</button>':'')+
     '<button class="btn rouge petit" id="bDebrancher">Débrancher</button>'+
@@ -1209,6 +1226,7 @@ function brancherCarteSynchro(){
     }catch(e){ toast('❌ '+e.message,6000); b.disabled=false; }
   };
   const m=$('#bSyncMain'); if(m) m.onclick=()=>synchroniser(true);
+  document.querySelectorAll('input[name=sMode]').forEach(r=>r.onchange=async()=>{ const c=await syncConfig(); if(!c) return; c.mode=r.value; await ecrireMeta('synchro',c); toast(r.value==='auto'?'☁️ Synchro automatique':'☁️ Synchro manuelle : touche ☁️ quand tu veux'); if(r.value==='auto') synchroniser(); else etatLeger(false); });
   const d=$('#bDebrancher'); if(d) d.onclick=async()=>{
     const ok=await fenetre('Débrancher la synchro ?','<p>Cet appareil ne se synchronisera plus. Rien n\'est effacé, ni ici ni sur Google.</p>',[{texte:'Débrancher',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
     if(ok){ await ecrireMeta('synchro',null); iconeSync('off'); vueSauvegarde(); }
@@ -1297,7 +1315,7 @@ async function majHub(){
   verifierSauvegardeIntegree().catch(e=>console.warn(e));
   envoyerEnAttente(true);
   window.addEventListener('online',()=>{ envoyerEnAttente(true); synchroniser(); });
-  if(!appDemandee) synchroniser(); else syncConfig().then(c=>{ if(c&&c.url) iconeSync('attente'); });
+  if(!appDemandee) syncConfig().then(c=>{ if(modeSync(c)==='manuel') etatLeger(true); else synchroniser(); }); else syncConfig().then(c=>{ if(c&&c.url) iconeSync('attente'); });
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && vueCourante==='accueil') synchroniser(); });
   setInterval(()=>{ if(document.visibilityState==='visible' && vueCourante==='accueil') synchroniser(); }, 60000);
   if(!APP_ANDROID && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
