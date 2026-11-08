@@ -17,6 +17,12 @@ function doGet() {
 }
 
 function doPost(e) {
+  // Toute erreur est renvoyée au hub en clair (sinon le hub ne voit qu'un « serveur injoignable »).
+  try { return traiter(e); }
+  catch (err) { return repondre({ ok: false, erreur: 'Erreur du serveur Google : ' + (err && err.message ? err.message : err) }); }
+}
+
+function traiter(e) {
   let q;
   try { q = JSON.parse(e.postData.contents); } catch (err) { return repondre({ ok: false, erreur: 'Demande illisible.' }); }
   const props = PropertiesService.getScriptProperties();
