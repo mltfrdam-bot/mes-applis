@@ -17,6 +17,10 @@
   #entete button{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:8px 11px;font-size:16px}
   main{padding:14px;max-width:900px;margin:0 auto}
   .grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px}
+  body.simple #outils, body.simple #btnSignal{display:none!important}
+  body.simple .grille{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px}
+  body.simple .tuile{min-height:150px;font-size:18px} body.simple .tuile .ico{font-size:52px}
+  .btn.gros{display:block;width:100%;margin-top:18px;padding:16px;font-size:18px}
   .tuile{position:relative;background:#fff;border:1px solid #d3d8e0;border-radius:14px;padding:14px 6px 10px;text-align:center;min-height:112px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
   .tuile:active{background:#e9f0fb}
   .tuile .ico{font-size:40px;line-height:1}
@@ -70,7 +74,7 @@
   <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
   <h1 id="titre">Mon Hub</h1>
   <button id="btnSignal" title="Signaler un problème ou une idée">📍</button>
-  <span id="outils" style="display:flex;gap:6px"><button id="btnSync" class="cache" title="Synchro">☁️</button><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button></span>
+  <span id="outils" style="display:flex;gap:6px"><button id="btnSync" class="cache" title="Synchro">☁️</button><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button><button id="btnProches" title="Profil et proches">👥</button></span>
 </header>
 <div id="bandeau"></div>
 <div id="bandeauSante" style="display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px"></div>
@@ -90,7 +94,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.11';
+const HUB_VERSION = '1.12';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -171,6 +175,7 @@ function HubPourApp(appId){
   return {
     version: HUB_VERSION,
     appId,
+    profil: () => ({ nom: PROFIL.nom, role: PROFIL.role, admin: PROFIL.admin }),
     registre: {
       lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
       ecrire: (cle,valeur) => poser('registre',{cle, valeur, app:appId, maj:new Date().toISOString()}),
@@ -290,6 +295,7 @@ $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(
 $('#btnGerer').onclick=()=>vueGerer();
 $('#btnSauv').onclick=()=>vueSauvegarde();
 $('#btnSync').onclick=()=>synchroniser(true);
+$('#btnProches').onclick=()=>vueProches();
 $('#btnSante').onclick=()=>vueSante();
 $('#btnSignal').onclick=()=>signaler();
 
@@ -297,8 +303,9 @@ $('#btnSignal').onclick=()=>signaler();
 async function vueAccueil(){
   vueCourante='accueil';
   if(history.state && history.state.v) history.replaceState(null,'');
-  $('#titre').textContent='Mon Hub';
-  $('#btnRetour').classList.add('cache'); $('#outils').classList.remove('cache'); document.title='Mon Hub';
+  $('#titre').textContent=titreHub();
+  $('#btnRetour').classList.add('cache'); $('#outils').classList.remove('cache'); document.title=titreHub();
+  appliquerModeSimple();
   $('#vueApp').style.display='none'; $('#contenu').style.display='block';
   const apps=await listeApps();
   const derniere=await lireMeta('derniereSauvegarde',null);
@@ -311,18 +318,21 @@ async function vueAccueil(){
   const tuiles=apps.map(a=>'<button class="tuile" data-id="'+esc(a.id)+'">'+(majDispo[a.id]?'<span class="badge">MAJ</span>':(etatsApps[a.id]==='probleme'?'<span class="badge">❌</span>':etatsApps[a.id]==='surveiller'?'<span class="badge" style="background:#f08c00">⚠️</span>':''))+
     '<span class="ico">'+esc(a.icone||'📦')+'</span><span class="nom">'+esc(a.nom)+'</span></button>').join('');
   const vide = apps.length ? '' : '<div class="carte aide">👋 Ton hub est prêt.<br>Appuie sur <b>➕ Ajouter</b> pour ranger ta première appli : depuis un fichier HTML (sans internet) ou depuis le catalogue.</div>';
-  $('#contenu').innerHTML = rappel + vide + '<div class="grille">'+tuiles+
-    '<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button></div>'+
-    installAide();
+  const simple=estMembreSimple();
+  const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>' : '';
+  $('#contenu').innerHTML = (simple?'':rappel) + vide + '<div class="grille">'+tuiles+
+    (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
+    (simple?'':installAide());
+  const be=$('#btnEnvoiAdmin'); if(be) be.onclick=envoyerAuxAdmin;
   $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
-  $('#tuileAjout').onclick=()=>vueAjouter();
+  const ta=$('#tuileAjout'); if(ta) ta.onclick=()=>vueAjouter();
   const bi=$('#btnInstaller'); if(bi) bi.onclick=installer;
 }
 
 /* ---------- Ouvrir une appli ---------- */
-async function ouvrirApp(id){
+async function ouvrirApp(id, objet){
   if(syncEnCours){ toast('☁️ Synchronisation en cours, un instant…'); while(syncEnCours) await new Promise(r=>setTimeout(r,200)); }
-  const a=await un('apps',id); if(!a) return;
+  const a=objet || await un('apps',id); if(!a) return;
   fermerApp();
   vueCourante='app';
   if(!(history.state && history.state.v)) history.pushState({v:'app'},'');
@@ -336,7 +346,7 @@ async function ouvrirApp(id){
   fr.setAttribute('allowfullscreen','');
   fr.src=urlApp;
   zone.innerHTML=''; zone.appendChild(fr);
-  a.ouverteLe=new Date().toISOString(); poser('apps',a);
+  if(!objet){ a.ouverteLe=new Date().toISOString(); poser('apps',a); }
   demarrerSession(a);
 }
 function fermerApp(){ terminerSession(); const z=$('#vueApp'); z.innerHTML=''; z.style.display='none'; if(urlApp){ URL.revokeObjectURL(urlApp); urlApp=null; } }
@@ -929,6 +939,7 @@ async function fabriquerSauvegarde(){
   const apps=await tous('apps');
   const ids=new Set([...apps.map(a=>a.id), ...idsAvecDonnees()]);
   (await toutesLesBasesApps()).forEach(b=>ids.add(b.name.slice(PREFIXE.length).split(':')[0]));
+  [...ids].forEach(id=>{ if(id.startsWith('pr~')) ids.delete(id); });
   const donnees={};
   for(const id of ids){
     const p=PREFIXE+id+':', ls={};
@@ -1012,6 +1023,7 @@ function afficherBilan(titre, lignes, sauvDate){
 }
 async function importerFusion(){
   const s=await lireSauvegarde(); if(!s) return;
+  if(s.invitation) await appliquerInvitation(s.invitation);
   toast('Fusion en cours…');
   const lignes=await fusionner(s);
   await afficherBilan('📥 Fusion terminée — rien n\'a été écrasé', lignes, s.creeeLe);
@@ -1060,6 +1072,7 @@ async function verifierSauvegardeIntegree(){
   const ok=await fenetre('📦 Fichier tout-en-un','<p>Ce fichier contient une sauvegarde du <b>'+esc(dateFr(s.creeeLe))+'</b> : '+(s.applis||[]).length+' appli(s) et toutes leurs données.</p><p class="aide">La fusion ajoute ce qui manque, <b>sans rien écraser</b>, puis affiche le détail.</p>',
     [{texte:'📥 Fusionner maintenant',classe:'vert',valeur:true},{texte:'Plus tard',classe:'gris',valeur:false}]);
   if(!ok) return;
+  if(s.invitation) await appliquerInvitation(s.invitation);
   const lignes=await fusionner(s);
   await ecrireMeta('integreeImportee', s.creeeLe);
   await afficherBilan('📥 Fusion terminée — rien n\'a été écrasé', lignes, s.creeeLe);
@@ -1279,6 +1292,145 @@ async function reunirDoublons(){
   return n;
 }
 
+
+/* ==========================================================================
+   👤 PROFIL DU HUB et 👥 PROCHES
+   - Chaque hub a une propriétaire (« Hub d'Erika ») ; les applis le savent via Hub.profil().
+   - L'administrateur (Frédéric) prépare un hub pour un proche, peut ouvrir les réglages cachés avec son code,
+     reçoit les fichiers « progrès » de ses proches et les consulte À PART (jamais mélangés à ses données).
+   ========================================================================== */
+let PROFIL = { nom:null, role:'admin', admin:null, codeHash:null, simple:false };
+let ADMIN_OUVERT = false;
+const estMembreSimple = () => PROFIL.role==='membre' && PROFIL.simple && !ADMIN_OUVERT;
+async function chargerProfil(){ PROFIL = Object.assign({ nom:null, role:'admin', admin:null, codeHash:null, simple:false }, await lireMeta('profil', {})); }
+async function hacher(t){
+  try{ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode('monhub:'+t)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+  catch(e){ let h=0; for(const c of 'monhub:'+t) h=(h*31+c.charCodeAt(0))|0; return 'h'+h; }
+}
+function titreHub(){ return PROFIL.nom ? (PROFIL.role==='admin' ? 'Hub de '+PROFIL.nom : 'Hub '+(/^[aeiouyéèh]/i.test(PROFIL.nom)?"d'":'de ')+PROFIL.nom) : 'Mon Hub'; }
+function appliquerModeSimple(){
+  document.body.classList.toggle('simple', estMembreSimple());
+}
+/* appui long sur le titre (mode simple) = code administrateur */
+(function(){ let t=null; const h=()=>$('#titre');
+  document.addEventListener('pointerdown', e=>{ if(e.target!==h() || !(PROFIL.role==='membre')) return; t=setTimeout(async()=>{ t=null;
+      const v=await fenetre('🔑 Accès administrateur','<label>Code de '+esc(PROFIL.admin||'l\'administrateur')+'</label><input id="codeAdm" type="password" inputmode="numeric">',[{texte:'Ouvrir',classe:'vert',valeur:f=>f.querySelector('#codeAdm').value},{texte:'Annuler',classe:'gris',valeur:null}]);
+      if(v==null) return; if(PROFIL.codeHash && await hacher(v)===PROFIL.codeHash){ ADMIN_OUVERT=true; appliquerModeSimple(); toast('🔓 Réglages ouverts jusqu\'à la fermeture du hub'); vueAccueil(); } else toast('Code incorrect.'); }, 800); });
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>document.addEventListener(ev,()=>{ if(t){ clearTimeout(t); t=null; } }));
+})();
+
+/* Partager un fichier (WhatsApp, mail…) ou, à défaut, l'enregistrer */
+async function partagerFichier(nom, texte, type, message){
+  try{ const f=new File([texte], nom, {type}); if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:nom, text:message||''}); return true; } }catch(e){ if(e && e.name==='AbortError') return false; }
+  enregistrerFichier(nom, texte, type); return true;
+}
+const sansAccent = t => String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-');
+
+/* 📤 Le proche envoie ses progrès à l'administrateur */
+async function envoyerAuxAdmin(){
+  const s=await fabriquerSauvegarde();
+  const f={format:'mon-hub-proche', version:1, de:PROFIL.nom||'?', pour:PROFIL.admin||'?', creeLe:new Date().toISOString(), hub:HUB_VERSION, applis:s.applis, donnees:s.donnees};
+  await partagerFichier(sansAccent(f.de)+'-pour-'+sansAccent(f.pour)+'_'+horodatage()+'.json', JSON.stringify(f), 'application/json', 'Mes progrès dans mon hub ('+f.de+')');
+  await ecrireMeta('envoiAdminLe', f.creeLe);
+}
+
+/* 🎁 Préparer un hub pour un proche (fichier tout-en-un avec invitation) */
+async function preparerPourProche(nom, ids, simple, avecDonnees){
+  const s=await fabriquerSauvegarde();
+  const applis=s.applis.filter(a=>ids.includes(a.id)), donnees={};
+  if(avecDonnees) ids.forEach(id=>{ if(s.donnees[id]) donnees[id]=s.donnees[id]; });
+  const paquet={format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis, donnees, registre:[],
+    invitation:{pour:nom, admin:PROFIL.nom||'Administrateur', codeHash:PROFIL.codeHash, simple:!!simple}};
+  const balise='<script type="application/json" id="'+ID_INTEGREE+'">'+JSON.stringify(paquet).replace(/</g,'\\u003c')+'</'+'script>';
+  let code=await codeDuHub(); const i=code.lastIndexOf('</body>'); code = i>=0 ? code.slice(0,i)+balise+'\n'+code.slice(i) : code+balise;
+  await partagerFichier('Hub-'+sansAccent(nom)+'_'+horodatage()+'.html', code, 'text/html', 'Ton hub, '+nom+' : ouvre ce fichier dans Chrome.');
+}
+/* À l'arrivée d'une invitation : ce hub devient celui du proche */
+async function appliquerInvitation(inv){
+  if(!inv || !inv.pour) return false;
+  if(PROFIL.nom && PROFIL.nom!==inv.pour){
+    const ok=await fenetre('👤 Changer de propriétaire ?','<p>Ce fichier est un hub préparé pour <b>'+esc(inv.pour)+'</b>, mais ce hub appartient à <b>'+esc(PROFIL.nom)+'</b>.</p><p class="aide">Si tu continues, seules les applis sont ajoutées, sans changer le propriétaire.</p>',[{texte:'Ajouter les applis seulement',classe:'',valeur:false},{texte:'En faire le hub de '+esc(inv.pour),classe:'rouge',valeur:true}]);
+    if(!ok) return false;
+  }
+  PROFIL={nom:inv.pour, role:'membre', admin:inv.admin||null, codeHash:inv.codeHash||null, simple:!!inv.simple};
+  await ecrireMeta('profil', PROFIL); appliquerModeSimple(); return true;
+}
+
+/* 👁 Ouvrir l'appli d'un proche AVEC SES DONNÉES (dans un compartiment à part, jamais mélangé aux tiennes) */
+const idProche = (nom, appId) => 'pr~'+sansAccent(nom)+'~'+appId;
+async function ouvrirChezProche(nom, appId){
+  const proches=await lireMeta('proches',{}), p=proches[nom]; if(!p) return;
+  const a=(p.applis||[]).find(x=>x.id===appId) || await un('apps',appId); if(!a || !a.code){ toast('Le code de cette appli manque.'); return; }
+  const pid=idProche(nom, appId), pre=PREFIXE+pid+':';
+  if(!p.ouvert || !p.ouvert[appId] || p.ouvert[appId]!==p.recuLe){   // première ouverture de ce fichier : on installe ses données
+    Object.keys(localStorage).filter(k=>k.startsWith(pre)).forEach(k=>localStorage.removeItem(k));
+    for(const b of await basesDeApp(pid)) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
+    const d=(p.donnees||{})[appId]||{localStorage:{},bases:[]};
+    Object.keys(d.localStorage||{}).forEach(k=>localStorage.setItem(pre+k, d.localStorage[k]));
+    for(const b of d.bases||[]) await fusionnerBase(Object.assign({},b,{nom:b.nom.replace(PREFIXE+appId+':', pre)}));
+    p.ouvert=Object.assign({}, p.ouvert, {[appId]:p.recuLe}); await ecrireMeta('proches', proches);
+  }
+  ouvrirApp(null, Object.assign({}, a, {id:pid, nom:a.nom+' — '+nom, icone:'👁'}));
+}
+/* 📤 Renvoyer au proche ses données (avec tes modifications) et, si besoin, une appli */
+async function renvoyerAuProche(nom, ids){
+  const proches=await lireMeta('proches',{}), p=proches[nom]; if(!p) return;
+  const donnees={}, applis=[];
+  for(const appId of ids){
+    const pid=idProche(nom, appId), pre=PREFIXE+pid+':', ls={};
+    Object.keys(localStorage).filter(k=>k.startsWith(pre)).forEach(k=>ls[k.slice(pre.length)]=localStorage.getItem(k));
+    const bases=[]; for(const b of await basesDeApp(pid)){ const dump=await exporterBase(b.name); dump.nom=b.name.replace(pre, PREFIXE+appId+':'); bases.push(dump); }
+    if(Object.keys(ls).length || bases.length) donnees[appId]={localStorage:ls, bases};
+    const a=await un('apps',appId) || (p.applis||[]).find(x=>x.id===appId); if(a) applis.push(a);
+  }
+  const paquet={format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis, donnees, registre:[], de:PROFIL.nom};
+  await partagerFichier('Pour-'+sansAccent(nom)+'_'+horodatage()+'.json', JSON.stringify(paquet), 'application/json', 'Mise à jour de ton hub, de '+(PROFIL.nom||''));
+}
+
+async function vueProches(){
+  vueCourante='proches'; $('#titre').textContent='👥 Profil et proches'; $('#btnRetour').classList.remove('cache'); $('#outils').classList.add('cache');
+  if(!(history.state && history.state.v)) history.pushState({v:'proches'},'');
+  const apps=await listeApps(), proches=await lireMeta('proches',{});
+  const lp=Object.keys(proches).sort();
+  $('#contenu').innerHTML=
+    '<div class="carte"><h2>👤 Ce hub</h2>'+
+      '<label>Prénom du propriétaire</label><input id="pNom" value="'+esc(PROFIL.nom||'')+'" placeholder="Frédéric">'+
+      (PROFIL.role==='admin'
+        ? '<label>Code administrateur (pour ouvrir les réglages chez tes proches)</label><input id="pCode" type="password" inputmode="numeric" placeholder="'+(PROFIL.codeHash?'•••• (défini) — tape un nouveau code pour le changer':'Choisis un code, 4 chiffres ou plus')+'">'
+        : '<p class="aide">Ce hub a été préparé par <b>'+esc(PROFIL.admin||'?')+'</b>.</p>')+
+      '<button class="btn vert" id="pSauver">Enregistrer</button></div>'+
+    (PROFIL.role==='membre' ? '<div class="carte"><h2>📤 Envoyer mes progrès</h2><p class="aide">Envoie tes jeux et tes scores à '+esc(PROFIL.admin||'')+' par WhatsApp ou par mail.</p><button class="btn" id="pEnvoyer">📤 Envoyer à '+esc(PROFIL.admin||'')+'</button></div>' :
+    '<div class="carte"><h2>🎁 Préparer un hub pour un proche</h2>'+
+      '<label>Son prénom</label><input id="nPour" placeholder="Erika">'+
+      '<label>Applis à lui donner</label><div class="tablo"><table>'+apps.map(a=>'<tr><td style="width:36px;text-align:center"><input type="checkbox" class="nApp" value="'+esc(a.id)+'"></td><td>'+esc((a.icone||'')+' '+a.nom)+'</td></tr>').join('')+'</table></div>'+
+      '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nSimple" checked style="width:auto"> Mode simple (grosses tuiles, pas de boutons techniques)</label>'+
+      '<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="nDonnees" style="width:auto"> Avec mes données de ces applis (sinon : neuves)</label>'+
+      '<button class="btn" id="nCreer">🎁 Créer et envoyer son hub</button>'+
+      '<p class="aide">Elle ouvre le fichier dans Chrome, il devient « son » hub. Pour l\'avoir en appli : elle installe d\'abord le hub depuis son adresse, puis importe ce fichier (💾 → Importer).</p></div>'+
+    '<div class="carte"><h2>📥 Reçu de mes proches</h2><p class="aide">Quand un proche t\'envoie ses progrès, importe le fichier ici. Ses données restent <b>à part</b>, jamais mélangées aux tiennes.</p>'+
+      '<button class="btn" id="rImport">📥 Importer le fichier d\'un proche</button>'+
+      (lp.length ? '<div class="tablo" style="margin-top:10px"><table><tr><th>Proche</th><th>Reçu le</th><th>Applis</th></tr>'+lp.map(n=>{ const p=proches[n];
+        return '<tr><td><b>'+esc(n)+'</b></td><td>'+dateFr(p.recuLe)+'</td><td>'+(p.applis||[]).map(a=>'<button class="btn petit gris" data-voir="'+esc(n)+'" data-app="'+esc(a.id)+'">👁 '+esc(a.nom)+'</button>').join(' ')+
+          '<br><button class="btn petit" data-renvoi="'+esc(n)+'">📤 Lui renvoyer ses données</button></td></tr>'; }).join('')+'</table></div>' : '')+
+    '</div>');
+  $('#pSauver').onclick=async()=>{ PROFIL.nom=$('#pNom').value.trim()||null; const c=$('#pCode'); if(c && c.value){ if(c.value.length<4){ toast('Code : 4 caractères minimum.'); return; } PROFIL.codeHash=await hacher(c.value); }
+    await ecrireMeta('profil', PROFIL); toast('✅ Enregistré'); vueProches(); };
+  const pe=$('#pEnvoyer'); if(pe) pe.onclick=envoyerAuxAdmin;
+  const nc=$('#nCreer'); if(nc) nc.onclick=async()=>{ const nom=$('#nPour').value.trim(), ids=[...document.querySelectorAll('.nApp:checked')].map(x=>x.value);
+    if(!nom){ toast('Écris son prénom.'); return; } if(!ids.length){ toast('Coche au moins une appli.'); return; }
+    if(!PROFIL.codeHash){ toast('Choisis d\'abord ton code administrateur, en haut.'); return; }
+    if(!PROFIL.nom){ toast('Écris d\'abord ton prénom, en haut.'); return; }
+    await preparerPourProche(nom, ids, $('#nSimple').checked, $('#nDonnees').checked); };
+  const ri=$('#rImport'); if(ri) ri.onclick=async()=>{
+    const f=await choisirFichier('.json,application/json'); if(!f) return;
+    let j; try{ j=JSON.parse(await lireTexte(f)); }catch(e){ toast('Fichier illisible.'); return; }
+    if(j.format!=='mon-hub-proche'){ toast('Ce n\'est pas un fichier envoyé par un proche.'); return; }
+    const pr=await lireMeta('proches',{}); pr[j.de]={recuLe:j.creeLe, applis:j.applis, donnees:j.donnees, ouvert:{}}; await ecrireMeta('proches', pr);
+    toast('📥 Progrès de '+j.de+' reçus'); vueProches(); };
+  document.querySelectorAll('[data-voir]').forEach(b=>b.onclick=()=>ouvrirChezProche(b.dataset.voir, b.dataset.app));
+  document.querySelectorAll('[data-renvoi]').forEach(b=>b.onclick=async()=>{ const n=b.dataset.renvoi, p=(await lireMeta('proches',{}))[n]; await renvoyerAuProche(n, (p.applis||[]).map(a=>a.id)); });
+}
+
 /* ---------- Écran Sauvegarde ---------- */
 function vueSauvegarde(){
   montrer('sauvegarde', async ()=>{
@@ -1346,6 +1498,7 @@ async function majHub(){
 (async function demarrer(){
   try{ await ouvrirBase(); }catch(e){ $('#contenu').innerHTML='<div class="carte ko">Impossible d\'ouvrir la mémoire du téléphone : '+esc(e&&e.message)+'</div>'; return; }
   history.replaceState(null,'');
+  await chargerProfil();
   const appDemandee=new URLSearchParams(location.search).get('app');
   if(appDemandee && await un('apps',appDemandee)){ vueAccueil(); ouvrirApp(appDemandee); }
   else { vueAccueil(); if(appDemandee) toast('Cette appli n\'est plus dans le hub.'); }
