@@ -94,7 +94,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.14';
+const HUB_VERSION = '1.15';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -134,16 +134,47 @@ function choisirFichier(accept){
 }
 const lireTexte = f => new Promise((ok,ko)=>{ const r=new FileReader(); r.onload=()=>ok(r.result); r.onerror=()=>ko(r.error); r.readAsText(f); });
 
-/* Enregistrer un fichier (Téléchargements, ou pont Android dans l'APK). */
-function enregistrerFichier(nom, contenu, type){
-  if(APP_ANDROID && APP_ANDROID.enregistrer){
-    try{ toast(APP_ANDROID.enregistrer(nom, contenu, type) || ('Fichier « '+nom+' » enregistré')); return; }catch(e){}
-  }
-  const b=new Blob([contenu],{type:type||'application/octet-stream'});
+/* Enregistrer un fichier.
+   Réglage « Où enregistrer » (💾 Sauvegarde) : « demander » = choisir le dossier à chaque fois
+   (le sélecteur se souvient du dernier dossier par sorte de fichier), « telechargements » = direct.
+   Renvoie true si le fichier est enregistré, false si annulé. */
+const modeEnregistrement = () => { try{ return localStorage.getItem('monhub-enregistrement') || 'demander'; }catch(e){ return 'demander'; } };
+const choixDossierPossible = () => typeof window.showSaveFilePicker === 'function';
+function sorteDeFichier(nom){ const n=nom.toLowerCase(); return n.includes('rapport') ? 'rapports' : n.includes('sauvegarde') || n.includes('tout-en-un') || n.includes('secours') ? 'sauvegardes' : n.endsWith('.html') ? 'applis' : 'fichiers'; }
+function versTelechargements(nom, b){
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=nom;
-  document.body.appendChild(a); a.click();
+  document.body.appendChild(a); HTMLAnchorElement.prototype.click.call(a);
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-  toast('Fichier « '+nom+' » enregistré dans Téléchargements', 4500);
+  toast('Fichier « '+nom+' » enregistré dans Téléchargements', 4500); return true;
+}
+async function enregistrerFichier(nom, contenu, type){
+  if(APP_ANDROID && APP_ANDROID.enregistrer && !(contenu instanceof Blob)){
+    try{ toast(APP_ANDROID.enregistrer(nom, contenu, type) || ('Fichier « '+nom+' » enregistré')); return true; }catch(e){}
+  }
+  const b = contenu instanceof Blob ? contenu : new Blob([contenu],{type:type||'application/octet-stream'});
+  if(modeEnregistrement()==='demander'){
+    if(choixDossierPossible()){
+      try{
+        const ext=(nom.match(/\.[a-z0-9]+$/i)||[''])[0];
+        const opts={ suggestedName:nom, id:'monhub-'+sorteDeFichier(nom) };
+        if(ext) opts.types=[{ description:'Fichier '+ext, accept:{ [b.type||'application/octet-stream']:[ext] } }];
+        const h=await window.showSaveFilePicker(opts);
+        const w=await h.createWritable(); await w.write(b); await w.close();
+        toast('✅ « '+h.name+' » enregistré dans le dossier choisi', 4500); return true;
+      }catch(e){
+        if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return false; }
+        /* sélecteur refusé par le navigateur : on passe au partage puis aux Téléchargements */
+      }
+    }
+    try{
+      const f=new File([b], nom, {type:b.type||'application/octet-stream'});
+      if(navigator.canShare && navigator.canShare({files:[f]})){
+        toast('Choisis « Enregistrer dans Fichiers » ou Drive pour choisir le dossier', 6000);
+        await navigator.share({files:[f], title:nom}); return true;
+      }
+    }catch(e){ if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return false; } }
+  }
+  return versTelechargements(nom, b);
 }
 
 /* ---------- Base du hub (IndexedDB « mon-hub ») ---------- */
@@ -176,6 +207,7 @@ function HubPourApp(appId){
     version: HUB_VERSION,
     appId,
     profil: () => ({ nom: PROFIL.nom, role: PROFIL.role, admin: PROFIL.admin }),
+    enregistrer: (nom, contenu, type) => enregistrerFichier(nom, contenu, type),
     registre: {
       lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
       ecrire: (cle,valeur) => poser('registre',{cle, valeur, app:appId, maj:new Date().toISOString()}),
@@ -209,6 +241,14 @@ function compartiment(ID){
       getOwnPropertyDescriptor:function(t,p){ var v=reel.getItem(P+String(p)); return v===null?undefined:{value:v,writable:true,enumerable:true,configurable:true}; }
     });
   }
+  /* Les fichiers que l'appli enregistre (liens « download ») passent par le hub → choix du dossier */
+  try{
+    var vers=function(el){ var nom=el.getAttribute('download'), h=el.href||''; if(nom===null || !/^(blob|data):/.test(h) || !window.parent || !window.parent.enregistrerFichier) return false;
+      fetch(h).then(function(r){ return r.blob(); }).then(function(b){ window.parent.enregistrerFichier(nom||'fichier', b, b.type); }); return true; };
+    var clic=HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click=function(){ if(!vers(this)) return clic.call(this); };
+    document.addEventListener('click',function(e){ var el=e.target && e.target.closest && e.target.closest('a[download]'); if(el && vers(el)) e.preventDefault(); },true);
+  }catch(e){}
   try{ var ls=window.localStorage; Object.defineProperty(window,'localStorage',{value:fabriquer(ls),configurable:true,enumerable:true}); }catch(e){}
   try{ var ss=window.sessionStorage; Object.defineProperty(window,'sessionStorage',{value:fabriquer(ss),configurable:true,enumerable:true}); }catch(e){}
   try{
@@ -954,7 +994,7 @@ async function fabriquerSauvegarde(){
 async function sauvegarder(){
   toast('Préparation de la sauvegarde…');
   const s=await fabriquerSauvegarde();
-  enregistrerFichier('MonHub-sauvegarde_'+horodatage()+'.json', JSON.stringify(s), 'application/json');
+  if(!await enregistrerFichier('MonHub-sauvegarde_'+horodatage()+'.json', JSON.stringify(s), 'application/json')) return;
   await ecrireMeta('derniereSauvegarde', new Date().toISOString());
   if(vueCourante==='sauvegarde') vueSauvegarde();
 }
@@ -1450,13 +1490,24 @@ function vueSauvegarde(){
       '<tr><th>Registre partagé</th><td>'+reg.length+' élément(s)</td></tr>'+
       '<tr><th>Espace</th><td>'+(espace||'—')+'</td></tr>'+
       '<tr><th>Version du hub</th><td>'+HUB_VERSION+'</td></tr></table></div></div>'+
+      carteEnregistrement()+
       '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Sauvegarder tout</button></div>'+
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
       '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
     $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
+    document.querySelectorAll('input[name=ouEnr]').forEach(r=>r.onchange=()=>{ try{ localStorage.setItem('monhub-enregistrement', r.value); }catch(e){} toast(r.value==='demander'?'📁 Le dossier te sera demandé à chaque enregistrement':'📥 Les fichiers iront directement dans Téléchargements'); });
     const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
   },'💾 Sauvegarde');
+}
+function carteEnregistrement(){
+  const m=modeEnregistrement(), ck=v=>m===v?' checked':'';
+  return '<div class="carte"><h2>📁 Où enregistrer les fichiers</h2>'+
+    '<p class="aide">Pour les rapports, les sauvegardes, les applis exportées et les fichiers créés dans tes applis.</p>'+
+    '<label style="font-weight:400"><input type="radio" name="ouEnr" value="demander"'+ck('demander')+'> Me demander le dossier à chaque fois</label>'+
+    '<label style="font-weight:400"><input type="radio" name="ouEnr" value="telechargements"'+ck('telechargements')+'> Toujours dans Téléchargements, sans rien demander</label>'+
+    (choixDossierPossible() ? '<p class="aide">Le hub se souvient du dernier dossier choisi pour chaque sorte de fichier (rapports, sauvegardes, applis).</p>'
+      : '<p class="aide">Sur cet appareil, Chrome ouvre le menu de partage : choisis <b>« Enregistrer dans Fichiers »</b> (ou Drive) pour choisir le dossier.</p>')+'</div>';
 }
 async function proteger(){ try{ return navigator.storage && navigator.storage.persist ? await navigator.storage.persist() : false; }catch(e){ return false; } }
 
