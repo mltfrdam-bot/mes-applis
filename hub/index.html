@@ -94,7 +94,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.12';
+const HUB_VERSION = '1.13';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -319,11 +319,13 @@ async function vueAccueil(){
     '<span class="ico">'+esc(a.icone||'📦')+'</span><span class="nom">'+esc(a.nom)+'</span></button>').join('');
   const vide = apps.length ? '' : '<div class="carte aide">👋 Ton hub est prêt.<br>Appuie sur <b>➕ Ajouter</b> pour ranger ta première appli : depuis un fichier HTML (sans internet) ou depuis le catalogue.</div>';
   const simple=estMembreSimple();
-  const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>' : '';
+  const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>'+
+    '<button class="btn gros gris" id="btnRecoitAdmin">📥 Recevoir un fichier de '+esc(PROFIL.admin)+'</button>' : '';
   $('#contenu').innerHTML = (simple?'':rappel) + vide + '<div class="grille">'+tuiles+
     (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
     (simple?'':installAide());
   const be=$('#btnEnvoiAdmin'); if(be) be.onclick=envoyerAuxAdmin;
+  const br=$('#btnRecoitAdmin'); if(br) br.onclick=importerFusion;   // nouvelles applis, nouvelles versions, données renvoyées : tout s'ajoute sans rien effacer
   $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
   const ta=$('#tuileAjout'); if(ta) ta.onclick=()=>vueAjouter();
   const bi=$('#btnInstaller'); if(bi) bi.onclick=installer;
@@ -1027,7 +1029,7 @@ async function importerFusion(){
   toast('Fusion en cours…');
   const lignes=await fusionner(s);
   await afficherBilan('📥 Fusion terminée — rien n\'a été écrasé', lignes, s.creeeLe);
-  vueSauvegarde();
+  if(vueCourante==='sauvegarde') vueSauvegarde(); else vueAccueil();
 }
 async function restaurer(){
   const s=await lireSauvegarde(); if(!s) return;
