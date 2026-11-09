@@ -94,7 +94,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.15';
+const HUB_VERSION = '1.16';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -357,7 +357,11 @@ async function vueAccueil(){
   }
   const tuiles=apps.map(a=>'<button class="tuile" data-id="'+esc(a.id)+'">'+(majDispo[a.id]?'<span class="badge">MAJ</span>':(etatsApps[a.id]==='probleme'?'<span class="badge">❌</span>':etatsApps[a.id]==='surveiller'?'<span class="badge" style="background:#f08c00">⚠️</span>':''))+
     '<span class="ico">'+esc(a.icone||'📦')+'</span><span class="nom">'+esc(a.nom)+'</span></button>').join('');
-  const vide = apps.length ? '' : '<div class="carte aide">👋 Ton hub est prêt.<br>Appuie sur <b>➕ Ajouter</b> pour ranger ta première appli : depuis un fichier HTML (sans internet) ou depuis le catalogue.</div>';
+  const filetVide = !apps.length ? await lireMeta('syncFilet',null) : null;
+  const vide = apps.length ? '' : '<div class="carte aide">👋 <b>Ton hub est vide.</b><br>Hub neuf : appuie sur <b>➕ Ajouter</b> pour ranger ta première appli.<br><br>'+
+      '<b>Tes applis ont disparu ?</b> (téléphone nettoyé, données du site effacées…) Récupère-les :'+
+      '<button class="btn gros vert" id="btnRestaurer">📥 Restaurer une sauvegarde</button><p class="aide">Choisis le fichier <b>MonHub-sauvegarde</b> le plus récent (dossier « Mon Hub - synchro » de Google Drive, ou Téléchargements). Un fichier <b>tout-en-un</b> marche aussi.</p>'+
+      (filetVide ? '<button class="btn gris" id="btnFilet">↩ Revenir à l\'état d\'avant la dernière synchro</button>' : '')+'</div>';
   const simple=estMembreSimple();
   const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>'+
     '<button class="btn gros gris" id="btnRecoitAdmin">📥 Recevoir un fichier de '+esc(PROFIL.admin)+'</button>' : '';
@@ -365,7 +369,9 @@ async function vueAccueil(){
     (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
     (simple?'':installAide());
   const be=$('#btnEnvoiAdmin'); if(be) be.onclick=envoyerAuxAdmin;
-  const br=$('#btnRecoitAdmin'); if(br) br.onclick=importerFusion;   // nouvelles applis, nouvelles versions, données renvoyées : tout s'ajoute sans rien effacer
+  const br=$('#btnRecoitAdmin'); if(br) br.onclick=importerFusion;
+  const brs=$('#btnRestaurer'); if(brs) brs.onclick=importerFusion;
+  const bfi=$('#btnFilet'); if(bfi) bfi.onclick=async()=>{ const f=await lireMeta('syncFilet',null); if(!f) return; await remplacerTout(f.etat); toast('↩ Hub remis à l\'état du '+dateFr(f.le)); vueAccueil(); };   // nouvelles applis, nouvelles versions, données renvoyées : tout s'ajoute sans rien effacer
   $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
   const ta=$('#tuileAjout'); if(ta) ta.onclick=()=>vueAjouter();
   const bi=$('#btnInstaller'); if(bi) bi.onclick=installer;
@@ -1190,6 +1196,16 @@ async function synchroniser(manuel){
       const et=await appelServeur(cfg,{action:'etat'});
       const localModif = h!==cfg.hash, distantModif = (et.rev||0)!==(cfg.rev||0);
       if(!localModif && !distantModif) break;
+      const nbLoc=(local.applis||[]).length;
+      if(nbLoc===0 && (et.rev||0)>0){                                     // garde-fou : un hub vide n'écrase jamais le nuage
+        const ok=await fenetre('☁️ Ton hub est vide','<p>Ce hub n\'a plus aucune appli, alors que Google Drive a une sauvegarde.</p><p>Veux-tu <b>récupérer</b> tes applis depuis Google Drive ?</p>',
+          [{texte:'⬇️ Récupérer depuis Google',classe:'vert',valeur:true},{texte:'Plus tard',classe:'gris',valeur:false}]);
+        if(!ok){ message='☁️ Synchro en pause : hub vide'; break; }
+        const lu0=await appelServeur(cfg,{action:'lire'}); const d0=lu0.donnees?JSON.parse(lu0.donnees):null;
+        if(d0 && (d0.applis||[]).length){ await remplacerTout(d0); cfg.rev=lu0.rev; cfg.hash=empreinte(await fabriquerSauvegarde()); await ecrireMeta('synchro',cfg);
+          await journalSync('⬇️ Hub vide récupéré : version '+lu0.rev); message='☁️ Applis récupérées depuis Google'; if(vueCourante==='accueil') vueAccueil(); }
+        break;
+      }
       if(localModif && !distantModif){                                   // 1) envoyer
         const r=await appelServeur(cfg,{action:'ecrire', baseRev:cfg.rev||0, appareil:cfg.appareil, donnees:JSON.stringify(local)});
         if(r.conflit) continue;
@@ -1201,6 +1217,14 @@ async function synchroniser(manuel){
       if(!dist){ cfg.rev=lu.rev||0; continue; }
       if(vueCourante==='app') break;
       const qui=(lu.info&&lu.info.appareil)||'l\'autre appareil';
+      if(!(dist.applis||[]).length && nbLoc>0){                           // garde-fou : un nuage vide n'efface jamais tes applis
+        const ok=await fenetre('☁️ Attention','<p>La version sur Google Drive (envoyée par <b>'+esc(qui)+'</b>) ne contient <b>aucune appli</b>.</p><p>Ce hub en a '+nbLoc+'. Je garde tes applis et je renvoie ta version sur Google, d\'accord ?</p>',
+          [{texte:'Garder mes applis',classe:'vert',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]);
+        if(!ok){ message='☁️ Synchro en pause'; break; }
+        const r=await appelServeur(cfg,{action:'ecrire', baseRev:lu.rev, appareil:cfg.appareil, donnees:JSON.stringify(local)});
+        if(!r.conflit){ cfg.rev=r.rev; cfg.hash=h; await ecrireMeta('synchro',cfg); await journalSync('🛡 Version vide refusée, ma version renvoyée ('+r.rev+')'); message='☁️ Tes applis sont gardées'; }
+        break;
+      }
       if(!localModif){                                                   // 2) recevoir (remplace : les suppressions suivent)
         await garderCopieLocale(local);
         await remplacerTout(dist);
