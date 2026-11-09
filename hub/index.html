@@ -9,7 +9,7 @@
 <link rel="icon" href="icone-192.png">
 <style>
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  html{height:100%} body{margin:0;min-height:100%}
   body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f4f5f7;color:#1d2330;font-size:17px}
   button{font:inherit;cursor:pointer}
   #entete{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;background:#1d5fbf;color:#fff;padding:10px 12px;min-height:56px}
@@ -39,6 +39,9 @@
   th,td{border:1px solid #c9ced6;padding:7px 8px;text-align:left;vertical-align:middle}
   th{background:#e8ecf2;font-weight:700}
   .tablo{overflow-x:auto}
+  .rapide{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #d5d9df;border-radius:12px;padding:8px 10px;margin-bottom:12px}
+  .rapide button{flex:none;font-size:17px;font-weight:700;padding:11px 14px;border-radius:10px;border:0;background:#1a7f3c;color:#fff}
+  .rapide small{color:#5a6470;font-size:13px;line-height:1.3}
   table.gerer{font-size:14px}
   table.gerer th,table.gerer td{padding:5px 5px}
   table.gerer td.ord{width:42px;padding:3px}
@@ -94,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.16';
+const HUB_VERSION = '1.17';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -365,11 +368,15 @@ async function vueAccueil(){
   const simple=estMembreSimple();
   const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>'+
     '<button class="btn gros gris" id="btnRecoitAdmin">📥 Recevoir un fichier de '+esc(PROFIL.admin)+'</button>' : '';
-  $('#contenu').innerHTML = (simple?'':rappel) + vide + '<div class="grille">'+tuiles+
+  const sr = (!simple && apps.length) ? await lireMeta('sauvegardeRapide',null) : null;
+  const barreRapide = (!simple && apps.length) ? '<div class="rapide"><button id="btnRapide">⚡ Sauvegarder</button><small>'+
+    (sr ? 'Écrase <b>'+esc(sr.nom)+'</b><br>Dernière : '+(derniere?dateFr(derniere)+' à '+new Date(derniere).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'jamais') : 'Premier appui : choisis le fichier (dossier Drive, carte SD…). Ensuite un seul appui suffit.')+'</small></div>' : '';
+  $('#contenu').innerHTML = (simple?'':rappel) + barreRapide + vide + '<div class="grille">'+tuiles+
     (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
     (simple?'':installAide());
   const be=$('#btnEnvoiAdmin'); if(be) be.onclick=envoyerAuxAdmin;
   const br=$('#btnRecoitAdmin'); if(br) br.onclick=importerFusion;
+  const bra=$('#btnRapide'); if(bra) bra.onclick=sauvegardeRapide;
   const brs=$('#btnRestaurer'); if(brs) brs.onclick=importerFusion;
   const bfi=$('#btnFilet'); if(bfi) bfi.onclick=async()=>{ const f=await lireMeta('syncFilet',null); if(!f) return; await remplacerTout(f.etat); toast('↩ Hub remis à l\'état du '+dateFr(f.le)); vueAccueil(); };   // nouvelles applis, nouvelles versions, données renvoyées : tout s'ajoute sans rien effacer
   $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
@@ -997,6 +1004,36 @@ async function fabriquerSauvegarde(){
   }
   return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre')};
 }
+/* ⚡ Sauvegarde rapide (comme « Enregistrer » d'Excel) : un appui = le fichier choisi la dernière fois est écrasé, sans question.
+   « Enregistrer sous… » (écran 💾) choisit un nouveau fichier, qui devient la cible de la sauvegarde rapide. */
+async function enregistrerSous(){
+  if(!choixDossierPossible()) return sauvegarder();
+  let h;
+  try{ h=await window.showSaveFilePicker({suggestedName:'MonHub-sauvegarde_'+horodatage()+'.json', id:'monhub-sauvegardes', types:[{description:'Sauvegarde Mon Hub', accept:{'application/json':['.json']}}]}); }
+  catch(e){ if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return; } return sauvegarder(); }
+  if(await ecrireSauvegardeDans(h)) await ecrireMeta('sauvegardeRapide', {handle:h, nom:h.name, choisiLe:new Date().toISOString()});
+  if(vueCourante==='sauvegarde') vueSauvegarde(); else if(vueCourante==='accueil') vueAccueil();
+}
+async function ecrireSauvegardeDans(h){
+  try{
+    toast('⏳ Sauvegarde en cours…', 20000);
+    const s=await fabriquerSauvegarde();
+    const w=await h.createWritable(); await w.write(new Blob([JSON.stringify(s)],{type:'application/json'})); await w.close();
+    await ecrireMeta('derniereSauvegarde', new Date().toISOString());
+    toast('✅ Sauvegardé dans « '+h.name+' » ('+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+')', 4000); return true;
+  }catch(e){ toast('❌ Écriture impossible : '+(e&&e.message||e), 6000); return false; }
+}
+async function sauvegardeRapide(){
+  const r=await lireMeta('sauvegardeRapide',null);
+  if(!r || !r.handle || !choixDossierPossible()) return enregistrerSous();
+  try{
+    let p=await r.handle.queryPermission({mode:'readwrite'});
+    if(p!=='granted') p=await r.handle.requestPermission({mode:'readwrite'});   // au plus une fois par session
+    if(p!=='granted'){ toast('Autorisation refusée : choisis le fichier à nouveau.'); return enregistrerSous(); }
+  }catch(e){ return enregistrerSous(); }
+  if(!await ecrireSauvegardeDans(r.handle)) return enregistrerSous();
+  if(vueCourante==='accueil') vueAccueil();
+}
 async function sauvegarder(){
   toast('Préparation de la sauvegarde…');
   const s=await fabriquerSauvegarde();
@@ -1515,11 +1552,12 @@ function vueSauvegarde(){
       '<tr><th>Espace</th><td>'+(espace||'—')+'</td></tr>'+
       '<tr><th>Version du hub</th><td>'+HUB_VERSION+'</td></tr></table></div></div>'+
       carteEnregistrement()+
-      '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Sauvegarder tout</button></div>'+
+      '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Enregistrer sous… (nouveau fichier)</button>'+
+        '<p class="aide">Le fichier choisi devient celui de <b>⚡ Sauvegarder</b> sur l\'accueil : un appui, et il est remplacé par la version du moment.</p></div>'+
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
       '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
-    $('#bSauv').onclick=sauvegarder; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
+    $('#bSauv').onclick=enregistrerSous; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
     document.querySelectorAll('input[name=ouEnr]').forEach(r=>r.onchange=()=>{ try{ localStorage.setItem('monhub-enregistrement', r.value); }catch(e){} toast(r.value==='demander'?'📁 Le dossier te sera demandé à chaque enregistrement':'📥 Les fichiers iront directement dans Téléchargements'); });
     const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
   },'💾 Sauvegarde');
