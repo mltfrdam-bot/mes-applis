@@ -77,7 +77,7 @@
   <button id="btnRetour" class="cache" aria-label="Retour à l'accueil">← Accueil</button>
   <h1 id="titre">Mon Hub</h1>
   <button id="btnSignal" title="Signaler un problème ou une idée">📍</button>
-  <span id="outils" style="display:flex;gap:6px"><button id="btnSync" class="cache" title="Synchro">☁️</button><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Sauvegarde">💾</button><button id="btnProches" title="Profil et proches">👥</button></span>
+  <span id="outils" style="display:flex;gap:6px"><button id="btnSync" class="cache" title="Synchro">☁️</button><button id="btnSante" title="Santé des applis">🩺</button><button id="btnGerer" title="Gérer les applis">⚙️</button><button id="btnSauv" title="Appui court : sauvegarde rapide · appui long : écran Sauvegarde">💾</button><button id="btnProches" title="Profil et proches">👥</button></span>
 </header>
 <div id="bandeau"></div>
 <div id="bandeauSante" style="display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px"></div>
@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.19';
+const HUB_VERSION = '1.20';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -336,7 +336,7 @@ function retourAccueil(){ fermerApp(); vueAccueil(); synchroniser(); }
 window.addEventListener('popstate',()=>{ if(vueCourante!=='accueil') retourAccueil(); });
 $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(); else retourAccueil(); };
 $('#btnGerer').onclick=()=>vueGerer();
-$('#btnSauv').onclick=()=>vueSauvegarde();
+deuxGestes($('#btnSauv'), ()=>sauvegardeRapide(), ()=>vueSauvegarde());
 $('#btnSync').onclick=()=>synchroniser(true);
 $('#btnProches').onclick=()=>vueProches();
 $('#btnSante').onclick=()=>vueSante();
@@ -368,15 +368,11 @@ async function vueAccueil(){
   const simple=estMembreSimple();
   const envoi = PROFIL.role==='membre' && PROFIL.admin ? '<button class="btn gros" id="btnEnvoiAdmin">📤 Envoyer mes progrès à '+esc(PROFIL.admin)+'</button>'+
     '<button class="btn gros gris" id="btnRecoitAdmin">📥 Recevoir un fichier de '+esc(PROFIL.admin)+'</button>' : '';
-  const sr = (!simple && apps.length) ? await lireMeta('sauvegardeRapide',null) : null;
-  const barreRapide = (!simple && apps.length) ? '<div class="rapide"><button id="btnRapide">⚡ Sauvegarder</button><small>'+
-    (sr ? 'Écrase <b>'+esc(sr.nom)+'</b><br>Dernière : '+(derniere?dateFr(derniere):'jamais') : 'Premier appui : choisis le fichier (dossier Drive, carte SD…). Ensuite un seul appui suffit.')+'</small></div>' : '';
-  $('#contenu').innerHTML = (simple?'':rappel) + barreRapide + vide + '<div class="grille">'+tuiles+
+  $('#contenu').innerHTML = (simple?'':rappel) + vide + '<div class="grille">'+tuiles+
     (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
     (simple?'':installAide());
   const be=$('#btnEnvoiAdmin'); if(be) be.onclick=envoyerAuxAdmin;
   const br=$('#btnRecoitAdmin'); if(br) br.onclick=importerFusion;
-  const bra=$('#btnRapide'); if(bra) bra.onclick=sauvegardeRapide;
   const brs=$('#btnRestaurer'); if(brs) brs.onclick=importerFusion;
   const bfi=$('#btnFilet'); if(bfi) bfi.onclick=async()=>{ const f=await lireMeta('syncFilet',null); if(!f) return; await remplacerTout(f.etat); toast('↩ Hub remis à l\'état du '+dateFr(f.le)); vueAccueil(); };   // nouvelles applis, nouvelles versions, données renvoyées : tout s'ajoute sans rien effacer
   $('#contenu').querySelectorAll('.tuile[data-id]').forEach(b=>b.onclick=()=>ouvrirApp(b.dataset.id));
@@ -498,21 +494,22 @@ function vueSante(){
       (bil.length?bil.map(x=>'<tr data-det="'+esc(x.a.id)+'"><td>'+esc(x.a.icone)+' '+esc(x.a.nom)+'</td><td class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':x.b.verdict==='stable'?'ok':'')+'">'+x.b.texte+'</td><td>'+x.b.ouvertures+'</td><td>'+duree(x.b.temps)+'</td><td>'+x.b.erreurs+'</td><td>'+(x.b.chargeMoy!=null?(x.b.chargeMoy/1000).toFixed(1).replace('.',',')+' s':'—')+'</td></tr>').join(''):'<tr><td colspan="6">Aucune appli pour l\'instant.</td></tr>')+
       '</table></div><p class="aide">✅ Stable : aucune erreur cette semaine · ⚠️ À surveiller : quelques erreurs ou démarrage lent · ❌ Problème : erreurs fréquentes ou ne démarre pas · 💤 Peu utilisée : pas ouverte depuis 30 jours.</p></div>'+
       '<div class="carte" id="carteSignal"></div>'+
-      '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan, les dernières erreurs <b>et tes signalements 📍</b>. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
+      '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan, les dernières erreurs <b>et tes signalements 📍</b>. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button><span class="aide" style="display:block;margin:6px 0">Appui court : remplace le dernier rapport · appui long : nouveau fichier.</span> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
     $('#contenu').querySelectorAll('[data-det]').forEach(tr=>tr.onclick=()=>{ const x=bil.find(y=>y.a.id===tr.dataset.det);
       info(x.a.icone+' '+x.a.nom, '<p class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':'ok')+'">'+x.b.texte+' — '+esc(x.b.explic)+'</p>'+
         (x.b.ressources?'<p class="aide">'+x.b.ressources+' élément(s) internet non chargé(s) (normal sans réseau).</p>':'')+
         (x.b.derniers.length?'<div class="tablo"><table><tr><th>Quand</th><th>Version</th><th>Message</th></tr>'+x.b.derniers.map(m=>'<tr><td>'+dateFr(m.quand)+'</td><td>'+esc(m.version)+'</td><td>'+esc(m.message)+(m.ligne?' (ligne '+m.ligne+')':'')+'</td></tr>').join('')+'</table></div>':'<p>Aucune erreur notée.</p>')); });
     afficherCarteSignal();
-    $('#bRapport').onclick=async()=>{
+    fabriquerRapport=async()=>{
       const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
         applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
         erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20),
         // 📍 signalements : tous ceux pas encore envoyés par GitHub, + les 10 derniers envoyés
         signalements:(await tous('signalements')).sort((x,y)=>y.cree.localeCompare(x.cree)).filter((x,i,arr)=>x.statut==='attente' || (x.statut==='envoye' && arr.filter(z=>z.statut==='envoye').indexOf(x)<10))
           .map(x=>({ecritLe:x.cree, etat:x.statut==='envoye'?'envoyé n°'+x.numero:'en attente', type:TYPES_SIG[x.type], message:x.message, appli:x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''), endroit:x.endroit}))};
-      enregistrerFichier('MonHub-rapport-sante_'+horodatage()+'.json', JSON.stringify(rapport,null,1), 'application/json');
+      return rapport;
     };
+    deuxGestes($('#bRapport'), ()=>enregistrerRapide('rapport'), ()=>enregistrerNouveau('rapport'));
     $('#bVider').onclick=async()=>{ const ok=await fenetre('Remettre à zéro ?','<p>Le journal des ouvertures et des erreurs sera vidé. Tes applis et leurs données ne bougent pas.</p>',[{texte:'Remettre à zéro',classe:'rouge',valeur:true},{texte:'Annuler',classe:'gris',valeur:false}]); if(ok){ await vider('journal'); vueSanteRendu(); } };
   },'🩺 Santé des applis');
 }
@@ -650,15 +647,36 @@ async function afficherCarteSignal(){
   c.innerHTML='<h2>📍 Signalements pour Claude</h2>'+
     '<p class="aide">Bouton 📍 en haut de l\'écran : tu touches l\'endroit, tu écris ton message, il part dans ton dépôt GitHub privé, où je le lis.</p>'+
     '<div class="tablo"><table><tr><th>Dépôt</th><td>'+esc(reg.depot)+'</td></tr><tr><th>Clé</th><td>'+(reg.cle?'<span class="ok">enregistrée</span>':'<span class="att">pas encore réglée</span>')+'</td></tr><tr><th>En attente</th><td>'+att+'</td></tr></table></div>'+
-    '<button class="btn" id="sGuide">📖 Guide : dépôt privé et clé</button><button class="btn gris" id="sRegl">🔑 Régler la clé</button>'+(att?'<button class="btn vert" id="sEnv">📨 Envoyer maintenant</button>':'')+
+    '<button class="btn" id="sGuide">📖 Guide : dépôt privé et clé</button><button class="btn gris" id="sRegl">🔑 Régler la clé</button><button class="btn gris" id="sHisto">📚 Historique</button>'+(att?'<button class="btn vert" id="sEnv">📨 Envoyer maintenant</button>':'')+
     (l.length?'<p class="aide" style="margin-top:12px">Touche une ligne pour <b>modifier</b>, marquer <b>✅ réglé</b> (il sort du rapport) ou <b>supprimer</b>.</p>'+
       (att?'<button class="btn petit gris" id="sToutRegle">✅ Tout marquer réglé</button>':'')+
       '<div class="tablo"><table class="sigs"><tr><th>Écrit le</th><th>Message</th><th>État</th></tr>'+l.slice(0,30).map(s=>'<tr data-sig="'+s.id+'"'+(s.statut==='regle'?' class="regle"':'')+'><td>'+dateFr(s.cree).replace(/\/\d{4}/,'').replace(' ','<br>')+'</td><td><small>'+esc(s.app.nom)+'</small><br>'+esc(TYPES_SIG[s.type].slice(0,2)+' '+s.message.slice(0,80))+'</td><td>'+(s.statut==='envoye'?'<span class="ok">✅ envoyé n°'+s.numero+'</span>':s.statut==='regle'?'✔ réglé':'<span class="att">⏳ attente'+(s.erreur?'<br><small>'+esc(s.erreur)+'</small>':'')+'</span>')+'</td></tr>').join('')+'</table></div>':'');
   c.querySelector('#sGuide').onclick=guideSignal;
+  const hi=c.querySelector('#sHisto'); if(hi) hi.onclick=voirHistorique;
   c.querySelectorAll('tr[data-sig]').forEach(tr=>tr.onclick=()=>gererSignal(tr.dataset.sig));
   const tr=c.querySelector('#sToutRegle'); if(tr) tr.onclick=async()=>{ const l2=(await tous('signalements')).filter(x=>x.statut==='attente'); for(const x of l2){ x.statut='regle'; x.regleLe=new Date().toISOString(); await poser('signalements',x); } toast('✅ '+l2.length+' marqué(s) réglé(s)'); afficherCarteSignal(); };
   c.querySelector('#sRegl').onclick=reglerCle;
   const e=c.querySelector('#sEnv'); if(e) e.onclick=async()=>{ const r=await envoyerEnAttente(false); toast(r.envoyes?'✅ '+r.envoyes+' envoyé(s)':r.pasDeCle?'Règle d\'abord la clé.':'Pas envoyé : voir l\'état dans le tableau.',4500); };
+}
+/* 📚 Historique : un signalement supprimé n'est jamais perdu (il part dans l'archive, gardée aussi dans les sauvegardes).
+   Sert à relire les leçons du passé avant de créer une nouvelle appli. */
+async function archiverSignal(s){ const a=await lireMeta('archiveSignalements',[]); if(!a.some(x=>x.id===s.id)) a.push(Object.assign({}, s, {supprimeLe:new Date().toISOString()})); await ecrireMeta('archiveSignalements', a); }
+async function historiqueSignalements(){
+  const cur=await tous('signalements'), arc=await lireMeta('archiveSignalements',[]), ids=new Set(cur.map(x=>x.id));
+  return cur.concat(arc.filter(x=>!ids.has(x.id))).sort((a,b)=>String(b.cree).localeCompare(String(a.cree)));
+}
+async function voirHistorique(){
+  const l=await historiqueSignalements();
+  const etat=x=>x.supprimeLe?'🗑 supprimé':x.statut==='regle'?'✅ réglé':x.statut==='envoye'?'📨 envoyé':'⏳ en attente';
+  const v=await fenetre('📚 Historique des signalements ('+l.length+')',
+    '<p class="aide">Tous tes signalements, même supprimés. Avant de créer une nouvelle appli, envoie-moi ce fichier : je verrai ce qui a posé problème et ce que tu as demandé, pour ne pas refaire les mêmes erreurs.</p>'+
+    '<div class="tablo"><table><tr><th>Date</th><th>Appli</th><th>Message</th><th>État</th></tr>'+
+    l.map(x=>'<tr><td>'+dateFr(x.cree).replace(' ','<br>')+'</td><td><small>'+esc((x.app&&x.app.nom)||'')+'</small></td><td>'+(TYPES_SIG[x.type]||'')+' '+esc(x.message)+'</td><td><small>'+etat(x)+'</small></td></tr>').join('')+'</table></div>',
+    [{texte:'📤 Exporter pour Claude',classe:'vert',valeur:true},{texte:'Fermer',classe:'gris',valeur:false}]);
+  if(!v) return;
+  const exp={format:'mon-hub-historique-signalements', hub:HUB_VERSION, creeLe:new Date().toISOString(), nombre:l.length,
+    signalements:l.map(x=>({ecritLe:x.cree, appli:x.app?x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''):'', type:TYPES_SIG[x.type], message:x.message, etat:etat(x).replace(/^\S+ /,''), regleLe:x.regleLe||null, supprimeLe:x.supprimeLe||null, endroit:x.endroit}))};
+  enregistrerFichier('MonHub-historique-signalements_'+horodatage()+'.json', JSON.stringify(exp,null,1), 'application/json');
 }
 async function gererSignal(id){
   const s=await un('signalements',id); if(!s) return;
@@ -670,7 +688,7 @@ async function gererSignal(id){
      s.statut==='regle'?{texte:'↩ Remettre en attente',classe:'',valeur:{act:'attente'}}:(envoye?null:{texte:'✅ Réglé',classe:'',valeur:{act:'regle'}}),
      {texte:'🗑 Supprimer',classe:'rouge',valeur:{act:'suppr'}},{texte:'Annuler',classe:'gris',valeur:null}].filter(Boolean));
   if(!v) return;
-  if(v.act==='suppr'){ await enlever('signalements',id); toast('🗑 Signalement supprimé'); }
+  if(v.act==='suppr'){ await archiverSignal(s); await enlever('signalements',id); toast('🗑 Supprimé (gardé dans 📚 Historique)'); }
   else if(v.act==='regle'){ s.statut='regle'; s.regleLe=new Date().toISOString(); await poser('signalements',s); toast('✅ Marqué réglé : il sort du rapport'); }
   else if(v.act==='attente'){ s.statut='attente'; delete s.regleLe; await poser('signalements',s); toast('Remis en attente'); }
   else { if(!v.message){ toast('Message vide : rien changé.'); return; } s.type=v.type; s.message=v.message; await poser('signalements',s); toast('✅ Modifié'); }
@@ -1002,39 +1020,62 @@ async function fabriquerSauvegarde(){
     const bases=[]; for(const b of await basesDeApp(id)) bases.push(await exporterBase(b.name));
     donnees[id]={localStorage:ls, bases};
   }
-  return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre')};
+  return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre'), historiqueSignalements:await historiqueSignalements()};
 }
-/* ⚡ Sauvegarde rapide (comme « Enregistrer » d'Excel) : un appui = le fichier choisi la dernière fois est écrasé, sans question.
-   « Enregistrer sous… » (écran 💾) choisit un nouveau fichier, qui devient la cible de la sauvegarde rapide. */
-async function enregistrerSous(){
-  if(!choixDossierPossible()) return sauvegarder();
-  let h;
-  try{ h=await window.showSaveFilePicker({suggestedName:'MonHub-sauvegarde_'+horodatage()+'.json', id:'monhub-sauvegardes', types:[{description:'Sauvegarde Mon Hub', accept:{'application/json':['.json']}}]}); }
-  catch(e){ if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return; } return sauvegarder(); }
-  if(await ecrireSauvegardeDans(h)){ poigneeRapide=h; await ecrireMeta('sauvegardeRapide', {handle:h, nom:h.name, choisiLe:new Date().toISOString()}); }
-  if(vueCourante==='sauvegarde') vueSauvegarde(); else if(vueCourante==='accueil') vueAccueil();
-}
-async function ecrireSauvegardeDans(h){
+/* ⚡ Enregistrement rapide (comme « Enregistrer » d'Excel), pour les sauvegardes et les rapports :
+   appui court = le dernier fichier choisi est écrasé sans question ; appui long = « Enregistrer sous… » (nouveau fichier, qui devient la cible). */
+let fabriquerRapport=async()=>{ throw new Error('ouvre d\'abord 🩺 Santé'); };
+const RAPIDE={
+  sauvegarde:{meta:'sauvegardeRapide', id:'monhub-sauvegardes', nom:()=>'MonHub-sauvegarde_'+horodatage()+'.json', desc:'Sauvegarde Mon Hub',
+    contenu:async()=>JSON.stringify(await fabriquerSauvegarde()), apres:async()=>ecrireMeta('derniereSauvegarde', new Date().toISOString())},
+  rapport:{meta:'rapportRapide', id:'monhub-rapports', nom:()=>'MonHub-rapport-sante_'+horodatage()+'.json', desc:'Rapport Mon Hub',
+    contenu:async()=>JSON.stringify(await fabriquerRapport(),null,1), apres:async()=>{}}
+};
+const poignees={};   // gardées en mémoire tant que le hub reste ouvert : Chrome ne redemande pas l'autorisation
+async function ecrireVers(h, sorte){
+  const R=RAPIDE[sorte];
   try{
-    toast('⏳ Sauvegarde en cours…', 20000);
-    const s=await fabriquerSauvegarde();
-    const w=await h.createWritable(); await w.write(new Blob([JSON.stringify(s)],{type:'application/json'})); await w.close();
-    await ecrireMeta('derniereSauvegarde', new Date().toISOString());
-    toast('✅ Sauvegardé dans « '+h.name+' » ('+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+')', 4000); return true;
+    toast('⏳ Enregistrement…', 20000);
+    const texte=await R.contenu();
+    const w=await h.createWritable(); await w.write(new Blob([texte],{type:'application/json'})); await w.close();
+    await R.apres();
+    toast('✅ « '+h.name+' » enregistré ('+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+')', 4000); return true;
   }catch(e){ toast('❌ Écriture impossible : '+(e&&e.message||e), 6000); return false; }
 }
-let poigneeRapide=null;   // gardée en mémoire tant que le hub reste ouvert : Chrome ne redemande pas l'autorisation pour la même poignée
-async function sauvegardeRapide(){
-  if(!choixDossierPossible()) return enregistrerSous();
-  if(!poigneeRapide){ const r=await lireMeta('sauvegardeRapide',null); if(!r || !r.handle) return enregistrerSous(); poigneeRapide=r.handle; }
-  const h=poigneeRapide;
+async function enregistrerClassique(sorte){
+  const R=RAPIDE[sorte]; const ok=await enregistrerFichier(R.nom(), await R.contenu(), 'application/json'); if(ok) await R.apres(); rafraichirVue();
+}
+async function enregistrerNouveau(sorte){                        // « Enregistrer sous… »
+  const R=RAPIDE[sorte];
+  if(!choixDossierPossible()) return enregistrerClassique(sorte);
+  let h;
+  try{ h=await window.showSaveFilePicker({suggestedName:R.nom(), id:R.id, types:[{description:R.desc, accept:{'application/json':['.json']}}]}); }
+  catch(e){ if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return; } return enregistrerClassique(sorte); }
+  if(await ecrireVers(h, sorte)){ poignees[sorte]=h; await ecrireMeta(R.meta, {handle:h, nom:h.name, choisiLe:new Date().toISOString()}); }
+  rafraichirVue();
+}
+async function enregistrerRapide(sorte){                         // « Enregistrer » : écrase sans question
+  const R=RAPIDE[sorte];
+  if(!choixDossierPossible()) return enregistrerNouveau(sorte);
+  if(!poignees[sorte]){ const r=await lireMeta(R.meta,null); if(!r || !r.handle) return enregistrerNouveau(sorte); poignees[sorte]=r.handle; }
+  const h=poignees[sorte];
   try{
     let p='prompt'; try{ p=await h.queryPermission({mode:'readwrite'}); }catch(e){}
-    if(p!=='granted'){ p=await h.requestPermission({mode:'readwrite'}); }
-    if(p!=='granted'){ toast('Autorisation refusée : choisis le fichier à nouveau.'); poigneeRapide=null; return enregistrerSous(); }
-  }catch(e){ poigneeRapide=null; return enregistrerSous(); }
-  if(!await ecrireSauvegardeDans(h)){ poigneeRapide=null; return enregistrerSous(); }
-  if(vueCourante==='accueil') vueAccueil();
+    if(p!=='granted') p=await h.requestPermission({mode:'readwrite'});
+    if(p!=='granted'){ toast('Autorisation refusée : choisis le fichier à nouveau.'); delete poignees[sorte]; return enregistrerNouveau(sorte); }
+  }catch(e){ delete poignees[sorte]; return enregistrerNouveau(sorte); }
+  if(!await ecrireVers(h, sorte)){ delete poignees[sorte]; return enregistrerNouveau(sorte); }
+  rafraichirVue();
+}
+function rafraichirVue(){ if(vueCourante==='sauvegarde') vueSauvegarde(); }
+const sauvegardeRapide=()=>enregistrerRapide('sauvegarde'), enregistrerSous=()=>enregistrerNouveau('sauvegarde');
+/* Bouton à deux gestes : appui court / appui long (0,6 s) */
+function deuxGestes(b, court, long){
+  if(!b) return; let t=null, estLong=false;
+  b.addEventListener('pointerdown', ()=>{ estLong=false; t=setTimeout(()=>{ estLong=true; t=null; if(navigator.vibrate) navigator.vibrate(30); long(); }, 600); });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev, ()=>{ if(t){ clearTimeout(t); t=null; } }));
+  b.addEventListener('contextmenu', e=>e.preventDefault());
+  b.onclick=e=>{ if(estLong){ estLong=false; e.preventDefault(); return; } court(); };
 }
 async function sauvegarder(){
   toast('Préparation de la sauvegarde…');
@@ -1102,6 +1143,11 @@ async function fusionner(s){
     if(r.etat==='present') rp++; else if(r.etat==='conflit') rc++; else { cur.valeur=JSON.parse(r.valeur); await poser('registre',cur); ra++; }
   }
   if((s.registre||[]).length) lignes.push(['Registre partagé', ['+'+ra+' ajouté(s)', rp+' déjà présent(s)', rc?rc+' différence(s) : valeur actuelle gardée':''].filter(Boolean).join(' · '), ra?'ok':'']);
+  if((s.historiqueSignalements||[]).length){
+    const cur=new Set((await tous('signalements')).map(x=>x.id)), arc=await lireMeta('archiveSignalements',[]), ids=new Set(arc.map(x=>x.id)); let n=0;
+    for(const x of s.historiqueSignalements){ if(!x || !x.id || cur.has(x.id) || ids.has(x.id)) continue; if(x.supprimeLe){ arc.push(x); ids.add(x.id); } else { await poser('signalements',x); cur.add(x.id); } n++; }
+    if(n){ await ecrireMeta('archiveSignalements', arc); lignes.push(['📚 Historique des signalements', '+'+n+' gardé(s) dans l\'historique', 'ok']); }
+  }
   return lignes;
 }
 function afficherBilan(titre, lignes, sauvDate){
@@ -1539,6 +1585,7 @@ async function vueProches(){
 /* ---------- Écran Sauvegarde ---------- */
 function vueSauvegarde(){
   montrer('sauvegarde', async ()=>{
+    const srInfo=await lireMeta('sauvegardeRapide',null);
     const derniere=await lireMeta('derniereSauvegarde',null);
     let protege='inconnu', espace='';
     try{ protege = navigator.storage && navigator.storage.persisted ? (await navigator.storage.persisted() ? '<span class="ok">Oui</span>' : '<span class="att">Non</span> <button class="btn petit" id="bProteger">Protéger</button>') : 'inconnu'; }catch(e){}
@@ -1555,7 +1602,7 @@ function vueSauvegarde(){
       '<tr><th>Version du hub</th><td>'+HUB_VERSION+'</td></tr></table></div></div>'+
       carteEnregistrement()+
       '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Enregistrer sous… (nouveau fichier)</button>'+
-        '<p class="aide">Le fichier choisi devient celui de <b>⚡ Sauvegarder</b> sur l\'accueil : un appui, et il est remplacé par la version du moment.</p></div>'+
+        '<p class="aide"><b>Bouton 💾 en haut de l\'accueil</b> : appui court = sauvegarde rapide (remplace '+(srInfo?'<b>'+esc(srInfo.nom)+'</b>':'le dernier fichier choisi')+') · appui long = cet écran.</p></div>'+
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
       '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
