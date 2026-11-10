@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.22';
+const HUB_VERSION = '1.23';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -211,7 +211,7 @@ function HubPourApp(appId){
     appId,
     profil: () => ({ nom: PROFIL.nom, role: PROFIL.role, admin: PROFIL.admin }),
     enregistrer: (nom, contenu, type) => enregistrerFichier(nom, contenu, type),
-    contact: (navigator.contacts && navigator.contacts.select) ? (() => navigator.contacts.select(['name','tel'], {multiple:false})) : undefined,
+    contact: (navigator.contacts && navigator.contacts.select) ? ((plusieurs) => navigator.contacts.select(['name','tel'], {multiple:!!plusieurs})) : undefined,
     registre: {
       lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
       ecrire: (cle,valeur) => poser('registre',{cle, valeur, app:appId, maj:new Date().toISOString()}),
