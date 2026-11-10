@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.25';
+const HUB_VERSION = '1.26';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -212,6 +212,7 @@ function HubPourApp(appId){
     profil: () => ({ nom: PROFIL.nom, role: PROFIL.role, admin: PROFIL.admin }),
     enregistrer: (nom, contenu, type) => enregistrerFichier(nom, contenu, type),
     ouvrirLien: (url) => { if(!/^(sms|tel|mailto|geo|https?):/i.test(String(url))) return false; const l=document.createElement('a'); l.href=url; l.rel='noopener'; if(/^https?:/i.test(url)) l.target='_blank'; document.body.appendChild(l); HTMLAnchorElement.prototype.click.call(l); setTimeout(()=>l.remove(),1000); return true; },
+    imprimer: (html) => imprimerPage(html),
     contact: (navigator.contacts && navigator.contacts.select) ? ((plusieurs) => navigator.contacts.select(['name','tel'], {multiple:!!plusieurs})) : undefined,
     registre: {
       lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
@@ -222,6 +223,23 @@ function HubPourApp(appId){
   };
 }
 window.HubPourApp = HubPourApp;
+/* 🖨 Une appli demande d'imprimer une page (rapport → « Enregistrer au format PDF ») : c'est le hub qui imprime, sinon Android n'imprimerait que l'écran visible */
+function imprimerPage(html){
+  try{
+    const doc=new DOMParser().parseFromString(String(html),'text/html');
+    const css=[...doc.querySelectorAll('style')].map(x=>x.textContent).join('\n');
+    const page=(css.match(/@page\s*\{[^}]*\}/)||[''])[0];
+    let z=document.getElementById('zoneImpression'); if(z) z.remove();
+    z=document.createElement('div'); z.id='zoneImpression';
+    z.innerHTML='<style>@media screen{#zoneImpression{display:none}}@media print{body>*:not(#zoneImpression){display:none!important}#zoneImpression{display:block}'+css.replace(/@page\s*\{[^}]*\}/g,'')+'}'+page+'</style>'+doc.body.innerHTML;
+    document.body.appendChild(z);
+    const titre=document.title; if(doc.title) document.title=doc.title;
+    const fin=()=>{ document.title=titre; setTimeout(()=>{ const y=document.getElementById('zoneImpression'); if(y) y.remove(); },500); window.removeEventListener('afterprint',fin); };
+    window.addEventListener('afterprint',fin);
+    setTimeout(()=>window.print(),60);
+    return true;
+  }catch(e){ return false; }
+}
 
 /* ---------- Le « compartiment » de chaque appli ----------
    Ce code est placé AU DÉBUT de chaque appli avant de la lancer.
