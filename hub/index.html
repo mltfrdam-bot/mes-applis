@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.23';
+const HUB_VERSION = '1.24';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -333,7 +333,7 @@ function montrer(vue, rendu, titre){
   rendu();
   window.scrollTo(0,0);
 }
-function retourAccueil(){ fermerApp(); vueAccueil(); synchroniser(); }
+function retourAccueil(){ const etaitDansApp=vueCourante==='app'; fermerApp(); vueAccueil(); if(etaitDansApp) sauvegardeAuto(true); synchroniser(); }
 window.addEventListener('popstate',()=>{ if(vueCourante!=='accueil') retourAccueil(); });
 $('#btnRetour').onclick=()=>{ if(history.state && history.state.v) history.back(); else retourAccueil(); };
 $('#btnGerer').onclick=()=>vueGerer();
@@ -382,7 +382,7 @@ async function vueAccueil(){
 }
 
 /* ---------- Ouvrir une appli ---------- */
-async function ouvrirApp(id, objet){
+async function ouvrirApp(id, objet){ appliModifiee=true;
   if(syncEnCours){ toast('☁️ Synchronisation en cours, un instant…'); while(syncEnCours) await new Promise(r=>setTimeout(r,200)); }
   const a=objet || await un('apps',id); if(!a) return;
   fermerApp();
@@ -1028,11 +1028,32 @@ async function fabriquerSauvegarde(){
 let fabriquerRapport=async()=>{ throw new Error('ouvre d\'abord 🩺 Santé'); };
 const RAPIDE={
   sauvegarde:{meta:'sauvegardeRapide', id:'monhub-sauvegardes', nom:()=>'MonHub-sauvegarde_'+horodatage()+'.json', desc:'Sauvegarde Mon Hub',
-    contenu:async()=>JSON.stringify(await fabriquerSauvegarde()), apres:async()=>ecrireMeta('derniereSauvegarde', new Date().toISOString())},
+    contenu:async()=>{ const sv=await fabriquerSauvegarde(); empreinteEnCours=empreinte(sv); return JSON.stringify(sv); },
+    apres:async()=>{ await ecrireMeta('derniereSauvegarde', new Date().toISOString()); if(empreinteEnCours) await ecrireMeta('empreinteSauvegarde', empreinteEnCours); appliModifiee=false; }},
   rapport:{meta:'rapportRapide', id:'monhub-rapports', nom:()=>'MonHub-rapport-sante_'+horodatage()+'.json', desc:'Rapport Mon Hub',
     contenu:async()=>JSON.stringify(await fabriquerRapport(),null,1), apres:async()=>{}}
 };
-const poignees={};   // gardées en mémoire tant que le hub reste ouvert : Chrome ne redemande pas l'autorisation
+const poignees={};
+let empreinteEnCours=null, appliModifiee=false, autoEnCours=false;
+/* 💾 Sauvegarde automatique : en revenant à l'accueil après être passé dans une appli (et quand le hub passe en arrière-plan),
+   si quelque chose a changé, le fichier de la sauvegarde rapide est remplacé, sans question. */
+const autoActive=()=>{ try{ return localStorage.getItem('monhub-auto')!=='non'; }catch(e){ return true; } };
+async function sauvegardeAuto(avecGeste){
+  if(!appliModifiee || autoEnCours || !autoActive() || !choixDossierPossible()) return;
+  let h=poignees.sauvegarde; if(!h){ const r=await lireMeta('sauvegardeRapide',null); if(!r || !r.handle) return; h=poignees.sauvegarde=r.handle; }
+  autoEnCours=true;
+  try{
+    let p='prompt'; try{ p=await h.queryPermission({mode:'readwrite'}); }catch(e){}
+    if(p!=='granted'){ if(!avecGeste) return; p=await h.requestPermission({mode:'readwrite'}); if(p!=='granted') return; }
+    const sv=await fabriquerSauvegarde(), em=empreinte(sv);
+    if(em===await lireMeta('empreinteSauvegarde',null)){ appliModifiee=false; return; }     // rien n'a changé
+    const w=await h.createWritable(); await w.write(new Blob([JSON.stringify(sv)],{type:'application/json'})); await w.close();
+    await ecrireMeta('derniereSauvegarde', new Date().toISOString()); await ecrireMeta('empreinteSauvegarde', em); appliModifiee=false;
+    if(!document.hidden) toast('💾 Sauvegarde automatique faite ('+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+')', 2500);
+  }catch(e){ if(!document.hidden) toast('💾 Sauvegarde automatique impossible : '+(e&&e.message||e), 5000); }
+  finally{ autoEnCours=false; }
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') sauvegardeAuto(false); });   // gardées en mémoire tant que le hub reste ouvert : Chrome ne redemande pas l'autorisation
 async function ecrireVers(h, sorte){
   const R=RAPIDE[sorte];
   try{
@@ -1603,11 +1624,13 @@ function vueSauvegarde(){
       '<tr><th>Version du hub</th><td>'+HUB_VERSION+'</td></tr></table></div></div>'+
       carteEnregistrement()+
       '<div class="carte"><h2>💾 Sauvegarder</h2><p class="aide">Un seul fichier avec <b>toutes les applis et toutes leurs données</b>. Garde-le aussi sur une carte SD ou une clé USB.</p><button class="btn" id="bSauv">💾 Enregistrer sous… (nouveau fichier)</button>'+
+        '<label style="display:flex;gap:8px;align-items:center;font-weight:600;margin:10px 0"><input type="checkbox" id="bAuto" style="width:auto"'+(autoActive()?' checked':'')+'> Sauvegarde automatique en revenant à l\'accueil</label>'+
         '<p class="aide"><b>Bouton 💾 en haut de l\'accueil</b> : appui court = sauvegarde rapide (remplace '+(srInfo?'<b>'+esc(srInfo.nom)+'</b>':'le dernier fichier choisi')+') · appui long = cet écran.</p></div>'+
       '<div class="carte"><h2>📥 Importer / fusionner</h2><p class="aide">Ajoute ce qui manque, <b>sans jamais rien écraser</b>, puis affiche le détail de ce qui a été ajouté.</p><button class="btn vert" id="bFus">📥 Importer une sauvegarde</button></div>'+
       '<div class="carte"><h2>♻️ Restaurer</h2><p class="aide">Remplace <b>tout</b> le hub par une sauvegarde (double confirmation).</p><button class="btn rouge" id="bRest">♻️ Restaurer</button></div>'+
       '<div class="carte"><h2>📦 Tout-en-un</h2><p class="aide"><b>Un seul fichier</b> avec le hub, toutes les applis et toutes leurs données. Ouvre-le dans Chrome sur n\'importe quel appareil, même sans internet : il propose de tout fusionner. Le hub installé peut aussi l\'importer avec « Importer une sauvegarde ».</p><button class="btn" id="bTout">📦 Enregistrer le tout-en-un</button> <button class="btn gris petit" id="bSecours">Hub seul (sans données)</button></div>';
-    $('#bSauv').onclick=enregistrerSous; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
+    $('#bSauv').onclick=enregistrerSous;
+    const ba=$('#bAuto'); if(ba) ba.onchange=()=>{ try{ localStorage.setItem('monhub-auto', ba.checked?'oui':'non'); }catch(e){} toast(ba.checked?'💾 Sauvegarde automatique activée':'Sauvegarde automatique coupée'); }; $('#bFus').onclick=importerFusion; $('#bRest').onclick=restaurer; $('#bSecours').onclick=copieDeSecours; $('#bTout').onclick=toutEnUn; brancherCarteSynchro();
     document.querySelectorAll('input[name=ouEnr]').forEach(r=>r.onchange=()=>{ try{ localStorage.setItem('monhub-enregistrement', r.value); }catch(e){} toast(r.value==='demander'?'📁 Le dossier te sera demandé à chaque enregistrement':'📥 Les fichiers iront directement dans Téléchargements'); });
     const bp=$('#bProteger'); if(bp) bp.onclick=async()=>{ const ok=await proteger(); toast(ok?'✅ Données protégées':'Chrome n\'a pas encore accordé la protection. Installe le hub sur l\'écran d\'accueil, puis réessaie.',5000); vueSauvegarde(); };
   },'💾 Sauvegarde');
