@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.17';
+const HUB_VERSION = '1.18';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -370,7 +370,7 @@ async function vueAccueil(){
     '<button class="btn gros gris" id="btnRecoitAdmin">📥 Recevoir un fichier de '+esc(PROFIL.admin)+'</button>' : '';
   const sr = (!simple && apps.length) ? await lireMeta('sauvegardeRapide',null) : null;
   const barreRapide = (!simple && apps.length) ? '<div class="rapide"><button id="btnRapide">⚡ Sauvegarder</button><small>'+
-    (sr ? 'Écrase <b>'+esc(sr.nom)+'</b><br>Dernière : '+(derniere?dateFr(derniere)+' à '+new Date(derniere).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'jamais') : 'Premier appui : choisis le fichier (dossier Drive, carte SD…). Ensuite un seul appui suffit.')+'</small></div>' : '';
+    (sr ? 'Écrase <b>'+esc(sr.nom)+'</b><br>Dernière : '+(derniere?dateFr(derniere):'jamais') : 'Premier appui : choisis le fichier (dossier Drive, carte SD…). Ensuite un seul appui suffit.')+'</small></div>' : '';
   $('#contenu').innerHTML = (simple?'':rappel) + barreRapide + vide + '<div class="grille">'+tuiles+
     (simple?'':'<button class="tuile ajout" id="tuileAjout"><span class="ico">➕</span><span class="nom">Ajouter</span></button>')+'</div>'+ envoi +
     (simple?'':installAide());

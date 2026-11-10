@@ -3,7 +3,7 @@
 // - S'il y a du réseau, la dernière version est récupérée en arrière-plan pour l'ouverture suivante.
 // - catalogue.json, version.json et modules/ : on essaie d'abord internet (pour voir les nouveautés), sinon la copie gardée.
 // - Les applis rangées et leurs données sont dans la mémoire du téléphone : ce fichier n'y touche jamais.
-const CACHE = 'mon-hub-v18';
+const CACHE = 'mon-hub-v19';
 const FICHIERS = ['./', './index.html', './manifest.json', './icone-192.png', './icone-512.png', './serveur-google/MonHub-serveur.gs'];
 
 self.addEventListener('install', e => {
