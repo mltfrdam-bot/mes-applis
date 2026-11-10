@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.20';
+const HUB_VERSION = '1.21';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -671,11 +671,11 @@ async function voirHistorique(){
   const v=await fenetre('📚 Historique des signalements ('+l.length+')',
     '<p class="aide">Tous tes signalements, même supprimés. Avant de créer une nouvelle appli, envoie-moi ce fichier : je verrai ce qui a posé problème et ce que tu as demandé, pour ne pas refaire les mêmes erreurs.</p>'+
     '<div class="tablo"><table><tr><th>Date</th><th>Appli</th><th>Message</th><th>État</th></tr>'+
-    l.map(x=>'<tr><td>'+dateFr(x.cree).replace(' ','<br>')+'</td><td><small>'+esc((x.app&&x.app.nom)||'')+'</small></td><td>'+(TYPES_SIG[x.type]||'')+' '+esc(x.message)+'</td><td><small>'+etat(x)+'</small></td></tr>').join('')+'</table></div>',
+    l.map(x=>'<tr><td>'+dateFr(x.cree).replace(' ','<br>')+'</td><td><small>'+esc((x.app&&x.app.nom)||'')+'</small></td><td>'+(TYPES_SIG[x.type]||'')+' '+esc(x.message)+(x.lecon?'<br><small class="ok">💡 Leçon : '+esc(x.lecon)+'</small>':'')+'</td><td><small>'+etat(x)+'</small></td></tr>').join('')+'</table></div>',
     [{texte:'📤 Exporter pour Claude',classe:'vert',valeur:true},{texte:'Fermer',classe:'gris',valeur:false}]);
   if(!v) return;
   const exp={format:'mon-hub-historique-signalements', hub:HUB_VERSION, creeLe:new Date().toISOString(), nombre:l.length,
-    signalements:l.map(x=>({ecritLe:x.cree, appli:x.app?x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''):'', type:TYPES_SIG[x.type], message:x.message, etat:etat(x).replace(/^\S+ /,''), regleLe:x.regleLe||null, supprimeLe:x.supprimeLe||null, endroit:x.endroit}))};
+    signalements:l.map(x=>({ecritLe:x.cree, appli:x.app?x.app.nom+' (version '+x.app.version+')'+(x.app.ecran?' — écran '+x.app.ecran:''):'', type:TYPES_SIG[x.type], message:x.message, etat:etat(x).replace(/^\S+ /,''), regleLe:x.regleLe||null, supprimeLe:x.supprimeLe||null, reponse:x.reponse||null, lecon:x.lecon||null, endroit:x.endroit}))};
   enregistrerFichier('MonHub-historique-signalements_'+horodatage()+'.json', JSON.stringify(exp,null,1), 'application/json');
 }
 async function gererSignal(id){
