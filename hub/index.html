@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.26';
+const HUB_VERSION = '1.27';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -1040,8 +1040,12 @@ async function fabriquerSauvegarde(){
     const bases=[]; for(const b of await basesDeApp(id)) bases.push(await exporterBase(b.name));
     donnees[id]={localStorage:ls, bases};
   }
-  return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre'), historiqueSignalements:await historiqueSignalements()};
+  return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre'), historiqueSignalements:await historiqueSignalements(), reglages:await reglagesPartages()};
 }
+/* 🔑 La clé des signalements voyage avec la synchro et les sauvegardes de l'administrateur : réglée sur un appareil, elle arrive sur les autres */
+async function reglagesPartages(){ if(PROFIL.role==='membre') return undefined; const r=await reglageSignal(); return r.cle?{signalement:{depot:r.depot, cle:r.cle}}:undefined; }
+async function recevoirReglages(s){ const g=s&&s.reglages&&s.reglages.signalement; if(!g||!g.cle||PROFIL.role==='membre') return false; const r=await reglageSignal(); if(r.cle) return false;
+  await ecrireMeta('signalement',{depot:g.depot||DEPOT_DEFAUT, cle:g.cle}); setTimeout(()=>envoyerEnAttente(true),500); return true; }
 /* ⚡ Enregistrement rapide (comme « Enregistrer » d'Excel), pour les sauvegardes et les rapports :
    appui court = le dernier fichier choisi est écrasé sans question ; appui long = « Enregistrer sous… » (nouveau fichier, qui devient la cible). */
 let fabriquerRapport=async()=>{ throw new Error('ouvre d\'abord 🩺 Santé'); };
@@ -1144,7 +1148,7 @@ function plusRecente(a,b){
 }
 const nomNorm = n => String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
 async function fusionner(s){
-  const lignes=[]; const nomApp=id=>{ const a=(s.applis||[]).find(x=>x.id===id); return a?a.nom:id; };
+  const lignes=[]; if(await recevoirReglages(s)) lignes.push(['🔑 Clé des signalements','Reçue de l\'autre appareil : les 📍 partent maintenant d\'ici aussi','ok']); const nomApp=id=>{ const a=(s.applis||[]).find(x=>x.id===id); return a?a.nom:id; };
   // 1) Applis (code) : la version la plus récente gagne ; une même appli ajoutée sur deux appareils n'est gardée qu'une fois
   const actuelles=await tous('apps'); let ordre=actuelles.length; const alias={};
   for(const a of s.applis||[]){
