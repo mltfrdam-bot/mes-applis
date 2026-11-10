@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.18';
+const HUB_VERSION = '1.19';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -1011,7 +1011,7 @@ async function enregistrerSous(){
   let h;
   try{ h=await window.showSaveFilePicker({suggestedName:'MonHub-sauvegarde_'+horodatage()+'.json', id:'monhub-sauvegardes', types:[{description:'Sauvegarde Mon Hub', accept:{'application/json':['.json']}}]}); }
   catch(e){ if(e && e.name==='AbortError'){ toast('Enregistrement annulé'); return; } return sauvegarder(); }
-  if(await ecrireSauvegardeDans(h)) await ecrireMeta('sauvegardeRapide', {handle:h, nom:h.name, choisiLe:new Date().toISOString()});
+  if(await ecrireSauvegardeDans(h)){ poigneeRapide=h; await ecrireMeta('sauvegardeRapide', {handle:h, nom:h.name, choisiLe:new Date().toISOString()}); }
   if(vueCourante==='sauvegarde') vueSauvegarde(); else if(vueCourante==='accueil') vueAccueil();
 }
 async function ecrireSauvegardeDans(h){
@@ -1023,15 +1023,17 @@ async function ecrireSauvegardeDans(h){
     toast('✅ Sauvegardé dans « '+h.name+' » ('+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+')', 4000); return true;
   }catch(e){ toast('❌ Écriture impossible : '+(e&&e.message||e), 6000); return false; }
 }
+let poigneeRapide=null;   // gardée en mémoire tant que le hub reste ouvert : Chrome ne redemande pas l'autorisation pour la même poignée
 async function sauvegardeRapide(){
-  const r=await lireMeta('sauvegardeRapide',null);
-  if(!r || !r.handle || !choixDossierPossible()) return enregistrerSous();
+  if(!choixDossierPossible()) return enregistrerSous();
+  if(!poigneeRapide){ const r=await lireMeta('sauvegardeRapide',null); if(!r || !r.handle) return enregistrerSous(); poigneeRapide=r.handle; }
+  const h=poigneeRapide;
   try{
-    let p=await r.handle.queryPermission({mode:'readwrite'});
-    if(p!=='granted') p=await r.handle.requestPermission({mode:'readwrite'});   // au plus une fois par session
-    if(p!=='granted'){ toast('Autorisation refusée : choisis le fichier à nouveau.'); return enregistrerSous(); }
-  }catch(e){ return enregistrerSous(); }
-  if(!await ecrireSauvegardeDans(r.handle)) return enregistrerSous();
+    let p='prompt'; try{ p=await h.queryPermission({mode:'readwrite'}); }catch(e){}
+    if(p!=='granted'){ p=await h.requestPermission({mode:'readwrite'}); }
+    if(p!=='granted'){ toast('Autorisation refusée : choisis le fichier à nouveau.'); poigneeRapide=null; return enregistrerSous(); }
+  }catch(e){ poigneeRapide=null; return enregistrerSous(); }
+  if(!await ecrireSauvegardeDans(h)){ poigneeRapide=null; return enregistrerSous(); }
   if(vueCourante==='accueil') vueAccueil();
 }
 async function sauvegarder(){
