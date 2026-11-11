@@ -57,9 +57,15 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v23</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v24</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
+  <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button></div>
+  <div id="calInfo" class="cache" style="background:#fff;border:3px solid #5b4b8a;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
+    <div style="font-weight:800;color:#5b4b8a">🎯 RÉGLAGE DES IMPACTS</div>
+    <div id="calTxt" style="font-size:16px;margin:6px 0">Fais tes coups (par ex. 10), à ta force normale, puis touche « J'ai fini ».</div>
+    <div id="calVal" style="font-size:30px;font-weight:800"></div>
+    <div class="ligne"><button class="main" id="calFin">J'ai fini</button><button class="sec" id="calAnnul" style="flex:0 0 auto">Annuler</button></div></div>
   <div id="recInfo" class="cache" style="background:#fff;border:3px solid #c0392b;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
     <div style="font-weight:800;color:#c0392b">● ENREGISTREMENT H10 — <span id="recAct"></span></div><div id="recVal" style="font-size:22px;font-weight:800;margin:4px 0"></div>
     <div class="ligne"><button class="sec bVerrou" style="flex:0 0 auto">🔒</button><button class="main" id="recStop" style="background:#c0392b">⏹ Arrêter et enregistrer</button></div></div>
@@ -349,10 +355,11 @@ const DET = { court: 0.2, long: 2, fen: 4, seuilMin: 35, seuilK: 0.6, ecartMin: 
 function accDetReset() { accDet = { c: [], l: [], s: [], etat: "", der: 0 }; }
 /* 📡 Enregistrement H10 seconde par seconde (tennis, footing…) : FC + mouvement résumé */
 let REC = null, recSec = null, recSauveT = 0;
+let IMP = { seuil: 2500, rearme: 1800 }; try { IMP = Object.assign(IMP, JSON.parse(localStorage.getItem("impact-reglage") || "{}")); } catch (e) {}
 function recEch(m, t) { const sec = Math.floor((Date.now() - REC.debut) / 1000);
   if (!recSec || recSec.s !== sec) { if (recSec) recFermer(recSec); recSec = { s: sec, n: 0, som: 0, max: 0, pics: 0, enPic: false }; }
   const dv = Math.abs(m - 1000); recSec.n++; recSec.som += dv; if (dv > recSec.max) recSec.max = dv;
-  if (m > 2500 && !recSec.enPic && t - (REC.derPic || 0) > 400) { recSec.pics++; REC.derPic = t; recSec.enPic = true; } else if (m < 1800) recSec.enPic = false; }
+  if (m > IMP.seuil && !recSec.enPic && t - (REC.derPic || 0) > 400) { recSec.pics++; REC.derPic = t; recSec.enPic = true; } else if (m < IMP.rearme) recSec.enPic = false; }
 function recFermer(x) { REC.l.push([x.s, fcFraiche() || 0, Math.round(x.som / Math.max(1, x.n)), Math.round(x.max), x.pics]);
   if (Date.now() - recSauveT > 5000) { recSauveT = Date.now(); REC.maj = Date.now(); try { localStorage.setItem("h10-rec", JSON.stringify(REC)); } catch (e) {} } }
 function recResume(R) { const l = R.l, act = l.filter(x => x[2] > 120).length, fcs = l.map(x => x[1]).filter(Boolean), pics = l.reduce((a, x) => a + x[4], 0);
@@ -368,7 +375,23 @@ function recTerminer() { if (recSec) recFermer(recSec); const R = REC, r = recRe
 setInterval(recMaj, 1000);
 $("#recAct").onclick = () => { if (!REC) return; const l = toutesActs(), i = l.findIndex(x => x[0] === REC.act); REC.act = l[(i + 1) % l.length][0]; $("#recAct").textContent = actNom(REC.act) + " ✎"; };
 let accN = 0, accTaux = 0; setInterval(() => { accTaux = accN / 2; accN = 0; }, 2000);
-function accEchantillon(m, t, a) { accN++; if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
+/* 🎯 Réglage : tu fais N coups, l'appli cherche le seuil qui en compte exactement N */
+let CAL = null;
+function calPics(l, sep) { const p = []; let best = null; l.forEach(([t, m]) => { if (m < 1250) return; if (best && t - best[0] < sep) { if (m > best[1]) best = [t, m]; } else { if (best) p.push(best); best = [t, m]; } }); if (best) p.push(best);
+  // fusion : deux pics à moins de sep → le plus fort
+  return p.filter((x, i) => !(p[i + 1] && p[i + 1][0] - x[0] < sep && p[i + 1][1] > x[1])); }
+$("#bCal").onclick = async () => { if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
+  CAL = { l: [] }; accDetReset(); await accDemarrer(); garderEcran(); $("#calInfo").classList.remove("cache"); $("#bCal").classList.add("cache");
+  $("#calTxt").textContent = "Fais tes coups (par ex. 10), à ta force normale, puis touche « J'ai fini »."; $("#calFin").classList.remove("cache"); };
+setInterval(() => { if (CAL) $("#calVal").textContent = calPics(CAL.l, 600).filter(x => x[1] > 1500).length + " mouvements nets détectés"; }, 700);
+$("#calAnnul").onclick = () => { CAL = null; if (!REC) accArreter(); $("#calInfo").classList.add("cache"); $("#bCal").classList.remove("cache"); };
+$("#calFin").onclick = () => { if (!CAL) return; const n = parseInt(prompt("Combien de coups as-tu faits ?", "10"), 10); if (!n) return;
+  const pics = calPics(CAL.l, 600).map(x => x[1]).sort((a, b) => b - a); CAL = null; if (!REC) accArreter();
+  if (pics.length < n) { $("#calTxt").innerHTML = "Je n'ai vu que " + pics.length + " mouvements pour " + n + " coups : la ceinture ne sent pas assez certains coups. Seuil mis au minimum (1,3 g)."; IMP = { seuil: 1300, rearme: 1150 }; }
+  else { const fort = pics[n - 1], faible = pics[n] || 1250, s2 = Math.round((fort + faible) / 2); IMP = { seuil: s2, rearme: Math.round(1000 + (s2 - 1000) * 0.6) };
+    $("#calTxt").innerHTML = "✅ Seuil réglé à <b>" + (s2 / 1000).toFixed(2).replace(".", ",") + " g</b> (avant : 2,50 g).<br>Tes " + n + " coups : " + pics.slice(0, n).map(v => (v / 1000).toFixed(1).replace(".", ",")).join(" · ") + " g<br>Plus fort mouvement non compté : " + (faible / 1000).toFixed(1).replace(".", ",") + " g" + (fort - faible < 150 ? "<br>⚠️ Écart faible : coups et déplacements se ressemblent, refais un essai." : ""); }
+  try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} $("#calVal").textContent = ""; $("#calFin").classList.add("cache"); setTimeout(() => { $("#bCal").classList.remove("cache"); }, 500); };
+function accEchantillon(m, t, a) { accN++; if (CAL) CAL.l.push([t, m]); if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
   const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
   D.c.push(m); if (D.c.length > nc) D.c.shift(); D.l.push(m); if (D.l.length > nl) D.l.shift();
   const v = D.c.reduce((x, y) => x + y, 0) / D.c.length - D.l.reduce((x, y) => x + y, 0) / D.l.length;
