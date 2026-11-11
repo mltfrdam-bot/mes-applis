@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.29';
+const HUB_VERSION = '1.30';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -889,10 +889,13 @@ async function optionsApp(id){
   const a=await un('apps',id);
   const boutons=[{texte:'▶️ Ouvrir',valeur:'ouvrir'}];
   if(majDispo[id]) boutons.push({texte:'⬆️ Mettre à jour (version '+majDispo[id]+')',classe:'vert',valeur:'majcat'});
+  const estHors=(await horsSauvegarde()).has(id);
+  boutons.push({texte:estHors?'💾 Remettre ses données dans les sauvegardes du hub':'📴 Sortir ses données des sauvegardes du hub',classe:'gris',valeur:'hors'});
   boutons.push({texte:'📁 Nouvelle version depuis un fichier',classe:'gris',valeur:'majfic'},{texte:'✏️ Nom / icône / version',classe:'gris',valeur:'modif'},
     {texte:'📌 Raccourci sur l\'écran d\'accueil',classe:'gris',valeur:'raccourci'},{texte:'📤 Enregistrer le code de l\'appli',classe:'gris',valeur:'export'},{texte:'🗑️ Retirer du hub',classe:'rouge',valeur:'retirer'},{texte:'Fermer',classe:'gris',valeur:null});
   const c=await fenetre((a.icone||'')+' '+a.nom,'<div class="tablo"><table>'+
     '<tr><th>Version</th><td>'+esc(a.version)+'</td></tr><tr><th>Origine</th><td>'+(a.source==='catalogue'?'Catalogue':'Fichier « '+esc(a.fichier||'')+' »')+'</td></tr>'+
+    '<tr><th>Sauvegarde du hub</th><td>'+(estHors?'📴 Données gardées seulement dans cet appareil (utilise la sauvegarde de l\'appli)':'✅ Incluse')+'</td></tr>'+
     '<tr><th>Ajoutée le</th><td>'+dateFr(a.ajouteeLe)+'</td></tr><tr><th>Modifiée le</th><td>'+dateFr(a.majLe)+'</td></tr></table></div>', boutons);
   if(c==='ouvrir'){ history.replaceState(null,''); ouvrirApp(id); }
   else if(c==='majcat'){ const cat=await lireMeta('catalogue',{applis:[]}); const e=(cat.applis||[]).find(x=>x.id===id); if(e && await installerDuCatalogue(e)) vueGererRendu(); }
@@ -901,6 +904,7 @@ async function optionsApp(id){
   else if(c==='export') enregistrerFichier(slug(a.nom)+'-v'+slug(a.version)+'.html', a.code, 'text/html');
   else if(c==='retirer') retirerApp(id);
   else if(c==='raccourci') raccourciApp(a);
+  else if(c==='hors'){ const h=await basculerHorsSauvegarde(id); toast(h?'📴 '+a.nom+' : ses données ne sont plus dans les sauvegardes du hub. Pense à sa propre sauvegarde.':'💾 '+a.nom+' : ses données reviennent dans les sauvegardes du hub.',5000); }
 }
 function adresseApp(a){ return new URL('./?app='+encodeURIComponent(a.id), location.href).href; }
 async function raccourciApp(a){
@@ -1069,11 +1073,16 @@ function fusionObjets(a,b){
    Une appli marque une donnée comme privée en commençant son nom par « prive- » ou « prive: ». */
 const CLES_PRIVEES=/^(prive[-:]|mc-compte$)/;
 const estPrive = k => CLES_PRIVEES.test(k);
+/* 📴 Applis « hors sauvegarde du hub » : leurs données restent dans l'appareil (elles ont leur propre sauvegarde).
+   Par défaut : l'Atelier Lecture (livres, audio… trop lourds : ils bloquaient le hub). Le code de l'appli, lui, voyage toujours. */
+async function horsSauvegarde(){ const l=await lireMeta('horsSauvegarde',null); if(Array.isArray(l)) return new Set(l);
+  return new Set((await tous('apps')).filter(a=>/^f-atelier-lecture/.test(a.id)||/atelier\s*lecture/i.test(a.nom||'')).map(a=>a.id)); }
+async function basculerHorsSauvegarde(id){ const h=await horsSauvegarde(); if(h.has(id)) h.delete(id); else h.add(id); await ecrireMeta('horsSauvegarde',[...h]); localSale=true; return h.has(id); }
 async function fabriquerSauvegarde(){
-  const apps=await tous('apps');
+  const apps=await tous('apps'), hors=await horsSauvegarde();
   const ids=new Set([...apps.map(a=>a.id), ...idsAvecDonnees()]);
   (await toutesLesBasesApps()).forEach(b=>ids.add(b.name.slice(PREFIXE.length).split(':')[0]));
-  [...ids].forEach(id=>{ if(id.startsWith('pr~')) ids.delete(id); });
+  [...ids].forEach(id=>{ if(id.startsWith('pr~') || hors.has(id)) ids.delete(id); });
   const donnees={};
   for(const id of ids){
     const p=PREFIXE+id+':', ls={};
@@ -1208,7 +1217,9 @@ async function fusionner(s){
       Object.assign(d2[cible].localStorage, d.localStorage||{}); d2[cible].bases.push(...bases); });
     s=Object.assign({},s,{donnees:d2}); }
   // 2) Données de chaque appli
+  const horsF=await horsSauvegarde();
   for(const id of Object.keys(s.donnees||{})){
+    if(horsF.has(id) && !s.forcerHors){ lignes.push(['📴 '+id,'Données ignorées : appli hors sauvegarde du hub (utilise sa propre sauvegarde)','']); continue; }
     const d=s.donnees[id], p=PREFIXE+id+':'; let aj=0, pr=0, fu=0, co=0; const notes=[];
     Object.keys(d.localStorage||{}).forEach(k=>{
       const cur=localStorage.getItem(p+k), inc=d.localStorage[k];
@@ -1428,9 +1439,10 @@ async function synchroniser(manuel){
 /* Remplace tout le contenu du hub par une sauvegarde (sans question : utilisé par la synchro et par « Restaurer »).
    Les données privées (comptes, mots de passe) restent en place. */
 async function remplacerTout(s){
-  Object.keys(localStorage).filter(k=>{ if(!k.startsWith(PREFIXE)) return false; const r=k.slice(PREFIXE.length), i=r.indexOf(':'); return !estPrive(i>=0?r.slice(i+1):r); })
+  const hors=await horsSauvegarde();   // les données des applis « hors sauvegarde » ne sont jamais effacées
+  Object.keys(localStorage).filter(k=>{ if(!k.startsWith(PREFIXE)) return false; const r=k.slice(PREFIXE.length), i=r.indexOf(':'); if(hors.has(i>=0?r.slice(0,i):r)) return false; return !estPrive(i>=0?r.slice(i+1):r); })
     .forEach(k=>localStorage.removeItem(k));
-  for(const b of await toutesLesBasesApps()) await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{});
+  for(const b of await toutesLesBasesApps()){ if(hors.has(b.name.slice(PREFIXE.length).split(':')[0])) continue; await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{}); }
   await vider('apps'); await vider('registre');
   return fusionner(s);
 }
