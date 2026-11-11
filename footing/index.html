@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v13</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v14</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -146,6 +146,7 @@
     <div class="ligne" style="margin:8px 0"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
     <div class="chips" style="margin-bottom:6px"><button class="chip" id="pTest">🧪 Test comptage H10 (toi + la ceinture)</button></div>
     <div class="aide" id="pTestAide" style="margin-bottom:8px">Tu touches l'écran comme d'habitude ; en parallèle la ceinture compte avec son capteur de mouvement. On compare série par série avant de lui faire confiance.</div>
+    <label class="opt">Repos visé (signal de reprise)</label><div class="chips" id="pRepos"></div>
     <div id="pSeanceReg">
     <label class="opt">Objectif (pompes au total)</label><div class="chips" id="pObj"></div>
     <div id="pFant" class="aide" style="margin:10px 0;font-size:15px"></div>
@@ -157,7 +158,13 @@
     <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span><span id="poTitre"></span> <span class="fcLive"></span></span><span><button class="sec bVerrou" style="flex:0 0 auto;padding:6px 10px">🔒</button> <button class="sec" id="pStop" style="flex:0 0 auto;padding:6px 10px">⏹ Terminer</button></span></div>
     <div id="pZone" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;touch-action:manipulation">
       <div id="pPhase" style="font-size:22px;font-weight:700"></div><div id="pGros" style="font-size:96px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums">0</div>
-      <div id="pEcart" style="font-size:30px;font-weight:800"></div><div id="pTestLive" style="font-size:24px;font-weight:700;color:#5b4b8a"></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
+      <div id="pEcart" style="font-size:30px;font-weight:800"></div><div id="pTestBox" class="cache" style="width:92%;border:3px solid #5b4b8a;border-radius:16px;padding:8px 6px">
+        <div style="display:flex;justify-content:space-around;align-items:flex-end">
+          <div><div style="font-size:15px;font-weight:700;color:#5b6470">👆 TOI</div><div id="ptMoi" style="font-size:56px;font-weight:800;line-height:1">0</div></div>
+          <div style="font-size:30px;font-weight:800;color:#8a929c;padding-bottom:10px">vs</div>
+          <div><div style="font-size:15px;font-weight:700;color:#5b6470">🫀 H10</div><div id="ptH10" style="font-size:56px;font-weight:800;line-height:1;color:#5b4b8a">–</div></div></div>
+        <div id="ptTotal" style="font-size:17px;font-weight:700;margin-top:6px"></div><div id="ptEtat" style="font-size:14px;color:#5b6470;padding:6px;text-decoration:underline"></div></div>
+      <div id="pTestLive" style="font-size:24px;font-weight:700;color:#c0392b"></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
     <div class="ligne" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button></div>
   </div>
 </div>
@@ -310,14 +317,14 @@ async function h10Brancher() { const g = await h10.gatt.connect(); const car = a
 async function h10Connecter() { if (h10 && h10.gatt.connected) return;
   try { if (!h10) { h10 = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Polar" }, { services: ["heart_rate"] }], optionalServices: ["heart_rate", PMD_S] });
       h10.addEventListener("gattserverdisconnected", () => { h10Boutons("❤️ H10 perdue — reconnexion…"); if (accOn) accOn = false; setTimeout(() => h10Brancher().then(() => { if (accVoulu) accDemarrer(); }).catch(() => h10Boutons("❤️ Reconnecter la H10")), 1500); }); }
-    h10Boutons("❤️ Connexion…"); await h10Brancher(); vib([40, 40]); }
+    h10Boutons("❤️ Connexion…"); await h10Brancher(); vib([40, 40]); if (accVoulu || (enSeance && PO.test)) accDemarrer(); }
   catch (e) { h10Boutons("❤️ H10 : " + String(e.message || e).slice(0, 40)); } }
 document.querySelectorAll(".bH10").forEach(b => b.onclick = h10Connecter);
 setInterval(() => { const f = fcFraiche(); document.querySelectorAll(".fcLive").forEach(x => x.textContent = f ? "❤️ " + f : ""); if (h10 && h10.gatt.connected && f) document.querySelectorAll(".bH10").forEach(b => b.textContent = "❤️ " + f + " — H10 connectée"); }, 1000);
 function fcMaxEntre(a, b) { const l = fcSerie.filter(x => x[0] >= a && x[0] <= b).map(x => x[1]); return l.length ? Math.max(...l) : null; }
 
 /* Capteur de mouvement (accéléromètre 25 Hz) et détection des pompes — mode test */
-let accOn = false, accVoulu = false, accBuf = [], accEv = [], accDet = null;
+let accOn = false, accVoulu = false, accBuf = [], accEv = [], accDet = null, accErr = "";
 function accDetReset() { accDet = { ma5: [], ma50: [], s: [], etat: "", der: 0 }; }
 function accEchantillon(m, t) { accBuf.push([t, Math.round(m)]); if (accBuf.length > 90000) accBuf.splice(0, 30000);
   const D = accDet; D.ma5.push(m); if (D.ma5.length > 5) D.ma5.shift(); D.ma50.push(m); if (D.ma50.length > 50) D.ma50.shift();
@@ -335,7 +342,11 @@ function accTrame(dv) { if (dv.getUint8(0) !== 2) return; const ft = dv.getUint8
   const n = out.length; out.forEach((a, i) => accEchantillon(Math.hypot(a[0], a[1], a[2]), now - (n - 1 - i) * 40)); }
 async function accDemarrer() { accVoulu = true; if (!h10Pmd || accOn) return; try { accDetReset();
     if (!h10Pmd.ecoute) { h10Pmd.d.addEventListener("characteristicvaluechanged", (e) => accTrame(e.target.value)); h10Pmd.ecoute = true; } await h10Pmd.cp.startNotifications(); await h10Pmd.d.startNotifications();
-    await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x02, 0x02, 0x00, 0x01, 0x19, 0x00, 0x01, 0x01, 0x10, 0x00, 0x02, 0x01, 0x08, 0x00])); accOn = true; } catch (e) { accOn = false; } }
+    if (!h10Pmd.ecouteCp) { h10Pmd.cp.addEventListener("characteristicvaluechanged", (e) => { const v = e.target.value; if (v.byteLength >= 4 && v.getUint8(0) === 0xF0 && v.getUint8(3) !== 0) accErr = "la ceinture refuse le flux (code " + v.getUint8(3) + ")"; }); h10Pmd.ecouteCp = true; }
+    await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x02, 0x02, 0x00, 0x01, 0x19, 0x00, 0x01, 0x01, 0x10, 0x00, 0x02, 0x01, 0x08, 0x00])); accOn = true; accErr = ""; } catch (e) { accOn = false; accErr = String(e.message || e).slice(0, 60); } }
+function accEtat() { if (!(h10 && h10.gatt.connected)) return "⚠️ H10 non connectée : touche ici pour la connecter";
+  if (!h10Pmd) return "⚠️ capteur de mouvement non accessible sur ce téléphone"; if (accErr) return "⚠️ " + accErr; if (!accOn) return "capteur en attente…";
+  const r = accBuf.filter(x => x[0] > performance.now() - 2000).length / 2; return r ? "✅ capteur actif (" + Math.round(r) + " mesures/s)" : "⚠️ capteur activé mais aucune mesure reçue"; }
 async function accArreter() { accVoulu = false; if (!h10Pmd || !accOn) return; accOn = false; try { await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x03, 0x02])); } catch (e) {} }
 const accCompte = (a, b) => accEv.filter(t => t >= a && t <= b).length;
 
@@ -448,8 +459,10 @@ setInterval(() => { if ($("#verrou").classList.contains("cache")) return; const 
 const CARNET_POMPES = [{"nom": "Carnet 02/11 20:20", "tl": [1.3, 2.2, 3.0, 3.8, 4.6, 5.4, 6.3, 7.1, 7.9, 8.8, 74.4, 75.3, 76.1, 76.9, 77.7, 78.5, 79.3, 80.1, 80.9, 81.8, 147.7, 149.4, 150.3, 151.2, 152.2, 153.2, 154.2, 155.1, 156.2, 157.2, 222.8, 223.7, 224.5, 225.3, 226.2, 227.2, 228.2, 229.2, 230.2, 231.1, 232.0, 233.0]}, {"nom": "Carnet 05/11 05:26", "tl": [1.6, 2.5, 3.3, 4.2, 5.0, 6.0, 6.9, 7.9, 8.8, 9.7, 10.6, 11.6, 167.2, 168.4, 169.5, 170.6, 171.6, 172.6, 173.6, 174.6, 175.7, 176.8, 179.0, 181.6, 337.2, 338.1, 339.1, 340.0, 340.9, 341.9, 342.9, 343.8, 345.8, 346.8, 347.8, 349.0]}, {"nom": "Carnet 05/11 05:40", "tl": [1.1, 2.1, 2.9, 3.8, 4.6, 5.4, 6.4, 7.3, 8.2, 9.1, 10.0, 11.0, 118.6, 119.5, 120.4, 121.4, 122.4, 124.2, 125.2, 126.2, 127.2, 128.2, 129.3, 131.7, 238.1, 239.2, 240.2, 241.1, 242.1, 243.1, 244.0, 245.0, 246.0, 247.0, 248.0, 249.0]}, {"nom": "Carnet 05/11 18:04", "tl": [2.0, 2.9, 3.8, 4.7, 5.5, 6.4, 7.2, 8.0, 8.9, 9.7, 10.5, 11.4, 210.4, 211.4, 212.3, 215.4, 216.4, 217.3, 218.3, 219.3, 220.3, 221.4, 223.7, 224.7, 424.9, 425.9, 426.9, 427.8, 428.7, 429.6, 430.6, 431.5, 432.4, 433.9, 435.0, 436.1, 634.6, 635.4, 636.3, 637.2, 638.1, 639.3, 640.3, 641.2, 642.1, 643.1, 644.1, 645.2, 843.5, 844.4, 845.2, 846.0, 846.8, 847.6, 848.4, 849.2, 850.0, 850.8, 852.4, 854.5, 1053.2, 1054.0, 1054.8, 1055.6, 1056.3, 1057.1, 1057.9, 1058.8, 1059.6, 1060.4, 1061.4, 1062.4, 1261.3, 1262.1, 1262.9, 1263.7, 1264.5, 1265.4, 1266.2, 1267.0, 1267.7, 1268.6, 1269.6, 1270.7, 1469.5, 1470.6, 1471.5, 1472.4, 1473.3, 1474.1, 1475.1, 1476.0, 1477.0, 1478.0, 1479.0, 1480.0]}, {"nom": "Carnet 06/11 04:50", "tl": [2.2, 3.1, 4.0, 4.8, 5.7, 6.6, 7.5, 8.3, 9.2, 10.1, 11.1, 12.0, 227.6, 228.7, 229.7, 230.8, 231.8, 232.8, 233.8, 234.9, 236.0, 237.0, 238.0, 239.1, 455.3, 456.5, 457.5, 458.4, 459.3, 460.3, 461.2, 462.1, 463.2, 464.1, 465.1, 466.1, 683.9, 684.9, 685.9, 687.2, 688.4, 689.5, 690.7, 691.9, 692.9, 694.0, 695.3, 696.7, 912.4, 913.5, 914.4, 915.3, 916.3, 917.2, 918.1, 918.9, 919.8, 920.7, 921.9, 923.0]}, {"nom": "Carnet 07/11 19:33", "tl": [1.2, 2.1, 3.1, 4.0, 4.8, 5.6, 6.5, 7.4, 8.2, 9.1, 10.0, 11.0, 210.4, 211.4, 212.2, 213.1, 213.9, 214.8, 215.7, 216.6, 217.4, 218.3, 219.1, 220.1, 419.7, 420.6, 421.5, 422.3, 423.1, 424.0, 424.9, 425.7, 426.6, 427.5, 428.4, 429.3, 628.5, 629.4, 630.4, 631.4, 632.3, 633.2, 635.1, 636.1, 637.0, 638.0, 638.9, 639.9, 839.2, 840.1, 840.9, 841.7, 842.6, 843.4, 844.3, 845.1, 845.9, 846.8, 847.7, 848.6, 1048.0, 1048.9, 1049.6, 1050.4, 1051.3, 1052.3, 1053.3, 1054.2, 1056.1, 1057.1, 1058.2, 1061.8, 1262.8, 1263.8, 1264.7, 1265.7, 1266.6, 1267.6, 1268.6, 1269.6, 1270.5, 1271.5, 1272.4, 1273.5, 1473.3, 1474.3, 1475.3, 1476.3, 1477.3, 1478.3, 1479.4, 1480.4, 1481.4, 1482.4, 1483.3, 1484.3, 1683.2, 1684.1, 1685.0, 1685.9, 1686.8, 1687.8, 1688.7, 1690.5, 1691.5, 1692.5, 1693.4, 1694.6, 1894.1, 1895.1, 1896.3, 1897.3, 1898.4, 1899.5, 1900.5, 1901.6, 1902.6, 1903.5, 1904.5, 1905.6, 2105.4, 2106.2, 2107.2, 2108.1, 2109.0, 2109.9, 2110.8, 2111.6, 2112.5, 2113.3, 2114.2, 2115.1, 2314.3, 2315.2, 2316.1, 2316.9, 2317.7, 2318.5, 2319.4, 2320.2, 2321.2, 2322.0, 2322.9, 2323.9, 2523.2, 2524.2, 2525.0, 2525.8, 2526.7, 2527.6, 2528.5, 2529.4, 2530.2, 2531.1, 2532.0, 2532.9, 2732.6, 2733.5, 2734.4, 2735.2, 2736.0, 2736.8, 2737.6, 2738.5, 2739.3, 2740.2, 2741.0, 2742.0]}];   // séances du Carnet (07/11 : 168 pompes…), temps cumulés à chaque pompe
 function pompesSeances() { const l = CARNET_POMPES.map(x => ({ nom: x.nom, tl: x.tl })); lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.tl && n.pompes.tl.length) l.push({ nom: new Date(n.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + hh(n.t).slice(0, 5), tl: n.pompes.tl }); })); return l; }
 function pompesFantome(obj) { let best = null; pompesSeances().forEach(s => { if (s.tl.length >= obj && (!best || s.tl[obj - 1] < best.tl[obj - 1])) best = s; }); return best; }
-let PO = { obj: 100, test: false }; try { PO = Object.assign(PO, JSON.parse(localStorage.getItem("pompes-opt") || "{}")); } catch (e) {}
+let PO = { obj: 100, test: false, repos: 90 }; try { PO = Object.assign(PO, JSON.parse(localStorage.getItem("pompes-opt") || "{}")); } catch (e) {}
 function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO)); } catch (e) {}
+  $("#pRepos").innerHTML = [0, 60, 90, 120, 180].map(v => `<button class="chip" data-v="${v}" aria-pressed="${(PO.repos || 0) == v}">${v ? gm(v) : "Libre"}</button>`).join("");
+  $("#pRepos").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.repos = Number(b.dataset.v); pReglage(); });
   $("#pTest").setAttribute("aria-pressed", PO.test ? "true" : "false"); $("#pTestAide").classList.toggle("cache", !PO.test);
   $("#pObj").innerHTML = [30, 50, 100, 150, 200].map(v => `<button class="chip" data-v="${v}" aria-pressed="${PO.obj == v}">${v}</button>`).join("");
   $("#pObj").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.obj = Number(b.dataset.v); pReglage(); });
@@ -459,10 +472,37 @@ $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
 let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
 const pNow = () => (performance.now() - pT0) / 1000;
+let pSignal = 0, pRepNom = "";
+function pReposSignal(t) { const zone = $("#pZone"); if (pPhase !== "repos" || !PO.repos) { zone.style.background = ""; return; }
+  const r = t - pDebutRepos, reste = PO.repos - r;
+  if (reste > 0) { $("#pPhase").textContent = "Repos — reprise dans " + gm(Math.ceil(reste)); zone.style.background = reste <= 10 ? "#fff6d6" : "";
+    if (reste <= 10 && pSignal === 0) { pSignal = 1; bip(1); } }
+  else { $("#pPhase").textContent = "▶ C'EST LE MOMENT DE REPRENDRE"; zone.style.background = "#d6f5e0"; if (pSignal < 2) { pSignal = 2; bip(3); vib([300, 150, 300]); dire("On reprend"); } }
+  mediaInfo("Repos " + gm(Math.max(0, r)) + (PO.repos ? " / " + gm(PO.repos) : ""), (reste <= 0 ? "▶ Reprends ! " : "") + pjResume()); }
+function pjResume() { try { return PJ && PJ.debut ? pjEcartTxt().txt : pTl.length + " pompes"; } catch (e) { return ""; } }
+/* son + garder l'appli active quand tu passes sur une autre appli (SMS…) */
+let actx = null, garde = null;
+function sonPret() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume(); } catch (e) {}
+  try { if (!garde) { const n = 8000, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+      w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+      for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, (i % 2) ? 1 : -1, true);
+      garde = new Audio(URL.createObjectURL(new Blob([b], { type: "audio/wav" }))); garde.loop = true; garde.volume = 0.01; }
+    garde.play().catch(() => {}); } catch (e) {} }
+function sonStop() { try { garde && garde.pause(); } catch (e) {} try { navigator.mediaSession.metadata = null; } catch (e) {} }
+function bip(n) { try { sonPret(); for (let i = 0; i < n; i++) { const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + i * 0.35;
+    o.frequency.value = 880; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25); o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + 0.3); } } catch (e) {} }
+let mediaDer = 0;
+function mediaInfo(titre, sous) { if (!("mediaSession" in navigator) || Date.now() - mediaDer < 1000) return; mediaDer = Date.now();
+  try { navigator.mediaSession.metadata = new MediaMetadata({ title: titre, artist: "💪 " + sous, album: "Journal d'activité" }); } catch (e) {} }
 function pFantReps(t) { if (!pF) return 0; let n = 0; while (n < pF.tl.length && pF.tl[n] <= t) n++; return n; }
 function pMaj() { const t = pNow(), n = pTl.length;
-  { const f = fcFraiche(), dern = pSeries[pSeries.length - 1]; let tx = ""; if (PO.test) { const enc = pCur && pCur.p0 ? accCompte(pCur.p0 - 2000, performance.now()) : null; tx = (accOn ? "" : "⚠️ capteur H10 non actif — ") + (pCur ? "🧪 toi " + pCur.d.length + " · H10 " + (enc ?? "–") : pTestTxt(pSeries)); }
-    if (pPhase === "repos" && f && dern && dern.fcMax) tx = "❤️ " + dern.fcMax + " → " + f + (tx ? "<br>" + tx : ""); $("#pTestLive").innerHTML = tx; }
+  { const f = fcFraiche(), dern = pSeries[pSeries.length - 1]; $("#pTestBox").classList.toggle("cache", !PO.test);
+    if (PO.test) { const now = performance.now(), sr = pCur && pCur.d.length ? pCur : dern, pol = (x) => x.polar != null ? x.polar : x.p0 ? accCompte(x.p0 - 2000, (x.p1 || now) + 1500) : 0;
+      $("#ptMoi").textContent = sr ? sr.d.length : 0; $("#ptH10").textContent = sr && accBuf.length ? pol(sr) : "–";
+      const tous = pSeries.concat(pCur && pCur.d.length ? [pCur] : []), tm = tous.reduce((a, x) => a + x.d.length, 0), th = tous.reduce((a, x) => a + pol(x), 0);
+      $("#ptTotal").textContent = (sr === pCur ? "Série en cours" : sr ? "Dernière série" : "") + (tous.length ? " · Total : toi " + tm + " / H10 " + (accBuf.length ? th : "–") : ""); $("#ptEtat").textContent = accEtat(); }
+    $("#pTestLive").textContent = pPhase === "repos" && f && dern && dern.fcMax ? "❤️ " + dern.fcMax + " → " + f : f ? "❤️ " + f : "";
+  }
   if (PJ) { $("#pGros").textContent = pPhase === "repos" ? gm(t - pDebutRepos) : (pCur ? pCur.d.length : 0);
     $("#pPhase").textContent = pPhase === "repos" ? "Repos — série " + (pSeries.length + 1) + " ensuite" : pPhase === "serie" ? "Série " + (pSeries.length + 1) : "Touche pour la 1re pompe";
     if (!PJ.debut) { $("#pEcart").textContent = "👻 L'horloge part à ta 1re pompe"; $("#pSous").textContent = ""; return; }
@@ -475,21 +515,24 @@ function pMaj() { const t = pNow(), n = pTl.length;
     $("#pEcart").style.color = ecR >= 0 ? "#2e8b57" : "#c0392b";
     const prochain = pF.tl[n]; $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t) + (pPhase === "repos" && prochain != null ? (prochain > t ? " — le fantôme repart dans " + gm(prochain - t) : " — le fantôme est reparti !") : ""); }
   else $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t); }
+$("#ptEtat").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (!(h10 && h10.gatt.connected)) h10Connecter(); else if (!accOn) accDemarrer(); });
+{ const base = pMaj; pMaj = function () { base(); if (enSeance) pReposSignal(pNow()); }; }
 $("#pGo").onclick = () => { pF = pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + gm(pF.tl[PO.obj - 1]) : "");
-  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); };
+  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!enSeance || $("#pSeance").classList.contains("cache")) return; const now = performance.now();
   if (now - pDern < 350) return; if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [], p0: now }; const f = fcFraiche(); if (f) { pCur.fcDepart = f; } pDern = now - 1000; }
   const v = (now - pDern) / 1000; pDern = now; pCur.d.push(pCur.d.length ? Math.round(v * 100) / 100 : 0); pTl.push(Math.round(pNow() * 10) / 10);
   if (PJ) { if (!PJ.debut) PJ.debut = Date.now(); if (!PJ.cours) PJ.cours = Date.now(); PJ.tlCours = (PJ.tlCours || []).concat(Math.round(pjT() * 10) / 10); pjSauver(); }
-  vib(25); pMaj(); if (!PJ && pTl.length === PO.obj) pTerminer(); });
-$("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); pCur = null; pPhase = "repos"; pDebutRepos = pNow(); dire("Repos"); vib(150); pMaj(); };
+  vib(25); pSauverCours(); pMaj(); if (!PJ && pTl.length === PO.obj) pTerminer(); });
+$("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); pCur = null; pPhase = "repos"; pDebutRepos = pNow(); pSignal = 0; pSauverCours(); dire("Repos"); vib(150); pMaj(); };
+function pSauverCours() { if (PJ) return; try { localStorage.setItem("pompes-encours", JSON.stringify({ t: Date.now(), obj: PO.obj, tl: pTl, series: pSeries.map(x => x.d.length).concat(pCur && pCur.d.length ? [pCur.d.length] : []) })); } catch (e) {} }
 $("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.pop(); if (PJ && PJ.tlCours) { PJ.tlCours.pop(); pjSauver(); } pMaj(); } };
 function pFermerSerie(sr) { const now = performance.now(); sr.p1 = now; sr.fcMax = fcMaxEntre(sr.p0, now) || fcFraiche(); sr.fcFin = fcFraiche();
   if (accOn) setTimeout(() => { sr.polar = accCompte(sr.p0 - 2000, sr.p1 + 1500); sr.acc = accBuf.filter(x => x[0] >= sr.p0 - 3000 && x[0] <= sr.p1 + 2000).map(x => x[1]); }, 1600); }
 function pTestTxt(series) { const l = series.filter(x => x.polar != null); if (!l.length) return ""; const t = l.reduce((a, x) => a + x.d.length, 0), p = l.reduce((a, x) => a + x.polar, 0);
   return "🧪 Toi " + t + " / H10 " + p + " (" + l.map(x => x.d.length + "/" + x.polar).join(", ") + ")"; }
-function pTerminer() { clearInterval(pTick); if (pCur && pCur.d.length) { pFermerSerie(pCur); pSeries.push(pCur); } pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {}); pleinEcran(false);
+function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.background = ""; try { localStorage.removeItem("pompes-encours"); } catch (e) {} if (pCur && pCur.d.length) { pFermerSerie(pCur); pSeries.push(pCur); } pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {}); pleinEcran(false);
   if (PJ) { pjFinSeance(); $("#pStop").textContent = "⏹ Terminer"; $("#pSeance").classList.add("cache"); $("#pReglage").classList.remove("cache"); pTypeMaj(); return; }
   const n = pTl.length, t = n ? pTl[n - 1] : 0; let res = n + " pompes en " + gm(t) + ", " + pSeries.length + " série" + (pSeries.length > 1 ? "s" : "");
   if (pF && n >= PO.obj) { const e = pF.tl[PO.obj - 1] - pTl[PO.obj - 1]; res += e >= 0 ? " — fantôme battu de " + gm(e) : " — le fantôme gagne de " + gm(-e); dire(e >= 0 ? "Bravo, fantôme battu" : "Le fantôme gagne, de " + Math.round(-e) + " secondes"); }
@@ -550,7 +593,7 @@ $("#pjGo").onclick = () => {
   pF = null; pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran(); PJ.cours = 0;
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#pStop").textContent = "⏸ Fin de séance";
   $("#poTitre").textContent = "📅 Séance " + (PJ.seances.length + 1) + " — " + PJ.g.nom.split(" (")[0];
-  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); };
+  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pjClore").onclick = () => { if (!PJ || !confirm("Clore la journée ?")) return; pjClore(); };
 function pjClore() { const moi = PJ.seances.reduce((a, s) => a + s.tl.length, 0); if (!moi) { PJ = null; pjSauver(); pTypeMaj(); return; }
   const tl = [].concat(...PJ.seances.map(s => s.tl)), offs = PJ.seances.map(s => s.off), cut = []; let c = 0; PJ.seances.forEach(s => { c += s.tl.length; cut.push(c); });
@@ -579,6 +622,9 @@ window.addEventListener("popstate", () => { if (retIgnore) { retIgnore = false; 
   else if (ouvert("#fant")) $("#fant").classList.add("cache");
   else if (ouvert("#frac")) $("#frac").classList.add("cache");
   if (ECRANS.some(ouvert)) history.pushState({ j: 1 }, ""); });
+try { const ec = JSON.parse(localStorage.getItem("pompes-encours") || "null"); if (ec && ec.tl && ec.tl.length) { localStorage.removeItem("pompes-encours"); const n = ec.tl.length;
+  ajouter({ pompes: { obj: ec.obj, total: n, temps: Math.round(ec.tl[n - 1]), series: ec.series, tl: ec.tl, res: n + " pompes en " + gm(ec.tl[n - 1]) + " (séance coupée : appli fermée par le téléphone)" } }); } } catch (e) {}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && enSeance) { garderEcran(); if (PO.test && !accOn) accDemarrer(); } });
 afficher();
 </script>
 </body>
