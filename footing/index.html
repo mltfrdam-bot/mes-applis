@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v14</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v15</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -157,15 +157,18 @@
   <div id="pSeance" class="cache" style="flex:1;display:flex;flex-direction:column">
     <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span><span id="poTitre"></span> <span class="fcLive"></span></span><span><button class="sec bVerrou" style="flex:0 0 auto;padding:6px 10px">🔒</button> <button class="sec" id="pStop" style="flex:0 0 auto;padding:6px 10px">⏹ Terminer</button></span></div>
     <div id="pZone" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;touch-action:manipulation">
-      <div id="pPhase" style="font-size:22px;font-weight:700"></div><div id="pGros" style="font-size:96px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums">0</div>
+      <div id="pBandeau" class="cache" style="background:#5b4b8a;color:#fff;font-size:20px;font-weight:800;padding:8px 14px;border-radius:12px"></div><div id="pPhase" style="font-size:22px;font-weight:700"></div><div id="pGros" style="font-size:80px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums">0</div>
       <div id="pEcart" style="font-size:30px;font-weight:800"></div><div id="pTestBox" class="cache" style="width:92%;border:3px solid #5b4b8a;border-radius:16px;padding:8px 6px">
         <div style="display:flex;justify-content:space-around;align-items:flex-end">
           <div><div style="font-size:15px;font-weight:700;color:#5b6470">👆 TOI</div><div id="ptMoi" style="font-size:56px;font-weight:800;line-height:1">0</div></div>
           <div style="font-size:30px;font-weight:800;color:#8a929c;padding-bottom:10px">vs</div>
           <div><div style="font-size:15px;font-weight:700;color:#5b6470">🫀 H10</div><div id="ptH10" style="font-size:56px;font-weight:800;line-height:1;color:#5b4b8a">–</div></div></div>
         <div id="ptTotal" style="font-size:17px;font-weight:700;margin-top:6px"></div><div id="ptEtat" style="font-size:14px;color:#5b6470;padding:6px;text-decoration:underline"></div></div>
-      <div id="pTestLive" style="font-size:24px;font-weight:700;color:#c0392b"></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
-    <div class="ligne" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button></div>
+      <div id="pTestLive" style="font-size:24px;font-weight:700;color:#c0392b"></div>
+      <div id="pGuide" style="width:92%"><div id="pgTxt" style="font-size:16px;font-weight:700"></div><svg id="pgSvg" viewBox="0 0 300 64" style="width:100%;height:64px"></svg></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
+    <div class="ligne" id="pBarre" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button></div>
+    <div id="pDiff" class="cache" style="padding:8px 6px"><div style="text-align:center;font-weight:700;margin-bottom:6px">Cette série était…</div>
+      <div style="display:flex;gap:4px"><button class="sec pD" data-d="0" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😌</span><br>Très facile</button><button class="sec pD" data-d="1" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">🙂</span><br>Facile</button><button class="sec pD" data-d="2" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😐</span><br>Moyen</button><button class="sec pD" data-d="3" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😤</span><br>Difficile</button><button class="sec pD" data-d="4" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">🥵</span><br>Très difficile</button></div></div>
   </div>
 </div>
 <script>
@@ -217,6 +220,7 @@ function libelle(x) {
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
   if (x.pjour) return "📅 Journée pompes : " + x.pjour.res;
+  if (x.pompes && x.pompes.diffs) return "👻 Pompes : " + x.pompes.res + " — " + x.pompes.series.map((n, i) => n + (x.pompes.diffs[i] != null ? DIFF[x.pompes.diffs[i]].split(" ")[0] : "")).join(" ");
   if (x.pompes) return "👻 Pompes : " + x.pompes.res + " (séries " + x.pompes.series.join("-") + (x.pompes.reposMoy ? ", repos moyen " + Math.floor(x.pompes.reposMoy / 60) + ":" + String(x.pompes.reposMoy % 60).padStart(2, "0") : "") + ")";
   if (x.ghost) return "👻 Contre « " + x.ghost.contre + " » — " + x.ghost.res;
   if (x.fracDebut) return "⏱ Début fractionné : " + x.fracDebut; if (x.fracFin) return "⏱ Fin fractionné";
@@ -466,7 +470,7 @@ function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO
   $("#pTest").setAttribute("aria-pressed", PO.test ? "true" : "false"); $("#pTestAide").classList.toggle("cache", !PO.test);
   $("#pObj").innerHTML = [30, 50, 100, 150, 200].map(v => `<button class="chip" data-v="${v}" aria-pressed="${PO.obj == v}">${v}</button>`).join("");
   $("#pObj").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.obj = Number(b.dataset.v); pReglage(); });
-  const f = pompesFantome(PO.obj); $("#pFant").innerHTML = f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."; }
+  const f = pompesFantome(PO.obj); $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>" + (f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."); }
 $("#bPompes").onclick = () => { $("#pomp").classList.remove("cache"); $("#pReglage").classList.remove("cache"); $("#pSeance").classList.add("cache"); pReglage(); };
 $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
@@ -494,6 +498,31 @@ function bip(n) { try { sonPret(); for (let i = 0; i < n; i++) { const o = actx.
 let mediaDer = 0;
 function mediaInfo(titre, sous) { if (!("mediaSession" in navigator) || Date.now() - mediaDer < 1000) return; mediaDer = Date.now();
   try { navigator.mediaSession.metadata = new MediaMetadata({ title: titre, artist: "💪 " + sous, album: "Journal d'activité" }); } catch (e) {} }
+/* séries : découpage d'une suite de pompes (pause > 5 s = nouvelle série) */
+const DIFF = ["😌 Très facile", "🙂 Facile", "😐 Moyen", "😤 Difficile", "🥵 Très difficile"];
+function decouper(tl, gap) { const l = []; let c = null; (tl || []).forEach((t, i) => { if (!c || t - tl[i - 1] > (gap || 5)) { c = []; l.push(c); } c.push(t); }); return l.map(x => x.map(t => t - x[0])); }
+function recordSerie() { let r = 0; const vu = (n) => { if (n > r) r = n; };
+  CARNET_POMPES.forEach(x => decouper(x.tl).forEach(z => vu(z.length))); decouper(JOUR_3008.tl).forEach(z => vu(z.length));
+  lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.series) n.pompes.series.forEach(vu); if (n.pjour && n.pjour.tl) decouper(n.pjour.tl).forEach(z => vu(z.length)); }));
+  try { (PJ ? PJ.seances : []).forEach(x => decouper(x.tl).forEach(z => vu(z.length))); } catch (e) {} return r; }
+let pRecord = 0, pRecordBattu = false, pObjAnnonce = false, pGSer = [], pSerieBase = 0, pBandT = null;
+function bandeau(txt) { const b = $("#pBandeau"); b.textContent = txt; b.classList.remove("cache"); clearTimeout(pBandT); pBandT = setTimeout(() => b.classList.add("cache"), 5000); vib([80, 60, 80]); bip(2); dire(txt.replace(/[^\p{L}\p{N} ,']/gu, "")); }
+function pGuideMaj() { const k = pSerieBase + pSeries.length + (pCur && pCur.d.length ? 0 : 0), g = pGSer[k], svg = $("#pgSvg");
+  if (!g) { $("#pgTxt").textContent = pGSer.length ? "Au-delà des séries du fantôme" : ""; svg.innerHTML = ""; return; }
+  const gT = g[g.length - 1], vit = g.length > 1 ? gT / (g.length - 1) : 0;
+  if (!pCur || !pCur.d.length) { $("#pgTxt").textContent = "Série " + (k + 1) + " du fantôme : " + g.length + " en " + gm(gT) + (vit ? " (" + vit.toFixed(1).replace(".", ",") + " s/pompe)" : ""); }
+  const moi = pCur && pCur.d.length ? pTl.slice(-pCur.d.length).map(t => t - pTl[pTl.length - pCur.d.length]) : [];
+  if (moi.length) { const j = moi.length, mT = moi[j - 1];
+    if (j <= g.length) { const e = g[j - 1] - mT; $("#pgTxt").innerHTML = "Série " + (k + 1) + " · pompe " + j + " : " + (Math.abs(e) < 0.5 ? "même foulée" : e > 0 ? "<span style='color:#2e8b57'>⚡ " + e.toFixed(1).replace(".", ",") + " s plus rapide</span>" : "<span style='color:#c0392b'>🐢 " + (-e).toFixed(1).replace(".", ",") + " s plus lent</span>") + " que le fantôme"; }
+    else $("#pgTxt").innerHTML = "<span style='color:#2e8b57'>Série " + (k + 1) + " : +" + (j - g.length) + " au-delà du fantôme (" + g.length + ")</span>"; }
+  const T = Math.max(gT, moi.length ? moi[moi.length - 1] : 0, 1) * 1.05, N = Math.max(g.length, moi.length, 1), X = (t) => 4 + 292 * t / T, Y = (i) => 60 - 56 * i / N;
+  const pts = (l) => l.map((t, i) => X(t).toFixed(1) + "," + Y(i + 1).toFixed(1)).join(" ");
+  svg.innerHTML = `<polyline points="4,60 ${pts(g)}" fill="none" stroke="#8a929c" stroke-width="2" stroke-dasharray="4 3"/>` + (moi.length ? `<polyline points="4,60 ${pts(moi)}" fill="none" stroke="#2e8b57" stroke-width="3"/>` : "") + `<text x="296" y="12" text-anchor="end" font-size="11" fill="#8a929c">👻 gris · toi vert</text>`; }
+function pPrepGuide() { if (PJ) { pGSer = decouper(PJ.g.tl); pSerieBase = PJ.seances.reduce((a, x) => a + (x.ns || decouper(x.tl).length), 0); }
+  else { let src = pF; if (!src) { const l = pompesSeances(); src = l[l.length - 1]; } pGSer = src ? decouper(src.tl) : []; pSerieBase = 0; } }
+function pDiffOuvrir() { $("#pBarre").classList.add("cache"); $("#pDiff").classList.remove("cache"); }
+function pDiffFermer() { $("#pDiff").classList.add("cache"); $("#pBarre").classList.remove("cache"); }
+document.querySelectorAll(".pD").forEach(b => b.addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); const sr = pSeries[pSeries.length - 1]; if (sr) sr.diff = Number(b.dataset.d); vib(40); pDiffFermer(); pSauverCours(); }));
 function pFantReps(t) { if (!pF) return 0; let n = 0; while (n < pF.tl.length && pF.tl[n] <= t) n++; return n; }
 function pMaj() { const t = pNow(), n = pTl.length;
   { const f = fcFraiche(), dern = pSeries[pSeries.length - 1]; $("#pTestBox").classList.toggle("cache", !PO.test);
@@ -516,16 +545,19 @@ function pMaj() { const t = pNow(), n = pTl.length;
     const prochain = pF.tl[n]; $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t) + (pPhase === "repos" && prochain != null ? (prochain > t ? " — le fantôme repart dans " + gm(prochain - t) : " — le fantôme est reparti !") : ""); }
   else $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t); }
 $("#ptEtat").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (!(h10 && h10.gatt.connected)) h10Connecter(); else if (!accOn) accDemarrer(); });
-{ const base = pMaj; pMaj = function () { base(); if (enSeance) pReposSignal(pNow()); }; }
+{ const base = pMaj; pMaj = function () { base(); if (enSeance) { pReposSignal(pNow()); pGuideMaj(); } }; }
 $("#pGo").onclick = () => { pF = pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + gm(pF.tl[PO.obj - 1]) : "");
-  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
+  pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!enSeance || $("#pSeance").classList.contains("cache")) return; const now = performance.now();
-  if (now - pDern < 350) return; if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [], p0: now }; const f = fcFraiche(); if (f) { pCur.fcDepart = f; } pDern = now - 1000; }
+  if (now - pDern < 350) return; if (!$("#pDiff").classList.contains("cache")) pDiffFermer(); if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [], p0: now }; const f = fcFraiche(); if (f) { pCur.fcDepart = f; } pDern = now - 1000; }
   const v = (now - pDern) / 1000; pDern = now; pCur.d.push(pCur.d.length ? Math.round(v * 100) / 100 : 0); pTl.push(Math.round(pNow() * 10) / 10);
   if (PJ) { if (!PJ.debut) PJ.debut = Date.now(); if (!PJ.cours) PJ.cours = Date.now(); PJ.tlCours = (PJ.tlCours || []).concat(Math.round(pjT() * 10) / 10); pjSauver(); }
-  vib(25); pSauverCours(); pMaj(); if (!PJ && pTl.length === PO.obj) pTerminer(); });
-$("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); pCur = null; pPhase = "repos"; pDebutRepos = pNow(); pSignal = 0; pSauverCours(); dire("Repos"); vib(150); pMaj(); };
+  vib(25); pSauverCours(); pMaj();
+  if (pRecord && !pRecordBattu && pCur.d.length > pRecord) { pRecordBattu = true; bandeau("🏆 Record battu sur une série : " + pCur.d.length); }
+  if (!PJ && !pObjAnnonce && pTl.length === PO.obj) { pObjAnnonce = true; const e = pF ? pF.tl[PO.obj - 1] - pTl[PO.obj - 1] : null;
+    bandeau(e == null ? "🎯 " + PO.obj + " atteint — continue !" : e >= 0 ? "👻 Fantôme battu de " + gm(e) + " — continue !" : "🎯 " + PO.obj + " atteint — continue !"); } });
+$("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); if (pCur.d.length > pRecord) pRecord = pCur.d.length; pRecordBattu = false; pCur = null; pPhase = "repos"; pDebutRepos = pNow(); pSignal = 0; pSauverCours(); dire("Repos"); vib(150); pDiffOuvrir(); pMaj(); };
 function pSauverCours() { if (PJ) return; try { localStorage.setItem("pompes-encours", JSON.stringify({ t: Date.now(), obj: PO.obj, tl: pTl, series: pSeries.map(x => x.d.length).concat(pCur && pCur.d.length ? [pCur.d.length] : []) })); } catch (e) {} }
 $("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.pop(); if (PJ && PJ.tlCours) { PJ.tlCours.pop(); pjSauver(); } pMaj(); } };
 function pFermerSerie(sr) { const now = performance.now(); sr.p1 = now; sr.fcMax = fcMaxEntre(sr.p0, now) || fcFraiche(); sr.fcFin = fcFraiche();
@@ -539,13 +571,13 @@ function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.backgr
   const repos = pSeries.slice(1).map((s, i) => Math.round(s.debut - (pSeries[i].debut + pSeries[i].d.reduce((a, b) => a + b, 0)))), rm = repos.length ? Math.round(repos.reduce((a, b) => a + b, 0) / repos.length) : 0;
   const sers = pSeries.slice(), fcs = sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]);
   if (n) setTimeout(() => { const test = sers.some(x => x.polar != null) ? sers.map(x => ({ tap: x.d.length, polar: x.polar, acc: x.acc })) : null;
-    ajouter({ pompes: { obj: PO.obj, total: n, temps: Math.round(t), series: sers.map(s => s.d.length), reposMoy: rm, tl: pTl, fcs: fcs.some(x => x[1]) ? fcs : null, test, res: res + (test ? " — " + pTestTxt(sers) : "") } }); accArreter(); }, 1700);
+    ajouter({ pompes: { obj: PO.obj, total: n, temps: Math.round(t), series: sers.map(s => s.d.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff ?? null) : null, reposMoy: rm, tl: pTl, fcs: fcs.some(x => x[1]) ? fcs : null, test, res: res + (test ? " — " + pTestTxt(sers) : "") } }); accArreter(); }, 1700);
   else accArreter();
   $("#pPhase").textContent = "Terminé"; $("#pGros").textContent = n; $("#pSous").textContent = res + (rm ? " — repos moyen " + gm(rm) : "");
   setTimeout(() => { $("#pomp").classList.add("cache"); afficher(); }, 7000); }
 $("#pStop").onclick = () => { if (!PJ && !confirm("Terminer la séance ?")) return; pTerminer(); };
 
-function pjFinSeance() { const tl = PJ.tlCours || []; if (tl.length) { const sers = pSeries.slice(), sc = { off: tl[0], tl, fcs: sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]) }; PJ.seances.push(sc);
+function pjFinSeance() { const tl = PJ.tlCours || []; if (tl.length) { const sers = pSeries.slice(), sc = { off: tl[0], tl, ns: sers.length, diffs: sers.map(x => x.diff ?? null), fcs: sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]) }; PJ.seances.push(sc);
     setTimeout(() => { if (sers.some(x => x.polar != null)) { sc.test = sers.map(x => ({ tap: x.d.length, polar: x.polar, acc: x.acc })); pjSauver(); } accArreter(); }, 1700); const e = pjEcartTxt();
     dire("Séance " + PJ.seances.length + " : " + tl.length + " pompes. " + (e.e >= 0 ? "Tu as " + e.e + " pompes d'avance" : "Le fantôme a " + (-e.e) + " pompes d'avance")); }
   PJ.tlCours = []; PJ.cours = 0; pjSauver(); }
@@ -593,14 +625,14 @@ $("#pjGo").onclick = () => {
   pF = null; pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran(); PJ.cours = 0;
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#pStop").textContent = "⏸ Fin de séance";
   $("#poTitre").textContent = "📅 Séance " + (PJ.seances.length + 1) + " — " + PJ.g.nom.split(" (")[0];
-  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
+  pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pjClore").onclick = () => { if (!PJ || !confirm("Clore la journée ?")) return; pjClore(); };
 function pjClore() { const moi = PJ.seances.reduce((a, s) => a + s.tl.length, 0); if (!moi) { PJ = null; pjSauver(); pTypeMaj(); return; }
   const tl = [].concat(...PJ.seances.map(s => s.tl)), offs = PJ.seances.map(s => s.off), cut = []; let c = 0; PJ.seances.forEach(s => { c += s.tl.length; cut.push(c); });
   const G = PJ.g, nF = G.tl.length, fin = tl[tl.length - 1]; let res = moi + " pompes en " + PJ.seances.length + " séances (" + PJ.seances.map(s => s.tl.length).join(" + ") + ") sur " + hm(fin);
   if (moi >= nF) { const e = G.tl[nF - 1] - tl[nF - 1]; res += e >= 0 ? " — fantôme battu, " + nF + " atteint " + hm(e) + " plus tôt" : " — " + nF + " atteint, " + hm(-e) + " après le fantôme"; }
   else res += " — le fantôme garde " + (nF - moi) + " pompes d'avance";
-  ajouter({ pjour: { debut: PJ.debut, mode: PJ.mode, fant: G.nom, total: moi, tl, offs, cut, res, seances: PJ.seances.map(x => ({ n: x.tl.length, fcs: x.fcs, test: x.test || null })) } }); dire(moi >= nF ? "Journée terminée, bravo" : "Journée terminée");
+  ajouter({ pjour: { debut: PJ.debut, mode: PJ.mode, fant: G.nom, total: moi, tl, offs, cut, res, seances: PJ.seances.map(x => ({ n: x.tl.length, ns: x.ns, diffs: x.diffs, fcs: x.fcs, test: x.test || null })) } }); dire(moi >= nF ? "Journée terminée, bravo" : "Journée terminée");
   PJ = null; pjSauver(); pTypeMaj(); $("#pjEtat").innerHTML = "<b>" + res + "</b>"; }
 
 
