@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Test des voix — Atelier Lecture</title>
+<style>
+  :root { --accent: #B5451B; --line: #d9dce1; --bg: #f6f7f9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1b1f23; background: var(--bg); }
+  main { max-width: 760px; margin: 0 auto; padding: 14px; }
+  h1 { font-size: 20px; color: var(--accent); margin: 6px 0 4px; }
+  .sub { color: #5b6470; font-size: 14px; margin: 0 0 12px; }
+  textarea { width: 100%; min-height: 130px; font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .carte { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 12px 0; }
+  .carte h2 { font-size: 17px; margin: 0 0 4px; }
+  .ligne { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  select, button { font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  button.go { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; }
+  .etat { font-size: 14px; color: #5b6470; min-height: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+  td { border-top: 1px solid var(--line); padding: 4px 6px; }
+  td:last-child { text-align: right; font-weight: 600; }
+  .barre { height: 6px; background: #eef0f3; border-radius: 3px; overflow: hidden; }
+  .barre i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .vitesse { position: sticky; top: 0; background: var(--bg); padding: 8px 0; z-index: 2; border-bottom: 1px solid var(--line); }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .note { font-size: 13px; color: #5b6470; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔊 Test des voix</h1>
+  <p class="sub">Même texte, trois voix. Chaque test chronomètre le téléchargement, le temps avant le premier son et la fabrication. La première fois il faut internet (téléchargement de la voix) ; ensuite tout est gardé dans la tablette.</p>
+
+  <textarea id="texte">Le soleil se levait doucement sur la baie de Saint-Paul. Marie referma son carnet, prit une grande inspiration et descendit vers la plage. Elle savait qu'aujourd'hui, tout allait changer : le bateau arriverait avant midi, et avec lui, la lettre qu'elle attendait depuis trois ans.</textarea>
+
+  <div class="vitesse ligne"><b>Vitesse</b><input type="range" id="vit" min="0.7" max="1.6" step="0.05" value="1"><span id="vitTxt">× 1,00</span></div>
+
+  <section class="carte" id="c-google">
+    <h2>1. Voix Google (celle d'Android)</h2>
+    <p class="note">Référence : c'est la voix déjà dans la tablette. Pour la meilleure version : Paramètres → Synthèse vocale → Google → télécharger la voix française « haute qualité ».</p>
+    <div class="ligne"><select id="g-voix"></select><button class="go" id="g-go">▶ Lire</button><button id="g-stop">■</button></div>
+    <div class="etat" id="g-etat"></div>
+  </section>
+
+  <section class="carte" id="c-piper">
+    <h2>2. Piper (voix neuronale légère)</h2>
+    <div class="ligne"><select id="p-voix">
+      <option value="fr_FR-siwis-medium">Siwis (femme) — moyen</option>
+      <option value="fr_FR-tom-medium">Tom (homme) — moyen</option>
+      <option value="fr_FR-upmc-medium">UPMC (femme/homme) — moyen</option>
+      <option value="fr_FR-mls-medium">MLS — moyen</option>
+      <option value="fr_FR-gilles-low">Gilles (homme) — léger</option>
+    </select><button class="go" id="p-go">▶ Fabriquer et lire</button><button id="p-stop">■</button></div>
+    <div class="barre"><i id="p-barre"></i></div>
+    <div class="etat" id="p-etat"></div>
+    <table id="p-tab"></table>
+  </section>
+
+  <section class="carte" id="c-kokoro">
+    <h2>3. Kokoro (voix la plus réaliste, plus lourde)</h2>
+    <div class="ligne"><select id="k-mode">
+      <option value="wasm|q8">Processeur — modèle compressé (≈ 90 Mo)</option>
+      <option value="webgpu|fp32">Puce graphique — modèle complet (≈ 330 Mo)</option>
+    </select><button class="go" id="k-go">▶ Fabriquer et lire</button><button id="k-stop">■</button></div>
+    <div class="barre"><i id="k-barre"></i></div>
+    <div class="etat" id="k-etat"></div>
+    <table id="k-tab"></table>
+    <p class="note">Voix française unique : Siwis. La prononciation française est calculée dans la tablette (même module que Piper) : rien n'est envoyé ailleurs.</p>
+  </section>
+
+  <p class="note">Le chiffre important : <b>« Vitesse de fabrication »</b>. Au-dessus de × 1, la tablette fabrique plus vite qu'elle ne lit : la lecture reste fluide, sans blanc. En dessous, il faudra préparer les chapitres à l'avance (ce que ferait l'appli, en arrière-plan).</p>
+</main>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const vit = () => Number($("#vit").value);
+$("#vit").oninput = () => { $("#vitTxt").textContent = "× " + vit().toFixed(2).replace(".", ","); document.querySelectorAll("audio").forEach(a => a.playbackRate = vit()); if (lecteur) lecteur.playbackRate = vit(); };
+const sec = (ms) => (ms / 1000).toFixed(1).replace(".", ",") + " s";
+const phrases = () => $("#texte").value.replace(/\s+/g, " ").trim().match(/[^.!?…]+[.!?…]*["»]?/g).map(s => s.trim()).filter(Boolean);
+function tableau(id, lignes) { $(id).innerHTML = lignes.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join(""); }
+
+/* ---------- Lecteur commun : joue les phrases dans l'ordre, dès qu'elles sont prêtes ---------- */
+let lecteur = null, file = [], fini = false, attentes = 0, enAttente = false, arret = false, demarre = false;
+const SILENCE = URL.createObjectURL(new Blob([new Uint8Array([82,73,70,70,38,0,0,0,87,65,86,69,102,109,116,32,16,0,0,0,1,0,1,0,64,31,0,0,128,62,0,0,2,0,16,0,100,97,116,97,2,0,0,0,0,0])], { type: "audio/wav" }));
+/* appelé directement au toucher : Android n'autorise le son qu'après un geste, on « débloque » le lecteur tout de suite */
+function nouveauLecteur() { if (lecteur) { lecteur.onended = null; lecteur.pause(); } file = []; fini = false; attentes = 0; enAttente = false; arret = false; demarre = false; lecteur = new Audio(SILENCE); lecteur.preservesPitch = true; lecteur.play().catch(() => {}); lecteur.onended = () => { if (demarre) suivant(); }; return lecteur; }
+function ajouter(url) { file.push(url); if (!demarre) { demarre = true; suivant(); } else if (enAttente) { attentes++; enAttente = false; suivant(); } }
+function suivant() { if (arret) return; const u = file.shift(); if (!u) { if (!fini) enAttente = true; return; } lecteur.src = u; lecteur.playbackRate = vit(); lecteur.play().catch(() => {}); }
+function stop() { arret = true; if (lecteur) lecteur.pause(); speechSynthesis.cancel(); }
+$("#p-stop").onclick = $("#k-stop").onclick = $("#g-stop").onclick = stop;
+
+function wav(f32, rate) { const n = f32.length, b = new DataView(new ArrayBuffer(44 + n * 2)); const w = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); b.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true); b.setUint32(24, rate, true); b.setUint32(28, rate * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true); w(36, "data"); b.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, f32[i])); b.setInt16(44 + i * 2, s < 0 ? s * 32768 : s * 32767, true); } return new Blob([b], { type: "audio/wav" }); }
+async function dureeBlob(blob) { return new Promise(r => { const a = new Audio(URL.createObjectURL(blob)); a.onloadedmetadata = () => r(a.duration); a.onerror = () => r(0); }); }
+
+/* ---------- 1. Google ---------- */
+function voixGoogle() { const v = speechSynthesis.getVoices().filter(x => /^fr/i.test(x.lang)); $("#g-voix").innerHTML = v.map((x, i) => `<option value="${i}">${x.name}${x.localService ? "" : " (en ligne)"}</option>`).join("") || "<option>Aucune voix française</option>"; return v; }
+speechSynthesis.onvoiceschanged = voixGoogle; voixGoogle();
+$("#g-go").onclick = () => { stop(); arret = false; const v = voixGoogle()[Number($("#g-voix").value)], u = new SpeechSynthesisUtterance($("#texte").value); if (v) { u.voice = v; u.lang = v.lang; } else u.lang = "fr-FR"; u.rate = vit();
+  const t0 = performance.now(); u.onstart = () => $("#g-etat").textContent = "Premier son après " + sec(performance.now() - t0) + "."; speechSynthesis.speak(u); };
+
+/* ---------- Prononciation française (module de Piper, dans la tablette) ---------- */
+const VW = "https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web@1.0.3";
+let piperMod = null, frConfig = null;
+async function phonemesFr(textes) {
+  piperMod = piperMod || await import(VW + "/dist/piper-DeOu3H9E.js");
+  if (!frConfig) frConfig = await (await fetch("https://huggingface.co/diffusionstudio/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json")).json();
+  const inv = {}; for (const [c, ids] of Object.entries(frConfig.phoneme_id_map)) inv[ids[0]] = c;
+  const lignes = [], base = "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize";
+  const m = await piperMod.createPiperPhonemize({ print: (l) => lignes.push(JSON.parse(l).phoneme_ids), printErr: () => {}, locateFile: (f) => f.endsWith(".wasm") ? base + ".wasm" : f.endsWith(".data") ? base + ".data" : f });
+  m.callMain(["-l", "fr", "--input", JSON.stringify(textes.map(t => ({ text: t }))), "--espeak_data", "/espeak-ng-data"]);
+  return lignes.map(ids => ids.map(i => inv[i]).filter(c => c && c !== "_" && c !== "^" && c !== "$").join(""));
+}
+
+/* ---------- 2. Piper ---------- */
+let vits = null;
+$("#p-go").onclick = async () => {
+  stop(); const btn = $("#p-go"); btn.disabled = true; const etat = $("#p-etat"), voix = $("#p-voix").value, ph = phrases(); nouveauLecteur();
+  try {
+    vits = vits || await import(VW + "/+esm");
+    const t0 = performance.now(); let dejaLa = (await vits.stored()).includes(voix);
+    if (!dejaLa) { etat.textContent = "Téléchargement de la voix…"; await vits.download(voix, (p) => { if (p.total) { $("#p-barre").style.width = (100 * p.loaded / p.total) + "%"; etat.textContent = "Téléchargement : " + Math.round(p.loaded / 1e6) + " / " + Math.round(p.total / 1e6) + " Mo"; } }); }
+    const tDl = performance.now() - t0; $("#p-barre").style.width = "100%";
+    const t1 = performance.now(); let tPremier = 0, duree = 0;
+    for (let i = 0; i < ph.length; i++) { if (arret) break; etat.textContent = "Fabrication de la phrase " + (i + 1) + " / " + ph.length + "…";
+      const blob = await vits.predict({ text: ph[i], voiceId: voix }); duree += await dureeBlob(blob); if (!i) tPremier = performance.now() - t1; ajouter(URL.createObjectURL(blob)); }
+    fini = true; const tFab = performance.now() - t1;
+    etat.textContent = "Terminé.";
+    tableau("#p-tab", [["Téléchargement de la voix", dejaLa ? "déjà dans la tablette" : sec(tDl)], ["Temps avant le premier son", sec(tPremier)], ["Fabrication totale", sec(tFab)], ["Durée de l'audio", sec(duree * 1000)], ["Vitesse de fabrication", "× " + (duree * 1000 / tFab).toFixed(1).replace(".", ",")], ["Blancs d'attente pendant la lecture", String(attentes)]]);
+  } catch (e) { etat.textContent = "Erreur : " + (e && e.message || e); }
+  btn.disabled = false;
+};
+
+/* ---------- 3. Kokoro ---------- */
+let kokoro = null, kokoroMode = "";
+$("#k-go").onclick = async () => {
+  stop(); const btn = $("#k-go"); btn.disabled = true; const etat = $("#k-etat"), [device, dtype] = $("#k-mode").value.split("|"), ph = phrases(); nouveauLecteur();
+  try {
+    if (device === "webgpu" && !navigator.gpu) throw new Error("la puce graphique n'est pas accessible dans ce navigateur : choisis « Processeur ».");
+    const t0 = performance.now(); let dl = false;
+    if (!kokoro || kokoroMode !== device + dtype) {
+      etat.textContent = "Chargement du modèle…"; const { KokoroTTS } = await import("https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js");
+      const vu = {}; kokoro = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", { dtype, device, progress_callback: (p) => { if (p.status === "progress" && p.total > 1e6) { dl = true; vu[p.file] = p; const a = Object.values(vu), l = a.reduce((s, x) => s + x.loaded, 0), t = a.reduce((s, x) => s + x.total, 0); $("#k-barre").style.width = (100 * l / t) + "%"; etat.textContent = "Téléchargement : " + Math.round(l / 1e6) + " / " + Math.round(t / 1e6) + " Mo"; } } });
+      kokoroMode = device + dtype; }
+    const tDl = performance.now() - t0; $("#k-barre").style.width = "100%";
+    etat.textContent = "Prononciation française…"; const t1 = performance.now(); const phon = await phonemesFr(ph); let tPremier = 0, duree = 0;
+    for (let i = 0; i < phon.length; i++) { if (arret) break; etat.textContent = "Fabrication de la phrase " + (i + 1) + " / " + phon.length + "…";
+      const { input_ids } = kokoro.tokenizer(phon[i], { truncation: true }); const audio = await kokoro.generate_from_ids(input_ids, { voice: "ff_siwis", speed: 1 });
+      duree += audio.audio.length / audio.sampling_rate; if (!i) tPremier = performance.now() - t1; ajouter(URL.createObjectURL(wav(audio.audio, audio.sampling_rate))); }
+    fini = true; const tFab = performance.now() - t1;
+    etat.textContent = "Terminé (" + (device === "webgpu" ? "puce graphique" : "processeur") + ").";
+    tableau("#k-tab", [["Chargement du modèle", (dl ? "téléchargé en " : "") + sec(tDl)], ["Temps avant le premier son", sec(tPremier)], ["Fabrication totale", sec(tFab)], ["Durée de l'audio", sec(duree * 1000)], ["Vitesse de fabrication", "× " + (duree * 1000 / tFab).toFixed(1).replace(".", ",")], ["Blancs d'attente pendant la lecture", String(attentes)]]);
+  } catch (e) { etat.textContent = "Erreur : " + (e && e.message || e); }
+  btn.disabled = false;
+};
+if (!navigator.gpu) { const o = $("#k-mode").options[1]; o.textContent += " — indisponible ici"; }
+</script>
+</body>
+</html>
