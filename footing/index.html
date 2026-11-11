@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v16</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v17</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -148,7 +148,9 @@
     </div>
     <div class="ligne" style="margin:8px 0"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
     <div class="chips" style="margin-bottom:6px"><button class="chip" id="pTest">🧪 Test comptage H10 (toi + la ceinture)</button></div>
-    <div class="aide" id="pTestAide" style="margin-bottom:8px">Tu touches l'écran comme d'habitude ; en parallèle la ceinture compte avec son capteur de mouvement. On compare série par série avant de lui faire confiance.</div>
+    <div id="pTestAide" style="margin-bottom:8px"><div class="aide">Tu touches l'écran comme d'habitude ; en parallèle la ceinture compte avec son capteur de mouvement. Chaque série de test est gardée (tes appuis + le mouvement) pour que Claude règle la détection.</div>
+      <label class="opt">Type de pompes</label><div class="chips" id="pExo"></div>
+      <div class="ligne" style="margin-top:6px"><button class="sec" id="pExport" style="flex:1">📤 Envoyer les tests H10 à Claude</button></div><div class="aide" id="pExpInfo"></div></div>
     <label class="opt">Repos visé (signal de reprise)</label><div class="chips" id="pRepos"></div>
     <div id="pSeanceReg">
     <label class="opt">Objectif (pompes au total)</label><div class="chips" id="pObj"></div>
@@ -334,13 +336,17 @@ function fcMaxEntre(a, b) { const l = fcSerie.filter(x => x[0] >= a && x[0] <= b
 
 /* Capteur de mouvement (accéléromètre 25 Hz) et détection des pompes — mode test */
 let accOn = false, accVoulu = false, accBuf = [], accEv = [], accDet = null, accErr = "";
-function accDetReset() { accDet = { ma5: [], ma50: [], s: [], etat: "", der: 0 }; }
-function accEchantillon(m, t) { accBuf.push([t, Math.round(m)]); if (accBuf.length > 90000) accBuf.splice(0, 30000);
-  const D = accDet; D.ma5.push(m); if (D.ma5.length > 5) D.ma5.shift(); D.ma50.push(m); if (D.ma50.length > 50) D.ma50.shift();
-  const v = D.ma5.reduce((a, b) => a + b, 0) / D.ma5.length - D.ma50.reduce((a, b) => a + b, 0) / D.ma50.length;
-  D.s.push(v); if (D.s.length > 100) D.s.shift(); const rms = Math.sqrt(D.s.reduce((a, b) => a + b * b, 0) / D.s.length), thr = Math.max(35, 0.6 * rms);
+const ACC_HZ = 50, ACC_DT = 1000 / ACC_HZ;
+/* réglages de détection — seront ajustés par Claude d'après tes séries de test */
+const DET = { court: 0.2, long: 2, fen: 4, seuilMin: 35, seuilK: 0.6, ecartMin: 600 };
+function accDetReset() { accDet = { c: [], l: [], s: [], etat: "", der: 0 }; }
+function accEchantillon(m, t, a) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 180000) accBuf.splice(0, 60000);
+  const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
+  D.c.push(m); if (D.c.length > nc) D.c.shift(); D.l.push(m); if (D.l.length > nl) D.l.shift();
+  const v = D.c.reduce((x, y) => x + y, 0) / D.c.length - D.l.reduce((x, y) => x + y, 0) / D.l.length;
+  D.s.push(v); if (D.s.length > nf) D.s.shift(); const rms = Math.sqrt(D.s.reduce((x, y) => x + y * y, 0) / D.s.length), thr = Math.max(DET.seuilMin, DET.seuilK * rms);
   if (D.etat !== "h" && v > thr) D.etat = "h";
-  else if (D.etat === "h" && v < -thr) { D.etat = "b"; if (t - D.der > 600) { accEv.push(t); D.der = t; } } }
+  else if (D.etat === "h" && v < -thr) { D.etat = "b"; if (t - D.der > DET.ecartMin) { accEv.push(t); D.der = t; } } }
 function accTrame(dv) { if (dv.getUint8(0) !== 2) return; const ft = dv.getUint8(9), now = performance.now(); let o = 10; const out = [];
   if (ft === 1) { while (o + 6 <= dv.byteLength) { out.push([dv.getInt16(o, true), dv.getInt16(o + 2, true), dv.getInt16(o + 4, true)]); o += 6; } }
   else if (ft === 0) { while (o + 3 <= dv.byteLength) { out.push([dv.getInt8(o), dv.getInt8(o + 1), dv.getInt8(o + 2)]); o += 3; } }
@@ -348,11 +354,11 @@ function accTrame(dv) { if (dv.getUint8(0) !== 2) return; const ft = dv.getUint8
     while (o + 2 <= dv.byteLength) { const nb = dv.getUint8(o), cnt = dv.getUint8(o + 1); o += 2; let bit = 0;
       const lire = () => { let v = 0; for (let k = 0; k < nb; k++) { const by = dv.getUint8(o + ((bit + k) >> 3)); v |= ((by >> ((bit + k) & 7)) & 1) << k; } bit += nb; return v & (1 << (nb - 1)) ? v - (1 << nb) : v; };
       for (let i = 0; i < cnt; i++) { ref = [ref[0] + lire(), ref[1] + lire(), ref[2] + lire()]; out.push(ref.slice()); } o += Math.ceil(cnt * 3 * nb / 8); } }
-  const n = out.length; out.forEach((a, i) => accEchantillon(Math.hypot(a[0], a[1], a[2]), now - (n - 1 - i) * 40)); }
+  const n = out.length; out.forEach((a, i) => accEchantillon(Math.hypot(a[0], a[1], a[2]), now - (n - 1 - i) * ACC_DT, a)); }
 async function accDemarrer() { accVoulu = true; if (!h10Pmd || accOn) return; try { accDetReset();
     if (!h10Pmd.ecoute) { h10Pmd.d.addEventListener("characteristicvaluechanged", (e) => accTrame(e.target.value)); h10Pmd.ecoute = true; } await h10Pmd.cp.startNotifications(); await h10Pmd.d.startNotifications();
     if (!h10Pmd.ecouteCp) { h10Pmd.cp.addEventListener("characteristicvaluechanged", (e) => { const v = e.target.value; if (v.byteLength >= 4 && v.getUint8(0) === 0xF0 && v.getUint8(3) !== 0) accErr = "la ceinture refuse le flux (code " + v.getUint8(3) + ")"; }); h10Pmd.ecouteCp = true; }
-    await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x02, 0x02, 0x00, 0x01, 0x19, 0x00, 0x01, 0x01, 0x10, 0x00, 0x02, 0x01, 0x08, 0x00])); accOn = true; accErr = ""; } catch (e) { accOn = false; accErr = String(e.message || e).slice(0, 60); } }
+    await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x02, 0x02, 0x00, 0x01, 0x32, 0x00, 0x01, 0x01, 0x10, 0x00, 0x02, 0x01, 0x08, 0x00])); accOn = true; accErr = ""; } catch (e) { accOn = false; accErr = String(e.message || e).slice(0, 60); } }
 function accEtat() { if (!(h10 && h10.gatt.connected)) return "⚠️ H10 non connectée : touche ici pour la connecter";
   if (!h10Pmd) return "⚠️ capteur de mouvement non accessible sur ce téléphone"; if (accErr) return "⚠️ " + accErr; if (!accOn) return "capteur en attente…";
   const r = accBuf.filter(x => x[0] > performance.now() - 2000).length / 2; return r ? "✅ capteur actif (" + Math.round(r) + " mesures/s)" : "⚠️ capteur activé mais aucune mesure reçue"; }
@@ -474,6 +480,9 @@ let PO = { obj: 100, test: false, repos: 90 }; try { PO = Object.assign(PO, JSON
 function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO)); } catch (e) {}
   $("#pRepos").innerHTML = [0, 60, 90, 120, 180].map(v => `<button class="chip" data-v="${v}" aria-pressed="${(PO.repos || 0) == v}">${v ? gm(v) : "Libre"}</button>`).join("");
   $("#pRepos").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.repos = Number(b.dataset.v); pReglage(); });
+  $("#pExo").innerHTML = [["sol", "Au sol"], ["decl", "Déclinées"], ["incl", "Inclinées"], ["genoux", "Genoux"], ["autre", "Autre"]].map(x => `<button class="chip" data-v="${x[0]}" aria-pressed="${(PO.exo || "sol") === x[0]}">${x[1]}</button>`).join("");
+  $("#pExo").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.exo = b.dataset.v; pReglage(); });
+  { const l = testsH10(); $("#pExpInfo").textContent = l.length ? l.length + " séries de test enregistrées (" + l.reduce((a, x) => a + x.tap, 0) + " pompes)" : "Pas encore de série de test."; }
   $("#pTest").setAttribute("aria-pressed", PO.test ? "true" : "false"); $("#pTestAide").classList.toggle("cache", !PO.test);
   $("#pObj").innerHTML = [30, 50, 100, 150, 200].map(v => `<button class="chip" data-v="${v}" aria-pressed="${PO.obj == v}">${v}</button>`).join("");
   $("#pObj").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.obj = Number(b.dataset.v); pReglage(); });
@@ -486,6 +495,14 @@ function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO
   const ch = pChoisi(); if (ch) { $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>👻 Fantôme choisi : <b>" + ch.nom + "</b> — " + ch.tl.length + " pompes en " + gm(ch.tl[ch.tl.length - 1]) + (ch.tl.length >= PO.obj ? " (" + PO.obj + " en " + gm(ch.tl[PO.obj - 1]) + ")" : ""); return; }
   const f = pompesFantome(PO.obj); $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>" + (f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."); }
 $("#bPompes").onclick = () => { $("#pomp").classList.remove("cache"); $("#pReglage").classList.remove("cache"); $("#pSeance").classList.add("cache"); pReglage(); };
+function testsH10() { const l = []; lire().forEach(c => c.notes.forEach(n => { const add = (x) => { if (x && x.polar != null) l.push(Object.assign({ quand: new Date(n.t).toISOString() }, x)); };
+    if (n.pompes && n.pompes.test) n.pompes.test.forEach(add); if (n.pjour && n.pjour.seances) n.pjour.seances.forEach(z => (z.test || []).forEach(add)); }));
+  try { (PJ ? PJ.seances : []).forEach(z => (z.test || []).forEach(x => x && x.polar != null && l.push(Object.assign({ quand: "journée en cours" }, x)))); } catch (e) {} return l; }
+$("#pExport").onclick = async () => { const l = testsH10(); if (!l.length) { $("#pExpInfo").textContent = "Rien à envoyer : fais d'abord une séance avec 🧪 Test."; return; }
+  const nom = "tests-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v17", series: l });
+  try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "Tests H10" }); $("#pExpInfo").textContent = "✅ Envoyé (" + Math.round(txt.length / 1024) + " Ko)"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); $("#pExpInfo").textContent = "✅ Fichier « " + nom + " » enregistré : envoie-le à Claude"; return; } } catch (e) {}
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); $("#pExpInfo").textContent = "✅ Fichier « " + nom + " » téléchargé : envoie-le à Claude"; };
 $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
 let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
@@ -575,7 +592,10 @@ $("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.len
 function pSauverCours() { if (PJ) return; try { localStorage.setItem("pompes-encours", JSON.stringify({ t: Date.now(), obj: PO.obj, tl: pTl, series: pSeries.map(x => x.d.length).concat(pCur && pCur.d.length ? [pCur.d.length] : []) })); } catch (e) {} }
 $("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.pop(); if (PJ && PJ.tlCours) { PJ.tlCours.pop(); pjSauver(); } pMaj(); } };
 function pFermerSerie(sr) { const now = performance.now(); sr.p1 = now; sr.fcMax = fcMaxEntre(sr.p0, now) || fcFraiche(); sr.fcFin = fcFraiche();
-  if (accOn) setTimeout(() => { sr.polar = accCompte(sr.p0 - 2000, sr.p1 + 1500); sr.acc = accBuf.filter(x => x[0] >= sr.p0 - 3000 && x[0] <= sr.p1 + 2000).map(x => x[1]); }, 1600); }
+  if (accOn) setTimeout(() => { sr.polar = accCompte(sr.p0 - 2000, sr.p1 + 1500); const a0 = sr.p0 - 3000; sr.acc = accBuf.filter(x => x[0] >= a0 && x[0] <= sr.p1 + 2000).map(x => [Math.round(x[0] - sr.p0), x[2], x[3], x[4]]);
+    sr.ev = accEv.filter(t => t >= a0 && t <= sr.p1 + 2000).map(t => Math.round(t - sr.p0)); }, 1600); }
+function testSerie(x) { let c = 0; const taps = x.d.map(v => Math.round((c += v) * 1000));
+  return { tap: x.d.length, polar: x.polar, diff: x.diff ?? null, exo: PO.exo || "sol", hz: ACC_HZ, det: Object.assign({}, DET), taps, ev: x.ev || [], acc: x.acc || [] }; }
 function pTestTxt(series) { const l = series.filter(x => x.polar != null); if (!l.length) return ""; const t = l.reduce((a, x) => a + x.d.length, 0), p = l.reduce((a, x) => a + x.polar, 0);
   return "🧪 Toi " + t + " / H10 " + p + " (" + l.map(x => x.d.length + "/" + x.polar).join(", ") + ")"; }
 function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.background = ""; try { localStorage.removeItem("pompes-encours"); } catch (e) {} if (pCur && pCur.d.length) { pFermerSerie(pCur); pSeries.push(pCur); } pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {}); pleinEcran(false);
@@ -584,7 +604,7 @@ function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.backgr
   if (pFT(PO.obj) != null && n >= PO.obj) { const e = pFT(PO.obj) - pTl[PO.obj - 1]; res += e >= 0 ? " — fantôme battu de " + gm(e) : " — le fantôme gagne de " + gm(-e); dire(e >= 0 ? "Bravo, fantôme battu" : "Le fantôme gagne, de " + Math.round(-e) + " secondes"); }
   const repos = pSeries.slice(1).map((s, i) => Math.round(s.debut - (pSeries[i].debut + pSeries[i].d.reduce((a, b) => a + b, 0)))), rm = repos.length ? Math.round(repos.reduce((a, b) => a + b, 0) / repos.length) : 0;
   const sers = pSeries.slice(), fcs = sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]);
-  if (n) setTimeout(() => { const test = sers.some(x => x.polar != null) ? sers.map(x => ({ tap: x.d.length, polar: x.polar, acc: x.acc })) : null;
+  if (n) setTimeout(() => { const test = sers.some(x => x.polar != null) ? sers.map(testSerie) : null;
     ajouter({ pompes: { obj: PO.obj, total: n, temps: Math.round(t), series: sers.map(s => s.d.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff ?? null) : null, reposMoy: rm, tl: pTl, fcs: fcs.some(x => x[1]) ? fcs : null, test, res: res + (test ? " — " + pTestTxt(sers) : "") } }); accArreter(); }, 1700);
   else accArreter();
   $("#pPhase").textContent = "Terminé"; $("#pGros").textContent = n; $("#pSous").textContent = res + (rm ? " — repos moyen " + gm(rm) : "");
@@ -592,7 +612,7 @@ function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.backgr
 $("#pStop").onclick = () => { if (!PJ && !confirm("Terminer la séance ?")) return; pTerminer(); };
 
 function pjFinSeance() { const tl = PJ.tlCours || []; if (tl.length) { const sers = pSeries.slice(), sc = { off: tl[0], tl, ns: sers.length, diffs: sers.map(x => x.diff ?? null), fcs: sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]) }; PJ.seances.push(sc);
-    setTimeout(() => { if (sers.some(x => x.polar != null)) { sc.test = sers.map(x => ({ tap: x.d.length, polar: x.polar, acc: x.acc })); pjSauver(); } accArreter(); }, 1700); const e = pjEcartTxt();
+    setTimeout(() => { if (sers.some(x => x.polar != null)) { sc.test = sers.map(testSerie); pjSauver(); } accArreter(); }, 1700); const e = pjEcartTxt();
     dire("Séance " + PJ.seances.length + " : " + tl.length + " pompes. " + (e.e >= 0 ? "Tu as " + e.e + " pompes d'avance" : "Le fantôme a " + (-e.e) + " pompes d'avance")); }
   PJ.tlCours = []; PJ.cours = 0; pjSauver(); }
 /* ===== 📅 Journée fantôme : plusieurs séances dans la journée, l'horloge part à ta 1re pompe ===== */
