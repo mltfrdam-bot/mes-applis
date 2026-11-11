@@ -71,6 +71,7 @@
   </section>
 
   <div class="barre" id="barre"></div>
+  <button class="main cache" id="bPompes" style="background:#5b4b8a">👻 Pompes contre le fantôme</button>
   <div class="ligne" id="zFant"><button class="main" id="bFrac">⏱ Fractionné</button><button class="main" id="bFant" style="background:#5b4b8a">👻 Fantôme</button></div>
   <div class="dernier" id="dernier"></div>
   <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Repère</button></div>
@@ -98,7 +99,7 @@
     <div class="ligne"><button class="main" id="fGo" style="font-size:22px;padding:18px">▶ Démarrer</button><button class="sec" id="fAnnul" style="flex:0 0 auto">Retour</button></div>
   </div>
   <div id="fSeance" class="cache" style="flex:1;display:flex;flex-direction:column">
-    <div id="fTop"><span id="fRep"></span><span id="fFc"></span><button class="sec" id="fStop" style="flex:0 0 auto;padding:6px 10px">⏹ Arrêter</button></div>
+    <div id="fTop"><span id="fRep"></span><span id="fFc"></span><button class="sec bVerrou" style="flex:0 0 auto;padding:6px 10px">🔒</button><button class="sec" id="fStop" style="flex:0 0 auto;padding:6px 10px">⏹ Arrêter</button></div>
     <div id="fZone"><div id="fSous"></div><div id="fGros">0,0</div><div id="fMsg"></div></div>
     <div id="fRpe" class="cache"><div style="font-weight:800;margin-bottom:6px">Comment était cette répétition ?</div><div class="grille" id="gRpe"></div></div>
   </div>
@@ -118,10 +119,30 @@
     <div class="ligne"><button class="main" id="gGo" style="font-size:22px;padding:18px">▶ Partir</button><button class="sec" id="gAnnul" style="flex:0 0 auto">Retour</button></div>
   </div>
   <div id="gCourse" class="cache" style="flex:1;display:flex;flex-direction:column">
-    <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span id="gNom"></span><button class="sec" id="gStop" style="flex:0 0 auto;padding:6px 10px">⏹ Fin</button></div>
+    <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span id="gNom"></span><span><button class="sec bVerrou" style="flex:0 0 auto;padding:6px 10px">🔒</button> <button class="sec" id="gStop" style="flex:0 0 auto;padding:6px 10px">⏹ Fin</button></span></div>
     <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center">
       <div id="gEcart" style="font-size:64px;font-weight:800;line-height:1">👻 0 m</div><div id="gEcartS" style="font-size:28px;font-weight:700"></div>
       <div id="gInfo" style="font-size:20px"></div><div id="gMsg" style="font-size:18px;color:#5b6470"></div></div>
+  </div>
+</div>
+<div id="verrou" class="cache" style="position:fixed;inset:0;z-index:50;background:#000;touch-action:none">
+  <div style="position:absolute;top:12px;right:12px;text-align:center;color:#666;font-size:12px"><div id="vIcone" style="width:72px;height:72px;border:2px solid #444;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:34px">🔓</div>2 appuis rapides</div>
+  <div id="vInfo" style="position:absolute;bottom:30px;left:0;right:0;text-align:center;color:#555;font-size:28px;font-weight:700"></div>
+</div>
+<div id="pomp" class="cache" style="position:fixed;inset:0;z-index:9;background:#fff;display:flex;flex-direction:column">
+  <div id="pReglage" style="padding:14px;overflow:auto;flex:1">
+    <h1 style="margin:0">👻 Pompes</h1>
+    <label class="opt">Objectif (pompes au total)</label><div class="chips" id="pObj"></div>
+    <div id="pFant" class="aide" style="margin:10px 0;font-size:15px"></div>
+    <div class="aide" style="margin:10px 0">Touche l'écran à chaque pompe (comme dans le Carnet). « Fin de série » lance le repos ; pendant le repos, ta 1re pompe relance la série suivante. Le fantôme, c'est ta meilleure séance qui a atteint ce nombre, repos compris.</div>
+    <div class="ligne"><button class="main" id="pGo" style="font-size:22px;padding:18px">▶ Démarrer</button><button class="sec" id="pAnnul" style="flex:0 0 auto">Retour</button></div>
+  </div>
+  <div id="pSeance" class="cache" style="flex:1;display:flex;flex-direction:column">
+    <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span id="poTitre"></span><button class="sec" id="pStop" style="flex:0 0 auto;padding:6px 10px">⏹ Terminer</button></div>
+    <div id="pZone" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;touch-action:manipulation">
+      <div id="pPhase" style="font-size:22px;font-weight:700"></div><div id="pGros" style="font-size:96px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums">0</div>
+      <div id="pEcart" style="font-size:30px;font-weight:800"></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
+    <div class="ligne" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button></div>
   </div>
 </div>
 <script>
@@ -172,6 +193,7 @@ function libelle(x) {
   if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
+  if (x.pompes) return "👻 Pompes : " + x.pompes.res + " (séries " + x.pompes.series.join("-") + (x.pompes.reposMoy ? ", repos moyen " + Math.floor(x.pompes.reposMoy / 60) + ":" + String(x.pompes.reposMoy % 60).padStart(2, "0") : "") + ")";
   if (x.ghost) return "👻 Contre « " + x.ghost.contre + " » — " + x.ghost.res;
   if (x.fracDebut) return "⏱ Début fractionné : " + x.fracDebut; if (x.fracFin) return "⏱ Fin fractionné";
   if (x.n) return NOMS5[x.n]; if (x.km) return "📍 Km " + x.km; if (x.rep) return "📍 Repère " + x.rep;
@@ -192,7 +214,7 @@ function choisirTroncon(nom) { const prof = PROFILS[actCourante()] || PROFILS.fo
     panneau("③ Ce qui domine", prof.domine, (d) => { modifier(t, { dom: d }); if (d === "Douleur") panneau("⚠️ Où ?", ZONES, (z) => modifier(t, { zone: z })); }); }, "s"); }
 
 function dessinerGrilles() { const a = actCourante(), prof = PROFILS[a];
-  $("#zTroncons").classList.toggle("cache", !prof); $("#zSimple").classList.toggle("cache", !!prof); $("#zFant").classList.toggle("cache", !AVEC_KM.includes(a)); $("#bFrac").classList.toggle("cache", a !== "footing");
+  $("#zTroncons").classList.toggle("cache", !prof); $("#zSimple").classList.toggle("cache", !!prof); $("#zFant").classList.toggle("cache", !AVEC_KM.includes(a)); $("#bPompes").classList.toggle("cache", a !== "muscu"); $("#bFrac").classList.toggle("cache", a !== "footing");
   if (prof) { $("#gTroncons").innerHTML = prof.troncons.map((c, i) => `<button class="case" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
     $("#gTroncons").querySelectorAll(".case").forEach(b => b.onclick = () => choisirTroncon(prof.troncons[Number(b.dataset.i)][1])); }
   else { $("#gSimple").innerHTML = SENS.map((c, i) => `<button class="case s${i + 1}" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
@@ -350,6 +372,53 @@ function gTerminer() { clearInterval(gTick); const t = (performance.now() - gT0)
   ajouter({ ghost: { contre: gNomF, formule: G.formule, dist: Math.round(d), temps: Math.round(t), res, track: gTrack } });
   enSeance = false; gpsStop(); if (verrou) verrou.release().catch(() => {}); $("#gMsg").textContent = res; setTimeout(() => { $("#fant").classList.add("cache"); afficher(); }, 6000); }
 $("#gStop").onclick = () => { if (!confirm("Terminer la course ?")) return; if (gTick) gTerminer(); else { $("#fant").classList.add("cache"); enSeance = false; gpsStop(); } };
+
+/* ===== 🔒 Verrou poche : écran noir allumé, 2 appuis rapides sur 🔓 pour sortir ===== */
+let vDernier = 0;
+document.querySelectorAll(".bVerrou").forEach(b => b.onclick = () => { $("#verrou").classList.remove("cache"); vib(80); });
+$("#verrou").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); });
+$("#vIcone").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); const n = Date.now(); if (n - vDernier < 600) { $("#verrou").classList.add("cache"); vDernier = 0; vib([40, 40, 40]); } else { vDernier = n; } });
+setInterval(() => { if ($("#verrou").classList.contains("cache")) return; const src = !$("#gCourse").classList.contains("cache") ? $("#gEcart").textContent : !$("#fSeance").classList.contains("cache") ? $("#fGros").textContent : ""; $("#vInfo").textContent = src; }, 500);
+
+/* ===== 👻 Pompes : fantôme = meilleure séance ayant atteint l'objectif (repos compris) ===== */
+const CARNET_POMPES = [{"nom": "Carnet 02/11 20:20", "tl": [1.3, 2.2, 3.0, 3.8, 4.6, 5.4, 6.3, 7.1, 7.9, 8.8, 74.4, 75.3, 76.1, 76.9, 77.7, 78.5, 79.3, 80.1, 80.9, 81.8, 147.7, 149.4, 150.3, 151.2, 152.2, 153.2, 154.2, 155.1, 156.2, 157.2, 222.8, 223.7, 224.5, 225.3, 226.2, 227.2, 228.2, 229.2, 230.2, 231.1, 232.0, 233.0]}, {"nom": "Carnet 05/11 05:26", "tl": [1.6, 2.5, 3.3, 4.2, 5.0, 6.0, 6.9, 7.9, 8.8, 9.7, 10.6, 11.6, 167.2, 168.4, 169.5, 170.6, 171.6, 172.6, 173.6, 174.6, 175.7, 176.8, 179.0, 181.6, 337.2, 338.1, 339.1, 340.0, 340.9, 341.9, 342.9, 343.8, 345.8, 346.8, 347.8, 349.0]}, {"nom": "Carnet 05/11 05:40", "tl": [1.1, 2.1, 2.9, 3.8, 4.6, 5.4, 6.4, 7.3, 8.2, 9.1, 10.0, 11.0, 118.6, 119.5, 120.4, 121.4, 122.4, 124.2, 125.2, 126.2, 127.2, 128.2, 129.3, 131.7, 238.1, 239.2, 240.2, 241.1, 242.1, 243.1, 244.0, 245.0, 246.0, 247.0, 248.0, 249.0]}, {"nom": "Carnet 05/11 18:04", "tl": [2.0, 2.9, 3.8, 4.7, 5.5, 6.4, 7.2, 8.0, 8.9, 9.7, 10.5, 11.4, 210.4, 211.4, 212.3, 215.4, 216.4, 217.3, 218.3, 219.3, 220.3, 221.4, 223.7, 224.7, 424.9, 425.9, 426.9, 427.8, 428.7, 429.6, 430.6, 431.5, 432.4, 433.9, 435.0, 436.1, 634.6, 635.4, 636.3, 637.2, 638.1, 639.3, 640.3, 641.2, 642.1, 643.1, 644.1, 645.2, 843.5, 844.4, 845.2, 846.0, 846.8, 847.6, 848.4, 849.2, 850.0, 850.8, 852.4, 854.5, 1053.2, 1054.0, 1054.8, 1055.6, 1056.3, 1057.1, 1057.9, 1058.8, 1059.6, 1060.4, 1061.4, 1062.4, 1261.3, 1262.1, 1262.9, 1263.7, 1264.5, 1265.4, 1266.2, 1267.0, 1267.7, 1268.6, 1269.6, 1270.7, 1469.5, 1470.6, 1471.5, 1472.4, 1473.3, 1474.1, 1475.1, 1476.0, 1477.0, 1478.0, 1479.0, 1480.0]}, {"nom": "Carnet 06/11 04:50", "tl": [2.2, 3.1, 4.0, 4.8, 5.7, 6.6, 7.5, 8.3, 9.2, 10.1, 11.1, 12.0, 227.6, 228.7, 229.7, 230.8, 231.8, 232.8, 233.8, 234.9, 236.0, 237.0, 238.0, 239.1, 455.3, 456.5, 457.5, 458.4, 459.3, 460.3, 461.2, 462.1, 463.2, 464.1, 465.1, 466.1, 683.9, 684.9, 685.9, 687.2, 688.4, 689.5, 690.7, 691.9, 692.9, 694.0, 695.3, 696.7, 912.4, 913.5, 914.4, 915.3, 916.3, 917.2, 918.1, 918.9, 919.8, 920.7, 921.9, 923.0]}, {"nom": "Carnet 07/11 19:33", "tl": [1.2, 2.1, 3.1, 4.0, 4.8, 5.6, 6.5, 7.4, 8.2, 9.1, 10.0, 11.0, 210.4, 211.4, 212.2, 213.1, 213.9, 214.8, 215.7, 216.6, 217.4, 218.3, 219.1, 220.1, 419.7, 420.6, 421.5, 422.3, 423.1, 424.0, 424.9, 425.7, 426.6, 427.5, 428.4, 429.3, 628.5, 629.4, 630.4, 631.4, 632.3, 633.2, 635.1, 636.1, 637.0, 638.0, 638.9, 639.9, 839.2, 840.1, 840.9, 841.7, 842.6, 843.4, 844.3, 845.1, 845.9, 846.8, 847.7, 848.6, 1048.0, 1048.9, 1049.6, 1050.4, 1051.3, 1052.3, 1053.3, 1054.2, 1056.1, 1057.1, 1058.2, 1061.8, 1262.8, 1263.8, 1264.7, 1265.7, 1266.6, 1267.6, 1268.6, 1269.6, 1270.5, 1271.5, 1272.4, 1273.5, 1473.3, 1474.3, 1475.3, 1476.3, 1477.3, 1478.3, 1479.4, 1480.4, 1481.4, 1482.4, 1483.3, 1484.3, 1683.2, 1684.1, 1685.0, 1685.9, 1686.8, 1687.8, 1688.7, 1690.5, 1691.5, 1692.5, 1693.4, 1694.6, 1894.1, 1895.1, 1896.3, 1897.3, 1898.4, 1899.5, 1900.5, 1901.6, 1902.6, 1903.5, 1904.5, 1905.6, 2105.4, 2106.2, 2107.2, 2108.1, 2109.0, 2109.9, 2110.8, 2111.6, 2112.5, 2113.3, 2114.2, 2115.1, 2314.3, 2315.2, 2316.1, 2316.9, 2317.7, 2318.5, 2319.4, 2320.2, 2321.2, 2322.0, 2322.9, 2323.9, 2523.2, 2524.2, 2525.0, 2525.8, 2526.7, 2527.6, 2528.5, 2529.4, 2530.2, 2531.1, 2532.0, 2532.9, 2732.6, 2733.5, 2734.4, 2735.2, 2736.0, 2736.8, 2737.6, 2738.5, 2739.3, 2740.2, 2741.0, 2742.0]}];   // séances du Carnet (07/11 : 168 pompes…), temps cumulés à chaque pompe
+function pompesSeances() { const l = CARNET_POMPES.map(x => ({ nom: x.nom, tl: x.tl })); lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.tl && n.pompes.tl.length) l.push({ nom: new Date(n.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + hh(n.t).slice(0, 5), tl: n.pompes.tl }); })); return l; }
+function pompesFantome(obj) { let best = null; pompesSeances().forEach(s => { if (s.tl.length >= obj && (!best || s.tl[obj - 1] < best.tl[obj - 1])) best = s; }); return best; }
+let PO = { obj: 100 }; try { PO = Object.assign(PO, JSON.parse(localStorage.getItem("pompes-opt") || "{}")); } catch (e) {}
+function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO)); } catch (e) {}
+  $("#pObj").innerHTML = [30, 50, 100, 150, 200].map(v => `<button class="chip" data-v="${v}" aria-pressed="${PO.obj == v}">${v}</button>`).join("");
+  $("#pObj").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.obj = Number(b.dataset.v); pReglage(); });
+  const f = pompesFantome(PO.obj); $("#pFant").innerHTML = f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."; }
+$("#bPompes").onclick = () => { $("#pomp").classList.remove("cache"); $("#pReglage").classList.remove("cache"); $("#pSeance").classList.add("cache"); pReglage(); };
+$("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
+let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
+const pNow = () => (performance.now() - pT0) / 1000;
+function pFantReps(t) { if (!pF) return 0; let n = 0; while (n < pF.tl.length && pF.tl[n] <= t) n++; return n; }
+function pMaj() { const t = pNow(), n = pTl.length;
+  $("#pGros").textContent = pPhase === "repos" ? gm(t - pDebutRepos) : (pCur ? pCur.d.length : 0);
+  $("#pPhase").textContent = pPhase === "repos" ? "Repos — série " + (pSeries.length + 1) + " ensuite" : pPhase === "serie" ? "Série " + (pSeries.length + 1) : "Touche pour la 1re pompe";
+  if (pF) { const ecR = n - pFantReps(t), ecS = n ? pF.tl[Math.min(n, pF.tl.length) - 1] - pTl[n - 1] : 0;
+    $("#pEcart").textContent = "👻 " + (ecR >= 0 ? "+" : "−") + Math.abs(ecR) + " pompe" + (Math.abs(ecR) > 1 ? "s" : "") + (n ? " · " + (ecS >= 0 ? Math.round(ecS) + " s d'avance" : Math.round(-ecS) + " s de retard") : "");
+    $("#pEcart").style.color = ecR >= 0 ? "#2e8b57" : "#c0392b";
+    const prochain = pF.tl[n]; $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t) + (pPhase === "repos" && prochain != null ? (prochain > t ? " — le fantôme repart dans " + gm(prochain - t) : " — le fantôme est reparti !") : ""); }
+  else $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t); }
+$("#pGo").onclick = () => { pF = pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
+  $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + gm(pF.tl[PO.obj - 1]) : "");
+  pT0 = performance.now(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); };
+$("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!enSeance || $("#pSeance").classList.contains("cache")) return; const now = performance.now();
+  if (now - pDern < 350) return; if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [] }; pDern = now - 1000; }
+  const v = (now - pDern) / 1000; pDern = now; pCur.d.push(pCur.d.length ? Math.round(v * 100) / 100 : 0); pTl.push(Math.round(pNow() * 10) / 10);
+  vib(25); pMaj(); if (pTl.length === PO.obj) pTerminer(); });
+$("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pSeries.push(pCur); pCur = null; pPhase = "repos"; pDebutRepos = pNow(); dire("Repos"); vib(150); pMaj(); };
+$("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.pop(); pMaj(); } };
+function pTerminer() { clearInterval(pTick); if (pCur && pCur.d.length) pSeries.push(pCur); pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {});
+  const n = pTl.length, t = n ? pTl[n - 1] : 0; let res = n + " pompes en " + gm(t) + ", " + pSeries.length + " série" + (pSeries.length > 1 ? "s" : "");
+  if (pF && n >= PO.obj) { const e = pF.tl[PO.obj - 1] - pTl[PO.obj - 1]; res += e >= 0 ? " — fantôme battu de " + gm(e) : " — le fantôme gagne de " + gm(-e); dire(e >= 0 ? "Bravo, fantôme battu" : "Le fantôme gagne, de " + Math.round(-e) + " secondes"); }
+  const repos = pSeries.slice(1).map((s, i) => Math.round(s.debut - (pSeries[i].debut + pSeries[i].d.reduce((a, b) => a + b, 0)))), rm = repos.length ? Math.round(repos.reduce((a, b) => a + b, 0) / repos.length) : 0;
+  if (n) ajouter({ pompes: { obj: PO.obj, total: n, temps: Math.round(t), series: pSeries.map(s => s.d.length), reposMoy: rm, tl: pTl, res } });
+  $("#pPhase").textContent = "Terminé"; $("#pGros").textContent = n; $("#pSous").textContent = res + (rm ? " — repos moyen " + gm(rm) : "");
+  setTimeout(() => { $("#pomp").classList.add("cache"); afficher(); }, 7000); }
+$("#pStop").onclick = () => { if (!confirm("Terminer la séance ?")) return; pTerminer(); };
 
 afficher();
 </script>
