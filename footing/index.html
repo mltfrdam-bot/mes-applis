@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v22</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v23</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div id="recInfo" class="cache" style="background:#fff;border:3px solid #c0392b;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
@@ -357,7 +357,7 @@ function recFermer(x) { REC.l.push([x.s, fcFraiche() || 0, Math.round(x.som / Ma
   if (Date.now() - recSauveT > 5000) { recSauveT = Date.now(); REC.maj = Date.now(); try { localStorage.setItem("h10-rec", JSON.stringify(REC)); } catch (e) {} } }
 function recResume(R) { const l = R.l, act = l.filter(x => x[2] > 120).length, fcs = l.map(x => x[1]).filter(Boolean), pics = l.reduce((a, x) => a + x[4], 0);
   return { duree: l.length, actif: act, pics, fcMoy: fcs.length ? Math.round(fcs.reduce((a, b) => a + b, 0) / fcs.length) : null, fcMax: fcs.length ? Math.max(...fcs) : null }; }
-function recMaj() { if (!REC) return; const tr = Math.floor((Date.now() - REC.debut) / 1000) - REC.l.length; const r = recResume(REC); $("#recVal").innerHTML = hm(r.duree) + " · ❤️ " + (fcFraiche() || "–") + " · ⚡ " + r.pics + " impacts · actif " + hm(r.actif) + (tr > 30 ? " · ⚠️ " + hm(tr) + " perdues" : "") + "<br><small style='font-size:13px;color:#5b6470'>" + accEtat() + "</small>"; }
+function recMaj() { if (!REC) return; const tr = Math.floor((Date.now() - REC.debut) / 1000) - REC.l.length; const r = recResume(REC); $("#recVal").innerHTML = hm(r.duree) + " · ❤️ " + (fcFraiche() || "–") + " · ⚡ " + r.pics + " impacts · actif " + hm(r.actif) + (tr > 30 ? " · ⚠️ " + hm(tr) + " perdues" : "") + "<br><small style='font-size:13px;color:#5b6470'>" + accEtat() + " · " + (verrou && !verrou.released ? "🔆 écran maintenu allumé" : "⚠️ l'écran peut se verrouiller") + "</small>"; }
 $("#bRec").onclick = async () => { if (REC) return; if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
   REC = { debut: Date.now(), act: actCourante(), l: [] }; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret();
   $("#recAct").textContent = actNom(REC.act) + " ✎"; $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); };
@@ -809,7 +809,9 @@ window.addEventListener("popstate", () => { if (retIgnore) { retIgnore = false; 
   if (ECRANS.some(ouvert)) history.pushState({ j: 1 }, ""); });
 try { const ec = JSON.parse(localStorage.getItem("pompes-encours") || "null"); if (ec && ec.tl && ec.tl.length) { localStorage.removeItem("pompes-encours"); const n = ec.tl.length;
   ajouter({ pompes: { obj: ec.obj, total: n, temps: Math.round(ec.tl[n - 1]), series: ec.series, tl: ec.tl, res: n + " pompes en " + gm(ec.tl[n - 1]) + " (séance coupée : appli fermée par le téléphone)" } }); } } catch (e) {}
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && enSeance) { garderEcran(); if (PO.test && !accOn) accDemarrer(); } });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState !== "visible") return;
+  if (enSeance) { garderEcran(); if (PO.test && !accOn) accDemarrer(); }
+  if (REC) { garderEcran(); if (!accOn) accDemarrer(); } });
 let recAttente = null;
 try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && r.l && r.l.length) {
   if (Date.now() - (r.maj || r.debut) < 3 * 3600e3) { recAttente = r; $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); $("#recAct").textContent = actNom(r.act) + " (coupé)";
