@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v26</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v27</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
@@ -392,7 +392,8 @@ function calPics(l, sep) { const p = []; let best = null; l.forEach(([t, m]) => 
 $("#bCal").onclick = async () => { if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
   CAL = { l: [] }; accDetReset(); await accDemarrer(); garderEcran(); $("#calInfo").classList.remove("cache"); $("#bCal").classList.add("cache");
   $("#calTxt").textContent = "Fais tes coups (par ex. 10), à ta force normale, puis touche « J'ai fini »."; $("#calFin").classList.remove("cache"); };
-setInterval(() => { if (CAL) $("#calVal").textContent = calPics(CAL.l, 600).filter(x => x[1] > 1500).length + " mouvements nets détectés"; }, 700);
+setInterval(() => { if (!CAL) return; const p = calPics(CAL.l, 600).filter(x => x[1] > 1400), c = p.filter(x => x[1] > IMP.seuil).length;
+  $("#calVal").innerHTML = c + " comptés au seuil " + gg(IMP.seuil) + " g <small style='font-weight:400'>(" + p.length + " mouvements en tout)</small><div style='font-size:16px;font-weight:600;line-height:1.6'>" + p.slice(-20).map(x => x[1] > IMP.seuil ? "<span style='color:#2e8b57'>" + gg(x[1]) + "✅</span>" : "<span style='color:#c0392b'>" + gg(x[1]) + "✗</span>").join(" · ") + "</div>"; }, 700);
 $("#calAnnul").onclick = () => { CAL = null; if (!REC) accArreter(); $("#calInfo").classList.add("cache"); $("#bCal").classList.remove("cache"); };
 $("#calFin").onclick = () => { if (!CAL) return; const n = parseInt(prompt("Combien de coups as-tu faits ?", "10"), 10); if (!n) return;
   const pics = calPics(CAL.l, 600).map(x => x[1]).sort((a, b) => b - a); CAL = null; if (!REC) accArreter();
