@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.27';
+const HUB_VERSION = '1.28';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -197,9 +197,10 @@ function ouvrirBase(){
 }
 async function tous(store){ const db=await ouvrirBase(); return promReq(db.transaction(store).objectStore(store).getAll()); }
 async function un(store,cle){ const db=await ouvrirBase(); return promReq(db.transaction(store).objectStore(store).get(cle)); }
-async function poser(store,val){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).put(val); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
-async function enlever(store,cle){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).delete(cle); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
-async function vider(store){ const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).clear(); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+let localSale=true;   // ⚡ quelque chose a pu changer depuis la dernière synchro
+async function poser(store,val){ if(store!=='meta') localSale=true; const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).put(val); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+async function enlever(store,cle){ if(store!=='meta') localSale=true; const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).delete(cle); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
+async function vider(store){ if(store!=='meta') localSale=true; const db=await ouvrirBase(); const t=db.transaction(store,'readwrite'); t.objectStore(store).clear(); return new Promise((ok,ko)=>{t.oncomplete=()=>ok();t.onerror=()=>ko(t.error);}); }
 async function lireMeta(cle,def){ const m=await un('meta',cle); return m?m.valeur:def; }
 const ecrireMeta=(cle,valeur)=>poser('meta',{cle,valeur});
 async function listeApps(){ return (await tous('apps')).sort((a,b)=>(a.ordre||0)-(b.ordre||0) || a.nom.localeCompare(b.nom)); }
@@ -401,7 +402,7 @@ async function vueAccueil(){
 }
 
 /* ---------- Ouvrir une appli ---------- */
-async function ouvrirApp(id, objet){ appliModifiee=true;
+async function ouvrirApp(id, objet){ appliModifiee=true; localSale=true;
   if(syncEnCours){ toast('☁️ Synchronisation en cours, un instant…'); while(syncEnCours) await new Promise(r=>setTimeout(r,200)); }
   const a=objet || await un('apps',id); if(!a) return;
   fermerApp();
@@ -625,7 +626,7 @@ function corpsIssue(s){
     '**Type** : '+TYPES_SIG[s.type]+'\n\n**Message** :\n> '+s.message.replace(/\n/g,'\n> ')+'\n\n'+
     (e.aucun?'**Endroit** : aucun endroit précis\n':'**Endroit touché** : '+(e.texte?'« '+e.texte+' »':'élément `'+e.balise+'`')+(e.section?' — section « '+e.section+' »':'')+'\n'+
       '- élément : `'+e.balise+'` — chemin : `'+e.chemin+'`\n- position : '+e.position.x+' % horizontal, '+e.position.y+' % vertical — écran '+e.ecran+'\n')+
-    '\n---\nEnvoyé depuis Mon Hub '+HUB_VERSION+' — écrit le '+dateFr(s.cree);
+    '\n---\nEnvoyé depuis Mon Hub '+HUB_VERSION+' — écrit le '+dateFr(s.cree)+'\n<!-- sig:'+s.cree+' -->';
 }
 let envoiEnCours=false;
 async function envoyerEnAttente(silencieux){
@@ -636,7 +637,11 @@ async function envoyerEnAttente(silencieux){
     const liste=(await tous('signalements')).filter(s=>s.statut==='attente').sort((a,b)=>a.cree.localeCompare(b.cree));
     if(!liste.length) return bilan;
     if(!reg.cle){ bilan.pasDeCle=true; return bilan; }
+    /* Déjà sur GitHub ? (ex. sauvegarde restaurée qui remet d'anciens signalements « en attente ») → on ne le renvoie pas */
+    let deja=[]; try{ const r0=await fetch('https://api.github.com/repos/'+reg.depot+'/issues?state=all&per_page=100',{headers:{'Authorization':'Bearer '+reg.cle,'Accept':'application/vnd.github+json'}}); if(r0.ok) deja=await r0.json(); }catch(e){}
     for(const s of liste){
+      const vu=deja.find(i=>{ const b=i.body||''; return b.includes('<!-- sig:'+s.cree+' -->') || (b.includes('écrit le '+dateFr(s.cree)) && b.includes(s.message.split('\n')[0].slice(0,30))); });
+      if(vu){ s.statut='envoye'; s.numero=vu.number; s.envoyeLe=s.envoyeLe||new Date().toISOString(); delete s.erreur; await poser('signalements', s); continue; }
       try{
         const r=await fetch('https://api.github.com/repos/'+reg.depot+'/issues',{method:'POST',headers:{'Authorization':'Bearer '+reg.cle,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
           body:JSON.stringify({title:('['+s.app.nom+'] '+TYPES_SIG[s.type].slice(3)+' : '+s.message.replace(/\s+/g,' ')).slice(0,90), body:corpsIssue(s)})});
@@ -1321,8 +1326,10 @@ async function synchroniser(manuel){
   syncEnCours=true; iconeSync('encours');
   let message='☁️ Déjà à jour';
   try{
-    for(let essai=0; essai<3; essai++){
-      const local=await fabriquerSauvegarde(), h=empreinte(local);
+    /* ⚡ Rien n'a bougé ici depuis la dernière synchro : on demande seulement au nuage s'il a du nouveau (très léger), sans refaire toute la sauvegarde */
+    let rienIci=false; if(!manuel && !localSale){ const et0=await appelServeur(cfg,{action:'etat'}); rienIci=(et0.rev||0)===(cfg.rev||0); }
+    if(!rienIci) for(let essai=0; essai<3; essai++){
+      const local=await fabriquerSauvegarde(), h=empreinte(local); localSale=false;
       const et=await appelServeur(cfg,{action:'etat'});
       const localModif = h!==cfg.hash, distantModif = (et.rev||0)!==(cfg.rev||0);
       if(!localModif && !distantModif) break;
@@ -1683,7 +1690,10 @@ function installAide(){
 async function installer(){ if(!invitationInstall) return; invitationInstall.prompt(); await invitationInstall.userChoice; invitationInstall=null; proteger(); vueAccueil(); }
 
 /* ---------- Mise à jour du hub lui-même ---------- */
+let derniereVerifVersion=0;
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && navigator.onLine!==false && Date.now()-derniereVerifVersion>600000) verifierVersionHub(); });
 async function verifierVersionHub(){
+  derniereVerifVersion=Date.now();
   try{
     const r=await fetch('version.json?t='+Date.now(),{cache:'no-store'}); if(!r.ok) return;
     const j=await r.json();
