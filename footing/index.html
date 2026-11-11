@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v15</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v16</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -78,7 +78,7 @@
   <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Repère</button></div>
   <table id="tab"></table>
   <div class="ligne"><button class="main" id="envoyer">📤 Envoyer à Claude</button><button class="sec" id="copier" style="flex:0 0 auto">Copier</button></div>
-  <div class="ligne"><button class="sec" id="nouvelle">Nouvelle séance</button></div>
+  <div class="ligne"><button class="sec" id="nouvelle">Nouvelle séance</button><button class="sec" id="bHisto">📜 Historique</button></div>
 </main>
 
 <div id="panneau" class="cache"><div class="titre" id="pTitre"></div><div class="compte"><i id="pCompte"></i></div><div class="grille" id="pGrille"></div><div class="ligne"><button class="sec" id="pPasser">Passer ›</button></div></div>
@@ -126,6 +126,9 @@
       <div id="gInfo" style="font-size:20px"></div><div id="gMsg" style="font-size:18px;color:#5b6470"></div></div>
   </div>
 </div>
+<div id="histo" class="cache" style="position:fixed;inset:0;z-index:9;background:#f6f7f9;overflow:auto;padding:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h1 style="margin:0">📜 Historique</h1><button class="sec" id="hFermer" style="flex:0 0 auto">Retour</button></div>
+  <div class="chips" id="hFiltre" style="margin:10px 0"></div><table id="hTab"></table></div>
 <div id="verrou" class="cache" style="position:fixed;inset:0;z-index:50;background:#000;touch-action:none">
   <div style="position:absolute;top:12px;right:12px;text-align:center;color:#666;font-size:12px"><div id="vIcone" style="width:72px;height:72px;border:2px solid #444;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:34px">🔓</div>2 appuis rapides</div>
   <div id="vInfo" style="position:absolute;bottom:30px;left:0;right:0;text-align:center;color:#555;font-size:28px;font-weight:700"></div>
@@ -149,6 +152,8 @@
     <label class="opt">Repos visé (signal de reprise)</label><div class="chips" id="pRepos"></div>
     <div id="pSeanceReg">
     <label class="opt">Objectif (pompes au total)</label><div class="chips" id="pObj"></div>
+    <label class="opt">Fantôme</label><div class="chips" id="pSrc"><button class="chip" data-v="auto">🏆 Le meilleur (auto)</button><button class="chip" data-v="choix">📜 Choisir dans l'historique</button></div>
+    <div id="pHisto" class="cache" style="max-height:260px;overflow:auto;margin-top:6px"></div>
     <div id="pFant" class="aide" style="margin:10px 0;font-size:15px"></div>
     <div class="aide" style="margin:10px 0">Touche l'écran à chaque pompe (comme dans le Carnet). « Fin de série » lance le repos ; pendant le repos, ta 1re pompe relance la série suivante. Le fantôme, c'est ta meilleure séance qui a atteint ce nombre, repos compris.</div>
     <div class="ligne"><button class="main" id="pGo" style="font-size:22px;padding:18px">▶ Démarrer</button><button class="sec" id="pAnnul" style="flex:0 0 auto">Retour</button></div>
@@ -461,7 +466,9 @@ setInterval(() => { if ($("#verrou").classList.contains("cache")) return; const 
 
 /* ===== 👻 Pompes : fantôme = meilleure séance ayant atteint l'objectif (repos compris) ===== */
 const CARNET_POMPES = [{"nom": "Carnet 02/11 20:20", "tl": [1.3, 2.2, 3.0, 3.8, 4.6, 5.4, 6.3, 7.1, 7.9, 8.8, 74.4, 75.3, 76.1, 76.9, 77.7, 78.5, 79.3, 80.1, 80.9, 81.8, 147.7, 149.4, 150.3, 151.2, 152.2, 153.2, 154.2, 155.1, 156.2, 157.2, 222.8, 223.7, 224.5, 225.3, 226.2, 227.2, 228.2, 229.2, 230.2, 231.1, 232.0, 233.0]}, {"nom": "Carnet 05/11 05:26", "tl": [1.6, 2.5, 3.3, 4.2, 5.0, 6.0, 6.9, 7.9, 8.8, 9.7, 10.6, 11.6, 167.2, 168.4, 169.5, 170.6, 171.6, 172.6, 173.6, 174.6, 175.7, 176.8, 179.0, 181.6, 337.2, 338.1, 339.1, 340.0, 340.9, 341.9, 342.9, 343.8, 345.8, 346.8, 347.8, 349.0]}, {"nom": "Carnet 05/11 05:40", "tl": [1.1, 2.1, 2.9, 3.8, 4.6, 5.4, 6.4, 7.3, 8.2, 9.1, 10.0, 11.0, 118.6, 119.5, 120.4, 121.4, 122.4, 124.2, 125.2, 126.2, 127.2, 128.2, 129.3, 131.7, 238.1, 239.2, 240.2, 241.1, 242.1, 243.1, 244.0, 245.0, 246.0, 247.0, 248.0, 249.0]}, {"nom": "Carnet 05/11 18:04", "tl": [2.0, 2.9, 3.8, 4.7, 5.5, 6.4, 7.2, 8.0, 8.9, 9.7, 10.5, 11.4, 210.4, 211.4, 212.3, 215.4, 216.4, 217.3, 218.3, 219.3, 220.3, 221.4, 223.7, 224.7, 424.9, 425.9, 426.9, 427.8, 428.7, 429.6, 430.6, 431.5, 432.4, 433.9, 435.0, 436.1, 634.6, 635.4, 636.3, 637.2, 638.1, 639.3, 640.3, 641.2, 642.1, 643.1, 644.1, 645.2, 843.5, 844.4, 845.2, 846.0, 846.8, 847.6, 848.4, 849.2, 850.0, 850.8, 852.4, 854.5, 1053.2, 1054.0, 1054.8, 1055.6, 1056.3, 1057.1, 1057.9, 1058.8, 1059.6, 1060.4, 1061.4, 1062.4, 1261.3, 1262.1, 1262.9, 1263.7, 1264.5, 1265.4, 1266.2, 1267.0, 1267.7, 1268.6, 1269.6, 1270.7, 1469.5, 1470.6, 1471.5, 1472.4, 1473.3, 1474.1, 1475.1, 1476.0, 1477.0, 1478.0, 1479.0, 1480.0]}, {"nom": "Carnet 06/11 04:50", "tl": [2.2, 3.1, 4.0, 4.8, 5.7, 6.6, 7.5, 8.3, 9.2, 10.1, 11.1, 12.0, 227.6, 228.7, 229.7, 230.8, 231.8, 232.8, 233.8, 234.9, 236.0, 237.0, 238.0, 239.1, 455.3, 456.5, 457.5, 458.4, 459.3, 460.3, 461.2, 462.1, 463.2, 464.1, 465.1, 466.1, 683.9, 684.9, 685.9, 687.2, 688.4, 689.5, 690.7, 691.9, 692.9, 694.0, 695.3, 696.7, 912.4, 913.5, 914.4, 915.3, 916.3, 917.2, 918.1, 918.9, 919.8, 920.7, 921.9, 923.0]}, {"nom": "Carnet 07/11 19:33", "tl": [1.2, 2.1, 3.1, 4.0, 4.8, 5.6, 6.5, 7.4, 8.2, 9.1, 10.0, 11.0, 210.4, 211.4, 212.2, 213.1, 213.9, 214.8, 215.7, 216.6, 217.4, 218.3, 219.1, 220.1, 419.7, 420.6, 421.5, 422.3, 423.1, 424.0, 424.9, 425.7, 426.6, 427.5, 428.4, 429.3, 628.5, 629.4, 630.4, 631.4, 632.3, 633.2, 635.1, 636.1, 637.0, 638.0, 638.9, 639.9, 839.2, 840.1, 840.9, 841.7, 842.6, 843.4, 844.3, 845.1, 845.9, 846.8, 847.7, 848.6, 1048.0, 1048.9, 1049.6, 1050.4, 1051.3, 1052.3, 1053.3, 1054.2, 1056.1, 1057.1, 1058.2, 1061.8, 1262.8, 1263.8, 1264.7, 1265.7, 1266.6, 1267.6, 1268.6, 1269.6, 1270.5, 1271.5, 1272.4, 1273.5, 1473.3, 1474.3, 1475.3, 1476.3, 1477.3, 1478.3, 1479.4, 1480.4, 1481.4, 1482.4, 1483.3, 1484.3, 1683.2, 1684.1, 1685.0, 1685.9, 1686.8, 1687.8, 1688.7, 1690.5, 1691.5, 1692.5, 1693.4, 1694.6, 1894.1, 1895.1, 1896.3, 1897.3, 1898.4, 1899.5, 1900.5, 1901.6, 1902.6, 1903.5, 1904.5, 1905.6, 2105.4, 2106.2, 2107.2, 2108.1, 2109.0, 2109.9, 2110.8, 2111.6, 2112.5, 2113.3, 2114.2, 2115.1, 2314.3, 2315.2, 2316.1, 2316.9, 2317.7, 2318.5, 2319.4, 2320.2, 2321.2, 2322.0, 2322.9, 2323.9, 2523.2, 2524.2, 2525.0, 2525.8, 2526.7, 2527.6, 2528.5, 2529.4, 2530.2, 2531.1, 2532.0, 2532.9, 2732.6, 2733.5, 2734.4, 2735.2, 2736.0, 2736.8, 2737.6, 2738.5, 2739.3, 2740.2, 2741.0, 2742.0]}];   // séances du Carnet (07/11 : 168 pompes…), temps cumulés à chaque pompe
-function pompesSeances() { const l = CARNET_POMPES.map(x => ({ nom: x.nom, tl: x.tl })); lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.tl && n.pompes.tl.length) l.push({ nom: new Date(n.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + hh(n.t).slice(0, 5), tl: n.pompes.tl }); })); return l; }
+function pompesSeances() { const l = CARNET_POMPES.map(x => ({ nom: x.nom, tl: x.tl, cle: x.nom })); lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.tl && n.pompes.tl.length) l.push({ nom: new Date(n.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + hh(n.t).slice(0, 5), tl: n.pompes.tl, cle: "a" + n.t, diffs: n.pompes.diffs }); })); return l; }
+function pChoisi() { if (PO.src !== "choix" || !PO.cle) return null; return pompesSeances().find(x => x.cle === PO.cle) || null; }
+const pFT = (k) => pF && pF.tl.length >= k ? pF.tl[k - 1] : null;
 function pompesFantome(obj) { let best = null; pompesSeances().forEach(s => { if (s.tl.length >= obj && (!best || s.tl[obj - 1] < best.tl[obj - 1])) best = s; }); return best; }
 let PO = { obj: 100, test: false, repos: 90 }; try { PO = Object.assign(PO, JSON.parse(localStorage.getItem("pompes-opt") || "{}")); } catch (e) {}
 function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO)); } catch (e) {}
@@ -470,6 +477,13 @@ function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO
   $("#pTest").setAttribute("aria-pressed", PO.test ? "true" : "false"); $("#pTestAide").classList.toggle("cache", !PO.test);
   $("#pObj").innerHTML = [30, 50, 100, 150, 200].map(v => `<button class="chip" data-v="${v}" aria-pressed="${PO.obj == v}">${v}</button>`).join("");
   $("#pObj").querySelectorAll(".chip").forEach(b => b.onclick = () => { PO.obj = Number(b.dataset.v); pReglage(); });
+  $("#pSrc").querySelectorAll(".chip").forEach(b => { b.setAttribute("aria-pressed", (PO.src || "auto") === b.dataset.v); b.onclick = () => { PO.src = b.dataset.v; pReglage(); }; });
+  $("#pHisto").classList.toggle("cache", PO.src !== "choix");
+  if (PO.src === "choix") { const l = pompesSeances().slice().reverse();
+    $("#pHisto").innerHTML = "<table><tr><th>Séance</th><th>Pompes</th><th>Temps</th><th>Séries</th></tr>" + l.map(x => { const sr = decouper(x.tl).map(z => z.length); const sel = x.cle === PO.cle;
+      return `<tr data-c="${x.cle}" style="${sel ? "background:#e6e0f5;font-weight:700" : ""}"><td>${sel ? "✅ " : ""}${x.nom.replace("Carnet ", "Carnet<br>")}</td><td>${x.tl.length}</td><td>${gm(x.tl[x.tl.length - 1])}</td><td style="font-size:12px">${sr.join("-")}</td></tr>`; }).join("") + "</table>";
+    $("#pHisto").querySelectorAll("tr[data-c]").forEach(r => r.onclick = () => { PO.cle = r.dataset.c; pReglage(); }); }
+  const ch = pChoisi(); if (ch) { $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>👻 Fantôme choisi : <b>" + ch.nom + "</b> — " + ch.tl.length + " pompes en " + gm(ch.tl[ch.tl.length - 1]) + (ch.tl.length >= PO.obj ? " (" + PO.obj + " en " + gm(ch.tl[PO.obj - 1]) + ")" : ""); return; }
   const f = pompesFantome(PO.obj); $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>" + (f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."); }
 $("#bPompes").onclick = () => { $("#pomp").classList.remove("cache"); $("#pReglage").classList.remove("cache"); $("#pSeance").classList.add("cache"); pReglage(); };
 $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
@@ -546,8 +560,8 @@ function pMaj() { const t = pNow(), n = pTl.length;
   else $("#pSous").textContent = n + " / " + PO.obj + " pompes — " + gm(t); }
 $("#ptEtat").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (!(h10 && h10.gatt.connected)) h10Connecter(); else if (!accOn) accDemarrer(); });
 { const base = pMaj; pMaj = function () { base(); if (enSeance) { pReposSignal(pNow()); pGuideMaj(); } }; }
-$("#pGo").onclick = () => { pF = pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
-  $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + gm(pF.tl[PO.obj - 1]) : "");
+$("#pGo").onclick = () => { pF = pChoisi() || pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
+  $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + (pFT(PO.obj) != null ? gm(pFT(PO.obj)) : pF.nom) : "");
   pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!enSeance || $("#pSeance").classList.contains("cache")) return; const now = performance.now();
   if (now - pDern < 350) return; if (!$("#pDiff").classList.contains("cache")) pDiffFermer(); if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [], p0: now }; const f = fcFraiche(); if (f) { pCur.fcDepart = f; } pDern = now - 1000; }
@@ -555,7 +569,7 @@ $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!en
   if (PJ) { if (!PJ.debut) PJ.debut = Date.now(); if (!PJ.cours) PJ.cours = Date.now(); PJ.tlCours = (PJ.tlCours || []).concat(Math.round(pjT() * 10) / 10); pjSauver(); }
   vib(25); pSauverCours(); pMaj();
   if (pRecord && !pRecordBattu && pCur.d.length > pRecord) { pRecordBattu = true; bandeau("🏆 Record battu sur une série : " + pCur.d.length); }
-  if (!PJ && !pObjAnnonce && pTl.length === PO.obj) { pObjAnnonce = true; const e = pF ? pF.tl[PO.obj - 1] - pTl[PO.obj - 1] : null;
+  if (!PJ && !pObjAnnonce && pTl.length === PO.obj) { pObjAnnonce = true; const e = pFT(PO.obj) != null ? pFT(PO.obj) - pTl[PO.obj - 1] : null;
     bandeau(e == null ? "🎯 " + PO.obj + " atteint — continue !" : e >= 0 ? "👻 Fantôme battu de " + gm(e) + " — continue !" : "🎯 " + PO.obj + " atteint — continue !"); } });
 $("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); if (pCur.d.length > pRecord) pRecord = pCur.d.length; pRecordBattu = false; pCur = null; pPhase = "repos"; pDebutRepos = pNow(); pSignal = 0; pSauverCours(); dire("Repos"); vib(150); pDiffOuvrir(); pMaj(); };
 function pSauverCours() { if (PJ) return; try { localStorage.setItem("pompes-encours", JSON.stringify({ t: Date.now(), obj: PO.obj, tl: pTl, series: pSeries.map(x => x.d.length).concat(pCur && pCur.d.length ? [pCur.d.length] : []) })); } catch (e) {} }
@@ -567,7 +581,7 @@ function pTestTxt(series) { const l = series.filter(x => x.polar != null); if (!
 function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.background = ""; try { localStorage.removeItem("pompes-encours"); } catch (e) {} if (pCur && pCur.d.length) { pFermerSerie(pCur); pSeries.push(pCur); } pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {}); pleinEcran(false);
   if (PJ) { pjFinSeance(); $("#pStop").textContent = "⏹ Terminer"; $("#pSeance").classList.add("cache"); $("#pReglage").classList.remove("cache"); pTypeMaj(); return; }
   const n = pTl.length, t = n ? pTl[n - 1] : 0; let res = n + " pompes en " + gm(t) + ", " + pSeries.length + " série" + (pSeries.length > 1 ? "s" : "");
-  if (pF && n >= PO.obj) { const e = pF.tl[PO.obj - 1] - pTl[PO.obj - 1]; res += e >= 0 ? " — fantôme battu de " + gm(e) : " — le fantôme gagne de " + gm(-e); dire(e >= 0 ? "Bravo, fantôme battu" : "Le fantôme gagne, de " + Math.round(-e) + " secondes"); }
+  if (pFT(PO.obj) != null && n >= PO.obj) { const e = pFT(PO.obj) - pTl[PO.obj - 1]; res += e >= 0 ? " — fantôme battu de " + gm(e) : " — le fantôme gagne de " + gm(-e); dire(e >= 0 ? "Bravo, fantôme battu" : "Le fantôme gagne, de " + Math.round(-e) + " secondes"); }
   const repos = pSeries.slice(1).map((s, i) => Math.round(s.debut - (pSeries[i].debut + pSeries[i].d.reduce((a, b) => a + b, 0)))), rm = repos.length ? Math.round(repos.reduce((a, b) => a + b, 0) / repos.length) : 0;
   const sers = pSeries.slice(), fcs = sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]);
   if (n) setTimeout(() => { const test = sers.some(x => x.polar != null) ? sers.map(x => ({ tap: x.d.length, polar: x.polar, acc: x.acc })) : null;
@@ -640,7 +654,16 @@ function pjClore() { const moi = PJ.seances.reduce((a, s) => a + s.tl.length, 0)
 if (PJ && PJ.cours) pjFinSeance();
 if (PJ && PJ.debut && Date.now() - PJ.debut > 24 * 3600 * 1000) setTimeout(pjClore, 0);
 /* ===== Bouton retour : reste dans l'appli tant qu'un écran est ouvert ===== */
-const ECRANS = ["#verrou", "#panneau", "#pomp", "#fant", "#frac"];
+let hAct = "";
+function histo() { const c = lire().slice().reverse(), acts = [...new Set(c.map(x => x.act || "footing"))];
+  $("#hFiltre").innerHTML = `<button class="chip" data-a="" aria-pressed="${!hAct}">Tout</button>` + acts.map(a => `<button class="chip" data-a="${a}" aria-pressed="${hAct === a}">${actNom(a)}</button>`).join("");
+  $("#hFiltre").querySelectorAll(".chip").forEach(b => b.onclick = () => { hAct = b.dataset.a; histo(); });
+  $("#hTab").innerHTML = "<tr><th>Date</th><th>Activité</th><th>Notes</th></tr>" + c.filter(x => !hAct || (x.act || "footing") === hAct).map(x => { const n = x.notes, fin = n.length ? n[n.length - 1].t : x.debut;
+    return `<tr data-id="${x.id}"><td>${new Date(x.debut).toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" })} ${hh(x.debut).slice(0, 5)}<br><small>${gm((fin - x.debut) / 1000)}</small></td><td>${actNom(x.act || "footing")}</td><td>${n.length} ›</td></tr><tr class="cache" data-det="${x.id}"><td colspan="3" style="background:#fafbfc;font-size:13px">${n.map(z => hh(z.t).slice(0, 5) + " — " + libelle(z).replace(/</g, "&lt;") + (z.fc ? " ❤️" + z.fc : "")).join("<br>") || "—"}</td></tr>`; }).join("");
+  $("#hTab").querySelectorAll("tr[data-id]").forEach(r => r.onclick = () => $(`tr[data-det="${r.dataset.id}"]`).classList.toggle("cache")); }
+$("#bHisto").onclick = () => { $("#histo").classList.remove("cache"); histo(); };
+$("#hFermer").onclick = () => $("#histo").classList.add("cache");
+const ECRANS = ["#verrou", "#panneau", "#pomp", "#fant", "#frac", "#histo"];
 const ouvert = (id) => !$(id).classList.contains("cache");
 let retIgnore = false;
 function retSurveiller() { const un = ECRANS.some(ouvert);
@@ -653,6 +676,7 @@ window.addEventListener("popstate", () => { if (retIgnore) { retIgnore = false; 
   else if (ouvert("#pomp")) { clearInterval(pjTick); $("#pomp").classList.add("cache"); afficher(); }
   else if (ouvert("#fant")) $("#fant").classList.add("cache");
   else if (ouvert("#frac")) $("#frac").classList.add("cache");
+  else if (ouvert("#histo")) $("#histo").classList.add("cache");
   if (ECRANS.some(ouvert)) history.pushState({ j: 1 }, ""); });
 try { const ec = JSON.parse(localStorage.getItem("pompes-encours") || "null"); if (ec && ec.tl && ec.tl.length) { localStorage.removeItem("pompes-encours"); const n = ec.tl.length;
   ajouter({ pompes: { obj: ec.obj, total: n, temps: Math.round(ec.tl[n - 1]), series: ec.series, tl: ec.tl, res: n + " pompes en " + gm(ec.tl[n - 1]) + " (séance coupée : appli fermée par le téléphone)" } }); } } catch (e) {}
