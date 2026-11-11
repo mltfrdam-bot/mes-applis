@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v24</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v25</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button></div>
@@ -65,9 +65,17 @@
     <div style="font-weight:800;color:#5b4b8a">🎯 RÉGLAGE DES IMPACTS</div>
     <div id="calTxt" style="font-size:16px;margin:6px 0">Fais tes coups (par ex. 10), à ta force normale, puis touche « J'ai fini ».</div>
     <div id="calVal" style="font-size:30px;font-weight:800"></div>
+<div class="sensBox" style="background:#f6f7f9;border-radius:10px;padding:6px;margin:6px 0">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px"><button class="sec sMoins" style="flex:0 0 auto;padding:10px 12px">− sensible</button><b class="sVal" style="font-size:22px;min-width:70px"></b><button class="sec sPlus" style="flex:0 0 auto;padding:10px 12px">+ sensible</button></div>
+      <div style="font-size:15px;margin-top:4px"><label><input type="checkbox" class="sBip"> 🔔 bip à chaque impact compté</label></div>
+      <div class="sDer" style="font-size:20px;font-weight:800;margin-top:4px"></div></div>
     <div class="ligne"><button class="main" id="calFin">J'ai fini</button><button class="sec" id="calAnnul" style="flex:0 0 auto">Annuler</button></div></div>
   <div id="recInfo" class="cache" style="background:#fff;border:3px solid #c0392b;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
     <div style="font-weight:800;color:#c0392b">● ENREGISTREMENT H10 — <span id="recAct"></span></div><div id="recVal" style="font-size:22px;font-weight:800;margin:4px 0"></div>
+    <div class="sensBox" style="background:#f6f7f9;border-radius:10px;padding:6px;margin:6px 0">
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px"><button class="sec sMoins" style="flex:0 0 auto;padding:10px 12px">− sensible</button><b class="sVal" style="font-size:22px;min-width:70px"></b><button class="sec sPlus" style="flex:0 0 auto;padding:10px 12px">+ sensible</button></div>
+      <div style="font-size:15px;margin-top:4px"><label><input type="checkbox" class="sBip"> 🔔 bip à chaque impact compté</label></div>
+      <div class="sDer" style="font-size:20px;font-weight:800;margin-top:4px"></div></div>
     <div class="ligne"><button class="sec bVerrou" style="flex:0 0 auto">🔒</button><button class="main" id="recStop" style="background:#c0392b">⏹ Arrêter et enregistrer</button></div></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
 
@@ -390,8 +398,19 @@ $("#calFin").onclick = () => { if (!CAL) return; const n = parseInt(prompt("Comb
   if (pics.length < n) { $("#calTxt").innerHTML = "Je n'ai vu que " + pics.length + " mouvements pour " + n + " coups : la ceinture ne sent pas assez certains coups. Seuil mis au minimum (1,3 g)."; IMP = { seuil: 1300, rearme: 1150 }; }
   else { const fort = pics[n - 1], faible = pics[n] || 1250, s2 = Math.round((fort + faible) / 2); IMP = { seuil: s2, rearme: Math.round(1000 + (s2 - 1000) * 0.6) };
     $("#calTxt").innerHTML = "✅ Seuil réglé à <b>" + (s2 / 1000).toFixed(2).replace(".", ",") + " g</b> (avant : 2,50 g).<br>Tes " + n + " coups : " + pics.slice(0, n).map(v => (v / 1000).toFixed(1).replace(".", ",")).join(" · ") + " g<br>Plus fort mouvement non compté : " + (faible / 1000).toFixed(1).replace(".", ",") + " g" + (fort - faible < 150 ? "<br>⚠️ Écart faible : coups et déplacements se ressemblent, refais un essai." : ""); }
-  try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} $("#calVal").textContent = ""; $("#calFin").classList.add("cache"); setTimeout(() => { $("#bCal").classList.remove("cache"); }, 500); };
-function accEchantillon(m, t, a) { accN++; if (CAL) CAL.l.push([t, m]); if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
+  IMP.bip = IMP.bip !== false; try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} sensMaj(); $("#calVal").textContent = ""; $("#calFin").classList.add("cache"); setTimeout(() => { $("#bCal").classList.remove("cache"); }, 500); };
+/* sensibilité en direct : chaque mouvement net est mesuré, compté ou non, avec bip si compté */
+let pic = null, derPic = null, derBipT = 0;
+function sensMaj() { document.querySelectorAll(".sVal").forEach(x => x.textContent = (IMP.seuil / 1000).toFixed(1).replace(".", ",") + " g");
+  document.querySelectorAll(".sBip").forEach(x => x.checked = IMP.bip !== false);
+  document.querySelectorAll(".sDer").forEach(x => x.innerHTML = derPic ? "Dernier : " + (derPic.m / 1000).toFixed(1).replace(".", ",") + " g " + (derPic.m > IMP.seuil ? "<span style='color:#2e8b57'>✅ compté</span>" : "<span style='color:#c0392b'>✗ pas compté</span>") : ""); }
+function sensRegler(d) { IMP.seuil = Math.min(4000, Math.max(1200, Math.round((IMP.seuil + d) / 100) * 100)); IMP.rearme = Math.round(1000 + (IMP.seuil - 1000) * 0.6); try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} vib(20); sensMaj(); }
+document.querySelectorAll(".sMoins").forEach(b => b.onclick = () => sensRegler(+100));
+document.querySelectorAll(".sPlus").forEach(b => b.onclick = () => sensRegler(-100));
+document.querySelectorAll(".sBip").forEach(b => b.onchange = () => { IMP.bip = b.checked; try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} sensMaj(); });
+function picSuivre(m, t) { if (!pic) { if (m > 1250) pic = { m, t }; return; } if (m > pic.m) pic.m = m; if (m < 1150) { if (pic.m > 1400 && t - (derPic ? derPic.t : 0) > 400) { derPic = { m: pic.m, t };
+      if (pic.m > IMP.seuil && IMP.bip !== false && Date.now() - derBipT > 300) { derBipT = Date.now(); bip(1); vib(40); } sensMaj(); } pic = null; } }
+function accEchantillon(m, t, a) { accN++; if (CAL) CAL.l.push([t, m]); if (CAL || REC) picSuivre(m, t); if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
   const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
   D.c.push(m); if (D.c.length > nc) D.c.shift(); D.l.push(m); if (D.l.length > nl) D.l.shift();
   const v = D.c.reduce((x, y) => x + y, 0) / D.c.length - D.l.reduce((x, y) => x + y, 0) / D.l.length;
@@ -842,6 +861,7 @@ try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && 
     $("#recReprendre").onclick = async () => { if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
       REC = recAttente; recAttente = null; REC.coupures = (REC.coupures || 0) + 1; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret(); $("#recAct").textContent = actNom(REC.act); }; }
   else { localStorage.removeItem("h10-rec"); ajouter({ h10rec: { debut: r.debut, act: r.act, res: recResume(r), l: r.l, coupe: true } }); } } } catch (e) {}
+sensMaj();
 afficher();
 </script>
 </body>
