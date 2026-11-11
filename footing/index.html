@@ -241,11 +241,13 @@ const lsL = (k) => { try { return JSON.parse(localStorage.getItem(k) || "[]"); }
 const lsE = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 let actsEdit = false;
 function toutesActs() { const l = ACTS.slice(); lsL("acts-perso").forEach(a => { if (!l.some(x => x[0] === a)) l.push([a, actNom(a)]); }); return l; }
-function dessinerActs() { const cur = actCourante(), mas = lsL("acts-masquees");
+function dessinerActs() { let cur = actCourante(), mas = lsL("acts-masquees");
+  // activité courante retirée ou masquée (ex. l'ancien « Chantier ») : on repasse sur la 1re visible
+  if (!actsEdit && (mas.includes(cur) || !toutesActs().some(x => x[0] === cur))) { const v = toutesActs().find(x => !mas.includes(x[0])); if (v) { cur = v[0]; try { localStorage.setItem("act-courante", cur); } catch (e) {} const r = courseActuelle(false); if (r.d && r.d.act !== cur) { if (r.d.notes.length) r.d.close = true; else r.d.act = cur; ecrire(r.c); } } }
   if (actsEdit) { $("#acts").innerHTML = toutesActs().map(x => { const m = mas.includes(x[0]); return `<button class="act" data-e="${x[0].replace(/"/g, "")}" style="${m ? "opacity:.45;text-decoration:line-through" : ""}">${x[1]} ${m ? "↺" : "✕"}</button>`; }).join("") + '<button class="act" data-f="1" style="background:#2e8b57;color:#fff">✓ Fini</button>';
     $("#acts").querySelectorAll(".act[data-e]").forEach(b => b.onclick = () => { const a = b.dataset.e, l = lsL("acts-masquees"), i = l.indexOf(a); if (i >= 0) l.splice(i, 1); else l.push(a); lsE("acts-masquees", l); dessinerActs(); });
     $("#acts").querySelector("[data-f]").onclick = () => { actsEdit = false; dessinerActs(); }; return; }
-  const l = toutesActs().filter(x => !mas.includes(x[0]) || x[0] === cur); if (!l.some(x => x[0] === cur)) l.push([cur, actNom(cur)]);
+  const l = toutesActs().filter(x => !mas.includes(x[0]));
   $("#acts").innerHTML = l.map(x => `<button class="act" data-a="${x[0].replace(/"/g, "")}" aria-pressed="${x[0] === cur}">${x[1]}</button>`).join("") + '<button class="act" data-a="+">➕ Autre</button><button class="act" data-a="⚙" title="Masquer des activités">⚙️</button>';
   $("#acts").querySelectorAll(".act").forEach(b => b.onclick = () => { let a = b.dataset.a; if (a === "⚙") { actsEdit = true; dessinerActs(); return; }
     if (a === "+") { a = (prompt("Nom de l'activité :") || "").trim(); if (!a) return; const p = lsL("acts-perso"); if (!p.includes(a) && !ACTS.some(x => x[0] === a)) { p.push(a); lsE("acts-perso", p); } const m = lsL("acts-masquees"); if (m.includes(a)) lsE("acts-masquees", m.filter(x => x !== a)); }
