@@ -38,11 +38,18 @@
   <button class="niv n4" data-n="4">😤 J'accélère</button>
   <button class="niv n5" data-n="5">🥵 À fond</button>
   <div class="dernier" id="dernier"></div>
-  <div class="ligne"><button class="sec" id="note">📝 Note</button><button class="sec" id="km">📍 Je passe un km</button></div>
+  <button class="main" id="micro" style="font-size:22px;padding:16px">🎤 Note vocale</button>
+  <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Je passe un km</button></div>
   <table id="tab"></table>
   <div class="ligne"><button class="main" id="envoyer">📤 Envoyer à Claude</button><button class="sec" id="copier" style="flex:0 0 auto">Copier</button></div>
   <div class="ligne"><button class="sec" id="nouvelle">Nouvelle course</button></div>
 </main>
+<div id="voix" style="display:none;position:fixed;inset:0;background:rgba(246,247,249,.98);padding:16px;flex-direction:column;gap:12px;z-index:9">
+  <div id="vEtat" style="font-size:20px;font-weight:700">🟢 Je t'écoute… parle</div>
+  <div id="vTexte" style="flex:1;background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:12px;font-size:20px;line-height:1.4;overflow:auto;user-select:text" contenteditable="true"></div>
+  <p class="aide">Tu peux corriger le texte en le touchant. Dis « virgule », « point » pour la ponctuation.</p>
+  <div class="ligne"><button class="main" id="vOk" style="font-size:22px;padding:18px">✓ Enregistrer</button><button class="sec" id="vNon" style="flex:0 0 auto">✕ Annuler</button></div>
+</div>
 <script>
 const $ = (s) => document.querySelector(s);
 const NOMS = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
@@ -55,12 +62,27 @@ function courseActuelle(creer) { const c = lire(), d = c[c.length - 1]; const de
   if (d && !d.close && Date.now() - der < 2 * 3600e3) return { c, d };
   if (!creer) return { c, d: null }; const n = { id: Date.now(), debut: Date.now(), notes: [] }; c.push(n); return { c, d: n }; }
 function ajouter(entree) { const { c, d } = courseActuelle(true); d.notes.push(Object.assign({ t: Date.now() }, entree)); ecrire(c); try { navigator.vibrate(80); } catch (e) {} afficher(); }
-function libelle(x) { return x.n ? NOMS[x.n] : x.km ? "📍 Km " + x.km : "📝 " + x.note; }
+function libelle(x) { return x.n ? NOMS[x.n] : x.km ? "📍 Km " + x.km : (x.voix ? "🎤 " : "📝 ") + x.note; }
 function afficher() { const { d } = courseActuelle(false); $("#jour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
   if (!d || !d.notes.length) { $("#tab").innerHTML = '<tr><td class="vide">Rien de noté pour cette course.</td></tr>'; $("#dernier").textContent = ""; return; }
   const l = d.notes[d.notes.length - 1]; $("#dernier").textContent = "Noté à " + hh(l.t) + " : " + libelle(l);
   $("#tab").innerHTML = "<tr><th>Heure</th><th>Ressenti / note</th><th></th></tr>" + d.notes.map((x, i) => `<tr><td>${hh(x.t)}</td><td>${libelle(x).replace(/</g, "&lt;")}</td><td class="x"><button class="sec" data-i="${i}" style="padding:4px 8px">✕</button></td></tr>`).join("");
   $("#tab").querySelectorAll("button[data-i]").forEach(b => b.onclick = () => { if (!confirm("Effacer cette ligne ?")) return; const r = courseActuelle(false); r.d.notes.splice(Number(b.dataset.i), 1); ecrire(r.c); afficher(); }); }
+/* 🎤 Note vocale : la voix devient du texte tout de suite ; l'heure notée est celle du début */
+const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reco = null, vDebut = 0, vFini = "", vActif = false;
+function vAfficher(provisoire) { $("#vTexte").textContent = (vFini + " " + (provisoire || "")).trim(); }
+function vEcouter() { if (!Reco) return; reco = new Reco(); reco.lang = "fr-FR"; reco.interimResults = true; reco.continuous = false; reco.maxAlternatives = 1;
+  reco.onresult = (e) => { let p = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) vFini = (vFini + " " + r[0].transcript).trim(); else p += r[0].transcript; } vAfficher(p); };
+  reco.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { vActif = false; $("#vEtat").textContent = "🔴 Micro refusé : autorise le micro, ou écris ta note"; } else if (e.error === "network") { vActif = false; $("#vEtat").textContent = "🔴 Pas de réseau : écris ta note ou utilise le micro du clavier"; } };
+  reco.onend = () => { if (vActif) { try { reco.start(); } catch (x) {} } else if (!$("#vEtat").textContent.startsWith("🔴")) $("#vEtat").textContent = "⏸ Écoute arrêtée : vérifie et enregistre"; };
+  try { reco.start(); } catch (x) {} }
+function vFermer() { vActif = false; try { reco && reco.stop(); } catch (x) {} $("#voix").style.display = "none"; }
+$("#micro").onclick = () => { vDebut = Date.now(); vFini = ""; vAfficher(""); $("#voix").style.display = "flex";
+  if (!Reco) { $("#vEtat").textContent = "🔴 Dictée indisponible ici : écris ou utilise le micro du clavier"; $("#vTexte").focus(); return; }
+  $("#vEtat").textContent = "🟢 Je t'écoute… parle"; vActif = true; vEcouter(); try { navigator.vibrate(60); } catch (x) {} };
+$("#vOk").onclick = () => { const t = $("#vTexte").textContent.trim(); vFermer(); if (t) { const { c, d } = courseActuelle(true); d.notes.push({ t: vDebut, note: t, voix: true }); ecrire(c); try { navigator.vibrate(80); } catch (x) {} afficher(); } };
+$("#vNon").onclick = vFermer;
 document.querySelectorAll(".niv").forEach(b => b.onclick = () => ajouter({ n: Number(b.dataset.n) }));
 $("#note").onclick = () => { const t = prompt("Ta note :"); if (t && t.trim()) ajouter({ note: t.trim() }); };
 $("#km").onclick = () => { const { d } = courseActuelle(false); const n = (d ? d.notes.filter(x => x.km).length : 0) + 1; ajouter({ km: n }); };
