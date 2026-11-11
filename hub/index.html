@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.28';
+const HUB_VERSION = '1.29';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -214,6 +214,7 @@ function HubPourApp(appId){
     enregistrer: (nom, contenu, type) => enregistrerFichier(nom, contenu, type),
     ouvrirLien: (url) => { if(!/^(sms|tel|mailto|geo|https?):/i.test(String(url))) return false; const l=document.createElement('a'); l.href=url; l.rel='noopener'; if(/^https?:/i.test(url)) l.target='_blank'; document.body.appendChild(l); HTMLAnchorElement.prototype.click.call(l); setTimeout(()=>l.remove(),1000); return true; },
     imprimer: (html) => imprimerPage(html),
+    dicter: (rappels) => dicterPourApp(rappels||{}),
     contact: (navigator.contacts && navigator.contacts.select) ? ((plusieurs) => navigator.contacts.select(['name','tel'], {multiple:!!plusieurs})) : undefined,
     registre: {
       lire: async cle => { const e=await un('registre',cle); return e?e.valeur:undefined; },
@@ -224,6 +225,23 @@ function HubPourApp(appId){
   };
 }
 window.HubPourApp = HubPourApp;
+/* 🎤 Dictée pour les applis : c'est le hub qui écoute (le micro marche mal depuis une appli rangée).
+   rappels : texte(fini, provisoire), etat(message, ok), fin(). Renvoie {arreter()}. Écoute jusqu'à arreter(), même avec des pauses. */
+function dicterPourApp(r){
+  const Reco=window.SpeechRecognition||window.webkitSpeechRecognition; const appel=(f,...a)=>{ try{ r[f]&&r[f](...a); }catch(e){} };
+  if(!Reco){ appel('etat','Dictée indisponible sur cet appareil',false); appel('fin'); return {arreter(){}}; }
+  let actif=true, fini='', reco=null;
+  const lancer=()=>{ reco=new Reco(); reco.lang='fr-FR'; reco.interimResults=true; reco.continuous=false;
+    reco.onstart=()=>appel('etat','Je t\'écoute… parle',true);
+    reco.onresult=(e)=>{ let p=''; for(let i=e.resultIndex;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal) fini=(fini+' '+x[0].transcript).trim(); else p+=x[0].transcript; } appel('texte',fini,p); };
+    reco.onerror=(e)=>{ if(['not-allowed','service-not-allowed'].includes(e.error)){ actif=false; appel('etat','Micro refusé : autorise le micro pour Mon Hub (cadenas à côté de l\'adresse, ou Paramètres → Applis → Chrome → Autorisations)',false); }
+      else if(e.error==='network'){ actif=false; appel('etat','Pas de réseau : la dictée a besoin d\'internet',false); }
+      else if(e.error==='audio-capture'){ actif=false; appel('etat','Micro introuvable ou déjà utilisé',false); } };
+    reco.onend=()=>{ if(actif){ try{ lancer(); }catch(x){} } else appel('fin'); };
+    try{ reco.start(); }catch(x){ appel('etat','Impossible de démarrer la dictée : '+x.message,false); } };
+  lancer();
+  return { arreter(){ actif=false; try{ reco&&reco.stop(); }catch(e){} } };
+}
 /* 🖨 Une appli demande d'imprimer une page (rapport → « Enregistrer au format PDF ») : c'est le hub qui imprime, sinon Android n'imprimerait que l'écran visible */
 function imprimerPage(html){
   try{
@@ -504,6 +522,22 @@ async function afficherControle(){
 }
 
 /* ---------- Écran Santé ---------- */
+/* 📦 Poids de chaque appli dans une sauvegarde : code, localStorage, chaque base (et sa plus grosse table) */
+const mo=(n)=>n>=1e6?(n/1e6).toFixed(1).replace('.',',')+' Mo':Math.round(n/1e3)+' Ko';
+async function poidsDonnees(){
+  const apps=await tous('apps'), out=[];
+  for(const a of apps){
+    const p=PREFIXE+a.id+':'; let ls=0; Object.keys(localStorage).filter(k=>k.startsWith(p)).forEach(k=>ls+=(localStorage.getItem(k)||'').length);
+    const bases=[]; for(const b of await basesDeApp(a.id)){ try{ const e=await exporterBase(b.name); const tables=(e.magasins||[]).map(m=>[m.nom,JSON.stringify(m.lignes).length]).sort((x,y)=>y[1]-x[1]); bases.push({nom:b.name.slice(p.length)||b.name, taille:JSON.stringify(e).length, grosse:tables[0]||null}); }catch(x){ bases.push({nom:b.name, taille:0, erreur:String(x)}); } await new Promise(r=>setTimeout(r,0)); }
+    const code=JSON.stringify(a).length, total=code+ls+bases.reduce((t,b)=>t+b.taille,0);
+    out.push({id:a.id, nom:a.nom, code, localStorage:ls, bases, total});
+  }
+  return {le:new Date().toISOString(), applis:out.sort((x,y)=>y.total-x.total)};
+}
+function tableauPoids(p){ const tot=p.applis.reduce((t,a)=>t+a.total,0);
+  return '<div class="tablo"><table><tr><th>Appli</th><th>Total</th><th>Code</th><th>Données</th><th>Plus gros morceau</th></tr>'+p.applis.map(a=>{ const g=a.bases.slice().sort((x,y)=>y.taille-x.taille)[0];
+    return '<tr><td>'+esc(a.nom)+'</td><td><b>'+mo(a.total)+'</b></td><td>'+mo(a.code)+'</td><td>'+mo(a.total-a.code)+'</td><td>'+(g&&g.taille>a.localStorage?esc(g.nom)+(g.grosse?' › '+esc(g.grosse[0])+' ('+mo(g.grosse[1])+')':''):a.localStorage?'mémoire simple ('+mo(a.localStorage)+')':'—')+'</td></tr>'; }).join('')+
+    '<tr><td><b>Tout</b></td><td><b>'+mo(tot)+'</b></td><td colspan="3"></td></tr></table></div>'; }
 function vueSante(){
   montrer('sante', async ()=>{
     const apps=await listeApps(), l=await journal(), pts=await controleDemarrage();
@@ -514,15 +548,17 @@ function vueSante(){
       '<div class="carte"><h2>Fonctionnement des applis (30 jours)</h2><p class="aide">Appuie sur une ligne pour voir le détail des erreurs.</p><div class="tablo"><table><tr><th>Appli</th><th>Verdict</th><th>Ouvertures</th><th>Temps</th><th>Erreurs</th><th>Démarrage</th></tr>'+
       (bil.length?bil.map(x=>'<tr data-det="'+esc(x.a.id)+'"><td>'+esc(x.a.icone)+' '+esc(x.a.nom)+'</td><td class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':x.b.verdict==='stable'?'ok':'')+'">'+x.b.texte+'</td><td>'+x.b.ouvertures+'</td><td>'+duree(x.b.temps)+'</td><td>'+x.b.erreurs+'</td><td>'+(x.b.chargeMoy!=null?(x.b.chargeMoy/1000).toFixed(1).replace('.',',')+' s':'—')+'</td></tr>').join(''):'<tr><td colspan="6">Aucune appli pour l\'instant.</td></tr>')+
       '</table></div><p class="aide">✅ Stable : aucune erreur cette semaine · ⚠️ À surveiller : quelques erreurs ou démarrage lent · ❌ Problème : erreurs fréquentes ou ne démarre pas · 💤 Peu utilisée : pas ouverte depuis 30 jours.</p></div>'+
+      '<div class="carte"><h2>📦 Poids des données</h2><p class="aide">Montre ce qui rend tes sauvegardes lourdes, appli par appli.</p><button class="btn" id="bPoids">Calculer</button><div id="poids"></div></div>'+
       '<div class="carte" id="carteSignal"></div>'+
       '<div class="carte"><h2>📤 Rapport pour Claude</h2><p class="aide">Enregistre un fichier avec ce bilan, les dernières erreurs <b>et tes signalements 📍</b>. Envoie-le-moi : je saurai quoi corriger. Il ne contient aucune de tes données personnelles.</p><button class="btn" id="bRapport">📤 Enregistrer le rapport</button><span class="aide" style="display:block;margin:6px 0">Appui court : remplace le dernier rapport · appui long : nouveau fichier.</span> <button class="btn gris" id="bVider">Remettre les compteurs à zéro</button></div>';
+    $('#bPoids').onclick=async()=>{ $('#bPoids').disabled=true; $('#poids').innerHTML='<p class="aide">Calcul…</p>'; const p=await poidsDonnees(); await ecrireMeta('poids',p); $('#poids').innerHTML=tableauPoids(p); $('#bPoids').disabled=false; };
     $('#contenu').querySelectorAll('[data-det]').forEach(tr=>tr.onclick=()=>{ const x=bil.find(y=>y.a.id===tr.dataset.det);
       info(x.a.icone+' '+x.a.nom, '<p class="'+(x.b.verdict==='probleme'?'ko':x.b.verdict==='surveiller'?'att':'ok')+'">'+x.b.texte+' — '+esc(x.b.explic)+'</p>'+
         (x.b.ressources?'<p class="aide">'+x.b.ressources+' élément(s) internet non chargé(s) (normal sans réseau).</p>':'')+
         (x.b.derniers.length?'<div class="tablo"><table><tr><th>Quand</th><th>Version</th><th>Message</th></tr>'+x.b.derniers.map(m=>'<tr><td>'+dateFr(m.quand)+'</td><td>'+esc(m.version)+'</td><td>'+esc(m.message)+(m.ligne?' (ligne '+m.ligne+')':'')+'</td></tr>').join('')+'</table></div>':'<p>Aucune erreur notée.</p>')); });
     afficherCarteSignal();
     fabriquerRapport=async()=>{
-      const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
+      const rapport={format:'mon-hub-rapport-sante', hub:HUB_VERSION, creeLe:new Date().toISOString(), poids:await lireMeta('poids',null), appareil:navigator.userAgent, installe:!!estInstalle(), controle:pts,
         applis:bil.map(x=>({id:x.a.id, nom:x.a.nom, version:x.a.version, source:x.a.source, verdict:x.b.verdict, explication:x.b.explic, ouvertures30j:x.b.ouvertures, tempsSecondes:x.b.temps, erreurs30j:x.b.erreurs, demarrageMoyenMs:x.b.chargeMoy, dernieresErreurs:x.b.derniers})),
         erreursHub:l.filter(e=>e.type==='erreur-hub').slice(-20),
         // 📍 signalements : tous ceux pas encore envoyés par GitHub, + les 10 derniers envoyés
@@ -1065,7 +1101,7 @@ const poignees={};
 let empreinteEnCours=null, appliModifiee=false, autoEnCours=false;
 /* 💾 Sauvegarde automatique : en revenant à l'accueil après être passé dans une appli (et quand le hub passe en arrière-plan),
    si quelque chose a changé, le fichier de la sauvegarde rapide est remplacé, sans question. */
-const autoActive=()=>{ try{ return localStorage.getItem('monhub-auto')!=='non'; }catch(e){ return true; } };
+const autoActive=()=>{ try{ return localStorage.getItem('monhub-auto')==='oui'; }catch(e){ return false; } };   // 1.29 : éteinte par défaut (sauvegardes trop lourdes)
 async function sauvegardeAuto(avecGeste){
   if(!appliModifiee || autoEnCours || !autoActive() || !choixDossierPossible()) return;
   let h=poignees.sauvegarde; if(!h){ const r=await lireMeta('sauvegardeRapide',null); if(!r || !r.handle) return; h=poignees.sauvegarde=r.handle; }

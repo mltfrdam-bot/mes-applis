@@ -74,12 +74,16 @@ let reco = null, vDebut = 0, vFini = "", vActif = false;
 function vAfficher(provisoire) { $("#vTexte").textContent = (vFini + " " + (provisoire || "")).trim(); }
 function vEcouter() { if (!Reco) return; reco = new Reco(); reco.lang = "fr-FR"; reco.interimResults = true; reco.continuous = false; reco.maxAlternatives = 1;
   reco.onresult = (e) => { let p = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) vFini = (vFini + " " + r[0].transcript).trim(); else p += r[0].transcript; } vAfficher(p); };
-  reco.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { vActif = false; $("#vEtat").textContent = "🔴 Micro refusé : autorise le micro, ou écris ta note"; } else if (e.error === "network") { vActif = false; $("#vEtat").textContent = "🔴 Pas de réseau : écris ta note ou utilise le micro du clavier"; } };
+  reco.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { vActif = false; vSecours("Micro refusé"); } else if (e.error === "network") { vActif = false; vSecours("Pas de réseau"); } };
   reco.onend = () => { if (vActif) { try { reco.start(); } catch (x) {} } else if (!$("#vEtat").textContent.startsWith("🔴")) $("#vEtat").textContent = "⏸ Écoute arrêtée : vérifie et enregistre"; };
   try { reco.start(); } catch (x) {} }
-function vFermer() { vActif = false; try { reco && reco.stop(); } catch (x) {} $("#voix").style.display = "none"; }
+let ctrlHub = null;
+function vFermer() { vActif = false; try { reco && reco.stop(); } catch (x) {} try { ctrlHub && ctrlHub.arreter(); } catch (x) {} ctrlHub = null; $("#voix").style.display = "none"; }
+function vSecours(m) { $("#vEtat").textContent = "🔴 " + m + " — écris ou touche le 🎤 du clavier"; const z = $("#vTexte"); z.focus(); }
 $("#micro").onclick = () => { vDebut = Date.now(); vFini = ""; vAfficher(""); $("#voix").style.display = "flex";
-  if (!Reco) { $("#vEtat").textContent = "🔴 Dictée indisponible ici : écris ou utilise le micro du clavier"; $("#vTexte").focus(); return; }
+  /* Dans le hub : c'est le hub qui écoute (le micro marche mal depuis une appli rangée) */
+  if (window.Hub && Hub.dicter) { $("#vEtat").textContent = "⏳ Ouverture du micro…"; ctrlHub = Hub.dicter({ texte: (f, p) => { vFini = f; vAfficher(p); }, etat: (m, ok) => { if (ok) $("#vEtat").textContent = "🟢 " + m; else vSecours(m); }, fin: () => {} }); try { navigator.vibrate(60); } catch (x) {} return; }
+  if (!Reco) { vSecours("Dictée indisponible ici"); return; }
   $("#vEtat").textContent = "🟢 Je t'écoute… parle"; vActif = true; vEcouter(); try { navigator.vibrate(60); } catch (x) {} };
 $("#vOk").onclick = () => { const t = $("#vTexte").textContent.trim(); vFermer(); if (t) { const { c, d } = courseActuelle(true); d.notes.push({ t: vDebut, note: t, voix: true }); ecrire(c); try { navigator.vibrate(80); } catch (x) {} afficher(); } };
 $("#vNon").onclick = vFermer;
