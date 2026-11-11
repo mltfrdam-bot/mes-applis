@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="color-scheme" content="light">
-<title>Footing</title>
+<title>Journal d'activité</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { background: #f6f7f9; }
@@ -26,12 +26,16 @@
   td.x { width: 1%; text-align: center; }
   .aide { font-size: 13px; color: #5b6470; margin: 0; }
   .vide { color: #5b6470; text-align: center; padding: 10px; }
+  .acts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .act { background: #fff; border: 1px solid #d9dce1; padding: 8px 10px; border-radius: 20px; font-size: 15px; }
+  .act[aria-pressed="true"] { background: #B5451B; border-color: #B5451B; color: #fff; font-weight: 700; }
 </style>
 </head>
 <body>
 <main>
-  <h1>🏃 Footing — ressentis <span id="jour"></span></h1>
-  <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche ton ressenti, range-le. L'heure est notée et je la cale sur ta montre COROS.</p>
+  <h1>📒 Journal d'activité <span id="jour"></span></h1>
+  <div class="acts" id="acts"></div>
+  <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. L'heure exacte est notée (je la cale sur ta montre COROS si besoin).</p>
   <button class="niv n1" data-n="1">😌 Très facile</button>
   <button class="niv n2" data-n="2">🙂 Facile</button>
   <button class="niv n3" data-n="3">😐 Normal</button>
@@ -39,10 +43,10 @@
   <button class="niv n5" data-n="5">🥵 À fond</button>
   <div class="dernier" id="dernier"></div>
   <button class="main" id="micro" style="font-size:22px;padding:16px">🎤 Note vocale</button>
-  <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Je passe un km</button></div>
+  <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Repère</button></div>
   <table id="tab"></table>
   <div class="ligne"><button class="main" id="envoyer">📤 Envoyer à Claude</button><button class="sec" id="copier" style="flex:0 0 auto">Copier</button></div>
-  <div class="ligne"><button class="sec" id="nouvelle">Nouvelle course</button></div>
+  <div class="ligne"><button class="sec" id="nouvelle">Nouvelle séance</button></div>
 </main>
 <div id="voix" style="display:none;position:fixed;inset:0;background:rgba(246,247,249,.98);padding:16px;flex-direction:column;gap:12px;z-index:9">
   <div id="vEtat" style="font-size:20px;font-weight:700">🟢 Je t'écoute… parle</div>
@@ -54,17 +58,25 @@
 const $ = (s) => document.querySelector(s);
 const NOMS = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
 const CLE = "footing-courses";
+const ACTS = [["footing", "🏃 Footing"], ["velo", "🚴 Vélo"], ["tennis", "🎾 Tennis"], ["muscu", "💪 Muscu"], ["marche", "🚶 Marche"], ["chantier", "🏗️ Chantier"]];
+const AVEC_KM = ["footing", "velo", "marche"];
+function actNom(a) { const x = ACTS.find(y => y[0] === a); return x ? x[1] : "✳️ " + (a || "Activité"); }
+function actChoisie() { try { return localStorage.getItem("act-courante") || "footing"; } catch (e) { return "footing"; } }
+function dessinerActs() { const cur = (courseActuelle(false).d || {}).act || actChoisie(), l = ACTS.slice(); if (!ACTS.some(x => x[0] === cur)) l.push([cur, actNom(cur)]);
+  $("#acts").innerHTML = l.map(x => `<button class="act" data-a="${x[0].replace(/"/g, "")}" aria-pressed="${x[0] === cur}">${x[1]}</button>`).join("") + '<button class="act" data-a="+">➕ Autre</button>';
+  $("#acts").querySelectorAll(".act").forEach(b => b.onclick = () => { let a = b.dataset.a; if (a === "+") { a = (prompt("Nom de l'activité :") || "").trim(); if (!a) return; }
+    try { localStorage.setItem("act-courante", a); } catch (e) {} const r = courseActuelle(false); if (r.d && r.d.act !== a) { if (r.d.notes.length) r.d.close = true; else r.d.act = a; ecrire(r.c); } afficher(); }); }
 const hh = (d) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 function lire() { try { return JSON.parse(localStorage.getItem(CLE) || "[]"); } catch (e) { return []; } }
 function ecrire(c) { try { localStorage.setItem(CLE, JSON.stringify(c)); } catch (e) {} }
 /* Une course = tout ce qui est noté sans pause de plus de 2 h. Rien à démarrer. */
 function courseActuelle(creer) { const c = lire(), d = c[c.length - 1]; const der = d && d.notes.length ? d.notes[d.notes.length - 1].t : d && d.debut;
-  if (d && !d.close && Date.now() - der < 2 * 3600e3) return { c, d };
-  if (!creer) return { c, d: null }; const n = { id: Date.now(), debut: Date.now(), notes: [] }; c.push(n); return { c, d: n }; }
+  if (d && !d.close && Date.now() - der < 2 * 3600e3) { if (!d.act) d.act = "footing"; return { c, d }; }
+  if (!creer) return { c, d: null }; const n = { id: Date.now(), debut: Date.now(), act: actChoisie(), notes: [] }; c.push(n); return { c, d: n }; }
 function ajouter(entree) { const { c, d } = courseActuelle(true); d.notes.push(Object.assign({ t: Date.now() }, entree)); ecrire(c); try { navigator.vibrate(80); } catch (e) {} afficher(); }
-function libelle(x) { return x.n ? NOMS[x.n] : x.km ? "📍 Km " + x.km : (x.voix ? "🎤 " : "📝 ") + x.note; }
-function afficher() { const { d } = courseActuelle(false); $("#jour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
-  if (!d || !d.notes.length) { $("#tab").innerHTML = '<tr><td class="vide">Rien de noté pour cette course.</td></tr>'; $("#dernier").textContent = ""; return; }
+function libelle(x) { return x.n ? NOMS[x.n] : x.km ? "📍 Km " + x.km : x.rep ? "📍 Repère " + x.rep : (x.voix ? "🎤 " : "📝 ") + x.note; }
+function afficher() { dessinerActs(); const { d } = courseActuelle(false); $("#jour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
+  if (!d || !d.notes.length) { $("#tab").innerHTML = '<tr><td class="vide">Rien de noté pour cette séance.</td></tr>'; $("#dernier").textContent = ""; return; }
   const l = d.notes[d.notes.length - 1]; $("#dernier").textContent = "Noté à " + hh(l.t) + " : " + libelle(l);
   $("#tab").innerHTML = "<tr><th>Heure</th><th>Ressenti / note</th><th></th></tr>" + d.notes.map((x, i) => `<tr><td>${hh(x.t)}</td><td>${libelle(x).replace(/</g, "&lt;")}</td><td class="x"><button class="sec" data-i="${i}" style="padding:4px 8px">✕</button></td></tr>`).join("");
   $("#tab").querySelectorAll("button[data-i]").forEach(b => b.onclick = () => { if (!confirm("Effacer cette ligne ?")) return; const r = courseActuelle(false); r.d.notes.splice(Number(b.dataset.i), 1); ecrire(r.c); afficher(); }); }
@@ -89,9 +101,10 @@ $("#vOk").onclick = () => { const t = $("#vTexte").textContent.trim(); vFermer()
 $("#vNon").onclick = vFermer;
 document.querySelectorAll(".niv").forEach(b => b.onclick = () => ajouter({ n: Number(b.dataset.n) }));
 $("#note").onclick = () => { const t = prompt("Ta note :"); if (t && t.trim()) ajouter({ note: t.trim() }); };
-$("#km").onclick = () => { const { d } = courseActuelle(false); const n = (d ? d.notes.filter(x => x.km).length : 0) + 1; ajouter({ km: n }); };
+document.addEventListener("DOMContentLoaded", () => {});
+$("#km").onclick = () => { const { d } = courseActuelle(false); const a = d ? d.act : actChoisie(); if (AVEC_KM.includes(a)) ajouter({ km: (d ? d.notes.filter(x => x.km).length : 0) + 1 }); else ajouter({ rep: (d ? d.notes.filter(x => x.rep).length : 0) + 1 }); };
 function texte() { const { d } = courseActuelle(false); const c = lire(), x = d || c[c.length - 1]; if (!x || !x.notes.length) return "";
-  return ["FOOTING — RESSENTIS — " + new Date(x.notes[0].t).toLocaleDateString("fr-FR"), ...x.notes.map(n => hh(n.t) + " " + (n.n ? n.n + " " + NOMS[n.n] : libelle(n)))].join("\n"); }
+  return [actNom(x.act || "footing").replace(/^\S+\s/, "").toUpperCase() + " — JOURNAL — " + new Date(x.notes[0].t).toLocaleDateString("fr-FR") + " (début " + hh(x.notes[0].t) + ")", ...x.notes.map(n => hh(n.t) + " " + (n.n ? n.n + " " + NOMS[n.n] : libelle(n)))].join("\n"); }
 $("#copier").onclick = () => { const t = texte(); if (!t) return; navigator.clipboard.writeText(t).then(() => { $("#copier").textContent = "Copié ✓"; setTimeout(() => $("#copier").textContent = "Copier", 2000); }); };
 $("#envoyer").onclick = async () => { const t = texte(); if (!t) return; try { await navigator.share({ text: t }); } catch (e) { try { await navigator.clipboard.writeText(t); } catch (x) {} $("#envoyer").textContent = "Copié : colle-le à Claude"; } };
 $("#nouvelle").onclick = () => { const r = courseActuelle(false); if (r.d) { r.d.close = true; ecrire(r.c); } afficher(); };

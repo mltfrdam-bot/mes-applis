@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.33';
+const HUB_VERSION = '1.34';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -228,18 +228,24 @@ window.HubPourApp = HubPourApp;
 /* 🎤 Dictée pour les applis : c'est le hub qui écoute (le micro marche mal depuis une appli rangée).
    rappels : texte(fini, provisoire), etat(message, ok), fin(). Renvoie {arreter()}. Écoute jusqu'à arreter(), même avec des pauses. */
 function dicterPourApp(r){
+  /* 1.34 : écoute CONTINUE (plus de coupure entre les phrases) + reconnaissance dans l'appareil quand Chrome le permet */
   const Reco=window.SpeechRecognition||window.webkitSpeechRecognition; const appel=(f,...a)=>{ try{ r[f]&&r[f](...a); }catch(e){} };
   if(!Reco){ appel('etat','Dictée indisponible sur cet appareil',false); appel('fin'); return {arreter(){}}; }
-  let actif=true, fini='', reco=null;
-  const lancer=()=>{ reco=new Reco(); reco.lang='fr-FR'; reco.interimResults=true; reco.continuous=false;
-    reco.onstart=()=>appel('etat','Je t\'écoute… parle',true);
-    reco.onresult=(e)=>{ let p=''; for(let i=e.resultIndex;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal) fini=(fini+' '+x[0].transcript).trim(); else p+=x[0].transcript; } appel('texte',fini,p); };
+  let actif=true, base='', reco=null, local=false;
+  const lancer=()=>{ reco=new Reco(); reco.lang='fr-FR'; reco.interimResults=true; reco.continuous=true; reco.maxAlternatives=1;
+    if(local){ try{ reco.processLocally=true; }catch(e){} }
+    let finSession='';
+    reco.onstart=()=>appel('etat','Je t\'écoute… parle'+(local?' (dans l\'appareil)':''),true);
+    reco.onresult=(e)=>{ let f='', p='';                       // on relit TOUS les résultats de la session (évite les doublons d'Android)
+      for(let i=0;i<e.results.length;i++){ const x=e.results[i]; if(x.isFinal){ const t=x[0].transcript.trim(); if(f && t.toLowerCase().startsWith(f.toLowerCase())) f=t; else if(t && !f.toLowerCase().endsWith(t.toLowerCase())) f+=(f?' ':'')+t; } else p=x[0].transcript; }
+      finSession=f; appel('texte',(base+' '+f).trim(),p); };
     reco.onerror=(e)=>{ if(['not-allowed','service-not-allowed'].includes(e.error)){ actif=false; appel('etat','Micro refusé : autorise le micro pour Mon Hub (cadenas à côté de l\'adresse, ou Paramètres → Applis → Chrome → Autorisations)',false); }
-      else if(e.error==='network'){ actif=false; appel('etat','Pas de réseau : la dictée a besoin d\'internet',false); }
-      else if(e.error==='audio-capture'){ actif=false; appel('etat','Micro introuvable ou déjà utilisé',false); } };
-    reco.onend=()=>{ if(actif){ try{ lancer(); }catch(x){} } else appel('fin'); };
+      else if(e.error==='network'){ if(!local){ actif=false; appel('etat','Pas de réseau : la dictée a besoin d\'internet',false); } }
+      else if(e.error==='audio-capture'){ actif=false; appel('etat','Micro introuvable ou déjà utilisé',false); }
+      else if(e.error==='language-not-supported' && local){ local=false; } };
+    reco.onend=()=>{ base=(base+' '+finSession).trim(); if(actif){ try{ lancer(); }catch(x){} } else appel('fin'); };   // relance seulement si Chrome a coupé (silence long)
     try{ reco.start(); }catch(x){ appel('etat','Impossible de démarrer la dictée : '+x.message,false); } };
-  lancer();
+  (async()=>{ try{ if(Reco.available){ const d=await Reco.available({langs:['fr-FR'],processLocally:true}); if(d==='available') local=true; else if(d==='downloadable' && Reco.install) Reco.install({langs:['fr-FR'],processLocally:true}).catch(()=>{}); } }catch(e){} lancer(); })();
   return { arreter(){ actif=false; try{ reco&&reco.stop(); }catch(e){} } };
 }
 /* 🖨 Une appli demande d'imprimer une page (rapport → « Enregistrer au format PDF ») : c'est le hub qui imprime, sinon Android n'imprimerait que l'écran visible */
