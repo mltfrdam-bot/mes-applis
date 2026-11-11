@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v18</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v19</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -173,7 +173,7 @@
         <div id="ptTotal" style="font-size:17px;font-weight:700;margin-top:6px"></div><div id="ptEtat" style="font-size:14px;color:#5b6470;padding:6px;text-decoration:underline"></div></div>
       <div id="pTestLive" style="font-size:24px;font-weight:700;color:#c0392b"></div>
       <div id="pGuide" style="width:92%"><div id="pgTxt" style="font-size:16px;font-weight:700"></div><svg id="pgSvg" viewBox="0 0 300 64" style="width:100%;height:64px"></svg></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
-    <div class="ligne" id="pBarre" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button></div>
+    <div class="ligne" id="pBarre" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button><button class="sec" id="pPlus" style="flex:0 0 auto">+1</button></div>
     <div id="pDiff" class="cache" style="padding:8px 6px"><div style="text-align:center;font-weight:700;margin-bottom:6px">Cette série était…</div>
       <div style="display:flex;gap:4px"><button class="sec pD" data-d="0" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😌</span><br>Très facile</button><button class="sec pD" data-d="1" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">🙂</span><br>Facile</button><button class="sec pD" data-d="2" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😐</span><br>Moyen</button><button class="sec pD" data-d="3" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">😤</span><br>Difficile</button><button class="sec pD" data-d="4" style="flex:1;padding:8px 2px;font-size:13px;line-height:1.2"><span style="font-size:28px">🥵</span><br>Très difficile</button></div></div>
   </div>
@@ -609,12 +609,20 @@ $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!en
     bandeau(e == null ? "🎯 " + PO.obj + " atteint — continue !" : e >= 0 ? "👻 Fantôme battu de " + gm(e) + " — continue !" : "🎯 " + PO.obj + " atteint — continue !"); } });
 $("#pFinSerie").onclick = () => { if (pPhase !== "serie" || !pCur || !pCur.d.length) return; pFermerSerie(pCur); pSeries.push(pCur); if (pCur.d.length > pRecord) pRecord = pCur.d.length; pRecordBattu = false; pCur = null; pPhase = "repos"; pDebutRepos = pNow(); pSignal = 0; pSauverCours(); dire("Repos"); vib(150); pDiffOuvrir(); pMaj(); };
 function pSauverCours() { if (PJ) return; try { localStorage.setItem("pompes-encours", JSON.stringify({ t: Date.now(), obj: PO.obj, tl: pTl, series: pSeries.map(x => x.d.length).concat(pCur && pCur.d.length ? [pCur.d.length] : []) })); } catch (e) {} }
+/* +1 : une descente faite mais pas prise par l'écran (en série : maintenant ; au repos : ajoutée à la série finie) */
+$("#pPlus").onclick = () => { if (!enSeance) return; let sr = null, dt = 0;
+  if (pPhase === "serie" && pCur && pCur.d.length) { sr = pCur; dt = Math.round((performance.now() - pDern) / 10) / 100; pDern = performance.now(); }
+  else if (pPhase === "repos" && pSeries.length) { sr = pSeries[pSeries.length - 1]; const l = sr.d.slice(1); dt = l.length ? Math.round(l.reduce((a, b) => a + b, 0) / l.length * 100) / 100 : 1; }
+  if (!sr) return; sr.d.push(dt); sr.man = (sr.man || 0) + 1;
+  const tl = pPhase === "serie" ? Math.round(pNow() * 10) / 10 : Math.round(((pTl[pTl.length - 1] || 0) + dt) * 10) / 10; pTl.push(tl);
+  if (PJ && PJ.debut) { const tc = PJ.tlCours || []; PJ.tlCours = tc.concat(pPhase === "serie" ? Math.round(pjT() * 10) / 10 : Math.round(((tc[tc.length - 1] || 0) + dt) * 10) / 10); pjSauver(); }
+  vib([30, 30]); pSauverCours(); pMaj(); };
 $("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.pop(); if (PJ && PJ.tlCours) { PJ.tlCours.pop(); pjSauver(); } pMaj(); } };
 function pFermerSerie(sr) { const now = performance.now(); sr.p1 = now; sr.fcMax = fcMaxEntre(sr.p0, now) || fcFraiche(); sr.fcFin = fcFraiche();
   if (accOn) setTimeout(() => { sr.polar = accCompte(sr.p0 - 2000, sr.p1 + 1500); const a0 = sr.p0 - 3000; sr.acc = accBuf.filter(x => x[0] >= a0 && x[0] <= sr.p1 + 2000).map(x => [Math.round(x[0] - sr.p0), x[2], x[3], x[4]]);
     sr.ev = accEv.filter(t => t >= a0 && t <= sr.p1 + 2000).map(t => Math.round(t - sr.p0)); }, 1600); }
 function testSerie(x) { let c = 0; const taps = x.d.map(v => Math.round((c += v) * 1000));
-  return { tap: x.d.length, polar: x.polar, diff: x.diff ?? null, exo: PO.exo || "sol", hz: ACC_HZ, det: Object.assign({}, DET), taps, ev: x.ev || [], acc: x.acc || [] }; }
+  return { tap: x.d.length, man: x.man || 0, polar: x.polar, diff: x.diff ?? null, exo: PO.exo || "sol", hz: ACC_HZ, det: Object.assign({}, DET), taps, ev: x.ev || [], acc: x.acc || [] }; }
 function pTestTxt(series) { const l = series.filter(x => x.polar != null); if (!l.length) return ""; const t = l.reduce((a, x) => a + x.d.length, 0), p = l.reduce((a, x) => a + x.polar, 0);
   return "🧪 Toi " + t + " / H10 " + p + " (" + l.map(x => x.d.length + "/" + x.polar).join(", ") + ")"; }
 function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.background = ""; try { localStorage.removeItem("pompes-encours"); } catch (e) {} if (pCur && pCur.d.length) { pFermerSerie(pCur); pSeries.push(pCur); } pCur = null; enSeance = false; if (verrou) verrou.release().catch(() => {}); pleinEcran(false);
