@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v17</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v18</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
@@ -538,10 +538,29 @@ function recordSerie() { let r = 0; const vu = (n) => { if (n > r) r = n; };
   try { (PJ ? PJ.seances : []).forEach(x => decouper(x.tl).forEach(z => vu(z.length))); } catch (e) {} return r; }
 let pRecord = 0, pRecordBattu = false, pObjAnnonce = false, pGSer = [], pSerieBase = 0, pBandT = null;
 function bandeau(txt) { const b = $("#pBandeau"); b.textContent = txt; b.classList.remove("cache"); clearTimeout(pBandT); pBandT = setTimeout(() => b.classList.add("cache"), 5000); vib([80, 60, 80]); bip(2); dire(txt.replace(/[^\p{L}\p{N} ,']/gu, "")); }
+/* fatigue : à partir de quelle pompe le rythme décroche, et de combien */
+function fatigue(t) { if (!t || t.length < 5) return null; const iv = t.slice(1).map((x, i) => x - t[i]), b = iv.slice(0, 3).sort((x, y) => x - y)[1];
+  for (let i = 2; i < iv.length; i++) if (iv[i] > b * 1.3 && (i + 1 >= iv.length || iv[i + 1] > b * 1.2)) { const r = iv.slice(i), m = r.reduce((x, y) => x + y, 0) / r.length; return { p: i + 2, perte: m - b, base: b }; }
+  return { p: 0, perte: 0, base: b }; }
+const v1 = (x) => x.toFixed(1).replace(".", ",");
+function bilanSerie(k, moi, g) { const mT = moi[moi.length - 1], fm = fatigue(moi);
+  let h = "<b>Série " + (k + 1) + "</b> : toi " + moi.length + " en " + gm(mT) + (moi.length > 1 ? " (" + v1(mT / (moi.length - 1)) + " s/p)" : "");
+  if (g) { const gT = g[g.length - 1], n = Math.min(moi.length, g.length), e = g[n - 1] - moi[n - 1];
+    h += "<br>👻 fantôme " + g.length + " en " + gm(gT) + " → " + (Math.abs(e) < 0.5 ? "même temps" : e > 0 ? "<span style='color:#2e8b57'>" + v1(e) + " s plus rapide</span>" : "<span style='color:#c0392b'>" + v1(-e) + " s plus lent</span>") + (n < Math.max(moi.length, g.length) ? " sur " + n + " pompes" : "") + (moi.length !== g.length ? " · " + (moi.length > g.length ? "+" : "") + (moi.length - g.length) + " pompe" + (Math.abs(moi.length - g.length) > 1 ? "s" : "") : ""); }
+  const fg = g ? fatigue(g) : null, ft = (f) => !f ? "–" : f.p ? "dès la pompe " + f.p + " (+" + v1(f.perte) + " s/pompe)" : "pas de décrochage";
+  h += "<br>😮‍💨 Fatigue : toi " + ft(fm) + (g ? " · fantôme " + ft(fg) : ""); return h; }
 function pGuideMaj() { const k = pSerieBase + pSeries.length + (pCur && pCur.d.length ? 0 : 0), g = pGSer[k], svg = $("#pgSvg");
-  if (!g) { $("#pgTxt").textContent = pGSer.length ? "Au-delà des séries du fantôme" : ""; svg.innerHTML = ""; return; }
+  if (!g) { const fin = (!pCur || !pCur.d.length) && pSeries.length ? pSeries[pSeries.length - 1] : null;
+    if (fin) { let c = 0; const mo = fin.d.map(v => (c += v)); $("#pgTxt").innerHTML = "<div style='text-align:left;border:2px solid #d9dce1;border-radius:12px;padding:6px 8px;font-weight:600;font-size:15px'>" + bilanSerie(k - 1, mo, pGSer[k - 1]) + "</div>"; }
+    else $("#pgTxt").textContent = pGSer.length ? "Au-delà des séries du fantôme" : ""; svg.innerHTML = ""; return; }
   const gT = g[g.length - 1], vit = g.length > 1 ? gT / (g.length - 1) : 0;
-  if (!pCur || !pCur.d.length) { $("#pgTxt").textContent = "Série " + (k + 1) + " du fantôme : " + g.length + " en " + gm(gT) + (vit ? " (" + vit.toFixed(1).replace(".", ",") + " s/pompe)" : ""); }
+  const finie = (!pCur || !pCur.d.length) && pSeries.length ? pSeries[pSeries.length - 1] : null;
+  if (!pCur || !pCur.d.length) { const suiv = "Série " + (k + 1) + " du fantôme : " + g.length + " en " + gm(gT) + (vit ? " (" + v1(vit) + " s/pompe)" : "");
+    if (!finie) { $("#pgTxt").textContent = suiv; }
+    else { let c = 0; const mo = finie.d.map(v => (c += v)), gp = pGSer[k - 1]; $("#pgTxt").innerHTML = "<div style='text-align:left;border:2px solid #d9dce1;border-radius:12px;padding:6px 8px;font-weight:600;font-size:15px'>" + bilanSerie(k - 1, mo, gp) + "</div><div style='margin-top:4px'>▶ " + suiv + "</div>";
+      if (gp) { const T = Math.max(gp[gp.length - 1], mo[mo.length - 1], 1) * 1.05, N = Math.max(gp.length, mo.length, 1), X = (t) => 4 + 292 * t / T, Y = (i) => 60 - 56 * i / N, pts = (l) => l.map((t, i) => X(t).toFixed(1) + "," + Y(i + 1).toFixed(1)).join(" ");
+        svg.innerHTML = `<polyline points="4,60 ${pts(gp)}" fill="none" stroke="#8a929c" stroke-width="2" stroke-dasharray="4 3"/><polyline points="4,60 ${pts(mo)}" fill="none" stroke="#2e8b57" stroke-width="3"/><text x="296" y="12" text-anchor="end" font-size="11" fill="#8a929c">série ${k} : 👻 gris · toi vert</text>`; }
+      return; } }
   const moi = pCur && pCur.d.length ? pTl.slice(-pCur.d.length).map(t => t - pTl[pTl.length - pCur.d.length]) : [];
   if (moi.length) { const j = moi.length, mT = moi[j - 1];
     if (j <= g.length) { const e = g[j - 1] - mT; $("#pgTxt").innerHTML = "Série " + (k + 1) + " · pompe " + j + " : " + (Math.abs(e) < 0.5 ? "même foulée" : e > 0 ? "<span style='color:#2e8b57'>⚡ " + e.toFixed(1).replace(".", ",") + " s plus rapide</span>" : "<span style='color:#c0392b'>🐢 " + (-e).toFixed(1).replace(".", ",") + " s plus lent</span>") + " que le fantôme"; }
