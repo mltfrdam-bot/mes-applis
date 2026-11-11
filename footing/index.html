@@ -57,9 +57,12 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v20</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v21</small></h1>
   <div class="acts" id="acts"></div>
-  <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button></div>
+  <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
+  <div id="recInfo" class="cache" style="background:#fff;border:3px solid #c0392b;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
+    <div style="font-weight:800;color:#c0392b">● ENREGISTREMENT H10 — <span id="recAct"></span></div><div id="recVal" style="font-size:22px;font-weight:800;margin:4px 0"></div>
+    <div class="ligne"><button class="sec bVerrou" style="flex:0 0 auto">🔒</button><button class="main" id="recStop" style="background:#c0392b">⏹ Arrêter et enregistrer</button></div></div>
   <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
 
   <section id="zTroncons">
@@ -229,6 +232,7 @@ function libelle(x) {
   if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
+  if (x.h10rec) { const r = x.h10rec.res; return "📡 H10 : " + hm(r.duree) + ", actif " + hm(r.actif) + ", " + r.pics + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : ""); }
   if (x.pjour) return "📅 Journée pompes : " + x.pjour.res;
   if (x.pompes && x.pompes.diffs) return "👻 Pompes : " + x.pompes.res + " — " + x.pompes.series.map((n, i) => n + (x.pompes.diffs[i] != null ? DIFF[x.pompes.diffs[i]].split(" ")[0] : "")).join(" ");
   if (x.pompes) return "👻 Pompes : " + x.pompes.res + " (séries " + x.pompes.series.join("-") + (x.pompes.reposMoy ? ", repos moyen " + Math.floor(x.pompes.reposMoy / 60) + ":" + String(x.pompes.reposMoy % 60).padStart(2, "0") : "") + ")";
@@ -343,7 +347,25 @@ const ACC_HZ = 50, ACC_DT = 1000 / ACC_HZ;
 /* réglages de détection — seront ajustés par Claude d'après tes séries de test */
 const DET = { court: 0.2, long: 2, fen: 4, seuilMin: 35, seuilK: 0.6, ecartMin: 600 };
 function accDetReset() { accDet = { c: [], l: [], s: [], etat: "", der: 0 }; }
-function accEchantillon(m, t, a) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 180000) accBuf.splice(0, 60000);
+/* 📡 Enregistrement H10 seconde par seconde (tennis, footing…) : FC + mouvement résumé */
+let REC = null, recSec = null, recSauveT = 0;
+function recEch(m, t) { const sec = Math.floor((Date.now() - REC.debut) / 1000);
+  if (!recSec || recSec.s !== sec) { if (recSec) recFermer(recSec); recSec = { s: sec, n: 0, som: 0, max: 0, pics: 0, enPic: false }; }
+  const dv = Math.abs(m - 1000); recSec.n++; recSec.som += dv; if (dv > recSec.max) recSec.max = dv;
+  if (m > 2500 && !recSec.enPic && t - (REC.derPic || 0) > 400) { recSec.pics++; REC.derPic = t; recSec.enPic = true; } else if (m < 1800) recSec.enPic = false; }
+function recFermer(x) { REC.l.push([x.s, fcFraiche() || 0, Math.round(x.som / Math.max(1, x.n)), Math.round(x.max), x.pics]);
+  if (Date.now() - recSauveT > 10000) { recSauveT = Date.now(); try { localStorage.setItem("h10-rec", JSON.stringify(REC)); } catch (e) {} } }
+function recResume(R) { const l = R.l, act = l.filter(x => x[2] > 120).length, fcs = l.map(x => x[1]).filter(Boolean), pics = l.reduce((a, x) => a + x[4], 0);
+  return { duree: l.length, actif: act, pics, fcMoy: fcs.length ? Math.round(fcs.reduce((a, b) => a + b, 0) / fcs.length) : null, fcMax: fcs.length ? Math.max(...fcs) : null }; }
+function recMaj() { if (!REC) return; const r = recResume(REC); $("#recVal").innerHTML = hm(r.duree) + " · ❤️ " + (fcFraiche() || "–") + " · ⚡ " + r.pics + " impacts · actif " + hm(r.actif) + "<br><small style='font-size:13px;color:#5b6470'>" + accEtat() + "</small>"; }
+$("#bRec").onclick = async () => { if (REC) return; if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
+  REC = { debut: Date.now(), act: actCourante(), l: [] }; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret();
+  $("#recAct").textContent = actNom(REC.act); $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); };
+$("#recStop").onclick = () => { if (!REC || !confirm("Arrêter l'enregistrement ?")) return; recTerminer(); };
+function recTerminer() { if (recSec) recFermer(recSec); const R = REC, r = recResume(R); REC = null; recSec = null; accArreter(); sonStop(); pleinEcran(false); try { localStorage.removeItem("h10-rec"); } catch (e) {}
+  ajouter({ h10rec: { debut: R.debut, act: R.act, res: r, l: R.l } }); $("#recInfo").classList.add("cache"); $("#bRec").classList.remove("cache"); }
+setInterval(recMaj, 1000);
+function accEchantillon(m, t, a) { if (REC) recEch(m, t); accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 180000) accBuf.splice(0, 60000);
   const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
   D.c.push(m); if (D.c.length > nc) D.c.shift(); D.l.push(m); if (D.l.length > nl) D.l.shift();
   const v = D.c.reduce((x, y) => x + y, 0) / D.c.length - D.l.reduce((x, y) => x + y, 0) / D.l.length;
@@ -758,7 +780,12 @@ function bilanActivite(a) { const c = lire().filter(x => (x.act || "footing") ==
 function bilan() { const acts = [...new Set(lire().filter(x => x.notes.length).map(x => x.act || "footing"))].filter(a => a !== "muscu");
   $("#bOnglets").innerHTML = [["pompes", "💪 Pompes"]].concat(acts.map(a => [a, actNom(a)])).map(x => `<button class="chip" data-o="${x[0]}" aria-pressed="${bOnglet === x[0]}">${x[1]}</button>`).join("");
   $("#bOnglets").querySelectorAll(".chip").forEach(b => b.onclick = () => { bOnglet = b.dataset.o; bilan(); });
-  $("#bCorps").innerHTML = bOnglet === "pompes" ? bilanPompes() : bilanActivite(bOnglet); }
+  $("#bCorps").innerHTML = (bOnglet === "pompes" ? bilanPompes() : bilanActivite(bOnglet)) + '<div class="ligne" style="margin-top:14px"><button class="sec" id="bExpRec">📤 Envoyer les enregistrements H10 à Claude</button></div><div class="aide" id="bExpInfo"></div>';
+  $("#bExpRec").onclick = async () => { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.h10rec) l.push(n.h10rec); })); if (!l.length) { $("#bExpInfo").textContent = "Pas encore d'enregistrement H10."; return; }
+    const nom = "enreg-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v21", colonnes: ["seconde", "fc", "mouvement moyen mg", "mouvement max mg", "impacts"], enregistrements: l });
+    try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); $("#bExpInfo").textContent = "✅ Envoyé"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); $("#bExpInfo").textContent = "✅ « " + nom + " » enregistré"; return; } } catch (e) {}
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); }; }
 $("#bBilan").onclick = () => { $("#bilan").classList.remove("cache"); bilan(); };
 $("#bFermer").onclick = () => $("#bilan").classList.add("cache");
 const ECRANS = ["#verrou", "#panneau", "#pomp", "#fant", "#frac", "#histo", "#bilan"];
@@ -780,6 +807,7 @@ window.addEventListener("popstate", () => { if (retIgnore) { retIgnore = false; 
 try { const ec = JSON.parse(localStorage.getItem("pompes-encours") || "null"); if (ec && ec.tl && ec.tl.length) { localStorage.removeItem("pompes-encours"); const n = ec.tl.length;
   ajouter({ pompes: { obj: ec.obj, total: n, temps: Math.round(ec.tl[n - 1]), series: ec.series, tl: ec.tl, res: n + " pompes en " + gm(ec.tl[n - 1]) + " (séance coupée : appli fermée par le téléphone)" } }); } } catch (e) {}
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && enSeance) { garderEcran(); if (PO.test && !accOn) accDemarrer(); } });
+try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && r.l && r.l.length) { localStorage.removeItem("h10-rec"); ajouter({ h10rec: { debut: r.debut, act: r.act, res: recResume(r), l: r.l, coupe: true } }); } } catch (e) {}
 afficher();
 </script>
 </body>
