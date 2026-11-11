@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="color-scheme" content="light">
+<title>Footing — ressentis</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font: 17px/1.35 system-ui, Roboto, sans-serif; background: #f6f7f9; color: #1b1f23; user-select: none; }
+  main { max-width: 520px; margin: 0 auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 100vh; }
+  .haut { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #d9dce1; border-radius: 10px; padding: 8px 12px; }
+  .chrono { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .fc { font-size: 30px; font-weight: 700; color: #c0392b; font-variant-numeric: tabular-nums; }
+  .fc small { font-size: 14px; color: #5b6470; font-weight: 400; }
+  button { font: inherit; border: none; border-radius: 12px; cursor: pointer; }
+  .niv { flex: 1; min-height: 64px; font-size: 22px; font-weight: 700; color: #fff; }
+  .n1 { background: #2e8b57; } .n2 { background: #6aa84f; } .n3 { background: #3b7bbf; } .n4 { background: #e69138; } .n5 { background: #c0392b; }
+  .niv:active { transform: scale(.98); filter: brightness(1.15); }
+  .ligne { display: flex; gap: 8px; }
+  .sec { background: #fff; border: 1px solid #d9dce1; padding: 12px; font-weight: 600; flex: 1; }
+  .go { background: #B5451B; color: #fff; font-size: 22px; font-weight: 700; padding: 18px; }
+  .dernier { text-align: center; color: #5b6470; min-height: 22px; font-size: 15px; }
+  #liste { background: #fff; border: 1px solid #d9dce1; border-radius: 10px; padding: 8px 12px; font-size: 15px; white-space: pre-wrap; user-select: text; }
+  select { font: inherit; padding: 8px; border-radius: 8px; border: 1px solid #d9dce1; background: #fff; }
+  .cache { display: none !important; }
+  .aide { font-size: 13px; color: #5b6470; }
+</style>
+</head>
+<body>
+<main>
+  <div class="haut"><div class="chrono" id="chrono">0:00</div><div class="fc" id="fc">— <small>bpm</small></div></div>
+
+  <div id="avant">
+    <div class="ligne"><button class="sec" id="h10">❤️ Connecter la H10 (facultatif)</button></div>
+    <p class="aide">Si la H10 est déjà reliée à ta montre, tu peux sauter cette étape : je prendrai le cardio de la montre.</p>
+    <div class="ligne" style="align-items:center"><span>Question vocale toutes les</span><select id="rappel"><option value="5">5 min</option><option value="10">10 min</option><option value="0">jamais</option></select></div>
+    <p class="aide">Démarre la montre <b>en même temps</b> que ce bouton. L'écran reste allumé pendant la course (sinon le téléphone met l'appli en pause).</p>
+    <button class="go" id="start" style="width:100%">▶ Départ</button>
+  </div>
+
+  <div id="pendant" class="cache" style="display:flex;flex-direction:column;gap:8px;flex:1">
+    <button class="niv n1" data-n="1">😌 Très facile</button>
+    <button class="niv n2" data-n="2">🙂 Facile</button>
+    <button class="niv n3" data-n="3">😐 Normal</button>
+    <button class="niv n4" data-n="4">😤 J'accélère</button>
+    <button class="niv n5" data-n="5">🥵 À fond</button>
+    <div class="dernier" id="dernier"></div>
+    <div class="ligne"><button class="sec" id="note">📝 Note</button><button class="sec" id="fin">⏹ Fin</button></div>
+  </div>
+
+  <div id="apres" class="cache">
+    <div id="liste"></div>
+    <div class="ligne" style="margin-top:8px"><button class="go" id="partager" style="flex:1">📤 Envoyer à Claude</button></div>
+    <div class="ligne" style="margin-top:8px"><button class="sec" id="copier">Copier</button><button class="sec" id="nouveau">Nouvelle course</button></div>
+    <p class="aide">Colle ce texte dans la conversation avec Claude : il le fusionne avec la séance de ta montre COROS (heure par heure).</p>
+  </div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const NOMS = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
+let depart = 0, journal = [], fc = null, fcSerie = [], verrou = null, minuteur = null, rappelMin = 5, prochainRappel = 0;
+const hh = (d) => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const mmss = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0"); };
+function dire(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; const v = speechSynthesis.getVoices().find(x => x.lang === "fr-FR"); if (v) u.voice = v; speechSynthesis.speak(u); } catch (e) {} }
+function sauver() { try { localStorage.setItem("footing-en-cours", JSON.stringify({ depart, journal, fcSerie })); } catch (e) {} }
+async function garderEcran() { try { verrou = await navigator.wakeLock.request("screen"); } catch (e) {} }
+document.addEventListener("visibilitychange", () => { if (depart && document.visibilityState === "visible") garderEcran(); });
+
+/* H10 en direct (facultatif) */
+$("#h10").onclick = async () => {
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: ["heart_rate"] }] });
+    const car = await (await (await dev.gatt.connect()).getPrimaryService("heart_rate")).getCharacteristic("heart_rate_measurement");
+    car.addEventListener("characteristicvaluechanged", (e) => { const v = e.target.value, f = v.getUint8(0); fc = f & 1 ? v.getUint16(1, true) : v.getUint8(1); $("#fc").innerHTML = fc + " <small>bpm</small>"; if (depart) fcSerie.push([Date.now() - depart, fc]); });
+    await car.startNotifications(); $("#h10").textContent = "❤️ H10 connectée"; dev.addEventListener("gattserverdisconnected", () => { $("#h10").textContent = "❤️ H10 déconnectée — retoucher"; });
+  } catch (e) { $("#h10").textContent = "❤️ Pas de H10 (" + (e.message || e).slice(0, 40) + ")"; }
+};
+
+$("#start").onclick = () => {
+  depart = Date.now(); journal = [{ t: 0, h: hh(new Date()), q: "Départ" }]; fcSerie = []; rappelMin = Number($("#rappel").value); prochainRappel = rappelMin ? rappelMin * 60000 : Infinity;
+  garderEcran(); dire("C'est parti. Bonne course."); $("#avant").classList.add("cache"); $("#pendant").classList.remove("cache"); sauver();
+  minuteur = setInterval(() => { const e = Date.now() - depart; $("#chrono").textContent = mmss(e);
+    if (e >= prochainRappel) { prochainRappel += rappelMin * 60000; dire(Math.round(e / 60000) + " minutes" + (fc ? ", cardio " + fc : "") + ". Comment tu te sens ?"); } }, 500);
+};
+document.querySelectorAll(".niv").forEach(b => b.onclick = () => {
+  const n = Number(b.dataset.n), e = Date.now() - depart; journal.push({ t: e, h: hh(new Date()), n, fc }); sauver();
+  try { navigator.vibrate(80); } catch (x) {} dire(NOMS[n] + ", noté");
+  $("#dernier").textContent = mmss(e) + " — " + NOMS[n] + (fc ? " (" + fc + " bpm)" : "");
+});
+$("#note").onclick = () => { const t = prompt("Ta note :"); if (t && t.trim()) { const e = Date.now() - depart; journal.push({ t: e, h: hh(new Date()), note: t.trim(), fc }); sauver(); $("#dernier").textContent = mmss(e) + " — 📝 " + t.trim(); } };
+function texte() { const d = new Date(depart), l = ["FOOTING — RESSENTIS — " + d.toLocaleDateString("fr-FR") + " (départ " + hh(d) + ")"];
+  journal.forEach(j => l.push(j.h + " (" + mmss(j.t) + ") " + (j.q || (j.n ? j.n + " " + NOMS[j.n] : "📝 " + j.note)) + (j.fc ? " — " + j.fc + " bpm" : "")));
+  if (fcSerie.length) { const m = {}; fcSerie.forEach(([t, v]) => { const k = Math.floor(t / 60000); (m[k] = m[k] || []).push(v); }); l.push("", "Cardio H10 (moyenne par minute) : " + Object.keys(m).map(k => k + "′ " + Math.round(m[k].reduce((a, b) => a + b, 0) / m[k].length)).join(", ")); }
+  return l.join("\n"); }
+$("#fin").onclick = () => { if (!confirm("Terminer la course ?")) return; clearInterval(minuteur); journal.push({ t: Date.now() - depart, h: hh(new Date()), q: "Fin" }); sauver();
+  try { const h = JSON.parse(localStorage.getItem("footing-historique") || "[]"); h.push({ depart, journal, fcSerie }); localStorage.setItem("footing-historique", JSON.stringify(h)); localStorage.removeItem("footing-en-cours"); } catch (e) {}
+  if (verrou) verrou.release().catch(() => {}); dire("Course terminée. Bravo.");
+  $("#pendant").classList.add("cache"); $("#apres").classList.remove("cache"); $("#liste").textContent = texte(); };
+$("#copier").onclick = () => { navigator.clipboard.writeText(texte()).then(() => $("#copier").textContent = "Copié ✓"); };
+$("#partager").onclick = async () => { const t = texte(); try { await navigator.share({ text: t }); } catch (e) { navigator.clipboard.writeText(t); $("#partager").textContent = "Copié : colle-le à Claude"; } };
+$("#nouveau").onclick = () => location.reload();
+/* Reprise si la page a été rechargée en pleine course */
+try { const c = JSON.parse(localStorage.getItem("footing-en-cours") || "null"); if (c && c.depart && Date.now() - c.depart < 4 * 3600e3 && confirm("Reprendre la course commencée à " + hh(new Date(c.depart)) + " ?")) { depart = c.depart; journal = c.journal; fcSerie = c.fcSerie || []; rappelMin = 5; prochainRappel = (Math.floor((Date.now() - depart) / 300000) + 1) * 300000; garderEcran(); $("#avant").classList.add("cache"); $("#pendant").classList.remove("cache");
+  minuteur = setInterval(() => { const e = Date.now() - depart; $("#chrono").textContent = mmss(e); if (e >= prochainRappel) { prochainRappel += 300000; dire(Math.round(e / 60000) + " minutes. Comment tu te sens ?"); } }, 500); } } catch (e) {}
+</script>
+</body>
+</html>
