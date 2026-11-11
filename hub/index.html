@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.31';
+const HUB_VERSION = '1.32';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -1079,6 +1079,9 @@ const estPrive = k => CLES_PRIVEES.test(k);
 async function horsSauvegarde(){ const l=await lireMeta('horsSauvegarde',null); if(Array.isArray(l)) return new Set(l);
   return new Set(); }
 async function basculerHorsSauvegarde(id){ const h=await horsSauvegarde(); if(h.has(id)) h.delete(id); else h.add(id); await ecrireMeta('horsSauvegarde',[...h]); localSale=true; return h.has(id); }
+/* 🔊 Bases « jetables » : voix de lecture, modèles, caches… Elles se retéléchargent : jamais dans les sauvegardes ni la synchro,
+   et jamais effacées par une restauration. (Ex. : atelier-voix = 209 Mo de voix Piper qui faisaient 240 Mo de sauvegarde.) */
+function baseJetable(nom){ const n=String(nom).split(':').pop(); return /(^|[-_])(voix|voices?|cache|caches|modeles?|models?|tts)([-_]|$)/i.test(n); }
 async function fabriquerSauvegarde(){
   const apps=await tous('apps'), hors=await horsSauvegarde();
   const ids=new Set([...apps.map(a=>a.id), ...idsAvecDonnees()]);
@@ -1088,7 +1091,7 @@ async function fabriquerSauvegarde(){
   for(const id of ids){
     const p=PREFIXE+id+':', ls={};
     Object.keys(localStorage).filter(k=>k.startsWith(p) && !estPrive(k.slice(p.length))).forEach(k=>ls[k.slice(p.length)]=localStorage.getItem(k));
-    const bases=[]; for(const b of await basesDeApp(id)) bases.push(await exporterBase(b.name));
+    const bases=[]; for(const b of await basesDeApp(id)){ if(baseJetable(b.name)) continue; bases.push(await exporterBase(b.name)); }
     donnees[id]={localStorage:ls, bases};
   }
   return {format:'mon-hub-sauvegarde', version:1, hub:HUB_VERSION, creeeLe:new Date().toISOString(), applis:apps, donnees, registre:await tous('registre'), historiqueSignalements:await historiqueSignalements(), reglages:await reglagesPartages()};
@@ -1228,7 +1231,7 @@ async function fusionner(s){
       const r=fusionValeurs(cur,inc);
       if(r.etat==='present') pr++; else if(r.etat==='conflit') co++; else { localStorage.setItem(p+k,r.valeur); fu++; if(r.conflit) co++; }
     });
-    for(const b of d.bases||[]){ const r=await fusionnerBase(b); aj+=r.ajoutes; pr+=r.presents; notes.push(...r.notes); }
+    for(const b of d.bases||[]){ if(baseJetable(b.nom)){ notes.push('🔊 '+b.nom.split(':').pop()+' ignorée (voix/cache, se retélécharge)'); continue; } const r=await fusionnerBase(b); aj+=r.ajoutes; pr+=r.presents; notes.push(...r.notes); }
     const txt=[aj&&('+'+aj+' élément(s) ajouté(s)'), fu&&(fu+' liste(s) complétée(s)'), pr&&(pr+' déjà présent(s)'), co&&(co+' différence(s) : valeur actuelle gardée')].filter(Boolean).join(' · ') || 'Rien à ajouter';
     lignes.push(['Données de '+nomApp(id), txt+(notes.length?'<br><small>'+notes.map(esc).join('<br>')+'</small>':''), aj||fu?'ok':(co?'att':'')]);
   }
@@ -1443,7 +1446,7 @@ async function remplacerTout(s){
   const hors=await horsSauvegarde();   // les données des applis « hors sauvegarde » ne sont jamais effacées
   Object.keys(localStorage).filter(k=>{ if(!k.startsWith(PREFIXE)) return false; const r=k.slice(PREFIXE.length), i=r.indexOf(':'); if(hors.has(i>=0?r.slice(0,i):r)) return false; return !estPrive(i>=0?r.slice(i+1):r); })
     .forEach(k=>localStorage.removeItem(k));
-  for(const b of await toutesLesBasesApps()){ if(hors.has(b.name.slice(PREFIXE.length).split(':')[0])) continue; await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{}); }
+  for(const b of await toutesLesBasesApps()){ if(hors.has(b.name.slice(PREFIXE.length).split(':')[0]) || baseJetable(b.name)) continue; await promReq(indexedDB.deleteDatabase(b.name)).catch(()=>{}); }
   await vider('apps'); await vider('registre');
   return fusionner(s);
 }
