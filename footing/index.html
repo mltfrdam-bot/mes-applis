@@ -71,7 +71,7 @@
   </section>
 
   <div class="barre" id="barre"></div>
-  <button class="main" id="bFrac">⏱ Fractionné</button>
+  <div class="ligne" id="zFant"><button class="main" id="bFrac">⏱ Fractionné</button><button class="main" id="bFant" style="background:#5b4b8a">👻 Fantôme</button></div>
   <div class="dernier" id="dernier"></div>
   <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Repère</button></div>
   <table id="tab"></table>
@@ -104,6 +104,26 @@
   </div>
 </div>
 
+<div id="fant" class="cache" style="position:fixed;inset:0;z-index:9;background:#fff;display:flex;flex-direction:column">
+  <div id="gReglage" style="padding:14px;overflow:auto;flex:1">
+    <h1 style="margin:0">👻 Fantôme</h1>
+    <label class="opt">Contre qui ?</label><div class="chips" id="gSource"></div>
+    <div id="gObj"><label class="opt">Objectif : distance</label><div class="chips" id="gDist"></div><label class="opt">Temps visé (min:s)</label>
+      <input id="gTemps" inputmode="numeric" placeholder="ex. 49:00" style="font:inherit;font-size:20px;padding:10px;border:1px solid #d9dce1;border-radius:10px;width:160px;margin-top:4px"><div class="aide" id="gAllure"></div></div>
+    <div id="gListe" class="cache"><label class="opt">Choisis la séance</label><div id="gSeances"></div></div>
+    <div id="gImport" class="cache"><label class="opt">Fichier fantôme (préparé par Claude depuis ta montre)</label><input type="file" id="gFichier" accept=".json,application/json"><div class="aide" id="gImpInfo"></div></div>
+    <label class="opt">Formule</label><div class="chips" id="gFormule"></div>
+    <label class="opt">Annonce vocale tous les</label><div class="chips" id="gPas"></div>
+    <div class="aide" style="margin:10px 0">L'écran reste allumé pendant la séance. La séance que tu fais est enregistrée et pourra devenir un fantôme à son tour.</div>
+    <div class="ligne"><button class="main" id="gGo" style="font-size:22px;padding:18px">▶ Partir</button><button class="sec" id="gAnnul" style="flex:0 0 auto">Retour</button></div>
+  </div>
+  <div id="gCourse" class="cache" style="flex:1;display:flex;flex-direction:column">
+    <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:700"><span id="gNom"></span><button class="sec" id="gStop" style="flex:0 0 auto;padding:6px 10px">⏹ Fin</button></div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center">
+      <div id="gEcart" style="font-size:64px;font-weight:800;line-height:1">👻 0 m</div><div id="gEcartS" style="font-size:28px;font-weight:700"></div>
+      <div id="gInfo" style="font-size:20px"></div><div id="gMsg" style="font-size:18px;color:#5b6470"></div></div>
+  </div>
+</div>
 <script>
 const $ = (s) => document.querySelector(s);
 const CLE = "footing-courses";
@@ -152,6 +172,7 @@ function libelle(x) {
   if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
+  if (x.ghost) return "👻 Contre « " + x.ghost.contre + " » — " + x.ghost.res;
   if (x.fracDebut) return "⏱ Début fractionné : " + x.fracDebut; if (x.fracFin) return "⏱ Fin fractionné";
   if (x.n) return NOMS5[x.n]; if (x.km) return "📍 Km " + x.km; if (x.rep) return "📍 Repère " + x.rep;
   return (x.voix ? "🎤 " : "📝 ") + (x.note || ""); }
@@ -171,7 +192,7 @@ function choisirTroncon(nom) { const prof = PROFILS[actCourante()] || PROFILS.fo
     panneau("③ Ce qui domine", prof.domine, (d) => { modifier(t, { dom: d }); if (d === "Douleur") panneau("⚠️ Où ?", ZONES, (z) => modifier(t, { zone: z })); }); }, "s"); }
 
 function dessinerGrilles() { const a = actCourante(), prof = PROFILS[a];
-  $("#zTroncons").classList.toggle("cache", !prof); $("#zSimple").classList.toggle("cache", !!prof); $("#bFrac").classList.toggle("cache", a !== "footing");
+  $("#zTroncons").classList.toggle("cache", !prof); $("#zSimple").classList.toggle("cache", !!prof); $("#zFant").classList.toggle("cache", !AVEC_KM.includes(a)); $("#bFrac").classList.toggle("cache", a !== "footing");
   if (prof) { $("#gTroncons").innerHTML = prof.troncons.map((c, i) => `<button class="case" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
     $("#gTroncons").querySelectorAll(".case").forEach(b => b.onclick = () => choisirTroncon(prof.troncons[Number(b.dataset.i)][1])); }
   else { $("#gSimple").innerHTML = SENS.map((c, i) => `<button class="case s${i + 1}" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
@@ -278,6 +299,57 @@ function finEffort() { clearInterval(tick); const e = performance.now() - t0, f 
     if (r <= 0) { clearInterval(tick); $("#fRpe").classList.add("cache"); effort(); } }, 50); }
 function finSeance() { clearInterval(tick); enSeance = false; phase = ""; gpsStop(); if (verrou) verrou.release().catch(() => {}); ajouter({ fracFin: true }); $("#frac").classList.add("cache"); afficher(); }
 $("#fStop").onclick = () => { if (!confirm("Arrêter le fractionné ?")) return; if (phase === "effort") finEffort(); finSeance(); };
+
+/* ===== 👻 Fantôme ===== */
+let G = { source: "obj", dist: 10000, temps: 49 * 60, formule: "dist", pas: 500, choix: null }; try { G = Object.assign(G, JSON.parse(localStorage.getItem("fant-opt") || "{}")); G.choix = null; } catch (e) {}
+const gm = (s) => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function lireTemps(t) { const m = String(t).trim().match(/^(\d+)(?:[:h'm ]+(\d{1,2}))?$/); return m ? Number(m[1]) * 60 + Number(m[2] || 0) : 0; }
+function seancesFantomes() { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.ghost && n.ghost.track && n.ghost.track.length > 5) l.push({ nom: new Date(n.t).toLocaleDateString("fr-FR") + " — " + (n.ghost.dist / 1000).toFixed(2).replace(".", ",") + " km en " + gm(n.ghost.temps), points: n.ghost.track }); })); return l.reverse(); }
+function gChips(id, liste, cle, fmt) { $(id).innerHTML = liste.map(v => `<button class="chip" data-v="${v}" aria-pressed="${G[cle] == v}">${fmt(v)}</button>`).join("");
+  $(id).querySelectorAll(".chip").forEach(b => b.onclick = () => { G[cle] = isNaN(b.dataset.v) ? b.dataset.v : Number(b.dataset.v); gReglage(); }); }
+function gReglage() { try { localStorage.setItem("fant-opt", JSON.stringify(Object.assign({}, G, { choix: null }))); } catch (e) {}
+  gChips("#gSource", ["obj", "appli", "fichier"], "source", v => ({ obj: "🎯 Objectif", appli: "📒 Une de mes séances", fichier: "⌚ Sortie de la montre" })[v]);
+  gChips("#gDist", [1000, 3000, 5000, 10000, 21100], "dist", v => v >= 21000 ? "Semi" : v / 1000 + " km");
+  gChips("#gFormule", ["dist", "temps", "libre"], "formule", v => ({ dist: "📏 Même distance", temps: "⏱ Même temps", libre: "♾ Libre" })[v]);
+  gChips("#gPas", [250, 500, 1000], "pas", v => v + " m");
+  $("#gObj").classList.toggle("cache", G.source !== "obj"); $("#gListe").classList.toggle("cache", G.source !== "appli"); $("#gImport").classList.toggle("cache", G.source !== "fichier");
+  if (!$("#gTemps").value) $("#gTemps").value = gm(G.temps); const t = lireTemps($("#gTemps").value); $("#gAllure").textContent = t ? "Allure régulière : " + gm(t / (G.dist / 1000)) + " /km" : "";
+  const l = seancesFantomes(); $("#gSeances").innerHTML = l.length ? l.map((x, i) => `<button class="chip" data-i="${i}" aria-pressed="${G.choix === x}">${x.nom}</button>`).join(" ") : '<div class="aide">Pas encore de séance enregistrée avec le fantôme : la première se fait avec un objectif.</div>';
+  $("#gSeances").querySelectorAll(".chip").forEach(b => b.onclick = () => { G.choix = l[Number(b.dataset.i)]; gReglage(); }); }
+$("#gTemps").oninput = () => { G.temps = lireTemps($("#gTemps").value) || G.temps; gReglage(); };
+$("#gFichier").onchange = async () => { try { const j = JSON.parse(await $("#gFichier").files[0].text()); if (!Array.isArray(j.points) || j.points.length < 2) throw new Error("pas de points");
+  G.choix = { nom: j.nom || "Sortie de la montre", points: j.points }; const d = j.points[j.points.length - 1]; $("#gImpInfo").textContent = "✅ " + G.choix.nom + " : " + (d[1] / 1000).toFixed(2).replace(".", ",") + " km en " + gm(d[0]); } catch (e) { $("#gImpInfo").textContent = "❌ Fichier non reconnu"; } };
+$("#bFant").onclick = () => { $("#fant").classList.remove("cache"); $("#gReglage").classList.remove("cache"); $("#gCourse").classList.add("cache"); gReglage(); };
+$("#gAnnul").onclick = () => $("#fant").classList.add("cache");
+/* le fantôme = une courbe (temps s, distance m) ; on interpole entre les points */
+function gDistA(P, t) { if (t <= P[0][0]) return P[0][1]; for (let i = 1; i < P.length; i++) if (t <= P[i][0]) { const a = P[i - 1], b = P[i]; return a[1] + (b[1] - a[1]) * (t - a[0]) / ((b[0] - a[0]) || 1); }
+  const a = P[P.length - 2], b = P[P.length - 1]; return b[1] + (b[1] - a[1]) / ((b[0] - a[0]) || 1) * (t - b[0]); }
+function gTempsA(P, d) { if (d <= P[0][1]) return P[0][0]; for (let i = 1; i < P.length; i++) if (d <= P[i][1]) { const a = P[i - 1], b = P[i]; return a[0] + (b[0] - a[0]) * (d - a[1]) / ((b[1] - a[1]) || 1); }
+  const a = P[P.length - 2], b = P[P.length - 1]; return b[0] + (b[0] - a[0]) / ((b[1] - a[1]) || 1) * (d - b[1]); }
+let gP = null, gT0 = 0, gTick = null, gTrack = [], gProchain = 0, gFin = 0, gNomF = "";
+$("#gGo").onclick = () => {
+  if (G.source === "obj") { const t = lireTemps($("#gTemps").value); if (!t) { alert("Indique le temps visé, ex. 49:00"); return; } gP = [[0, 0], [t, G.dist]]; gNomF = "Objectif " + (G.dist / 1000) + " km en " + gm(t); }
+  else { if (!G.choix) { alert("Choisis d'abord la séance du fantôme."); return; } gP = G.choix.points; gNomF = G.choix.nom; }
+  const der = gP[gP.length - 1]; gFin = G.formule === "dist" ? { d: der[1] } : G.formule === "temps" ? { t: der[0] } : {};
+  enSeance = true; garderEcran(); gpsMarche(); gpsDist = 0; gTrack = [[0, 0]]; gProchain = G.pas; $("#gReglage").classList.add("cache"); $("#gCourse").classList.remove("cache"); $("#gNom").textContent = "👻 " + gNomF;
+  let n = 5; $("#gEcart").textContent = n; dire("Départ dans 5 secondes");
+  const dec = setInterval(() => { n--; $("#gEcart").textContent = n > 0 ? n : "Go"; if (n > 0 && n <= 3) { dire(String(n)); vib(60); } if (n <= 0) { clearInterval(dec); dire("Go"); vib(300); gPartir(); } }, 1000); };
+function gPartir() { gT0 = performance.now(); gpsDist = 0; gpsDernier = null;
+  gTick = setInterval(() => { const t = (performance.now() - gT0) / 1000, d = gpsDist, dg = gDistA(gP, t), em = d - dg, es = d > 5 ? gTempsA(gP, d) - t : 0;
+    if (!gTrack.length || t - gTrack[gTrack.length - 1][0] >= 2) gTrack.push([Math.round(t * 10) / 10, Math.round(d)]);
+    $("#gEcart").textContent = "👻 " + (em >= 0 ? "+" : "−") + Math.abs(Math.round(em)) + " m"; $("#gEcart").style.color = em >= 0 ? "#2e8b57" : "#c0392b";
+    $("#gEcartS").textContent = d > 5 ? (es >= 0 ? Math.round(es) + " s d'avance" : Math.round(-es) + " s de retard") : "";
+    $("#gInfo").textContent = (d / 1000).toFixed(2).replace(".", ",") + " km — " + gm(t) + (d > 50 ? " — " + gm(t / (d / 1000)) + " /km" : "");
+    if (d >= gProchain) { dire(gProchain + " mètres, " + (es >= 0 ? Math.round(es) + " secondes d'avance" : Math.round(-es) + " secondes de retard")); gProchain += G.pas; }
+    if ((gFin.d && d >= gFin.d) || (gFin.t && t >= gFin.t)) gTerminer(); }, 250); }
+function gTerminer() { clearInterval(gTick); const t = (performance.now() - gT0) / 1000, d = gpsDist; gTrack.push([Math.round(t * 10) / 10, Math.round(d)]);
+  const res = gFin.d ? "Distance " + (gFin.d / 1000).toFixed(2).replace(".", ",") + " km : " + gm(t) + " contre " + gm(gTempsA(gP, gFin.d)) + " pour le fantôme" :
+    gFin.t ? "En " + gm(gFin.t) + " : " + Math.round(d) + " m contre " + Math.round(gDistA(gP, gFin.t)) + " m pour le fantôme" : Math.round(d) + " m en " + gm(t);
+  const ecart = gFin.d ? gTempsA(gP, gFin.d) - t : d - gDistA(gP, t);
+  dire(gFin.d ? (ecart >= 0 ? "Bravo, fantôme battu de " + Math.round(ecart) + " secondes" : "Le fantôme gagne de " + Math.round(-ecart) + " secondes") : "Terminé");
+  ajouter({ ghost: { contre: gNomF, formule: G.formule, dist: Math.round(d), temps: Math.round(t), res, track: gTrack } });
+  enSeance = false; gpsStop(); if (verrou) verrou.release().catch(() => {}); $("#gMsg").textContent = res; setTimeout(() => { $("#fant").classList.add("cache"); afficher(); }, 6000); }
+$("#gStop").onclick = () => { if (!confirm("Terminer la course ?")) return; if (gTick) gTerminer(); else { $("#fant").classList.add("cache"); enSeance = false; gpsStop(); } };
 
 afficher();
 </script>
