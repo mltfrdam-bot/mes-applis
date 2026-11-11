@@ -9,106 +9,276 @@
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { background: #f6f7f9; }
   body { margin: 0; font: 17px/1.35 system-ui, Roboto, sans-serif; color: #1b1f23; user-select: none; }
-  main { max-width: 520px; margin: 0 auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  main { max-width: 560px; margin: 0 auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
   h1 { font-size: 18px; margin: 2px 0; color: #B5451B; display: flex; justify-content: space-between; align-items: center; }
   h1 span { font-size: 14px; color: #5b6470; font-weight: 400; }
-  button { font: inherit; border: none; border-radius: 12px; cursor: pointer; }
-  .niv { min-height: 66px; font-size: 22px; font-weight: 700; color: #fff; }
-  .n1 { background: #2e8b57; } .n2 { background: #6aa84f; } .n3 { background: #3b7bbf; } .n4 { background: #e69138; } .n5 { background: #c0392b; }
-  .niv:active { transform: scale(.98); filter: brightness(1.15); }
+  h2 { font-size: 15px; margin: 4px 0 0; color: #5b6470; text-transform: uppercase; letter-spacing: .4px; }
+  button { font: inherit; border: none; border-radius: 12px; cursor: pointer; color: inherit; }
+  .grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .case { background: #fff; border: 2px solid #d9dce1; min-height: 64px; padding: 6px 4px; font-size: 15px; font-weight: 700; line-height: 1.15; }
+  .case b { display: block; font-size: 24px; }
+  .case:active { transform: scale(.97); background: #fdf1ec; }
+  .s1 { border-color: #2e8b57; } .s2 { border-color: #6aa84f; } .s3 { border-color: #3b7bbf; } .s4 { border-color: #e69138; } .s5 { border-color: #c0392b; } .s6 { border-color: #7a1f1f; }
   .ligne { display: flex; gap: 8px; }
   .sec { background: #fff; border: 1px solid #d9dce1; padding: 12px; font-weight: 600; flex: 1; }
   .main { background: #B5451B; color: #fff; padding: 14px; font-weight: 700; flex: 1; }
-  .dernier { text-align: center; color: #1b1f23; font-weight: 600; min-height: 24px; }
-  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 15px; }
-  td, th { border: 1px solid #d9dce1; padding: 5px 7px; text-align: left; }
-  th { background: #eef0f3; font-size: 13px; }
+  .barre { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .barre button { background: #fff; border: 1px solid #d9dce1; padding: 10px 2px; font-weight: 700; font-size: 15px; }
+  .dernier { text-align: center; font-weight: 600; min-height: 24px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
+  td, th { border: 1px solid #d9dce1; padding: 5px 6px; text-align: left; vertical-align: top; }
+  th { background: #eef0f3; font-size: 12px; }
   td.x { width: 1%; text-align: center; }
   .aide { font-size: 13px; color: #5b6470; margin: 0; }
   .vide { color: #5b6470; text-align: center; padding: 10px; }
   .acts { display: flex; flex-wrap: wrap; gap: 6px; }
   .act { background: #fff; border: 1px solid #d9dce1; padding: 8px 10px; border-radius: 20px; font-size: 15px; }
   .act[aria-pressed="true"] { background: #B5451B; border-color: #B5451B; color: #fff; font-weight: 700; }
+  .cache { display: none !important; }
+  /* panneaux qui s'ouvrent par-dessus */
+  #panneau { position: fixed; inset: 0; background: rgba(246,247,249,.98); z-index: 8; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  #panneau .titre { font-size: 20px; font-weight: 800; }
+  #panneau .grille .case { min-height: 92px; font-size: 17px; }
+  .compte { height: 6px; background: #eef0f3; border-radius: 3px; overflow: hidden; } .compte i { display: block; height: 100%; background: #B5451B; width: 100%; transition: width linear; }
+  /* fractionné */
+  #frac { position: fixed; inset: 0; z-index: 9; background: #fff; display: flex; flex-direction: column; }
+  #fTop { padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+  #fZone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 10px; }
+  #fGros { font-size: 72px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+  #fSous { font-size: 22px; font-weight: 700; }
+  #fMsg { font-size: 20px; min-height: 28px; }
+  .effort #fZone { background: #fff3ec; } .repos #fZone { background: #eef6f0; }
+  #fRpe { padding: 10px; }
+  label.opt { display: block; font-weight: 700; margin-top: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { background: #fff; border: 1px solid #d9dce1; padding: 8px 12px; border-radius: 18px; font-weight: 600; }
+  .chip[aria-pressed="true"] { background: #B5451B; color: #fff; border-color: #B5451B; }
 </style>
 </head>
 <body>
-<main>
+<main id="principal">
   <h1>📒 Journal d'activité <span id="jour"></span></h1>
   <div class="acts" id="acts"></div>
-  <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. L'heure exacte est notée (je la cale sur ta montre COROS si besoin).</p>
-  <button class="niv n1" data-n="1">😌 Très facile</button>
-  <button class="niv n2" data-n="2">🙂 Facile</button>
-  <button class="niv n3" data-n="3">😐 Normal</button>
-  <button class="niv n4" data-n="4">😤 J'accélère</button>
-  <button class="niv n5" data-n="5">🥵 À fond</button>
+  <p class="aide">Pas besoin de laisser l'appli ouverte : sors le téléphone, touche, range-le. Chaque appui est noté à la seconde.</p>
+
+  <section id="zTroncons">
+    <h2>① Tronçon</h2>
+    <div class="grille" id="gTroncons"></div>
+  </section>
+  <section id="zSimple" class="cache">
+    <h2>Sensation</h2>
+    <div class="grille" id="gSimple"></div>
+  </section>
+
+  <div class="barre" id="barre"></div>
+  <button class="main" id="bFrac">⏱ Fractionné</button>
   <div class="dernier" id="dernier"></div>
-  <button class="main" id="micro" style="font-size:22px;padding:16px">🎤 Note vocale</button>
   <div class="ligne"><button class="sec" id="note">📝 Note écrite</button><button class="sec" id="km">📍 Repère</button></div>
   <table id="tab"></table>
   <div class="ligne"><button class="main" id="envoyer">📤 Envoyer à Claude</button><button class="sec" id="copier" style="flex:0 0 auto">Copier</button></div>
   <div class="ligne"><button class="sec" id="nouvelle">Nouvelle séance</button></div>
 </main>
-<div id="voix" style="display:none;position:fixed;inset:0;background:rgba(246,247,249,.98);padding:16px;flex-direction:column;gap:12px;z-index:9">
+
+<div id="panneau" class="cache"><div class="titre" id="pTitre"></div><div class="compte"><i id="pCompte"></i></div><div class="grille" id="pGrille"></div><div class="ligne"><button class="sec" id="pPasser">Passer ›</button></div></div>
+
+<div id="voix" style="display:none;position:fixed;inset:0;background:rgba(246,247,249,.98);padding:16px;flex-direction:column;gap:12px;z-index:10">
   <div id="vEtat" style="font-size:20px;font-weight:700">🟢 Je t'écoute… parle</div>
   <div id="vTexte" style="flex:1;background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:12px;font-size:20px;line-height:1.4;overflow:auto;user-select:text" contenteditable="true"></div>
-  <p class="aide">Tu peux corriger le texte en le touchant. Dis « virgule », « point » pour la ponctuation.</p>
   <div class="ligne"><button class="main" id="vOk" style="font-size:22px;padding:18px">✓ Enregistrer</button><button class="sec" id="vNon" style="flex:0 0 auto">✕ Annuler</button></div>
 </div>
+
+<div id="frac" class="cache">
+  <div id="fReglage" style="padding:14px;overflow:auto;flex:1">
+    <h1 style="margin:0">⏱ Fractionné</h1>
+    <label class="opt">Effort</label><div class="chips" id="oType"></div><div class="chips" id="oVal"></div>
+    <label class="opt">Nombre de répétitions</label><div class="chips" id="oNb"></div>
+    <label class="opt">Récupération</label><div class="chips" id="oRec"></div>
+    <label class="opt">Cardio</label><div class="chips"><button class="chip" id="oH10">❤️ Connecter la H10 (facultatif)</button></div>
+    <div class="aide" style="margin:12px 0">Pendant l'effort, tout l'écran est un bouton :<br>• aucun appui = bonnes sensations jusqu'au bout<br>• 1 appui = « je dois ralentir » (moment exact noté)<br>• 2e appui ensuite = « j'ai récupéré, j'accélère »<br>• double appui rapide = « j'accélère » (sans être en difficulté)</div>
+    <div class="ligne"><button class="main" id="fGo" style="font-size:22px;padding:18px">▶ Démarrer</button><button class="sec" id="fAnnul" style="flex:0 0 auto">Retour</button></div>
+  </div>
+  <div id="fSeance" class="cache" style="flex:1;display:flex;flex-direction:column">
+    <div id="fTop"><span id="fRep"></span><span id="fFc"></span><button class="sec" id="fStop" style="flex:0 0 auto;padding:6px 10px">⏹ Arrêter</button></div>
+    <div id="fZone"><div id="fSous"></div><div id="fGros">0,0</div><div id="fMsg"></div></div>
+    <div id="fRpe" class="cache"><div style="font-weight:800;margin-bottom:6px">Comment était cette répétition ?</div><div class="grille" id="gRpe"></div></div>
+  </div>
+</div>
+
 <script>
 const $ = (s) => document.querySelector(s);
-const NOMS = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
 const CLE = "footing-courses";
 const ACTS = [["footing", "🏃 Footing"], ["velo", "🚴 Vélo"], ["tennis", "🎾 Tennis"], ["muscu", "💪 Muscu"], ["marche", "🚶 Marche"], ["chantier", "🏗️ Chantier"]];
 const AVEC_KM = ["footing", "velo", "marche"];
-function actNom(a) { const x = ACTS.find(y => y[0] === a); return x ? x[1] : "✳️ " + (a || "Activité"); }
-function actChoisie() { try { return localStorage.getItem("act-courante") || "footing"; } catch (e) { return "footing"; } }
-function dessinerActs() { const cur = (courseActuelle(false).d || {}).act || actChoisie(), l = ACTS.slice(); if (!ACTS.some(x => x[0] === cur)) l.push([cur, actNom(cur)]);
-  $("#acts").innerHTML = l.map(x => `<button class="act" data-a="${x[0].replace(/"/g, "")}" aria-pressed="${x[0] === cur}">${x[1]}</button>`).join("") + '<button class="act" data-a="+">➕ Autre</button>';
-  $("#acts").querySelectorAll(".act").forEach(b => b.onclick = () => { let a = b.dataset.a; if (a === "+") { a = (prompt("Nom de l'activité :") || "").trim(); if (!a) return; }
-    try { localStorage.setItem("act-courante", a); } catch (e) {} const r = courseActuelle(false); if (r.d && r.d.act !== a) { if (r.d.notes.length) r.d.close = true; else r.d.act = a; ecrire(r.c); } afficher(); }); }
+/* ===== Réglages des questions par activité (modifiables sans toucher au reste) ===== */
+const SENS = [["😌", "Très facile"], ["🙂", "Facile"], ["😐", "Correct"], ["😤", "Dur"], ["🥵", "Très dur"], ["🛑", "Je dois ralentir"]];
+const ZONES = [["🦵", "Genou gauche"], ["🦵", "Genou droit"], ["🦶", "Mollet"], ["🦶", "Pied / cheville"], ["🧍", "Hanche / dos"], ["❓", "Autre"]];
+const PROFILS = {
+  footing: { troncons: [["➖", "Plat"], ["↗️", "Faux plat montant"], ["↘️", "Faux plat descendant"], ["⛰️", "Côte"], ["⬇️", "Descente"], ["🚶", "Je marche"]],
+             domine: [["🦵", "Jambes lourdes"], ["🫁", "Souffle court"], ["⚡", "Bonne énergie"], ["🍌", "Coup de mou / faim"], ["🌡️", "Chaleur / soif"], ["⚠️", "Douleur"]] },
+  marche:  { troncons: [["➖", "Plat"], ["↗️", "Faux plat montant"], ["↘️", "Faux plat descendant"], ["⛰️", "Côte"], ["⬇️", "Descente"], ["⏸", "Arrêt"]],
+             domine: [["🦵", "Jambes lourdes"], ["🫁", "Souffle court"], ["⚡", "Bonne énergie"], ["🍌", "Coup de mou / faim"], ["🌡️", "Chaleur / soif"], ["⚠️", "Douleur"]] },
+  velo:    { troncons: [["➖", "Plat"], ["↗️", "Faux plat"], ["⛰️", "Côte"], ["⬇️", "Descente"], ["🔁", "Relance"], ["🛞", "Roue libre"]],
+             domine: [["⚙️", "Braquet trop dur"], ["🔄", "Cadence"], ["🦵", "Cuisses"], ["🫁", "Souffle"], ["🪑", "Selle"], ["⚠️", "Douleur"]] }
+};
+const BOIRE = [["💧", "3 gorgées"], ["💧", "4 gorgées"], ["💧", "5 gorgées"], ["💧", "6 gorgées"], ["🥤", "Bidon fini"], ["💧", "2 gorgées"]];
+const MANGER = [["🍎", "Compote"], ["🧃", "Gel"], ["🍫", "Barre"], ["🍌", "Fruit"], ["🍯", "Sirop / sucre"], ["❓", "Autre"]];
+const ARRET = [["🚦", "Feu / route"], ["🗣️", "Rencontre"], ["⏸", "Pause"], ["🔑", "Oubli"], ["🚻", "Toilettes"], ["❓", "Autre"]];
+const RPE = [["😌", "Très facile"], ["🙂", "Facile"], ["😐", "Correct"], ["😤", "Dur"], ["🥵", "Très dur"], ["💥", "Explosé"]];
+const NOMS5 = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
+
 const hh = (d) => new Date(d).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const s1 = (ms) => (ms / 1000).toFixed(1).replace(".", ",");
+const mmss = (ms) => { const s = ms / 1000, m = Math.floor(s / 60); return m + ":" + (s % 60).toFixed(1).padStart(4, "0").replace(".", ","); };
 function lire() { try { return JSON.parse(localStorage.getItem(CLE) || "[]"); } catch (e) { return []; } }
 function ecrire(c) { try { localStorage.setItem(CLE, JSON.stringify(c)); } catch (e) {} }
-/* Une course = tout ce qui est noté sans pause de plus de 2 h. Rien à démarrer. */
+function vib(n) { try { navigator.vibrate(n || 80); } catch (e) {} }
+function dire(t) { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = "fr-FR"; u.rate = 1.1; speechSynthesis.speak(u); } catch (e) {} }
+function actNom(a) { const x = ACTS.find(y => y[0] === a); return x ? x[1] : "✳️ " + (a || "Activité"); }
+function actChoisie() { try { return localStorage.getItem("act-courante") || "footing"; } catch (e) { return "footing"; } }
+/* Une séance = tout ce qui est noté sans pause de plus de 2 h, pour la même activité. Rien à démarrer. */
 function courseActuelle(creer) { const c = lire(), d = c[c.length - 1]; const der = d && d.notes.length ? d.notes[d.notes.length - 1].t : d && d.debut;
   if (d && !d.close && Date.now() - der < 2 * 3600e3) { if (!d.act) d.act = "footing"; return { c, d }; }
   if (!creer) return { c, d: null }; const n = { id: Date.now(), debut: Date.now(), act: actChoisie(), notes: [] }; c.push(n); return { c, d: n }; }
-function ajouter(entree) { const { c, d } = courseActuelle(true); d.notes.push(Object.assign({ t: Date.now() }, entree)); ecrire(c); try { navigator.vibrate(80); } catch (e) {} afficher(); }
-function libelle(x) { return x.n ? NOMS[x.n] : x.km ? "📍 Km " + x.km : x.rep ? "📍 Repère " + x.rep : (x.voix ? "🎤 " : "📝 ") + x.note; }
-function afficher() { dessinerActs(); const { d } = courseActuelle(false); $("#jour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
+function actCourante() { const d = courseActuelle(false).d; return d ? d.act : actChoisie(); }
+function ajouter(e) { const { c, d } = courseActuelle(true); const x = Object.assign({ t: Date.now() }, e); d.notes.push(x); ecrire(c); vib(); afficher(); return x.t; }
+function modifier(t, champs) { const { c, d } = courseActuelle(false); if (!d) return; const x = d.notes.find(n => n.t === t); if (x) { Object.assign(x, champs); ecrire(c); afficher(); } }
+
+/* ===== Libellés (tableau et texte envoyé à Claude) ===== */
+function libelle(x) {
+  if (x.frac) { const f = x.frac; return "⏱ Répét. " + f.rep + " — " + (f.mode === "dist" ? f.cible + " m en " + mmss(f.temps) : s1(f.temps) + " s, " + Math.round(f.dist) + " m") +
+    (f.dur ? " — dur à " + s1(f.dur.t) + " s / " + Math.round(f.dur.d) + " m" : " — bonnes sensations") +
+    (f.acc ? " — accélère à " + s1(f.acc.t) + " s / " + Math.round(f.acc.d) + " m" + (f.dur ? "" : " (double appui)") : f.dur ? " — n'a pas pu réaccélérer" : "") +
+    (f.rpe ? " — ressenti " + f.rpe : "") + (f.fcMax ? " — FC moy " + f.fcMoy + " / max " + f.fcMax : ""); }
+  if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
+  if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
+  if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
+  if (x.fracDebut) return "⏱ Début fractionné : " + x.fracDebut; if (x.fracFin) return "⏱ Fin fractionné";
+  if (x.n) return NOMS5[x.n]; if (x.km) return "📍 Km " + x.km; if (x.rep) return "📍 Repère " + x.rep;
+  return (x.voix ? "🎤 " : "📝 ") + (x.note || ""); }
+
+/* ===== Panneaux en chaîne (fermeture auto après 6 s sans appui) ===== */
+let pMinuteur = null;
+function panneau(titre, cases, choix, classe) { clearTimeout(pMinuteur); const p = $("#panneau"); p.classList.remove("cache"); $("#pTitre").textContent = titre;
+  $("#pGrille").innerHTML = cases.map((c, i) => `<button class="case ${classe ? classe + (i + 1) : ""}" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
+  $("#pGrille").querySelectorAll(".case").forEach(b => b.onclick = () => { vib(50); fermerPanneau(); choix(cases[Number(b.dataset.i)][1]); });
+  const k = $("#pCompte"); k.style.transition = "none"; k.style.width = "100%"; requestAnimationFrame(() => { k.style.transition = "width 6s linear"; k.style.width = "0%"; });
+  pMinuteur = setTimeout(fermerPanneau, 6000); }
+function fermerPanneau() { clearTimeout(pMinuteur); $("#panneau").classList.add("cache"); }
+$("#pPasser").onclick = fermerPanneau;
+
+function choisirTroncon(nom) { const prof = PROFILS[actCourante()] || PROFILS.footing, t = ajouter({ tr: nom });
+  panneau("② Sensation — " + nom, SENS, (s) => { modifier(t, { sens: s });
+    panneau("③ Ce qui domine", prof.domine, (d) => { modifier(t, { dom: d }); if (d === "Douleur") panneau("⚠️ Où ?", ZONES, (z) => modifier(t, { zone: z })); }); }, "s"); }
+
+function dessinerGrilles() { const a = actCourante(), prof = PROFILS[a];
+  $("#zTroncons").classList.toggle("cache", !prof); $("#zSimple").classList.toggle("cache", !!prof); $("#bFrac").classList.toggle("cache", a !== "footing");
+  if (prof) { $("#gTroncons").innerHTML = prof.troncons.map((c, i) => `<button class="case" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
+    $("#gTroncons").querySelectorAll(".case").forEach(b => b.onclick = () => choisirTroncon(prof.troncons[Number(b.dataset.i)][1])); }
+  else { $("#gSimple").innerHTML = SENS.map((c, i) => `<button class="case s${i + 1}" data-i="${i}"><b>${c[0]}</b>${c[1]}</button>`).join("");
+    $("#gSimple").querySelectorAll(".case").forEach(b => b.onclick = () => ajouter({ sensLibre: SENS[Number(b.dataset.i)][1] })); }
+  const barre = [["💧", "Boisson", () => panneau("💧 Boisson", BOIRE, (q) => ajouter({ boire: q }))], ["🍎", "Manger", () => panneau("🍎 Manger", MANGER, (q) => ajouter({ manger: q }))],
+    [AVEC_KM.includes(a) ? "⏸" : "⚠️", AVEC_KM.includes(a) ? "Arrêt" : "Douleur", AVEC_KM.includes(a) ? () => panneau("⏸ Arrêt", ARRET, (q) => ajouter({ arret: q })) : () => panneau("⚠️ Où ?", ZONES, (z) => ajouter({ douleur: z }))],
+    ["🎤", "Note", ouvrirMicro]];
+  $("#barre").innerHTML = barre.map((b, i) => `<button data-i="${i}">${b[0]}<br>${b[1]}</button>`).join(""); $("#barre").querySelectorAll("button").forEach(x => x.onclick = () => barre[Number(x.dataset.i)][2]()); }
+
+function dessinerActs() { const cur = actCourante(), l = ACTS.slice(); if (!ACTS.some(x => x[0] === cur)) l.push([cur, actNom(cur)]);
+  $("#acts").innerHTML = l.map(x => `<button class="act" data-a="${x[0].replace(/"/g, "")}" aria-pressed="${x[0] === cur}">${x[1]}</button>`).join("") + '<button class="act" data-a="+">➕ Autre</button>';
+  $("#acts").querySelectorAll(".act").forEach(b => b.onclick = () => { let a = b.dataset.a; if (a === "+") { a = (prompt("Nom de l'activité :") || "").trim(); if (!a) return; }
+    try { localStorage.setItem("act-courante", a); } catch (e) {} const r = courseActuelle(false); if (r.d && r.d.act !== a) { if (r.d.notes.length) r.d.close = true; else r.d.act = a; ecrire(r.c); } afficher(); }); }
+
+function afficher() { dessinerActs(); dessinerGrilles(); const { d } = courseActuelle(false);
+  $("#jour").textContent = new Date().toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
   if (!d || !d.notes.length) { $("#tab").innerHTML = '<tr><td class="vide">Rien de noté pour cette séance.</td></tr>'; $("#dernier").textContent = ""; return; }
   const l = d.notes[d.notes.length - 1]; $("#dernier").textContent = "Noté à " + hh(l.t) + " : " + libelle(l);
-  $("#tab").innerHTML = "<tr><th>Heure</th><th>Ressenti / note</th><th></th></tr>" + d.notes.map((x, i) => `<tr><td>${hh(x.t)}</td><td>${libelle(x).replace(/</g, "&lt;")}</td><td class="x"><button class="sec" data-i="${i}" style="padding:4px 8px">✕</button></td></tr>`).join("");
+  $("#tab").innerHTML = "<tr><th>Heure</th><th>Noté</th><th></th></tr>" + d.notes.map((x, i) => `<tr><td>${hh(x.t)}</td><td>${libelle(x).replace(/</g, "&lt;")}</td><td class="x"><button class="sec" data-i="${i}" style="padding:4px 8px">✕</button></td></tr>`).join("");
   $("#tab").querySelectorAll("button[data-i]").forEach(b => b.onclick = () => { if (!confirm("Effacer cette ligne ?")) return; const r = courseActuelle(false); r.d.notes.splice(Number(b.dataset.i), 1); ecrire(r.c); afficher(); }); }
-/* 🎤 Note vocale : la voix devient du texte tout de suite ; l'heure notée est celle du début */
-const Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
-let reco = null, vDebut = 0, vFini = "", vActif = false;
-function vAfficher(provisoire) { $("#vTexte").textContent = (vFini + " " + (provisoire || "")).trim(); }
-function vEcouter() { if (!Reco) return; reco = new Reco(); reco.lang = "fr-FR"; reco.interimResults = true; reco.continuous = false; reco.maxAlternatives = 1;
-  reco.onresult = (e) => { let p = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) vFini = (vFini + " " + r[0].transcript).trim(); else p += r[0].transcript; } vAfficher(p); };
-  reco.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") { vActif = false; vSecours("Micro refusé"); } else if (e.error === "network") { vActif = false; vSecours("Pas de réseau"); } };
-  reco.onend = () => { if (vActif) { try { reco.start(); } catch (x) {} } else if (!$("#vEtat").textContent.startsWith("🔴")) $("#vEtat").textContent = "⏸ Écoute arrêtée : vérifie et enregistre"; };
-  try { reco.start(); } catch (x) {} }
-let ctrlHub = null;
-function vFermer() { vActif = false; try { reco && reco.stop(); } catch (x) {} try { ctrlHub && ctrlHub.arreter(); } catch (x) {} ctrlHub = null; $("#voix").style.display = "none"; }
-function vSecours(m) { $("#vEtat").textContent = "🔴 " + m + " — écris ou touche le 🎤 du clavier"; const z = $("#vTexte"); z.focus(); }
-$("#micro").onclick = () => { vDebut = Date.now(); vFini = ""; vAfficher(""); $("#voix").style.display = "flex";
-  /* Dans le hub : c'est le hub qui écoute (le micro marche mal depuis une appli rangée) */
-  if (window.Hub && Hub.dicter) { $("#vEtat").textContent = "⏳ Ouverture du micro…"; ctrlHub = Hub.dicter({ texte: (f, p) => { vFini = f; vAfficher(p); }, etat: (m, ok) => { if (ok) $("#vEtat").textContent = "🟢 " + m; else vSecours(m); }, fin: () => {} }); try { navigator.vibrate(60); } catch (x) {} return; }
-  if (!Reco) { vSecours("Dictée indisponible ici"); return; }
-  $("#vEtat").textContent = "🟢 Je t'écoute… parle"; vActif = true; vEcouter(); try { navigator.vibrate(60); } catch (x) {} };
-$("#vOk").onclick = () => { const t = $("#vTexte").textContent.trim(); vFermer(); if (t) { const { c, d } = courseActuelle(true); d.notes.push({ t: vDebut, note: t, voix: true }); ecrire(c); try { navigator.vibrate(80); } catch (x) {} afficher(); } };
-$("#vNon").onclick = vFermer;
-document.querySelectorAll(".niv").forEach(b => b.onclick = () => ajouter({ n: Number(b.dataset.n) }));
+
 $("#note").onclick = () => { const t = prompt("Ta note :"); if (t && t.trim()) ajouter({ note: t.trim() }); };
-document.addEventListener("DOMContentLoaded", () => {});
-$("#km").onclick = () => { const { d } = courseActuelle(false); const a = d ? d.act : actChoisie(); if (AVEC_KM.includes(a)) ajouter({ km: (d ? d.notes.filter(x => x.km).length : 0) + 1 }); else ajouter({ rep: (d ? d.notes.filter(x => x.rep).length : 0) + 1 }); };
+$("#km").onclick = () => { const { d } = courseActuelle(false); const a = actCourante(); if (AVEC_KM.includes(a)) ajouter({ km: (d ? d.notes.filter(x => x.km).length : 0) + 1 }); else ajouter({ rep: (d ? d.notes.filter(x => x.rep).length : 0) + 1 }); };
 function texte() { const { d } = courseActuelle(false); const c = lire(), x = d || c[c.length - 1]; if (!x || !x.notes.length) return "";
-  return [actNom(x.act || "footing").replace(/^\S+\s/, "").toUpperCase() + " — JOURNAL — " + new Date(x.notes[0].t).toLocaleDateString("fr-FR") + " (début " + hh(x.notes[0].t) + ")", ...x.notes.map(n => hh(n.t) + " " + (n.n ? n.n + " " + NOMS[n.n] : libelle(n)))].join("\n"); }
+  return [actNom(x.act || "footing").replace(/^\S+\s/, "").toUpperCase() + " — JOURNAL — " + new Date(x.notes[0].t).toLocaleDateString("fr-FR") + " (début " + hh(x.notes[0].t) + ")", ...x.notes.map(n => hh(n.t) + " " + libelle(n))].join("\n"); }
 $("#copier").onclick = () => { const t = texte(); if (!t) return; navigator.clipboard.writeText(t).then(() => { $("#copier").textContent = "Copié ✓"; setTimeout(() => $("#copier").textContent = "Copier", 2000); }); };
 $("#envoyer").onclick = async () => { const t = texte(); if (!t) return; try { await navigator.share({ text: t }); } catch (e) { try { await navigator.clipboard.writeText(t); } catch (x) {} $("#envoyer").textContent = "Copié : colle-le à Claude"; } };
 $("#nouvelle").onclick = () => { const r = courseActuelle(false); if (r.d) { r.d.close = true; ecrire(r.c); } afficher(); };
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") afficher(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !enSeance) afficher(); });
+
+/* ===== 🎤 Note vocale (c'est le hub qui écoute, en continu) ===== */
+let ctrlHub = null, vDebut = 0, vFini = "";
+function vAfficher(p) { $("#vTexte").textContent = (vFini + " " + (p || "")).trim(); }
+function vFermer() { try { ctrlHub && ctrlHub.arreter(); } catch (x) {} ctrlHub = null; $("#voix").style.display = "none"; }
+function vSecours(m) { $("#vEtat").textContent = "🔴 " + m + " — écris ou touche le 🎤 du clavier"; $("#vTexte").focus(); }
+function ouvrirMicro() { vDebut = Date.now(); vFini = ""; vAfficher(""); $("#voix").style.display = "flex"; vib(60);
+  if (window.Hub && Hub.dicter) { $("#vEtat").textContent = "⏳ Ouverture du micro…"; ctrlHub = Hub.dicter({ texte: (f, p) => { vFini = f; vAfficher(p); }, etat: (m, ok) => { if (ok) $("#vEtat").textContent = "🟢 " + m; else vSecours(m); }, fin: () => {} }); }
+  else vSecours("Dictée disponible seulement dans le hub"); }
+$("#vOk").onclick = () => { const t = $("#vTexte").textContent.trim(); vFermer(); if (t) { const { c, d } = courseActuelle(true); d.notes.push({ t: vDebut, note: t, voix: true }); ecrire(c); vib(); afficher(); } };
+$("#vNon").onclick = vFermer;
+
+/* ===== ⏱ Fractionné : l'appli est le chrono ===== */
+let OPT = { mode: "dist", val: 400, nb: 6, rec: 90 }; try { OPT = Object.assign(OPT, JSON.parse(localStorage.getItem("frac-opt") || "{}")); } catch (e) {}
+const VALS = { dist: [200, 300, 400, 600, 800, 1000], temps: [20, 30, 45, 60, 90, 120] };
+function chips(id, liste, cle, fmt) { $(id).innerHTML = liste.map(v => `<button class="chip" data-v="${v}" aria-pressed="${OPT[cle] == v}">${fmt(v)}</button>`).join("");
+  $(id).querySelectorAll(".chip").forEach(b => b.onclick = () => { OPT[cle] = isNaN(b.dataset.v) ? b.dataset.v : Number(b.dataset.v); if (cle === "mode") OPT.val = OPT.mode === "dist" ? 400 : 30; reglages(); }); }
+function reglages() { try { localStorage.setItem("frac-opt", JSON.stringify(OPT)); } catch (e) {}
+  chips("#oType", ["dist", "temps"], "mode", v => v === "dist" ? "📏 Distance" : "⏱ Temps");
+  chips("#oVal", VALS[OPT.mode], "val", v => OPT.mode === "dist" ? v + " m" : v + " s");
+  chips("#oNb", [4, 5, 6, 8, 10, 12], "nb", v => "× " + v);
+  chips("#oRec", [30, 45, 60, 90, 120, 180], "rec", v => v < 60 ? v + " s" : (v / 60) + " min".replace(".", ",")); }
+$("#bFrac").onclick = () => { $("#frac").classList.remove("cache"); $("#fReglage").classList.remove("cache"); $("#fSeance").classList.add("cache"); reglages(); };
+$("#fAnnul").onclick = () => $("#frac").classList.add("cache");
+
+/* Cardio H10 en direct (facultatif) */
+let fc = null, fcSerie = [];
+$("#oH10").onclick = async () => { try { const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: ["heart_rate"] }] });
+  const car = await (await (await dev.gatt.connect()).getPrimaryService("heart_rate")).getCharacteristic("heart_rate_measurement");
+  car.addEventListener("characteristicvaluechanged", (e) => { const v = e.target.value; fc = v.getUint8(0) & 1 ? v.getUint16(1, true) : v.getUint8(1); fcSerie.push([performance.now(), fc]); if (enSeance) $("#fFc").textContent = "❤️ " + fc; });
+  await car.startNotifications(); $("#oH10").textContent = "❤️ H10 connectée"; $("#oH10").setAttribute("aria-pressed", "true"); } catch (e) { $("#oH10").textContent = "❤️ H10 : " + (e.message || e).slice(0, 40); } };
+
+/* GPS : distance de la répétition (filtre les points imprécis) */
+let gpsId = null, gpsDernier = null, gpsDist = 0;
+function hav(a, b) { const R = 6371000, r = Math.PI / 180, dLa = (b.latitude - a.latitude) * r, dLo = (b.longitude - a.longitude) * r; const x = Math.sin(dLa / 2) ** 2 + Math.cos(a.latitude * r) * Math.cos(b.latitude * r) * Math.sin(dLo / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); }
+function gpsMarche() { if (gpsId !== null || !navigator.geolocation) return; gpsId = navigator.geolocation.watchPosition(p => { const c = p.coords; if (c.accuracy > 30) return; if (gpsDernier) { const d = hav(gpsDernier, c); if (d < 60) gpsDist += d; } gpsDernier = c; }, () => {}, { enableHighAccuracy: true, maximumAge: 0 }); }
+function gpsStop() { if (gpsId !== null) navigator.geolocation.clearWatch(gpsId); gpsId = null; gpsDernier = null; }
+
+let enSeance = false, verrou = null, phase = "", rep = 0, t0 = 0, taps = [], tick = null, repEnCours = null;
+async function garderEcran() { try { verrou = await navigator.wakeLock.request("screen"); } catch (e) {} }
+function msgF(t) { $("#fMsg").textContent = t; }
+$("#fGo").onclick = () => { enSeance = true; rep = 0; garderEcran(); gpsMarche(); $("#fReglage").classList.add("cache"); $("#fSeance").classList.remove("cache");
+  ajouter({ fracDebut: OPT.nb + " × " + (OPT.mode === "dist" ? OPT.val + " m" : OPT.val + " s") + ", récup " + OPT.rec + " s" });
+  compteARebours(10, "Prépare-toi"); };
+function compteARebours(sec, titre) { phase = "attente"; $("#frac").className = "repos"; const fin = performance.now() + sec * 1000; let dernier = -1;
+  $("#fRep").textContent = "Répétition " + (rep + 1) + " / " + OPT.nb; $("#fSous").textContent = titre; msgF("");
+  clearInterval(tick); tick = setInterval(() => { const r = Math.ceil((fin - performance.now()) / 1000); $("#fGros").textContent = Math.max(0, r);
+    if (r <= 3 && r > 0 && r !== dernier) { dernier = r; dire(String(r)); vib(60); } if (r <= 0) { clearInterval(tick); effort(); } }, 50); }
+function effort() { rep++; phase = "effort"; $("#frac").className = "effort"; t0 = performance.now(); taps = []; gpsDist = 0; fcSerie = fcSerie.filter(x => x[0] > t0 - 1000);
+  $("#fRpe").classList.add("cache"); $("#fRep").textContent = "Répétition " + rep + " / " + OPT.nb; $("#fSous").textContent = OPT.mode === "dist" ? "0 / " + OPT.val + " m" : "Effort " + OPT.val + " s";
+  dire("Go"); vib(300); msgF("Touche l'écran si tu dois ralentir");
+  repEnCours = { t: Date.now(), frac: { rep, mode: OPT.mode, cible: OPT.val, temps: 0, dist: 0, dur: null, acc: null } };
+  clearInterval(tick); tick = setInterval(() => { const e = performance.now() - t0; $("#fGros").textContent = s1(e);
+    if (OPT.mode === "dist") { $("#fSous").textContent = Math.round(gpsDist) + " / " + OPT.val + " m"; if (gpsDist >= OPT.val) finEffort(); }
+    else { $("#fSous").textContent = Math.round(gpsDist) + " m — reste " + Math.max(0, Math.ceil(OPT.val - e / 1000)) + " s"; if (e >= OPT.val * 1000) finEffort(); } }, 50); }
+/* Appuis pendant l'effort : 1er = dur ; suivant = j'accélère ; double appui rapide = j'accélère */
+$("#fZone").addEventListener("pointerdown", () => { if (phase !== "effort") return; const e = performance.now() - t0, f = repEnCours.frac, now = performance.now();
+  taps.push(now); const double = taps.length >= 2 && now - taps[taps.length - 2] < 450;
+  if (double && f.dur && f.dur.t > e - 450 && !f.acc && taps.length === 2) { f.dur = null; }   // les 2 appuis du double appui ne comptent pas comme « dur »
+  if (double && !f.acc) { f.acc = { t: e, d: gpsDist }; vib([60, 60, 60]); msgF("💥 J'accélère — " + s1(e) + " s"); }
+  else if (!f.dur && !double) { f.dur = { t: e, d: gpsDist }; vib(150); msgF("😣 Ralentir noté à " + s1(e) + " s — touche encore si tu réaccélères"); }
+  else if (f.dur && !f.acc && !double) { f.acc = { t: e, d: gpsDist }; vib([60, 60, 60]); msgF("💥 J'accélère — " + s1(e) + " s"); } });
+function finEffort() { clearInterval(tick); const e = performance.now() - t0, f = repEnCours.frac; f.temps = e; f.dist = gpsDist;
+  const s = fcSerie.filter(x => x[0] >= t0).map(x => x[1]); if (s.length) { f.fcMax = Math.max(...s); f.fcMoy = Math.round(s.reduce((a, b) => a + b, 0) / s.length); }
+  const { c, d } = courseActuelle(true); d.notes.push(repEnCours); ecrire(c); const tRep = repEnCours.t;
+  dire(rep < OPT.nb ? "Récup" : "Terminé"); vib([200, 100, 200]);
+  phase = "repos"; $("#frac").className = "repos"; $("#fSous").textContent = (OPT.mode === "dist" ? OPT.val + " m en " + mmss(e) : Math.round(gpsDist) + " m en " + OPT.val + " s");
+  msgF(f.dur ? (f.acc ? "Ralenti à " + s1(f.dur.t) + " s, réaccéléré à " + s1(f.acc.t) + " s" : "Ralenti à " + s1(f.dur.t) + " s, pas de relance") : f.acc ? "Bonnes sensations + accélération finale" : "Bonnes sensations du début à la fin");
+  $("#fRpe").classList.remove("cache"); $("#gRpe").innerHTML = RPE.map((r, i) => `<button class="case s${i + 1}" data-i="${i}"><b>${r[0]}</b>${r[1]}</button>`).join("");
+  $("#gRpe").querySelectorAll(".case").forEach(b => b.onclick = () => { vib(50); modifier(tRep, { frac: Object.assign({}, f, { rpe: RPE[Number(b.dataset.i)][1] }) }); $("#fRpe").classList.add("cache"); });
+  if (rep >= OPT.nb) { setTimeout(() => { if (enSeance) finSeance(); }, 15000); $("#fGros").textContent = "✓"; return; }
+  const fin = performance.now() + OPT.rec * 1000; let dernier = -1;
+  tick = setInterval(() => { const r = Math.ceil((fin - performance.now()) / 1000); $("#fGros").textContent = r; $("#fRep").textContent = "Récup — répétition " + (rep + 1) + " / " + OPT.nb + " ensuite";
+    if (r === 10 && dernier !== 10) { dernier = 10; dire("10 secondes"); } if (r <= 3 && r > 0 && r !== dernier) { dernier = r; dire(String(r)); vib(60); }
+    if (r <= 0) { clearInterval(tick); $("#fRpe").classList.add("cache"); effort(); } }, 50); }
+function finSeance() { clearInterval(tick); enSeance = false; phase = ""; gpsStop(); if (verrou) verrou.release().catch(() => {}); ajouter({ fracFin: true }); $("#frac").classList.add("cache"); afficher(); }
+$("#fStop").onclick = () => { if (!confirm("Arrêter le fractionné ?")) return; if (phase === "effort") finEffort(); finSeance(); };
+
 afficher();
 </script>
 </body>
