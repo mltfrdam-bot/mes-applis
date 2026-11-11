@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v28</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v29</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
@@ -583,14 +583,36 @@ function pReglage() { try { localStorage.setItem("pompes-opt", JSON.stringify(PO
   const ch = pChoisi(); if (ch) { $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>👻 Fantôme choisi : <b>" + ch.nom + "</b> — " + ch.tl.length + " pompes en " + gm(ch.tl[ch.tl.length - 1]) + (ch.tl.length >= PO.obj ? " (" + PO.obj + " en " + gm(ch.tl[PO.obj - 1]) + ")" : ""); return; }
   const f = pompesFantome(PO.obj); $("#pFant").innerHTML = "🏆 Record sur une série : <b>" + recordSerie() + "</b><br>" + (f ? "👻 Fantôme : <b>" + PO.obj + " pompes en " + gm(f.tl[PO.obj - 1]) + "</b> (" + f.nom + ")" : "Pas encore de séance à " + PO.obj + " pompes : celle-ci deviendra ton premier fantôme."); }
 $("#bPompes").onclick = () => { $("#pomp").classList.remove("cache"); $("#pReglage").classList.remove("cache"); $("#pSeance").classList.add("cache"); pReglage(); };
+/* envoi à Claude : copier (résumé ou tout) pour coller dans la conversation, ou fichier (Drive / partage) */
+async function copier(txt) { try { await navigator.clipboard.writeText(txt); return true; } catch (e) {}
+  try { const t = document.createElement("textarea"); t.value = txt; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select(); const ok = document.execCommand("copy"); t.remove(); return ok; } catch (e) { return false; } }
+function exporterChoix(el, nom, txt, resume) { const ko = (t) => Math.max(1, Math.round(t.length / 1024)) + " Ko";
+  el.innerHTML = `<div class="ligne" style="flex-wrap:wrap;gap:6px;margin-top:6px"><button class="sec" data-x="r">📋 Copier le résumé (${ko(resume)})</button><button class="sec" data-x="t">📋 Copier tout (${ko(txt)})</button><button class="sec" data-x="f">💾 Fichier (Drive, partage)</button></div><div class="aide" data-m></div>`;
+  const msg = el.querySelector("[data-m]");
+  el.querySelector('[data-x="r"]').onclick = async () => { msg.textContent = (await copier(resume)) ? "✅ Résumé copié : colle-le dans la conversation avec Claude." : "⚠️ Copie refusée par le téléphone : utilise 💾 Fichier."; };
+  el.querySelector('[data-x="t"]').onclick = async () => { msg.textContent = (await copier(txt)) ? "✅ Tout copié (" + ko(txt) + ") : colle-le dans la conversation avec Claude." : "⚠️ Copie refusée par le téléphone : utilise 💾 Fichier."; };
+  el.querySelector('[data-x="f"]').onclick = async () => {
+    try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); msg.textContent = "✅ Envoyé"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); msg.textContent = "✅ « " + nom + " » enregistré"; return; } } catch (e) {}
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); msg.textContent = "✅ « " + nom + " » téléchargé"; }; }
+function resumeRec(l) { const g = (v) => (v / 1000).toFixed(1).replace(".", ",");
+  let t = "ENREGISTREMENTS H10 — résumé\nRéglage impacts actuel : " + g(IMP.seuil) + " g\n";
+  l.forEach(r => { const d = new Date(r.debut), L = r.l || [], R = r.res || {}; t += "\n" + actNom(r.act) + " — " + d.toLocaleDateString("fr-FR") + " " + hh(r.debut).slice(0, 5) + " · " + hm(R.duree || 0) + " enregistrées, actif " + hm(R.actif || 0) + ", " + (R.pics || 0) + " impacts, FC moy " + (R.fcMoy || "–") + " / max " + (R.fcMax || "–") + "\n";
+    let prev = 0; L.forEach(x => { if (x[0] - prev > 60) t += "  ⚠️ trou de " + hm(x[0] - prev) + " à " + hh(r.debut + prev * 1000).slice(0, 5) + "\n"; prev = x[0]; });
+    t += "  Tranche | FC moy/max | mouvement moy | secondes > 1,5 g / > 2 g / > 2,5 g\n";
+    const tr = {}; L.forEach(x => { const k = Math.floor(x[0] / 600); (tr[k] = tr[k] || []).push(x); });
+    Object.keys(tr).forEach(k => { const v = tr[k], f = v.map(x => x[1]).filter(Boolean), c = (th) => v.filter(x => x[3] > th - 1000).length;
+      t += "  " + hh(r.debut + k * 600000).slice(0, 5) + " | " + (f.length ? Math.round(f.reduce((a, b) => a + b, 0) / f.length) + "/" + Math.max(...f) : "–") + " | " + Math.round(v.reduce((a, x) => a + x[2], 0) / v.length) + " | " + c(1500) + " / " + c(2000) + " / " + c(2500) + "\n"; });
+    if (r.pics && r.pics.length) t += "  Mouvements nets : " + r.pics.length + " (comptés " + r.pics.filter(x => x[2]).length + ")\n"; });
+  const cl = calLog(); if (cl.length) t += "\nRéglages :\n" + cl.map(x => hh(x.t).slice(0, 5) + " " + (x.type === "essai" ? "essai " + x.n + " coups : " + (x.pics || []).slice(0, x.n).map(g).join(" ") + " | non compté " + (x.nonCompte ? g(x.nonCompte) : "–") + " → " + g(x.seuil) + " g" : x.sens + " → " + g(x.seuil) + " g")).join("\n");
+  return t; }
 function testsH10() { const l = []; lire().forEach(c => c.notes.forEach(n => { const add = (x) => { if (x && x.polar != null) l.push(Object.assign({ quand: new Date(n.t).toISOString() }, x)); };
     if (n.pompes && n.pompes.test) n.pompes.test.forEach(add); if (n.pjour && n.pjour.seances) n.pjour.seances.forEach(z => (z.test || []).forEach(add)); }));
   try { (PJ ? PJ.seances : []).forEach(z => (z.test || []).forEach(x => x && x.polar != null && l.push(Object.assign({ quand: "journée en cours" }, x)))); } catch (e) {} return l; }
-$("#pExport").onclick = async () => { const l = testsH10(); if (!l.length) { $("#pExpInfo").textContent = "Rien à envoyer : fais d'abord une séance avec 🧪 Test."; return; }
-  const nom = "tests-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v17", series: l });
-  try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "Tests H10" }); $("#pExpInfo").textContent = "✅ Envoyé (" + Math.round(txt.length / 1024) + " Ko)"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
-  try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); $("#pExpInfo").textContent = "✅ Fichier « " + nom + " » enregistré : envoie-le à Claude"; return; } } catch (e) {}
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); $("#pExpInfo").textContent = "✅ Fichier « " + nom + " » téléchargé : envoie-le à Claude"; };
+$("#pExport").onclick = () => { const l = testsH10(); if (!l.length) { $("#pExpInfo").textContent = "Rien à envoyer : fais d'abord une séance avec 🧪 Test."; return; }
+  const nom = "tests-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v29", series: l });
+  const res = "TESTS H10 — comptage des pompes\n" + l.map((x, i) => (i + 1) + ". " + (x.quand || "").slice(0, 16).replace("T", " ") + " · " + (x.exo || "") + " · toi " + x.tap + (x.man ? " (dont " + x.man + " ajoutées)" : "") + " / H10 " + x.polar + (x.diff != null ? " · " + DIFF[x.diff] : "")).join("\n");
+  exporterChoix($("#pExpInfo"), nom, txt, res); };
 $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
 let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
@@ -845,11 +867,9 @@ function bilan() { const acts = [...new Set(lire().filter(x => x.notes.length).m
   $("#bOnglets").innerHTML = [["pompes", "💪 Pompes"]].concat(acts.map(a => [a, actNom(a)])).map(x => `<button class="chip" data-o="${x[0]}" aria-pressed="${bOnglet === x[0]}">${x[1]}</button>`).join("");
   $("#bOnglets").querySelectorAll(".chip").forEach(b => b.onclick = () => { bOnglet = b.dataset.o; bilan(); });
   $("#bCorps").innerHTML = (bOnglet === "pompes" ? bilanPompes() : bilanActivite(bOnglet)) + '<div class="ligne" style="margin-top:14px"><button class="sec" id="bExpRec">📤 Envoyer les enregistrements H10 à Claude</button></div><div class="aide" id="bExpInfo"></div>';
-  $("#bExpRec").onclick = async () => { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.h10rec) l.push(n.h10rec); })); if (!l.length && !calLog().length) { $("#bExpInfo").textContent = "Pas encore d'enregistrement H10."; return; }
-    const nom = "enreg-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v26", colonnes: ["seconde", "fc", "mouvement moyen mg", "mouvement max mg", "impacts"], colonnesPics: ["seconde", "force mg", "compté", "seuil mg"], enregistrements: l, reglagesImpacts: calLog(), reglageActuel: IMP });
-    try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); $("#bExpInfo").textContent = "✅ Envoyé"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
-    try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); $("#bExpInfo").textContent = "✅ « " + nom + " » enregistré"; return; } } catch (e) {}
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); }; }
+  $("#bExpRec").onclick = () => { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.h10rec) l.push(n.h10rec); })); if (!l.length && !calLog().length) { $("#bExpInfo").textContent = "Pas encore d'enregistrement H10."; return; }
+    const nom = "enreg-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v29", colonnes: ["seconde", "fc", "mouvement moyen mg", "mouvement max mg", "impacts"], colonnesPics: ["seconde", "force mg", "compté", "seuil mg"], enregistrements: l, reglagesImpacts: calLog(), reglageActuel: IMP });
+    exporterChoix($("#bExpInfo"), nom, txt, resumeRec(l)); }; }
 $("#bBilan").onclick = () => { $("#bilan").classList.remove("cache"); bilan(); };
 $("#bFermer").onclick = () => $("#bilan").classList.add("cache");
 const ECRANS = ["#verrou", "#panneau", "#pomp", "#fant", "#frac", "#histo", "#bilan"];
