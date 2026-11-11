@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.30';
+const HUB_VERSION = '1.31';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -707,12 +707,13 @@ async function afficherCarteSignal(){
   const att=l.filter(s=>s.statut==='attente').length;
   c.innerHTML='<h2>📍 Signalements pour Claude</h2>'+
     '<p class="aide">Bouton 📍 en haut de l\'écran : tu touches l\'endroit, tu écris ton message, il part dans ton dépôt GitHub privé, où je le lis.</p>'+
-    '<div class="tablo"><table><tr><th>Dépôt</th><td>'+esc(reg.depot)+'</td></tr><tr><th>Clé</th><td>'+(reg.cle?'<span class="ok">enregistrée</span>':'<span class="att">pas encore réglée</span>')+'</td></tr><tr><th>En attente</th><td>'+att+'</td></tr></table></div>'+
+    '<div class="tablo"><table><tr><th>Dépôt</th><td>'+esc(reg.depot)+'</td></tr><tr><th>Clé</th><td>'+(reg.cle?'<span class="ok">enregistrée</span> <small>'+esc(reg.cle.slice(0,11)+'••••'+reg.cle.slice(-4))+'</small> <button class="btn petit gris" id="sCopie">📋 Copier</button>':'<span class="att">pas encore réglée</span>')+'</td></tr><tr><th>En attente</th><td>'+att+'</td></tr></table></div>'+
     '<button class="btn" id="sGuide">📖 Guide : dépôt privé et clé</button><button class="btn gris" id="sRegl">🔑 Régler la clé</button><button class="btn gris" id="sHisto">📚 Historique</button>'+(att?'<button class="btn vert" id="sEnv">📨 Envoyer maintenant</button>':'')+
     (l.length?'<p class="aide" style="margin-top:12px">Touche une ligne pour <b>modifier</b>, marquer <b>✅ réglé</b> (il sort du rapport) ou <b>supprimer</b>.</p>'+
       (att?'<button class="btn petit gris" id="sToutRegle">✅ Tout marquer réglé</button>':'')+
       '<div class="tablo"><table class="sigs"><tr><th>Écrit le</th><th>Message</th><th>État</th></tr>'+l.slice(0,30).map(s=>'<tr data-sig="'+s.id+'"'+(s.statut==='regle'?' class="regle"':'')+'><td>'+dateFr(s.cree).replace(/\/\d{4}/,'').replace(' ','<br>')+'</td><td><small>'+esc(s.app.nom)+'</small><br>'+esc(TYPES_SIG[s.type].slice(0,2)+' '+s.message.slice(0,80))+'</td><td>'+(s.statut==='envoye'?'<span class="ok">✅ envoyé n°'+s.numero+'</span>':s.statut==='regle'?'✔ réglé':'<span class="att">⏳ attente'+(s.erreur?'<br><small>'+esc(s.erreur)+'</small>':'')+'</span>')+'</td></tr>').join('')+'</table></div>':'');
   c.querySelector('#sGuide').onclick=guideSignal;
+  const cp=c.querySelector('#sCopie'); if(cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(reg.cle); toast('📋 Clé copiée : colle-la dans une note pour la garder',4000); }catch(e){ toast('Copie impossible'); } };
   const hi=c.querySelector('#sHisto'); if(hi) hi.onclick=voirHistorique;
   c.querySelectorAll('tr[data-sig]').forEach(tr=>tr.onclick=()=>gererSignal(tr.dataset.sig));
   const tr=c.querySelector('#sToutRegle'); if(tr) tr.onclick=async()=>{ const l2=(await tous('signalements')).filter(x=>x.statut==='attente'); for(const x of l2){ x.statut='regle'; x.regleLe=new Date().toISOString(); await poser('signalements',x); } toast('✅ '+l2.length+' marqué(s) réglé(s)'); afficherCarteSignal(); };
@@ -759,7 +760,7 @@ async function reglerCle(){
   const reg=await reglageSignal();
   const v=await fenetre('🔑 Régler la clé','<label>Dépôt (nom-du-compte/nom-du-dépôt)</label><input type="text" id="kDep" value="'+esc(reg.depot)+'">'+
     '<label>Clé (commence par github_pat_)</label><input type="text" id="kCle" value="" placeholder="'+(reg.cle?'Clé déjà enregistrée : colle une nouvelle clé pour la remplacer':'Colle la clé ici')+'" autocomplete="off" autocapitalize="off" spellcheck="false">'+
-    '<p class="aide">La clé reste dans ton téléphone. Elle n\'est jamais mise dans les sauvegardes.</p>',
+    '<p class="aide">Par sécurité la clé n\'est jamais réaffichée ici (champ vide = normal). Pour la copier : carte « Signalements », bouton 📋. Elle voyage avec ta synchro et tes sauvegardes, pour tous tes appareils.</p>',
     [{texte:'Enregistrer et tester',classe:'vert',valeur:f=>({depot:f.querySelector('#kDep').value.trim().replace(/^https?:\/\/github\.com\//,'').replace(/\/$/,''), cle:f.querySelector('#kCle').value.trim()})},
      {texte:'Effacer la clé',classe:'rouge',valeur:'effacer'},{texte:'Annuler',classe:'gris',valeur:null}]);
   if(!v) return;
@@ -895,7 +896,7 @@ async function optionsApp(id){
     {texte:'📌 Raccourci sur l\'écran d\'accueil',classe:'gris',valeur:'raccourci'},{texte:'📤 Enregistrer le code de l\'appli',classe:'gris',valeur:'export'},{texte:'🗑️ Retirer du hub',classe:'rouge',valeur:'retirer'},{texte:'Fermer',classe:'gris',valeur:null});
   const c=await fenetre((a.icone||'')+' '+a.nom,'<div class="tablo"><table>'+
     '<tr><th>Version</th><td>'+esc(a.version)+'</td></tr><tr><th>Origine</th><td>'+(a.source==='catalogue'?'Catalogue':'Fichier « '+esc(a.fichier||'')+' »')+'</td></tr>'+
-    '<tr><th>Sauvegarde du hub</th><td>'+(estHors?'📴 Données gardées seulement dans cet appareil (utilise la sauvegarde de l\'appli)':'✅ Incluse')+'</td></tr>'+
+    '<tr><th>Sauvegarde du hub</th><td>'+(estHors?'✅ Données dans l\'appli — 📴 pas copiées dans les sauvegardes du hub (fais la sauvegarde de l\'appli)':'✅ Incluse')+'</td></tr>'+
     '<tr><th>Ajoutée le</th><td>'+dateFr(a.ajouteeLe)+'</td></tr><tr><th>Modifiée le</th><td>'+dateFr(a.majLe)+'</td></tr></table></div>', boutons);
   if(c==='ouvrir'){ history.replaceState(null,''); ouvrirApp(id); }
   else if(c==='majcat'){ const cat=await lireMeta('catalogue',{applis:[]}); const e=(cat.applis||[]).find(x=>x.id===id); if(e && await installerDuCatalogue(e)) vueGererRendu(); }
@@ -1074,9 +1075,9 @@ function fusionObjets(a,b){
 const CLES_PRIVEES=/^(prive[-:]|mc-compte$)/;
 const estPrive = k => CLES_PRIVEES.test(k);
 /* 📴 Applis « hors sauvegarde du hub » : leurs données restent dans l'appareil (elles ont leur propre sauvegarde).
-   Par défaut : l'Atelier Lecture (livres, audio… trop lourds : ils bloquaient le hub). Le code de l'appli, lui, voyage toujours. */
+   Aucune par défaut (choix dans ⚙️ Gérer → l'appli). Le code de l'appli, lui, voyage toujours. */
 async function horsSauvegarde(){ const l=await lireMeta('horsSauvegarde',null); if(Array.isArray(l)) return new Set(l);
-  return new Set((await tous('apps')).filter(a=>/^f-atelier-lecture/.test(a.id)||/atelier\s*lecture/i.test(a.nom||'')).map(a=>a.id)); }
+  return new Set(); }
 async function basculerHorsSauvegarde(id){ const h=await horsSauvegarde(); if(h.has(id)) h.delete(id); else h.add(id); await ecrireMeta('horsSauvegarde',[...h]); localSale=true; return h.has(id); }
 async function fabriquerSauvegarde(){
   const apps=await tous('apps'), hors=await horsSauvegarde();
@@ -1323,7 +1324,7 @@ const syncConfig = () => lireMeta('synchro', null);   // {url, cle, appareil, re
 function trierCles(o){ if(Array.isArray(o)) return o.map(trierCles); if(o&&typeof o==='object'){ const r={}; Object.keys(o).sort().forEach(k=>r[k]=trierCles(o[k])); return r; } return o; }
 function empreinte(s){
   const c=Object.assign({},s); delete c.creeeLe; delete c.hub;
-  c.applis=(c.applis||[]).map(a=>{ const b=Object.assign({},a); delete b.ouverteLe; return b; });
+  c.applis=(c.applis||[]).map(a=>{ const b=Object.assign({},a); delete b.ouverteLe; if(typeof b.code==='string') b.code=b.code.length+'|'+(b.majLe||'')+'|'+b.version; return b; });   // ⚡ 1.31 : le code (jusqu'à 25 Mo) n'est plus relu lettre par lettre
   const t=JSON.stringify(trierCles(c)); let h1=0xdeadbeef, h2=0x41c6ce57;
   for(let i=0;i<t.length;i++){ const ch=t.charCodeAt(i); h1=Math.imul(h1^ch,2654435761); h2=Math.imul(h2^ch,1597334677); }
   h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);

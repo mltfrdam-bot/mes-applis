@@ -72,6 +72,14 @@
     <p class="note">Voix française unique : Siwis. La prononciation française est calculée dans la tablette (même module que Piper) : rien n'est envoyé ailleurs.</p>
   </section>
 
+  <section class="carte" id="c-place">
+    <h2>🧹 Place prise par les tests</h2>
+    <p class="note">Les voix téléchargées ici sont rangées dans le téléphone, à la même adresse que ton hub (elles ne sont pas dans ses sauvegardes). Ces boutons n'effacent <b>que</b> les voix : jamais tes applis ni tes données.</p>
+    <table id="pl-tab"></table>
+    <div class="ligne"><button id="pl-kok">🗑 Effacer Kokoro (inutile, trop lent)</button><button id="pl-pip">🗑 Effacer les voix Piper</button><button id="pl-maj">↻</button></div>
+    <div class="etat" id="pl-etat"></div>
+  </section>
+
   <p class="note">Le chiffre important : <b>« Vitesse de fabrication »</b>. Au-dessus de × 1, la tablette fabrique plus vite qu'elle ne lit : la lecture reste fluide, sans blanc. En dessous, il faudra préparer les chapitres à l'avance (ce que ferait l'appli, en arrière-plan).</p>
 </main>
 
@@ -158,6 +166,18 @@ $("#k-go").onclick = async () => {
   } catch (e) { etat.textContent = "Erreur : " + (e && e.message || e); }
   btn.disabled = false;
 };
+/* ---------- Place prise ---------- */
+const mo = (n) => (n / 1e6).toFixed(1).replace(".", ",") + " Mo";
+async function place() { const l = [];
+  try { const e = await navigator.storage.estimate(); l.push(["Tout ce site (hub compris)", mo(e.usage || 0)]); } catch (x) {}
+  let kok = 0; try { for (const n of await caches.keys()) if (/transformers/i.test(n)) { const c = await caches.open(n); for (const r of await c.keys()) { const b = await (await c.match(r)).blob(); kok += b.size; } } } catch (x) {}
+  l.push(["Kokoro (modèle téléchargé)", mo(kok)]);
+  try { const d = await (await navigator.storage.getDirectory()).getDirectoryHandle("piper", { create: false }); for await (const [n, h] of d.entries()) if (n.endsWith(".onnx")) l.push(["Piper : " + n.replace(".onnx", ""), mo((await h.getFile()).size)]); } catch (x) {}
+  tableau("#pl-tab", l); }
+$("#pl-maj").onclick = place;
+$("#pl-kok").onclick = async () => { let n = 0; for (const k of await caches.keys()) if (/transformers/i.test(k)) { await caches.delete(k); n++; } kokoro = null; $("#pl-etat").textContent = n ? "Kokoro effacé." : "Rien à effacer."; place(); };
+$("#pl-pip").onclick = async () => { if (!confirm("Effacer les voix Piper ? (elles se retéléchargent au besoin)")) return; try { await (await (await navigator.storage.getDirectory()).getDirectoryHandle("piper")).remove({ recursive: true }); } catch (x) { try { await (await navigator.storage.getDirectory()).removeEntry("piper", { recursive: true }); } catch (y) {} } $("#pl-etat").textContent = "Voix Piper effacées."; place(); };
+place();
 if (!navigator.gpu) { const o = $("#k-mode").options[1]; o.textContent += " — indisponible ici"; }
 </script>
 </body>
