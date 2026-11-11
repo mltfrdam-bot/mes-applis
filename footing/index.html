@@ -57,10 +57,11 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v25</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v26</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
-  <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button></div>
+  <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
+  <div id="calRap" class="cache" style="background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:8px;margin:6px 0;overflow:auto"></div>
   <div id="calInfo" class="cache" style="background:#fff;border:3px solid #5b4b8a;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
     <div style="font-weight:800;color:#5b4b8a">🎯 RÉGLAGE DES IMPACTS</div>
     <div id="calTxt" style="font-size:16px;margin:6px 0">Fais tes coups (par ex. 10), à ta force normale, puis touche « J'ai fini ».</div>
@@ -379,7 +380,7 @@ $("#bRec").onclick = async () => { if (REC) return; if (!(h10 && h10.gatt.connec
 $("#recStop").onclick = () => { if (recAttente && !REC) { if (!confirm("Terminer sans reprendre ?")) return; REC = recAttente; recAttente = null; recTerminer(); return; } if (!REC || !confirm("Arrêter l'enregistrement ?")) return; recTerminer(); };
 function recTerminer() { if (recSec) recFermer(recSec); const R = REC, r = recResume(R); REC = null; recSec = null; accArreter(); sonStop(); pleinEcran(false); try { localStorage.removeItem("h10-rec"); } catch (e) {}
   if (actCourante() !== R.act) { try { localStorage.setItem("act-courante", R.act); } catch (e) {} const rr = courseActuelle(false); if (rr.d && rr.d.act !== R.act) { if (rr.d.notes.length) rr.d.close = true; else rr.d.act = R.act; ecrire(rr.c); } }
-  ajouter({ h10rec: { debut: R.debut, act: R.act, res: r, l: R.l, coupures: R.coupures || 0 } }); afficher(); $("#recInfo").classList.add("cache"); $("#bRec").classList.remove("cache"); }
+  ajouter({ h10rec: { debut: R.debut, act: R.act, res: r, l: R.l, coupures: R.coupures || 0, pics: R.pics || [] } }); afficher(); $("#recInfo").classList.add("cache"); $("#bRec").classList.remove("cache"); }
 setInterval(recMaj, 1000);
 $("#recAct").onclick = () => { if (!REC) return; const l = toutesActs(), i = l.findIndex(x => x[0] === REC.act); REC.act = l[(i + 1) % l.length][0]; $("#recAct").textContent = actNom(REC.act) + " ✎"; };
 let accN = 0, accTaux = 0; setInterval(() => { accTaux = accN / 2; accN = 0; }, 2000);
@@ -395,20 +396,36 @@ setInterval(() => { if (CAL) $("#calVal").textContent = calPics(CAL.l, 600).filt
 $("#calAnnul").onclick = () => { CAL = null; if (!REC) accArreter(); $("#calInfo").classList.add("cache"); $("#bCal").classList.remove("cache"); };
 $("#calFin").onclick = () => { if (!CAL) return; const n = parseInt(prompt("Combien de coups as-tu faits ?", "10"), 10); if (!n) return;
   const pics = calPics(CAL.l, 600).map(x => x[1]).sort((a, b) => b - a); CAL = null; if (!REC) accArreter();
-  if (pics.length < n) { $("#calTxt").innerHTML = "Je n'ai vu que " + pics.length + " mouvements pour " + n + " coups : la ceinture ne sent pas assez certains coups. Seuil mis au minimum (1,3 g)."; IMP = { seuil: 1300, rearme: 1150 }; }
+  if (pics.length < n) { calNoter({ type: "essai", n, pics, nonCompte: null, seuil: 1300, manque: n - pics.length }); $("#calTxt").innerHTML = "Je n'ai vu que " + pics.length + " mouvements pour " + n + " coups : la ceinture ne sent pas assez certains coups. Seuil mis au minimum (1,3 g)."; IMP = { seuil: 1300, rearme: 1150 }; }
   else { const fort = pics[n - 1], faible = pics[n] || 1250, s2 = Math.round((fort + faible) / 2); IMP = { seuil: s2, rearme: Math.round(1000 + (s2 - 1000) * 0.6) };
+    calNoter({ type: "essai", n, pics: pics.slice(0, n + 5), nonCompte: pics[n] || null, seuil: s2 });
     $("#calTxt").innerHTML = "✅ Seuil réglé à <b>" + (s2 / 1000).toFixed(2).replace(".", ",") + " g</b> (avant : 2,50 g).<br>Tes " + n + " coups : " + pics.slice(0, n).map(v => (v / 1000).toFixed(1).replace(".", ",")).join(" · ") + " g<br>Plus fort mouvement non compté : " + (faible / 1000).toFixed(1).replace(".", ",") + " g" + (fort - faible < 150 ? "<br>⚠️ Écart faible : coups et déplacements se ressemblent, refais un essai." : ""); }
   IMP.bip = IMP.bip !== false; try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} sensMaj(); $("#calVal").textContent = ""; $("#calFin").classList.add("cache"); setTimeout(() => { $("#bCal").classList.remove("cache"); }, 500); };
 /* sensibilité en direct : chaque mouvement net est mesuré, compté ou non, avec bip si compté */
 let pic = null, derPic = null, derBipT = 0;
+const calLog = () => { try { return JSON.parse(localStorage.getItem("impact-essais") || "[]"); } catch (e) { return []; } };
+function calNoter(x) { const l = calLog(); l.push(Object.assign({ t: Date.now() }, x)); try { localStorage.setItem("impact-essais", JSON.stringify(l.slice(-300))); } catch (e) {} }
+const gg = (v) => v == null ? "–" : (v / 1000).toFixed(1).replace(".", ",");
+function calRapport() { const l = calLog().slice().reverse(); if (!l.length) return "<p class='aide'>Aucun essai enregistré pour l'instant.</p>";
+  const essais = l.filter(x => x.type === "essai");
+  let h = "<b>📋 Rapport des réglages d'impacts</b><br><small>" + essais.length + " essai(s) · réglage actuel " + gg(IMP.seuil) + " g</small>";
+  h += "<table><tr><th>Quand</th><th>Quoi</th><th>Coups (g)</th><th>Non compté max</th><th>Seuil</th></tr>" + l.map(x => {
+    const q = new Date(x.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + hh(x.t).slice(0, 5);
+    if (x.type === "essai") return `<tr><td>${q}</td><td>🎯 ${x.n} coups</td><td style="font-size:12px">${(x.pics || []).slice(0, x.n).map(gg).join(" · ")}</td><td>${gg(x.nonCompte)}</td><td><b>${gg(x.seuil)}</b></td></tr>`;
+    return `<tr><td>${q}</td><td>${x.ctx === "enreg" ? "📡 en jeu" : "🎯 en essai"} ${x.sens}</td><td>${x.dernier ? "dernier " + gg(x.dernier) : ""}</td><td></td><td>${gg(x.seuil)}</td></tr>`; }).join("") + "</table>";
+  if (essais.length > 1) { const tous = [].concat(...essais.map(x => (x.pics || []).slice(0, x.n))).sort((a, b) => a - b), nc = essais.map(x => x.nonCompte || 0);
+    h += "<p style='font-size:14px'>Sur tous tes essais : coups entre <b>" + gg(tous[0]) + "</b> et <b>" + gg(tous[tous.length - 1]) + " g</b> (moitié au-dessus de " + gg(tous[Math.floor(tous.length / 2)]) + " g) · mouvements non comptés jusqu'à <b>" + gg(Math.max(...nc)) + " g</b>.</p>"; }
+  return h; }
+$("#bCalRap").onclick = () => { const r = $("#calRap"); r.classList.toggle("cache"); if (!r.classList.contains("cache")) r.innerHTML = calRapport(); };
 function sensMaj() { document.querySelectorAll(".sVal").forEach(x => x.textContent = (IMP.seuil / 1000).toFixed(1).replace(".", ",") + " g");
   document.querySelectorAll(".sBip").forEach(x => x.checked = IMP.bip !== false);
   document.querySelectorAll(".sDer").forEach(x => x.innerHTML = derPic ? "Dernier : " + (derPic.m / 1000).toFixed(1).replace(".", ",") + " g " + (derPic.m > IMP.seuil ? "<span style='color:#2e8b57'>✅ compté</span>" : "<span style='color:#c0392b'>✗ pas compté</span>") : ""); }
-function sensRegler(d) { IMP.seuil = Math.min(4000, Math.max(1200, Math.round((IMP.seuil + d) / 100) * 100)); IMP.rearme = Math.round(1000 + (IMP.seuil - 1000) * 0.6); try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} vib(20); sensMaj(); }
+function sensRegler(d) { setTimeout(() => calNoter({ type: "reglage", sens: d < 0 ? "+ sensible" : "− sensible", seuil: IMP.seuil, ctx: REC ? "enreg" : "essai", dernier: derPic ? derPic.m : null }), 0); IMP.seuil = Math.min(4000, Math.max(1200, Math.round((IMP.seuil + d) / 100) * 100)); IMP.rearme = Math.round(1000 + (IMP.seuil - 1000) * 0.6); try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} vib(20); sensMaj(); }
 document.querySelectorAll(".sMoins").forEach(b => b.onclick = () => sensRegler(+100));
 document.querySelectorAll(".sPlus").forEach(b => b.onclick = () => sensRegler(-100));
 document.querySelectorAll(".sBip").forEach(b => b.onchange = () => { IMP.bip = b.checked; try { localStorage.setItem("impact-reglage", JSON.stringify(IMP)); } catch (e) {} sensMaj(); });
 function picSuivre(m, t) { if (!pic) { if (m > 1250) pic = { m, t }; return; } if (m > pic.m) pic.m = m; if (m < 1150) { if (pic.m > 1400 && t - (derPic ? derPic.t : 0) > 400) { derPic = { m: pic.m, t };
+      if (REC) { (REC.pics = REC.pics || []).push([Math.floor((Date.now() - REC.debut) / 1000), Math.round(pic.m), pic.m > IMP.seuil ? 1 : 0, IMP.seuil]); }
       if (pic.m > IMP.seuil && IMP.bip !== false && Date.now() - derBipT > 300) { derBipT = Date.now(); bip(1); vib(40); } sensMaj(); } pic = null; } }
 function accEchantillon(m, t, a) { accN++; if (CAL) CAL.l.push([t, m]); if (CAL || REC) picSuivre(m, t); if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
   const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
@@ -826,8 +843,8 @@ function bilan() { const acts = [...new Set(lire().filter(x => x.notes.length).m
   $("#bOnglets").innerHTML = [["pompes", "💪 Pompes"]].concat(acts.map(a => [a, actNom(a)])).map(x => `<button class="chip" data-o="${x[0]}" aria-pressed="${bOnglet === x[0]}">${x[1]}</button>`).join("");
   $("#bOnglets").querySelectorAll(".chip").forEach(b => b.onclick = () => { bOnglet = b.dataset.o; bilan(); });
   $("#bCorps").innerHTML = (bOnglet === "pompes" ? bilanPompes() : bilanActivite(bOnglet)) + '<div class="ligne" style="margin-top:14px"><button class="sec" id="bExpRec">📤 Envoyer les enregistrements H10 à Claude</button></div><div class="aide" id="bExpInfo"></div>';
-  $("#bExpRec").onclick = async () => { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.h10rec) l.push(n.h10rec); })); if (!l.length) { $("#bExpInfo").textContent = "Pas encore d'enregistrement H10."; return; }
-    const nom = "enreg-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v21", colonnes: ["seconde", "fc", "mouvement moyen mg", "mouvement max mg", "impacts"], enregistrements: l });
+  $("#bExpRec").onclick = async () => { const l = []; lire().forEach(c => c.notes.forEach(n => { if (n.h10rec) l.push(n.h10rec); })); if (!l.length && !calLog().length) { $("#bExpInfo").textContent = "Pas encore d'enregistrement H10."; return; }
+    const nom = "enreg-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v26", colonnes: ["seconde", "fc", "mouvement moyen mg", "mouvement max mg", "impacts"], colonnesPics: ["seconde", "force mg", "compté", "seuil mg"], enregistrements: l, reglagesImpacts: calLog(), reglageActuel: IMP });
     try { const f = new File([txt], nom, { type: "application/json" }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f] }); $("#bExpInfo").textContent = "✅ Envoyé"; return; } } catch (e) { if (e && e.name === "AbortError") return; }
     try { if (window.Hub && Hub.enregistrer) { await Hub.enregistrer(nom, txt, "application/json"); $("#bExpInfo").textContent = "✅ « " + nom + " » enregistré"; return; } } catch (e) {}
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" })); a.download = nom; a.click(); }; }
