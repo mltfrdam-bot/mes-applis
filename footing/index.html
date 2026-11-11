@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v27</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v28</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
@@ -804,7 +804,7 @@ const jourCle = (t) => { const d = new Date(t); return d.getFullYear() + "-" + S
 const lundi = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.getTime(); };
 const jj = (t) => new Date(t).toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" });
 function statsTl(tl) { const sers = [], rep = []; let c = [tl[0]]; for (let i = 1; i < tl.length; i++) { if (tl[i] - tl[i - 1] > 5) { sers.push(c); rep.push(tl[i] - tl[i - 1]); c = []; } c.push(tl[i]); } sers.push(c);
-  const iv = [].concat(...sers.map(x => x.slice(1).map((t, i) => t - x[i]))); return { n: tl.length, temps: tl[tl.length - 1], series: sers.map(x => x.length), repos: rep.length ? rep.reduce((a, b) => a + b, 0) / rep.length : 0, cad: iv.length ? iv.reduce((a, b) => a + b, 0) / iv.length : 0 }; }
+  const iv = [].concat(...sers.map(x => x.slice(1).map((t, i) => t - x[i]))); return { n: tl.length, temps: tl[tl.length - 1], series: sers.map(x => x.length), reposL: rep, repos: rep.length ? rep.reduce((a, b) => a + b, 0) / rep.length : 0, cad: iv.length ? iv.reduce((a, b) => a + b, 0) / iv.length : 0 }; }
 function seancesPompes() { const l = [];
   CARNET_POMPES.forEach(x => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const t = m ? new Date(2026, Number(m[2]) - 1, Number(m[1]), Number(m[3]), Number(m[4])).getTime() : 0; l.push(Object.assign({ t, src: "Carnet" }, statsTl(x.tl))); });
   lire().forEach(c => c.notes.forEach(n => { if (n.pompes && n.pompes.tl && n.pompes.tl.length) { const st = statsTl(n.pompes.tl); l.push(Object.assign({ t: n.t, src: "Journal", diffs: n.pompes.diffs, fcs: n.pompes.fcs }, st, { series: n.pompes.series || st.series })); }
@@ -825,11 +825,12 @@ function bilanPompes() { const l = seancesPompes(), now = Date.now(); if (!l.len
   // séances comparables : même total (à 10 % près)
   const groupes = {}; l.filter(x => !x.jour).forEach(x => { const k = [30, 50, 100, 150, 200].find(v => Math.abs(x.n - v) <= v * 0.1) || x.n; (groupes[k] = groupes[k] || []).push(x); });
   Object.keys(groupes).map(Number).sort((a, b) => b - a).forEach(k => { const g = groupes[k]; if (g.length < 1) return;
-    h += "<h2>⚖️ Séances de " + k + " pompes (" + g.length + ")</h2>" + tabl(["Date", "Temps", "Séries", "Repos moy.", "s/pompe", "Ressenti"], g.slice().reverse().map((x, i, a) => { const p = a[i + 1];
+    h += "<h2>⚖️ Séances de " + k + " pompes (" + g.length + ")</h2>" + tabl(["Date", "Temps", "Séries", "Repos moy.", "s/pompe", "Ressenti", "Chaque repos"], g.slice().reverse().map((x, i, a) => { const p = a[i + 1];
       const res = x.diffs && x.diffs.some(d => d != null) ? x.diffs.filter(d => d != null).map(d => DIFF[d].split(" ")[0]).join("") : "";
-      return [jj(x.t) + "<br><small>" + x.src + "</small>", gm(x.temps) + delta(x.temps, p && p.temps, gm), x.series.join("-"), gm(x.repos) + delta(x.repos, p && p.repos, gm), v1(x.cad) + delta(x.cad, p && p.cad, v1), res]; })); });
+      const cible = 90, rl = (x.reposL || []).map(r => "<span style='color:" + (Math.abs(r - cible) <= 10 ? "#2e8b57" : r > cible ? "#c0392b" : "#1d5fbf") + "'>" + gm(r) + "</span>").join(" ");
+      return [jj(x.t) + "<br><small>" + x.src + "</small>", gm(x.temps) + delta(x.temps, p && p.temps, gm), x.series.join("-"), gm(x.repos) + delta(x.repos, p && p.repos, gm), v1(x.cad) + delta(x.cad, p && p.cad, v1), res, "<small>" + rl + "</small>"]; })); });
   const j = l.filter(x => x.jour); if (j.length) h += "<h2>📅 Journées</h2>" + tabl(["Date", "Pompes", "Durée", "Séries"], j.slice().reverse().map(x => [jj(x.t), x.n, hm(x.temps), x.series.length]));
-  return h + "<p class='aide'>Les écarts en vert/rouge comparent à la séance précédente du même type. s/pompe = vitesse moyenne pendant les séries (repos exclus).</p>"; }
+  return h + "<p class='aide'>Les écarts en vert/rouge comparent à la séance précédente du même type. s/pompe = vitesse moyenne pendant les séries (repos exclus). Chaque repos : <span style='color:#2e8b57'>vert</span> = 1:30 à 10 s près, <span style='color:#c0392b'>rouge</span> = plus long, <span style='color:#1d5fbf'>bleu</span> = plus court.</p>"; }
 function bilanActivite(a) { const c = lire().filter(x => (x.act || "footing") === a && x.notes.length), now = Date.now(); if (!c.length) return "<p class='aide'>Pas encore de séance.</p>";
   const dur = (x) => (x.notes[x.notes.length - 1].t - x.debut) / 1000, fcm = (x) => { const f = x.notes.filter(n => n.fc).map(n => n.fc); return f.length ? Math.round(f.reduce((p, q) => p + q, 0) / f.length) : null; };
   const sens = (x) => { const l = x.notes.map(n => n.sens).filter(Boolean); if (!l.length) return ""; const o = {}; l.forEach(v => o[v] = (o[v] || 0) + 1); return Object.entries(o).sort((p, q) => q[1] - p[1])[0][0]; };
