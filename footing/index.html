@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v21</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v22</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div id="recInfo" class="cache" style="background:#fff;border:3px solid #c0392b;border-radius:14px;padding:10px;margin:6px 0;text-align:center">
@@ -354,18 +354,21 @@ function recEch(m, t) { const sec = Math.floor((Date.now() - REC.debut) / 1000);
   const dv = Math.abs(m - 1000); recSec.n++; recSec.som += dv; if (dv > recSec.max) recSec.max = dv;
   if (m > 2500 && !recSec.enPic && t - (REC.derPic || 0) > 400) { recSec.pics++; REC.derPic = t; recSec.enPic = true; } else if (m < 1800) recSec.enPic = false; }
 function recFermer(x) { REC.l.push([x.s, fcFraiche() || 0, Math.round(x.som / Math.max(1, x.n)), Math.round(x.max), x.pics]);
-  if (Date.now() - recSauveT > 10000) { recSauveT = Date.now(); try { localStorage.setItem("h10-rec", JSON.stringify(REC)); } catch (e) {} } }
+  if (Date.now() - recSauveT > 5000) { recSauveT = Date.now(); REC.maj = Date.now(); try { localStorage.setItem("h10-rec", JSON.stringify(REC)); } catch (e) {} } }
 function recResume(R) { const l = R.l, act = l.filter(x => x[2] > 120).length, fcs = l.map(x => x[1]).filter(Boolean), pics = l.reduce((a, x) => a + x[4], 0);
   return { duree: l.length, actif: act, pics, fcMoy: fcs.length ? Math.round(fcs.reduce((a, b) => a + b, 0) / fcs.length) : null, fcMax: fcs.length ? Math.max(...fcs) : null }; }
-function recMaj() { if (!REC) return; const r = recResume(REC); $("#recVal").innerHTML = hm(r.duree) + " · ❤️ " + (fcFraiche() || "–") + " · ⚡ " + r.pics + " impacts · actif " + hm(r.actif) + "<br><small style='font-size:13px;color:#5b6470'>" + accEtat() + "</small>"; }
+function recMaj() { if (!REC) return; const tr = Math.floor((Date.now() - REC.debut) / 1000) - REC.l.length; const r = recResume(REC); $("#recVal").innerHTML = hm(r.duree) + " · ❤️ " + (fcFraiche() || "–") + " · ⚡ " + r.pics + " impacts · actif " + hm(r.actif) + (tr > 30 ? " · ⚠️ " + hm(tr) + " perdues" : "") + "<br><small style='font-size:13px;color:#5b6470'>" + accEtat() + "</small>"; }
 $("#bRec").onclick = async () => { if (REC) return; if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
   REC = { debut: Date.now(), act: actCourante(), l: [] }; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret();
-  $("#recAct").textContent = actNom(REC.act); $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); };
-$("#recStop").onclick = () => { if (!REC || !confirm("Arrêter l'enregistrement ?")) return; recTerminer(); };
+  $("#recAct").textContent = actNom(REC.act) + " ✎"; $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); };
+$("#recStop").onclick = () => { if (recAttente && !REC) { if (!confirm("Terminer sans reprendre ?")) return; REC = recAttente; recAttente = null; recTerminer(); return; } if (!REC || !confirm("Arrêter l'enregistrement ?")) return; recTerminer(); };
 function recTerminer() { if (recSec) recFermer(recSec); const R = REC, r = recResume(R); REC = null; recSec = null; accArreter(); sonStop(); pleinEcran(false); try { localStorage.removeItem("h10-rec"); } catch (e) {}
-  ajouter({ h10rec: { debut: R.debut, act: R.act, res: r, l: R.l } }); $("#recInfo").classList.add("cache"); $("#bRec").classList.remove("cache"); }
+  if (actCourante() !== R.act) { try { localStorage.setItem("act-courante", R.act); } catch (e) {} const rr = courseActuelle(false); if (rr.d && rr.d.act !== R.act) { if (rr.d.notes.length) rr.d.close = true; else rr.d.act = R.act; ecrire(rr.c); } }
+  ajouter({ h10rec: { debut: R.debut, act: R.act, res: r, l: R.l, coupures: R.coupures || 0 } }); afficher(); $("#recInfo").classList.add("cache"); $("#bRec").classList.remove("cache"); }
 setInterval(recMaj, 1000);
-function accEchantillon(m, t, a) { if (REC) recEch(m, t); accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 180000) accBuf.splice(0, 60000);
+$("#recAct").onclick = () => { if (!REC) return; const l = toutesActs(), i = l.findIndex(x => x[0] === REC.act); REC.act = l[(i + 1) % l.length][0]; $("#recAct").textContent = actNom(REC.act) + " ✎"; };
+let accN = 0, accTaux = 0; setInterval(() => { accTaux = accN / 2; accN = 0; }, 2000);
+function accEchantillon(m, t, a) { accN++; if (REC) recEch(m, t); if (enSeance) { accBuf.push([t, Math.round(m), a[0], a[1], a[2]]); if (accBuf.length > 60000) accBuf.splice(0, 20000); }
   const D = accDet, nc = Math.round(DET.court * ACC_HZ), nl = Math.round(DET.long * ACC_HZ), nf = Math.round(DET.fen * ACC_HZ);
   D.c.push(m); if (D.c.length > nc) D.c.shift(); D.l.push(m); if (D.l.length > nl) D.l.shift();
   const v = D.c.reduce((x, y) => x + y, 0) / D.c.length - D.l.reduce((x, y) => x + y, 0) / D.l.length;
@@ -386,7 +389,7 @@ async function accDemarrer() { accVoulu = true; if (!h10Pmd || accOn) return; tr
     await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x02, 0x02, 0x00, 0x01, 0x32, 0x00, 0x01, 0x01, 0x10, 0x00, 0x02, 0x01, 0x08, 0x00])); accOn = true; accErr = ""; } catch (e) { accOn = false; accErr = String(e.message || e).slice(0, 60); } }
 function accEtat() { if (!(h10 && h10.gatt.connected)) return "⚠️ H10 non connectée : touche ici pour la connecter";
   if (!h10Pmd) return "⚠️ capteur de mouvement non accessible sur ce téléphone"; if (accErr) return "⚠️ " + accErr; if (!accOn) return "capteur en attente…";
-  const r = accBuf.filter(x => x[0] > performance.now() - 2000).length / 2; return r ? "✅ capteur actif (" + Math.round(r) + " mesures/s)" : "⚠️ capteur activé mais aucune mesure reçue"; }
+  const r = accTaux; return r ? "✅ capteur actif (" + Math.round(r) + " mesures/s)" : "⚠️ capteur activé mais aucune mesure reçue"; }
 async function accArreter() { accVoulu = false; if (!h10Pmd || !accOn) return; accOn = false; try { await h10Pmd.cp.writeValueWithResponse(new Uint8Array([0x03, 0x02])); } catch (e) {} }
 const accCompte = (a, b) => accEv.filter(t => t >= a && t <= b).length;
 
@@ -807,7 +810,13 @@ window.addEventListener("popstate", () => { if (retIgnore) { retIgnore = false; 
 try { const ec = JSON.parse(localStorage.getItem("pompes-encours") || "null"); if (ec && ec.tl && ec.tl.length) { localStorage.removeItem("pompes-encours"); const n = ec.tl.length;
   ajouter({ pompes: { obj: ec.obj, total: n, temps: Math.round(ec.tl[n - 1]), series: ec.series, tl: ec.tl, res: n + " pompes en " + gm(ec.tl[n - 1]) + " (séance coupée : appli fermée par le téléphone)" } }); } } catch (e) {}
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && enSeance) { garderEcran(); if (PO.test && !accOn) accDemarrer(); } });
-try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && r.l && r.l.length) { localStorage.removeItem("h10-rec"); ajouter({ h10rec: { debut: r.debut, act: r.act, res: recResume(r), l: r.l, coupe: true } }); } } catch (e) {}
+let recAttente = null;
+try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && r.l && r.l.length) {
+  if (Date.now() - (r.maj || r.debut) < 3 * 3600e3) { recAttente = r; $("#recInfo").classList.remove("cache"); $("#bRec").classList.add("cache"); $("#recAct").textContent = actNom(r.act) + " (coupé)";
+    $("#recVal").innerHTML = "L'appli s'est fermée. " + hm(r.l.length) + " déjà enregistrées.<br><button class='main' id='recReprendre' style='margin-top:8px'>▶ Reprendre l'enregistrement</button>";
+    $("#recReprendre").onclick = async () => { if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
+      REC = recAttente; recAttente = null; REC.coupures = (REC.coupures || 0) + 1; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret(); $("#recAct").textContent = actNom(REC.act); }; }
+  else { localStorage.removeItem("h10-rec"); ajouter({ h10rec: { debut: r.debut, act: r.act, res: recResume(r), l: r.l, coupe: true } }); } } } catch (e) {}
 afficher();
 </script>
 </body>
