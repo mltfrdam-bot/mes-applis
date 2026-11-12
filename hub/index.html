@@ -57,8 +57,12 @@
   .emojis{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .emojis button{font-size:24px;background:#fff;border:1px solid #d3d8e0;border-radius:8px;padding:4px 7px}
   #bandeau{display:none;background:#fff4e6;border-bottom:1px solid #f0c08a;padding:10px 14px;font-size:15px}
-  #vueApp{position:fixed;left:0;right:0;bottom:0;top:56px;background:#fff;display:none}
-  #vueApp iframe{border:0;width:100%;height:100%;display:block}
+  #vueApp{position:fixed;left:0;right:0;bottom:0;top:56px;background:#fff;visibility:hidden;pointer-events:none}
+  #vueApp.on{visibility:visible;pointer-events:auto}
+  /* 1.36 : les applis récentes restent prêtes en mémoire (cachées), rouvrir = instantané */
+  #vueApp iframe{border:0;width:100%;height:100%;display:block;position:absolute;inset:0;visibility:hidden;pointer-events:none}
+  #vueApp.on iframe.actif{visibility:visible;pointer-events:auto}
+  .tuile:active{transform:scale(.94);filter:brightness(.93);transition:transform .05s}
   #voile{position:fixed;inset:0;background:rgba(20,25,35,.45);display:none;align-items:center;justify-content:center;z-index:20;padding:14px}
   #fenetre{background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:88vh;overflow:auto;padding:16px}
   #fenetre h3{margin:0 0 10px;font-size:19px}
@@ -97,7 +101,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.35';
+const HUB_VERSION = '1.36';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -371,7 +375,7 @@ let vueCourante='accueil', urlApp=null;
 function montrer(vue, rendu, titre){
   vueCourante=vue;
   $('#titre').textContent=titre||'Mon Hub';
-  $('#vueApp').style.display='none';
+  $('#vueApp').classList.remove('on');
   $('#contenu').style.display='block';
   $('#btnRetour').classList.toggle('cache', vue==='accueil');
   $('#outils').classList.toggle('cache', vue!=='accueil');
@@ -396,8 +400,10 @@ async function vueAccueil(){
   $('#titre').textContent=titreHub();
   $('#btnRetour').classList.add('cache'); $('#outils').classList.remove('cache'); document.title=titreHub();
   appliquerModeSimple();
-  $('#vueApp').style.display='none'; $('#contenu').style.display='block';
+  $('#vueApp').classList.remove('on'); $('#contenu').style.display='block';
   const apps=await listeApps();
+  for(const [id,ce] of [...CACHE_APPS]){ const x=apps.find(y=>y.id===id); if(!x || x.code!==ce.code) jeterApp(id); }      // appli supprimée ou mise à jour : on la libère
+  prechauffer(apps);
   const derniere=await lireMeta('derniereSauvegarde',null);
   let rappel='';
   if(apps.length){
@@ -428,6 +434,26 @@ async function vueAccueil(){
 }
 
 /* ---------- Ouvrir une appli ---------- */
+/* 1.36 « mémoire vive » : les 4 dernières applis restent chargées (cachées) → rouvrir est instantané, on la retrouve où on l'a laissée.
+   Jetée si : nouvelle version de l'appli, synchro/fusion/restauration qui change les données, appli supprimée, ou plus de 4 en mémoire. */
+const CACHE_APPS=new Map(), CACHE_MAX=4;
+const ALLOW_APP='camera *; microphone *; accelerometer *; gyroscope *; magnetometer *; geolocation *; fullscreen *; bluetooth *; screen-wake-lock *; clipboard-write *; autoplay *; web-share *';
+function creerCadre(a){
+  const url=URL.createObjectURL(new Blob([preparerCode(a.code, a.id)],{type:'text/html'}));
+  const fr=document.createElement('iframe'); fr.setAttribute('allow',ALLOW_APP); fr.setAttribute('allowfullscreen',''); fr.src=url; fr.dataset.app=a.id;
+  $('#vueApp').appendChild(fr);
+  const e={fr, url, code:a.code, pret:null, vu:Date.now()}; CACHE_APPS.set(a.id, e);
+  limiterCache(); return e;
+}
+function limiterCache(){ while(CACHE_APPS.size>CACHE_MAX){ let vieux=null; for(const [id,e] of CACHE_APPS){ if(e.fr.classList.contains('actif')) continue; if(!vieux || e.vu<CACHE_APPS.get(vieux).vu) vieux=id; } if(!vieux) break; jeterApp(vieux); } }
+function jeterApp(id){ const e=CACHE_APPS.get(id); if(!e) return; CACHE_APPS.delete(id); try{ e.fr.remove(); }catch(x){} try{ URL.revokeObjectURL(e.url); }catch(x){} }
+function viderCacheApps(){ for(const id of [...CACHE_APPS.keys()]) jeterApp(id); }
+/* Préchauffage : au retour sur l'accueil, les 2 applis ouvertes le plus récemment se préparent en douce */
+let prechauffeT=null;
+function prechauffer(apps){ clearTimeout(prechauffeT); prechauffeT=setTimeout(()=>{
+  if(vueCourante!=='accueil' || syncEnCours || document.visibilityState!=='visible'){ prechauffer(apps); return; }
+  apps.filter(a=>a.code && a.ouverteLe && !CACHE_APPS.has(a.id)).sort((x,y)=>String(y.ouverteLe).localeCompare(String(x.ouverteLe))).slice(0, Math.max(0, 2-CACHE_APPS.size)).forEach(a=>creerCadre(a));
+}, 2500); }
 async function ouvrirApp(id, objet){ appliModifiee=true; localSale=true;
   if(syncEnCours){ toast('☁️ Synchronisation en cours, un instant…'); while(syncEnCours) await new Promise(r=>setTimeout(r,200)); }
   const a=objet || await un('apps',id); if(!a) return;
@@ -437,17 +463,19 @@ async function ouvrirApp(id, objet){ appliModifiee=true; localSale=true;
   $('#titre').textContent=(a.icone||'')+' '+a.nom;
   $('#btnRetour').classList.remove('cache'); $('#outils').classList.add('cache'); document.title=a.nom;
   $('#contenu').style.display='none';
-  const zone=$('#vueApp'); zone.style.display='block';
-  urlApp=URL.createObjectURL(new Blob([preparerCode(a.code, a.id)],{type:'text/html'}));
-  const fr=document.createElement('iframe');
-  fr.setAttribute('allow','camera *; microphone *; accelerometer *; gyroscope *; magnetometer *; geolocation *; fullscreen *; bluetooth *; screen-wake-lock *; clipboard-write *; autoplay *; web-share *');
-  fr.setAttribute('allowfullscreen','');
-  fr.src=urlApp;
-  zone.innerHTML=''; zone.appendChild(fr);
+  const zone=$('#vueApp'); zone.classList.add('on');
+  let e=objet ? null : CACHE_APPS.get(a.id);
+  if(e && e.code!==a.code){ jeterApp(a.id); e=null; }                 // nouvelle version : on repart de la bonne
+  const dejaPret = !!(e && e.pret!==null);
+  if(!e){ if(objet){ jeterApp(a.id); } e=creerCadre(a); if(objet) e.apercu=true; }
+  e.vu=Date.now(); e.fr.classList.add('actif'); urlApp=e.url;
+  try{ e.fr.focus(); }catch(x){}
   if(!objet){ a.ouverteLe=new Date().toISOString(); poser('apps',a); }
   demarrerSession(a);
+  if(dejaPret && session){ session.chargeMs=0; session.memoire=true; enregistrerSession(); }
 }
-function fermerApp(){ terminerSession(); const z=$('#vueApp'); z.innerHTML=''; z.style.display='none'; if(urlApp){ URL.revokeObjectURL(urlApp); urlApp=null; } }
+function fermerApp(){ terminerSession(); const z=$('#vueApp'); z.querySelectorAll('iframe.actif').forEach(f=>f.classList.remove('actif')); z.querySelectorAll('.alerteApp').forEach(b=>b.remove()); z.classList.remove('on'); urlApp=null;
+  for(const [id,e] of [...CACHE_APPS]) if(e.apercu) jeterApp(id); }
 
 /* ---------- Santé des applis : journal des ouvertures, erreurs et temps de démarrage ---------- */
 let session=null;
@@ -462,12 +490,13 @@ function terminerSession(){ if(!session) return; enregistrerSession(); session=n
 window.addEventListener('pagehide', enregistrerSession);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') enregistrerSession(); });
 function avertirApp(texte){
-  const z=$('#vueApp'); if(!z || z.style.display==='none') return;
+  const z=$('#vueApp'); if(!z || !z.classList.contains('on')) return;
   let b=z.querySelector('.alerteApp');
   if(!b){ b=document.createElement('div'); b.className='alerteApp'; b.style.cssText='position:absolute;left:8px;right:8px;top:8px;background:#fff4e6;border:1px solid #f0c08a;border-radius:10px;padding:10px 12px;font-size:15px;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:3'; z.appendChild(b); }
   b.innerHTML=esc(texte)+' <button class="btn petit gris">OK</button>'; b.querySelector('button').onclick=()=>b.remove();
 }
 window.HubSignal=function(appId,type,info){
+  if(type==='charge'){ const ce=CACHE_APPS.get(appId); if(ce && ce.pret===null) ce.pret=info.ms; }
   if(!session || session.app!==appId) return;
   if(type==='charge'){ session.chargeMs=info.ms; if(session.bloquee){ session.bloquee=false; } }
   else if(type==='ressource'){ session.ressources++; if(session.messages.length<20) session.messages.push({quand:new Date().toISOString(), type, message:info.message}); }
@@ -585,9 +614,9 @@ async function reglageSignal(){ return await lireMeta('signalement',{depot:DEPOT
 /* Étape 1 : toucher l'endroit concerné (dans l'appli ouverte, ou dans le hub). */
 function pointer(){
   return new Promise(fin=>{
-    const fr=$('#vueApp iframe');
+    const fr=$('#vueApp iframe.actif');
     let doc=document, win=window;
-    try{ if(fr && fr.contentDocument && $('#vueApp').style.display!=='none'){ doc=fr.contentDocument; win=fr.contentWindow; } }catch(e){}
+    try{ if(fr && fr.contentDocument && $('#vueApp').classList.contains('on')){ doc=fr.contentDocument; win=fr.contentWindow; } }catch(e){}
     const ban=document.createElement('div'); ban.id='pointage';
     ban.innerHTML='📍 Touche l\'endroit concerné<br><small style="font-weight:400">(fais d\'abord défiler jusqu\'à l\'endroit, puis appuie sur 📍)</small><br><button class="btn petit gris" id="pSans">Sans endroit précis</button><button class="btn petit gris" id="pAnn">Annuler</button>';
     document.body.appendChild(ban);
@@ -1020,7 +1049,7 @@ async function exporterBase(nom){
   return res;
 }
 /* Ajoute dans une base ce qui manque (n'écrase jamais). Renvoie {ajoutes, presents, notes}. */
-async function fusionnerBase(dump){
+async function fusionnerBase(dump){ viderCacheApps();
   const bilan={ajoutes:0, presents:0, notes:[]};
   const existe=(await toutesLesBasesApps()).some(b=>b.name===dump.nom);
   let creee=false;
@@ -1209,7 +1238,7 @@ function plusRecente(a,b){
   return String(a.majLe||'')>String(b.majLe||'');
 }
 const nomNorm = n => String(n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
-async function fusionner(s){
+async function fusionner(s){ viderCacheApps();
   const lignes=[]; if(await recevoirReglages(s)) lignes.push(['🔑 Clé des signalements','Reçue de l\'autre appareil : les 📍 partent maintenant d\'ici aussi','ok']); const nomApp=id=>{ const a=(s.applis||[]).find(x=>x.id===id); return a?a.nom:id; };
   // 1) Applis (code) : la version la plus récente gagne ; une même appli ajoutée sur deux appareils n'est gardée qu'une fois
   const actuelles=await tous('apps'); let ordre=actuelles.length; const alias={};
@@ -1450,7 +1479,7 @@ async function synchroniser(manuel){
 
 /* Remplace tout le contenu du hub par une sauvegarde (sans question : utilisé par la synchro et par « Restaurer »).
    Les données privées (comptes, mots de passe) restent en place. */
-async function remplacerTout(s){
+async function remplacerTout(s){ viderCacheApps();
   const hors=await horsSauvegarde();   // les données des applis « hors sauvegarde » ne sont jamais effacées
   Object.keys(localStorage).filter(k=>{ if(!k.startsWith(PREFIXE)) return false; const r=k.slice(PREFIXE.length), i=r.indexOf(':'); if(hors.has(i>=0?r.slice(0,i):r)) return false; return !estPrive(i>=0?r.slice(i+1):r); })
     .forEach(k=>localStorage.removeItem(k));
