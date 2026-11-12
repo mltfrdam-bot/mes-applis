@@ -1,0 +1,242 @@
+/* Journal d'activité (APK) — le cœur, sans écran : données, import du Hub, fusion, descriptif, lignes de l'historique.
+   Chargé par index.html, et testé seul par tests/test-noyau.js (node).
+   Règle n° 1 : aucune donnée perdue. Une fusion n'écrase jamais rien, et dit tout ce qu'elle a ajouté. */
+(function (g) {
+"use strict";
+const Integre = (typeof module !== "undefined" && module.exports) ? require("./donnees-integrees.js") : g.DonneesIntegrees;
+
+const FORMAT = "journal-activite";
+const CLE_COURSES = "footing-courses";
+/* clés du Journal dans le Hub (v31) */
+const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
+  "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
+const CLES_LISTES = ["acts-perso", "acts-masquees", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
+
+/* ===== Activités ===== */
+const ACTS = [["footing", "🏃", "Course"], ["tennis", "🎾", "Tennis"], ["pompes", "💪", "Pompes"], ["muscu", "🏋️", "Muscu"], ["velo", "🚴", "Vélo"], ["marche", "🚶", "Marche"]];
+function actInfo(a) { const x = ACTS.find(y => y[0] === a); if (x) return { id: a, icone: x[1], nom: x[2] };
+  if (a === "chantier") return { id: a, icone: "🏗️", nom: "Chantier" }; return { id: a, icone: "✳️", nom: String(a || "Activité") }; }
+function actNom(a) { const i = actInfo(a); return i.icone + " " + i.nom; }
+function lireListe(v) { try { const l = JSON.parse(v || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+function toutesActs(base) { const l = ACTS.map(x => x[0]); lireListe(base.reglages["acts-perso"]).forEach(a => { if (typeof a === "string" && a && !l.includes(a)) l.push(a); }); return l; }
+function actsVisibles(base) { const m = lireListe(base.reglages["acts-masquees"]); return toutesActs(base).filter(a => !m.includes(a)); }
+
+/* ===== Dates et durées : toujours à l'heure de La Réunion ===== */
+const TZ = "Indian/Reunion";
+const f = (o) => new Intl.DateTimeFormat("fr-FR", Object.assign({ timeZone: TZ }, o));
+const F_JOUR = f({ weekday: "short", day: "2-digit", month: "2-digit" }), F_JOURAN = f({ weekday: "short", day: "2-digit", month: "2-digit", year: "2-digit" });
+const F_DATE = f({ day: "2-digit", month: "2-digit", year: "numeric" }), F_H = f({ hour: "2-digit", minute: "2-digit", hourCycle: "h23" }), F_HS = f({ hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+const F_AN = f({ year: "numeric" });
+const annee = (t) => F_AN.format(new Date(t));
+function jourCourt(t, ref) { return annee(t) === annee(ref == null ? Date.now() : ref) ? F_JOUR.format(new Date(t)) : F_JOURAN.format(new Date(t)); }
+const dateFr = (t) => F_DATE.format(new Date(t));
+const heure = (t) => F_H.format(new Date(t));
+const heureS = (t) => F_HS.format(new Date(t));
+const dateHeure = (t) => dateFr(t) + " " + heure(t);
+function horodatage(t) { const p = {}; f({ year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t)).forEach(x => p[x.type] = x.value);
+  return p.year + "-" + p.month + "-" + p.day + "_" + p.hour + "h" + p.minute; }
+const reunion = (an, mois, jour, h, min) => Date.UTC(an, mois - 1, jour, h - 4, min);   // La Réunion = UTC+4, sans heure d'été
+const gm = (s) => { s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+const hm = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + " h " + String(m).padStart(2, "0") : m + " min"; };
+const s1 = (ms) => (ms / 1000).toFixed(1).replace(".", ",");
+const mmss = (ms) => { const s = ms / 1000, m = Math.floor(s / 60); return m + ":" + (s % 60).toFixed(1).padStart(4, "0").replace(".", ","); };
+const v1 = (x) => x.toFixed(1).replace(".", ",");
+const nb = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+const pl = (n, mot, plur) => n + " " + (n > 1 ? (plur || mot + "s") : mot);
+
+/* ===== Libellé d'une note (repris de la v31) ===== */
+const NOMS5 = { 1: "Très facile", 2: "Facile", 3: "Normal", 4: "J'accélère", 5: "À fond" };
+const DIFF = ["😌 Très facile", "🙂 Facile", "😐 Moyen", "😤 Difficile", "🥵 Très difficile"];
+function libelle(x) {
+  if (x.frac) { const q = x.frac; return "⏱ Répét. " + q.rep + " — " + (q.mode === "dist" ? q.cible + " m en " + mmss(q.temps) : s1(q.temps) + " s, " + Math.round(q.dist) + " m") +
+    (q.dur ? " — dur à " + s1(q.dur.t) + " s / " + Math.round(q.dur.d) + " m" : " — bonnes sensations") +
+    (q.acc ? " — accélère à " + s1(q.acc.t) + " s / " + Math.round(q.acc.d) + " m" + (q.dur ? "" : " (double appui)") : q.dur ? " — n'a pas pu réaccélérer" : "") +
+    (q.rpe ? " — ressenti " + q.rpe : "") + (q.fcMax ? " — FC moy " + q.fcMoy + " / max " + q.fcMax : ""); }
+  if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
+  if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
+  if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
+  if (x.h10rec) { const r = x.h10rec.res || {}; return "📡 H10 : " + hm(r.duree || 0) + ", actif " + hm(r.actif || 0) + ", " + (r.pics || 0) + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : ""); }
+  if (x.pjour) return "📅 Journée pompes : " + x.pjour.res;
+  if (x.pompes && x.pompes.diffs) return "👻 Pompes : " + x.pompes.res + " — " + (x.pompes.series || []).map((n, i) => n + (x.pompes.diffs[i] != null && DIFF[x.pompes.diffs[i]] ? DIFF[x.pompes.diffs[i]].split(" ")[0] : "")).join(" ");
+  if (x.pompes) return "👻 Pompes : " + x.pompes.res + " (séries " + (x.pompes.series || []).join("-") + (x.pompes.reposMoy ? ", repos moyen " + gm(x.pompes.reposMoy) : "") + ")";
+  if (x.ghost) return "👻 Contre « " + x.ghost.contre + " » — " + x.ghost.res;
+  if (x.fracDebut) return "⏱ Début fractionné : " + x.fracDebut; if (x.fracFin) return "⏱ Fin fractionné";
+  if (x.n) return NOMS5[x.n] || String(x.n); if (x.km) return "📍 Km " + x.km; if (x.rep) return "📍 Repère " + x.rep;
+  return (x.voix ? "🎤 " : "📝 ") + (x.note || ""); }
+
+/* ===== Base de l'appli ===== */
+function baseVide() { return { format: FORMAT, version: 1, courses: [], reglages: {}, imports: [] }; }
+function baseValide(b) { return !!b && typeof b === "object" && b.format === FORMAT && Array.isArray(b.courses) && !!b.reglages && typeof b.reglages === "object"; }
+function normaliser(b) { if (!Array.isArray(b.imports)) b.imports = []; b.courses.forEach(c => { if (!Array.isArray(c.notes)) c.notes = []; }); return b; }
+
+/* écriture stable d'une valeur (clés triées) : sert à savoir si deux éléments sont identiques */
+function stable(v) { if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
+  if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+  return "{" + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}"; }
+const TYPES = ["pompes", "pjour", "h10rec", "ghost", "frac", "tr", "boire", "manger", "arret", "douleur", "sensLibre", "fracDebut", "fracFin", "n", "km", "rep", "note"];
+function typeNote(n) { return TYPES.find(k => n[k] != null) || "autre"; }
+const idSeance = (c) => String(c.id != null ? c.id : c.debut);
+
+/* ===== Lecture d'une sauvegarde du Hub =====
+   Le Journal n'a pas d'identifiant fixe dans le Hub : on le reconnaît à sa clé « footing-courses ». */
+function extraireHub(sv) { const journaux = []; const don = sv.donnees || {};
+  Object.keys(don).forEach(id => { const ls = (don[id] || {}).localStorage || {}; if (typeof ls[CLE_COURSES] !== "string") return;
+    const a = (sv.applis || []).find(x => x.id === id) || {}; journaux.push({ id, nom: a.nom || id, version: a.version != null ? String(a.version) : "", localStorage: ls }); });
+  return { type: "hub", creeeLe: sv.creeeLe || "", hub: sv.hub || "", journaux }; }
+
+/* Transforme les données d'un Journal du Hub en « paquet » à fusionner.
+   Décision de Frédéric (12/11/2026) : la tuile « Muscu » du Hub, c'était les pompes → ces séances passent en « Pompes »
+   (l'activité d'origine reste notée dans actOrigine). */
+function paquetDepuisHub(j) { const ls = j.localStorage || {}; let courses;
+  try { courses = JSON.parse(ls[CLE_COURSES] || "[]"); } catch (e) { throw new Error("L'historique du Journal est illisible dans ce fichier."); }
+  if (!Array.isArray(courses)) throw new Error("L'historique du Journal est illisible dans ce fichier.");
+  let muscu = 0;
+  courses.forEach(c => { if (c.id == null) c.id = c.debut; if (!Array.isArray(c.notes)) c.notes = [];
+    if (c.act === "muscu") { c.act = "pompes"; c.actOrigine = "muscu"; muscu++; }
+    c.notes.forEach(n => { if (n.h10rec && n.h10rec.act === "muscu") { n.h10rec.act = "pompes"; n.h10rec.actOrigine = "muscu"; } }); });
+  const reglages = {}; Object.keys(ls).forEach(k => { if (k !== CLE_COURSES && typeof ls[k] === "string") reglages[k] = ls[k]; });
+  if (reglages["act-courante"] === "muscu") reglages["act-courante"] = "pompes";
+  return { courses, reglages, muscu }; }
+
+/* ===== Fusion : ajoute ce qui manque, n'écrase jamais =====
+   Séances reconnues par leur identifiant, notes par leur heure + leur type. Rejouable : un 2e import n'ajoute rien. */
+function fusionner(base, paquet) {
+  const b = { seances: { aj: 0, pres: 0 }, notes: { aj: 0, pres: 0, diff: 0 }, reglages: { aj: 0, pres: 0, completes: 0, diff: 0 }, seancesAj: [], notesAj: [], cles: [] };
+  const index = new Map(); base.courses.forEach(c => index.set(idSeance(c), c));
+  (paquet.courses || []).forEach(c => { const cur = index.get(idSeance(c));
+    if (!cur) { const copie = JSON.parse(JSON.stringify(c)); if (!Array.isArray(copie.notes)) copie.notes = []; base.courses.push(copie); index.set(idSeance(copie), copie);
+      b.seances.aj++; b.seancesAj.push(copie); copie.notes.forEach(n => { b.notes.aj++; b.notesAj.push({ c: copie, n }); }); return; }
+    b.seances.pres++; let ajout = false;
+    (c.notes || []).forEach(n => { const memes = cur.notes.filter(x => x.t === n.t && typeNote(x) === typeNote(n));
+      if (!memes.length) { const copie = JSON.parse(JSON.stringify(n)); cur.notes.push(copie); b.notes.aj++; b.notesAj.push({ c: cur, n: copie }); ajout = true; }
+      else if (memes.some(x => stable(x) === stable(n))) b.notes.pres++;
+      else { b.notes.pres++; b.notes.diff++; } });
+    if (ajout) cur.notes.sort((x, y) => x.t - y.t);
+    ["close", "actOrigine"].forEach(k => { if (cur[k] == null && c[k] != null) cur[k] = c[k]; }); });
+  base.courses.sort((x, y) => (x.debut || 0) - (y.debut || 0));
+  Object.keys(paquet.reglages || {}).forEach(k => { const v = paquet.reglages[k], cur = base.reglages[k];
+    if (cur == null) { base.reglages[k] = v; b.reglages.aj++; b.cles.push([k, "ajouté"]); return; }
+    if (cur === v) { b.reglages.pres++; b.cles.push([k, "déjà là"]); return; }
+    if (CLES_LISTES.includes(k)) { let a, e; try { a = JSON.parse(cur); e = JSON.parse(v); } catch (x) { a = null; }
+      if (Array.isArray(a) && Array.isArray(e)) { const vus = new Set(a.map(stable)); let n = 0; e.forEach(x => { if (!vus.has(stable(x))) { a.push(x); vus.add(stable(x)); n++; } });
+        if (n) { base.reglages[k] = JSON.stringify(a); b.reglages.completes++; b.cles.push([k, "complété (+" + n + ")"]); } else { b.reglages.pres++; b.cles.push([k, "déjà là"]); } return; } }
+    b.reglages.diff++; b.cles.push([k, "différent : valeur actuelle gardée"]); });
+  return b; }
+
+/* ===== Inventaire d'un lot de notes ===== */
+function trousH10(R) { const l = R.l || [], t = []; let prec = 0; l.forEach(x => { if (x[0] - prec > 60) t.push({ a: prec, duree: x[0] - prec }); prec = x[0]; }); return t; }
+function testsDe(n) { let k = 0; const compte = (x) => { if (x && x.polar != null) k++; };
+  if (n.pompes && n.pompes.test) n.pompes.test.forEach(compte); if (n.pjour && n.pjour.seances) n.pjour.seances.forEach(z => (z.test || []).forEach(compte)); return k; }
+function inventaire(seances, notes) { const r = { seances: seances.length, vides: seances.filter(c => !(c.notes || []).length), notes: notes.length, pompesN: 0, pompes: 0, journeesN: 0, journees: 0, h10: 0, h10Sec: 0, tests: 0, fantomes: 0, fracs: 0 };
+  notes.forEach(({ n }) => {
+    if (n.pompes) { r.pompesN++; r.pompes += n.pompes.total != null ? n.pompes.total : (n.pompes.tl || []).length; }
+    if (n.pjour) { r.journeesN++; r.journees += n.pjour.total != null ? n.pjour.total : (n.pjour.tl || []).length; }
+    if (n.h10rec) { r.h10++; r.h10Sec += (n.h10rec.l || []).length; }
+    r.tests += testsDe(n); if (n.ghost) r.fantomes++; if (n.frac) r.fracs++; });
+  return r; }
+const paires = (courses) => [].concat(...courses.map(c => (c.notes || []).map(n => ({ c, n }))));
+
+/* ===== Lignes de l'Historique =====
+   Une ligne par séance. Un enregistrement H10 a sa propre ligne, rangée dans SON activité et à SON heure de début
+   (dans la v31, il pouvait se retrouver dans la séance d'une autre activité). Les séances vides ne sont pas affichées. */
+function seriesDe(tl) { const l = []; let c = null; (tl || []).forEach((t, i) => { if (!c || t - tl[i - 1] > 5) { c = []; l.push(c); } c.push(t); }); return l.map(x => x.length); }
+function detailNote(n) { return heure(n.t) + " — " + libelle(n) + (n.fc ? " ❤️" + n.fc : ""); }
+function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R), total = tr.reduce((a, x) => a + x.duree, 0);
+  const res = ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax);
+  const alerte = tr.length ? "⚠️ " + pl(tr.length, "trou") + " (" + Math.round(total / 60) + " min)" : (R.coupe ? "⚠️ enregistrement coupé" : "");
+  const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
+  if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
+  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr }; }
+function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
+  const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost);
+  if (J.length) { const j = J[0].pjour; pompes = J.reduce((a, n) => a + (n.pjour.total || 0), 0) + P.reduce((a, n) => a + (n.pompes.total || 0), 0);
+    duree = (j.tl && j.tl.length) ? j.tl[j.tl.length - 1] : duree; res = nb(pompes) + " · " + pl((j.seances || j.offs || []).length, "séance") + " (journée)"; }
+  else if (P.length) { pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0); duree = P.reduce((a, n) => a + (n.pompes.temps || 0), 0);
+    const series = P.reduce((a, n) => a + (n.pompes.series || []).length, 0), fcs = [].concat(...P.map(n => (n.pompes.fcs || []).map(x => x[1]).filter(Boolean)));
+    const m = [nb(pompes), pl(series, "série")]; if (P.length > 1) m.push(P.length + " séances"); else if (P[0].pompes.reposMoy) m.push("repos " + gm(P[0].pompes.reposMoy));
+    if (fcs.length) m.push("❤️ max " + Math.max(...fcs)); res = m.join(" · "); }
+  else if (G.length) { duree = G.reduce((a, n) => a + (n.ghost.temps || 0), 0); res = "👻 " + G[0].ghost.res; }
+  else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
+  return { id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote) }; }
+function lignesHistorique(base) { const l = [];
+  base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(ligneH10(c, n)); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
+  Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
+    l.push({ id: "carnet-" + i, t: m ? reunion(2026, Number(m[2]), Number(m[1]), Number(m[3]), Number(m[4])) : 0, act: "pompes", duree: x.tl[x.tl.length - 1], pompes: x.tl.length,
+      resultat: nb(x.tl.length) + " · " + pl(sr.length, "série"), alerte: "", source: "Carnet", detail: ["Séance reprise du Carnet d'entraînement — séries " + sr.join("-")] }); });
+  const J = Integre.JOUR_3008; l.push({ id: "j3008", t: reunion(2025, 8, 30, 6, 20), act: "pompes", duree: J.tl[J.tl.length - 1], pompes: J.tl.length, journee: true,
+    resultat: nb(J.tl.length) + " · " + pl(J.offs.length, "séance"), alerte: "", source: "montre COROS",
+    detail: ["Journée relevée sur la montre COROS — séances de " + J.cut.map((v, i) => v - (J.cut[i - 1] || 0)).join(" + ") + " pompes"] });
+  return l; }
+function totaux(base, lignes) { const l = lignes || lignesHistorique(base); return { lignes: l.length, pompes: l.reduce((a, x) => a + (x.pompes || 0), 0) }; }
+function derniereParAct(lignes) { const d = {}; lignes.forEach(x => { if (!d[x.act] || x.t > d[x.act]) d[x.act] = x.t; }); return d; }
+
+/* ===== Descriptif d'une fusion (écran + rapports à copier) ===== */
+function descriptif(base, paquet, bilan, meta) { const tout = inventaire(paquet.courses || [], paires(paquet.courses || [])), aj = inventaire(bilan.seancesAj, bilan.notesAj);
+  const plus = (n) => n ? "+" + nb(n) : "0", rows = [];
+  rows.push(["Séances", plus(bilan.seances.aj), nb(bilan.seances.pres)]);
+  rows.push(["Notes", plus(bilan.notes.aj), nb(bilan.notes.pres)]);
+  if (tout.pompesN) rows.push(["Pompes (" + pl(tout.pompesN, "séance") + ")", plus(aj.pompes), nb(tout.pompes - aj.pompes)]);
+  if (tout.journeesN) rows.push(["Pompes en journée (" + pl(tout.journeesN, "journée") + ")", plus(aj.journees), nb(tout.journees - aj.journees)]);
+  if (tout.h10) rows.push(["Enregistrements H10 (" + hm(tout.h10Sec) + ")", plus(aj.h10), nb(tout.h10 - aj.h10)]);
+  if (tout.tests) rows.push(["Séries de test TOI / H10", plus(aj.tests), nb(tout.tests - aj.tests)]);
+  if (tout.fantomes) rows.push(["Courses contre le fantôme", plus(aj.fantomes), nb(tout.fantomes - aj.fantomes)]);
+  if (tout.fracs) rows.push(["Répétitions de fractionné", plus(aj.fracs), nb(tout.fracs - aj.fracs)]);
+  rows.push(["Réglages", plus(bilan.reglages.aj + bilan.reglages.completes), nb(bilan.reglages.pres + bilan.reglages.diff)]);
+  const infos = [], debuts = (paquet.courses || []).map(c => c.debut).filter(Boolean);
+  if (debuts.length) { infos.push(["Plus ancienne séance du fichier", dateHeure(Math.min(...debuts))]); infos.push(["Plus récente séance du fichier", dateHeure(Math.max(...debuts))]); }
+  const par = {}; lignesHistorique({ courses: paquet.courses || [], reglages: {} }).filter(x => !x.source).forEach(x => par[x.act] = (par[x.act] || 0) + 1);
+  if (Object.keys(par).length) infos.push(["Lignes par activité", Object.keys(par).map(a => actInfo(a).nom + " " + par[a]).join(" · ")]);
+  const lg = lignesHistorique(base), tt = totaux(base, lg);
+  infos.push(["Dans l'appli maintenant", pl(tt.lignes, "ligne") + " · " + nb(tt.pompes) + " pompes"]);
+  const integre = [["Journée du 30/08/2025 (montre)", nb(Integre.JOUR_3008.tl.length) + " pompes"], [pl(Integre.CARNET_POMPES.length, "séance") + " du Carnet", nb(Integre.CARNET_POMPES.reduce((a, x) => a + x.tl.length, 0)) + " pompes"]];
+  const obs = [];
+  if (tout.vides.length) obs.push(pl(tout.vides.length, "séance vide", "séances vides") + " (" + tout.vides.map(c => dateHeure(c.debut)).join(", ") + ") : gardée" + (tout.vides.length > 1 ? "s" : "") + ", mais pas affichée" + (tout.vides.length > 1 ? "s" : "") + ".");
+  if (paquet.muscu) obs.push(pl(paquet.muscu, "séance") + " « Muscu » du Hub rangée" + (paquet.muscu > 1 ? "s" : "") + " dans Pompes.");
+  paires(paquet.courses || []).forEach(({ c, n }) => { if (!n.h10rec) return; const R = n.h10rec, a = R.act || c.act || "footing";
+    if (a !== (c.act || "footing")) obs.push("L'enregistrement H10 du " + dateHeure(R.debut || n.t) + " était rangé dans « " + actInfo(c.actOrigine || c.act || "footing").nom + " » : affiché en " + actInfo(a).nom + ".");
+    const tr = trousH10(R); if (tr.length) obs.push(actInfo(a).nom + " du " + dateHeure(R.debut || n.t) + " : " + pl(tr.length, "trou") + " dans l'enregistrement H10 (" + tr.map(x => v1(x.duree / 60)).join(" · ") + " min)."); });
+  CLES_EN_COURS.forEach(k => { const v = (paquet.reglages || {})[k]; if (v && v !== "null") obs.push("Une séance n'était pas terminée dans le Hub (" + k + ") : gardée telle quelle."); });
+  if (bilan.notes.diff) obs.push(pl(bilan.notes.diff, "note différente", "notes différentes") + " entre le fichier et l'appli : la valeur de l'appli est gardée.");
+  if (bilan.reglages.diff) obs.push(pl(bilan.reglages.diff, "réglage différent", "réglages différents") + " : celui de l'appli est gardé.");
+  const rien = !bilan.seances.aj && !bilan.notes.aj && !(bilan.reglages.aj + bilan.reglages.completes);
+  const d = { t: Date.now(), source: meta.source || "", titre: rien ? "Rien à ajouter : tout était déjà là" : "Import terminé — rien n'a été écrasé", rien, rows, infos, integre, obs };
+  /* rapports en texte, à coller à Claude */
+  const L = ["IMPORT — Journal d'activité (APK" + (meta.version ? " " + meta.version : "") + ") — " + dateHeure(d.t), "Fichier : " + d.source, d.titre, "", "Élément | Ajouté | Déjà là"];
+  rows.forEach(r => L.push(r.join(" | "))); L.push(""); infos.forEach(r => L.push(r[0] + " : " + r[1])); integre.forEach(r => L.push("Déjà dans l'appli — " + r[0] + " : " + r[1]));
+  if (obs.length) { L.push("", "À savoir :"); obs.forEach(o => L.push("- " + o)); }
+  d.resume = L.join("\n");
+  const T = L.slice(); T.push("", "Réglages (clé : résultat) :"); bilan.cles.forEach(c => T.push("- " + c[0] + " : " + c[1]));
+  T.push("", "Toutes les lignes de l'Historique après l'import :"); lg.slice().sort((x, y) => y.t - x.t).forEach(x => T.push(texteLigne(x)));
+  d.tout = T.join("\n"); return d; }
+function texteLigne(x) { return dateFr(x.t) + " " + heure(x.t) + " | " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " | " + dureeTxt(x) + " | " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " | " + x.alerte : ""); }
+function dureeTxt(x) { return x.duree >= 3600 || x.act !== "pompes" || x.journee ? hm(x.duree) : gm(x.duree); }
+function rapportHistorique(base, version) { const lg = lignesHistorique(base).sort((x, y) => y.t - x.t), tt = totaux(base, lg);
+  return ["HISTORIQUE — Journal d'activité (APK" + (version ? " " + version : "") + ") — " + dateHeure(Date.now()), pl(tt.lignes, "ligne") + " · " + nb(tt.pompes) + " pompes", "", "Date | Activité | Durée | Résultat"].concat(lg.map(texteLigne)).join("\n"); }
+
+/* ===== Sauvegarde de l'appli ===== */
+function sauvegarde(base, version) { return { format: FORMAT, version: 1, creeeLe: new Date().toISOString(), appli: "APK Journal d'activité " + (version || ""), courses: base.courses, reglages: base.reglages, imports: base.imports }; }
+function nomSauvegarde(t) { return "JournalActivite-sauvegarde_" + horodatage(t == null ? Date.now() : t) + ".json"; }
+
+/* Importe un fichier déjà lu (objet) : sauvegarde du Hub (extrait ou complète) ou sauvegarde de l'appli. Renvoie le descriptif. */
+function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
+  if (fichier && fichier.format === "mon-hub-sauvegarde") fichier = extraireHub(fichier);
+  if (fichier && fichier.type === "hub") { if (!fichier.journaux || !fichier.journaux.length) throw new Error("Je ne trouve pas le Journal d'activité dans cette sauvegarde du Hub.");
+    paquet = { courses: [], reglages: {}, muscu: 0 }; const noms = [];
+    fichier.journaux.forEach(j => { const p = paquetDepuisHub(j); const tmp = { courses: paquet.courses, reglages: paquet.reglages }; fusionner(tmp, p); paquet.muscu += p.muscu; noms.push("« " + j.nom + " » version " + j.version); });
+    source = "sauvegarde du Hub" + (fichier.creeeLe ? " du " + dateHeure(Date.parse(fichier.creeeLe)) : "") + " — Journal trouvé : " + noms.join(", "); }
+  else if (fichier && fichier.format === FORMAT && Array.isArray(fichier.courses)) { paquet = { courses: fichier.courses, reglages: fichier.reglages || {}, muscu: 0 };
+    source = "sauvegarde de l'appli" + (fichier.creeeLe ? " du " + dateHeure(Date.parse(fichier.creeeLe)) : ""); }
+  else throw new Error("Ce fichier n'est ni une sauvegarde du Hub, ni une sauvegarde du Journal d'activité.");
+  if (meta.nom) source += " (" + meta.nom + ")";
+  const bilan = fusionner(base, paquet);
+  if (fichier.format === FORMAT) (fichier.imports || []).forEach(i => { if (!base.imports.some(x => x.t === i.t)) base.imports.push(i); });
+  const d = descriptif(base, paquet, bilan, { source, version: meta.version });
+  base.imports.push({ t: d.t, source, resume: d.resume }); base.imports.sort((x, y) => x.t - y.t);
+  return d; }
+
+const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
+  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };
+g.Noyau = N;
+if (typeof module !== "undefined" && module.exports) module.exports = N;
+})(typeof window !== "undefined" ? window : globalThis);

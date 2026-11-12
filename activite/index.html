@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="color-scheme" content="light">
+<title>Journal d'activité</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: #f6f7f9; }
+  body { margin: 0; font: 17px/1.35 system-ui, Roboto, sans-serif; color: #1b1f23; display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; }
+  button { font: inherit; color: inherit; border: none; border-radius: 12px; cursor: pointer; }
+  button:active { transform: scale(.98); }
+  .cache { display: none !important; }
+  /* barre du haut */
+  #haut { flex: 0 0 auto; min-height: 60px; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff; border-bottom: 1px solid #d9dce1; }
+  #hTitre { font-size: 19px; font-weight: 900; color: #B5451B; }
+  #hSous { font-size: 13px; color: #5b6470; }
+  .outils { display: flex; gap: 8px; flex: 0 0 auto; }
+  .rond { width: 46px; height: 46px; background: #fff; border: 1px solid #d9dce1; font-size: 20px; }
+  #alerte { flex: 0 0 auto; background: #fff6d6; border-bottom: 2px solid #8a5a00; padding: 8px 12px; font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  #alerte.rouge { background: #fde8e6; border-color: #a52a1f; }
+  /* contenu */
+  #vue { flex: 1 1 auto; overflow-y: auto; padding: 10px 8px 16px; display: flex; flex-direction: column; gap: 10px; }
+  #pied { flex: 0 0 auto; padding: 8px 12px; background: #f6f7f9; }
+  .gros { width: 100%; min-height: 76px; background: #B5451B; color: #fff; font-size: 24px; font-weight: 900; border-radius: 16px; }
+  .main { background: #B5451B; color: #fff; font-weight: 700; min-height: 52px; padding: 10px 14px; }
+  .sec { background: #fff; border: 1px solid #d9dce1; font-weight: 700; min-height: 52px; padding: 10px 12px; }
+  .ligne { display: flex; gap: 6px; flex-wrap: wrap; } .ligne > button { flex: 1 1 0; }
+  h2 { font-size: 14px; margin: 8px 0 0; color: #5b6470; text-transform: uppercase; letter-spacing: .4px; }
+  p { margin: 0; } .aide { font-size: 14px; color: #5b6470; }
+  /* onglets du bas */
+  #onglets { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border-top: 1px solid #d9dce1; }
+  #onglets button { background: none; border-radius: 0; border-top: 4px solid #fff; min-height: 64px; font-size: 13px; font-weight: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  #onglets button b { font-size: 22px; line-height: 1; font-weight: 400; }
+  #onglets button[aria-current="page"] { border-top-color: #B5451B; color: #B5451B; font-weight: 900; }
+  /* tuiles de l'accueil */
+  .tuiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tuile { min-height: 118px; background: #fff; border: 2px solid #d9dce1; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; }
+  .tuile .ic { font-size: 40px; line-height: 1; } .tuile .nom { font-size: 20px; font-weight: 700; } .tuile .sous { font-size: 13px; color: #5b6470; }
+  .tuile[aria-pressed="true"] { border: 4px solid #B5451B; background: #fdf1ec; } .tuile[aria-pressed="true"] .nom { font-weight: 900; }
+  .tuile.plus { border-style: dashed; border-color: #8a929c; background: #f6f7f9; }
+  /* tableaux façon Excel */
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; line-height: 1.3; }
+  th, td { border: 1px solid #d9dce1; padding: 7px 6px; text-align: left; vertical-align: top; }
+  th { background: #e3e6ea; border-color: #c3c8cf; font-size: 12px; font-weight: 700; }
+  th button { background: none; border-radius: 0; font-weight: 700; font-size: 12px; padding: 6px 0; width: 100%; text-align: left; min-height: 32px; }
+  th[aria-sort] button { color: #B5451B; }
+  td.n, th.n { text-align: right; white-space: nowrap; }
+  td.date { white-space: nowrap; }
+  table.histo { font-size: 13.5px; } table.histo th, table.histo td { padding: 7px 5px; } table.histo td.act { white-space: nowrap; }
+  tr.ligneH { cursor: pointer; } tr.ligneH.special td { background: #fdf1ec; }
+  tr.det td { background: #fafbfc; font-size: 13px; }
+  .src { color: #5b6470; } .al { color: #a52a1f; font-weight: 700; } .ok { color: #1f6b43; font-weight: 700; } .att { color: #7a4a00; font-weight: 700; } .gris { color: #5b6470; }
+  tr.afaire td { background: #fff6d6; }
+  table.milieu td { vertical-align: middle; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: #fff; border: 1px solid #d9dce1; border-radius: 22px; min-height: 44px; padding: 0 14px; font-size: 15px; font-weight: 500; }
+  .chip[aria-pressed="true"] { background: #B5451B; border-color: #B5451B; color: #fff; font-weight: 700; }
+  .boiteInfo { border: 2px solid #8a5a00; border-radius: 12px; background: #fff6d6; padding: 8px 10px; font-size: 14px; }
+  .boiteInfo ul { margin: 4px 0 0; padding-left: 18px; }
+  .titreOk { font-size: 19px; font-weight: 900; color: #1f6b43; }
+  /* fenêtre par-dessus */
+  #voile { position: fixed; inset: 0; background: rgba(27,31,35,.45); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #boite { background: #fff; border-radius: 16px; padding: 16px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 90%; overflow: auto; }
+  #boite .t { font-size: 19px; font-weight: 900; }
+  #boite input { font: inherit; font-size: 20px; padding: 12px; border: 2px solid #8a929c; border-radius: 12px; width: 100%; user-select: text; -webkit-user-select: text; }
+  #toast { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 30; background: #1b1f23; color: #fff; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; text-align: center; }
+</style>
+</head>
+<body>
+<header id="haut">
+  <div><div id="hTitre">Journal d'activité</div><div id="hSous"></div></div>
+  <div class="outils"><button class="rond" id="bAide" aria-label="Aide de cet écran">❓</button><button class="rond" id="bRegl" aria-label="Réglages">⚙️</button></div>
+</header>
+<div id="alerte" class="cache"></div>
+<main id="vue"></main>
+<div id="pied" class="cache"><button class="gros" id="bDemarrer">▶ Démarrer</button></div>
+<nav id="onglets">
+  <button data-o="activites"><b>🏠</b>Activités</button>
+  <button data-o="historique"><b>📜</b>Historique</button>
+  <button data-o="bilans"><b>📊</b>Bilans</button>
+  <button data-o="aide"><b>❓</b>Aide</button>
+</nav>
+<div id="voile" class="cache"><div id="boite" role="dialog" aria-modal="true"></div></div>
+<div id="toast" class="cache" role="status"></div>
+<input type="file" id="fichierNav" class="cache" accept=".json,application/json">
+
+<script src="donnees-integrees.js"></script>
+<script src="noyau.js"></script>
+<script>
+"use strict";
+/* Journal d'activité (APK) — étape 1 : socle. Écrans : Activités, Historique, Bilans, Aide, Réglages, Descriptif d'import.
+   Les données sont dans le téléphone (fichier base.json), écrites par la partie Android. */
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t == null ? "" : t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const N = Noyau;
+
+/* ===== Pont vers la partie Android (remplacé par le navigateur quand on teste hors APK) ===== */
+const A = (typeof AndroidApp !== "undefined") ? AndroidApp : null;
+const Pont = {
+  natif: !!A,
+  lire(nom) { if (A) return A.lire(nom) || ""; try { return localStorage.getItem("ja:" + nom) || ""; } catch (e) { return ""; } },
+  ecrire(nom, txt) { if (A) return !!A.ecrire(nom, txt); try { localStorage.setItem("ja:" + nom, txt); return true; } catch (e) { return false; } },
+  version() { try { return A ? A.version() : "essai navigateur"; } catch (e) { return "?"; } },
+  async copier(txt) { if (A) return !!A.copier(txt); try { await navigator.clipboard.writeText(txt); return true; } catch (e) { return false; } },
+  enregistrer(nom, txt, type) { if (A) return A.enregistrer(nom, txt, type) || ""; try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type })); a.download = nom; a.click(); return nom; } catch (e) { return ""; } },
+  partager(nom, txt, type) { if (A) return !!A.partager(nom, txt, type); return false; },
+  choisirFichier() { if (A) A.choisirFichier(); else $("#fichierNav").click(); },
+  batterieOk() { try { return A ? !!A.batterieOk() : true; } catch (e) { return true; } },
+  ouvrirBatterie() { if (A) A.ouvrirBatterie(); },
+  notifOk() { try { return A ? !!A.notifOk() : true; } catch (e) { return true; } },
+  demanderNotif() { if (A) A.demanderNotif(); },
+  sauvegardesAuto() { try { return A ? JSON.parse(A.sauvegardesAuto() || "[]") : []; } catch (e) { return []; } }
+};
+
+/* ===== Données ===== */
+let BASE = N.baseVide(), ecritureKo = false, baseIllisible = false;
+function chargerBase() { const lireJson = (nom) => { const t = Pont.lire(nom); if (!t) return { vide: true }; try { const b = JSON.parse(t); return N.baseValide(b) ? { base: N.normaliser(b) } : { ko: t }; } catch (e) { return { ko: t }; } };
+  const a = lireJson("base.json"); if (a.base) { BASE = a.base; return; }
+  if (a.vide) { const p = lireJson("base.json.prec"); if (p.base) BASE = p.base; return; }
+  /* fichier abîmé : on le met de côté (rien n'est effacé) et on reprend la version précédente */
+  baseIllisible = true; Pont.ecrire("base-illisible_" + N.horodatage(Date.now()) + ".json", a.ko);
+  const p = lireJson("base.json.prec"); if (p.base) BASE = p.base; }
+function sauver() { ecritureKo = !Pont.ecrire("base.json", JSON.stringify(BASE)); majAlerte(); return !ecritureKo; }
+function regl(cle, defaut) { const v = BASE.reglages[cle]; return v == null ? defaut : v; }
+function actCourante() { const vis = N.actsVisibles(BASE), a = regl("act-courante", "pompes"); return vis.includes(a) ? a : (vis[0] || "pompes"); }
+
+/* ===== Petits outils d'écran ===== */
+let toastT = null;
+function toast(txt, ms) { const t = $("#toast"); t.textContent = txt; t.classList.remove("cache"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add("cache"), ms || 3500); }
+function fenetre(html) { $("#boite").innerHTML = html; $("#voile").classList.remove("cache"); }
+function fermerFenetre() { $("#voile").classList.add("cache"); $("#boite").innerHTML = ""; }
+const fenetreOuverte = () => !$("#voile").classList.contains("cache");
+function info(titre, html) { fenetre('<div class="t">' + esc(titre) + '</div><div>' + html + '</div><div class="ligne"><button class="main" data-do="fermer">OK</button></div>'); }
+function majAlerte() { const z = $("#alerte"); z.className = ""; z.innerHTML = "";
+  if (ecritureKo) { z.classList.add("rouge"); z.innerHTML = "<span>⚠️ Impossible d'écrire dans le téléphone. Tes données affichées ne sont pas enregistrées.</span>"; return; }
+  if (baseIllisible) { z.classList.add("rouge"); z.innerHTML = "<span>⚠️ Le fichier de données était abîmé : il est mis de côté, rien n'est effacé. Préviens Claude.</span>"; return; }
+  if (!Pont.batterieOk()) { z.innerHTML = '<span>⚠️ Batterie Samsung à régler, sinon l\'appli sera coupée écran éteint.</span><button class="sec" data-do="fiche" data-f="premiere" style="min-height:44px;flex:0 0 auto">Régler</button>'; return; }
+  z.classList.add("cache"); }
+
+/* ===== Navigation ===== */
+let ECRAN = { nom: "activites" }, PRECEDENT = null;
+const ONGLETS = ["activites", "historique", "bilans", "aide"];
+function aller(nom, param) { if (!ONGLETS.includes(nom) && ONGLETS.includes(ECRAN.nom)) PRECEDENT = ECRAN; ECRAN = { nom, param }; dessiner(); $("#vue").scrollTop = 0; }
+function retourEcran() { const p = PRECEDENT || { nom: "activites" }; PRECEDENT = null; ECRAN = p; dessiner(); }
+function dessiner() { const e = ECRAN, o = ONGLETS.includes(e.nom) ? e.nom : (e.nom === "fiche" ? "aide" : (PRECEDENT ? PRECEDENT.nom : ""));
+  document.querySelectorAll("#onglets button").forEach(b => { if (b.dataset.o === o) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  $("#pied").classList.toggle("cache", e.nom !== "activites");
+  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif })[e.nom]();
+  majAlerte(); }
+function titre(t, sous) { $("#hTitre").textContent = t; $("#hSous").textContent = sous || ""; }
+/* bouton Retour du téléphone : appelé par la partie Android. Renvoie false quand il n'y a plus rien à fermer. */
+window.surRetour = function () { if (fenetreOuverte()) { fermerFenetre(); return true; }
+  if (!ONGLETS.includes(ECRAN.nom)) { retourEcran(); return true; }
+  if (ECRAN.nom !== "activites") { aller("activites"); return true; } return false; };
+/* l'appli revient au premier plan (par ex. après le réglage de batterie) */
+window.surReprise = function () { if (ECRAN.nom === "fiche" || ECRAN.nom === "reglages") dessiner(); else majAlerte(); };
+
+/* ===== 🏠 Activités ===== */
+function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereParAct(lg), cur = actCourante();
+  titre("Journal d'activité", N.jourCourt(Date.now()));
+  $("#vue").innerHTML = '<div class="tuiles">' + N.actsVisibles(BASE).map(a => { const i = N.actInfo(a);
+    return '<button class="tuile" data-do="act" data-a="' + esc(a) + '" aria-pressed="' + (a === cur) + '"><span class="ic">' + i.icone + '</span><span class="nom">' + esc(i.nom) + '</span><span class="sous">' + (der[a] ? "dernière : " + N.jourCourt(der[a]) : "aucune séance") + '</span></button>'; }).join("") +
+    '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>';
+  $("#bDemarrer").textContent = "▶ Démarrer " + N.actInfo(cur).nom; }
+function choisirAct(a) { BASE.reglages["act-courante"] = a; sauver(); vueActivites(); }
+function nouvelleAct() { fenetre('<div class="t">➕ Nouvelle activité</div><label for="naNom">Son nom (ex. Corde à sauter)</label><input id="naNom" maxlength="30" autocomplete="off"><div class="ligne"><button class="main" data-do="creerAct">Créer</button><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#naNom"); if (i) i.focus(); }, 50); }
+function creerAct() { const nom = ($("#naNom").value || "").trim(); if (!nom) return; const existe = N.toutesActs(BASE).find(a => N.actInfo(a).nom.toLowerCase() === nom.toLowerCase() || a.toLowerCase() === nom.toLowerCase());
+  const a = existe || nom; if (!existe) { const p = N.lireListe(BASE.reglages["acts-perso"]); p.push(nom); BASE.reglages["acts-perso"] = JSON.stringify(p); }
+  BASE.reglages["acts-masquees"] = JSON.stringify(N.lireListe(BASE.reglages["acts-masquees"]).filter(x => x !== a)); BASE.reglages["act-courante"] = a; sauver(); fermerFenetre(); vueActivites(); }
+function demarrer() { const a = N.actInfo(actCourante());
+  info("▶ " + a.nom + " : bientôt", "<p>Cette version est le <b>socle</b> : tes données, l'Historique, la sauvegarde.</p><p style='margin-top:8px'>Les séances arrivent juste après : <b>H10 et tennis</b> (étape 2), puis <b>pompes</b> (étape 3).</p><p style='margin-top:8px'>En attendant, fais ta séance dans le Hub, puis réimporte ta sauvegarde ici : rien n'est mis en double.</p>"); }
+
+/* ===== 📜 Historique ===== */
+const H = { filtre: "", tri: "t", sens: -1, ouverts: new Set() };
+const COLS = [["t", "Date"], ["act", "Activité"], ["duree", "Durée"], ["pompes", "Résultat"]];
+function vueHistorique() { const tous = N.lignesHistorique(BASE), tt = N.totaux(BASE, tous);
+  titre("Historique", N.pl(tt.lignes, "ligne") + " · " + N.nb(tt.pompes) + " pompes");
+  const acts = [...new Set(tous.map(x => x.act))]; if (H.filtre && !acts.includes(H.filtre)) H.filtre = "";
+  const l = tous.filter(x => !H.filtre || x.act === H.filtre);
+  const val = (x) => H.tri === "act" ? N.actInfo(x.act).nom : x[H.tri];
+  l.sort((x, y) => { const a = val(x), b = val(y); return (a < b ? -1 : a > b ? 1 : y.t - x.t) * (a === b ? 1 : H.sens); });
+  let h = '<div class="chips"><button class="chip" data-do="filtre" data-a="" aria-pressed="' + !H.filtre + '">Tout</button>' + acts.map(a => '<button class="chip" data-do="filtre" data-a="' + esc(a) + '" aria-pressed="' + (H.filtre === a) + '">' + esc(N.actNom(a)) + '</button>').join("") + '</div>';
+  h += '<table class="histo"><thead><tr>' + COLS.map(c => '<th' + (H.tri === c[0] ? ' aria-sort="' + (H.sens > 0 ? "ascending" : "descending") + '"' : "") + '><button data-do="tri" data-c="' + c[0] + '">' + c[1] + (H.tri === c[0] ? (H.sens > 0 ? " ▲" : " ▼") : "") + '</button></th>').join("") + '</tr></thead><tbody>';
+  h += l.map(x => { const o = H.ouverts.has(x.id);
+    return '<tr class="ligneH' + (x.journee ? " special" : "") + '" data-do="ouvrir" data-id="' + esc(x.id) + '"><td class="date">' + esc(N.jourCourt(x.t)) + '<br>' + N.heure(x.t) + '</td><td class="act">' + esc(N.actNom(x.act)) + (x.journee ? "<br>journée" : "") + '</td><td class="date">' + N.dureeTxt(x) + '</td><td>' + esc(x.resultat) +
+      (x.source ? ' <span class="src">(' + esc(x.source) + ')</span>' : "") + (x.alerte ? '<br><span class="al">' + esc(x.alerte) + '</span>' : "") + '</td></tr>' +
+      (o ? '<tr class="det"><td colspan="4">' + x.detail.map(esc).join("<br>") + '</td></tr>' : ""); }).join("");
+  h += '</tbody></table>' + (l.length ? "" : '<p class="aide">Aucune ligne pour ce filtre.</p>') + '<p class="aide">Toucher un titre de colonne = trier. Toucher une ligne = voir le détail.</p><div class="ligne"><button class="sec" data-do="copierHisto">📋 Copier l\'historique</button></div>';
+  $("#vue").innerHTML = h; }
+
+/* ===== 📊 Bilans (les vrais bilans arrivent avec les pompes, étape 3) ===== */
+function vueBilans() { const lg = N.lignesHistorique(BASE), par = {}; lg.forEach(x => { const p = par[x.act] = par[x.act] || { n: 0, pompes: 0, der: 0 }; p.n++; p.pompes += x.pompes || 0; if (x.t > p.der) p.der = x.t; });
+  titre("📊 Bilans", "résumé par activité");
+  $("#vue").innerHTML = '<table><thead><tr><th>Activité</th><th class="n">Lignes</th><th class="n">Pompes</th><th>Dernière</th></tr></thead><tbody>' +
+    Object.keys(par).map(a => '<tr><td>' + esc(N.actNom(a)) + '</td><td class="n">' + par[a].n + '</td><td class="n">' + (par[a].pompes ? N.nb(par[a].pompes) : "") + '</td><td>' + esc(N.jourCourt(par[a].der)) + '</td></tr>').join("") + '</tbody></table>' +
+    '<p class="aide">Les bilans complets (records, séances comparables, chaque repos en couleur) arrivent avec les pompes, à l\'étape 3. Rien n\'est perdu : ils seront calculés sur tout ton historique.</p>'; }
+
+/* ===== ❓ Aide ===== */
+const FICHES = [["premiere", "Première utilisation"], ["accueil", "L'accueil et les activités"], ["import", "Importer mes données du Hub"], ["sauvegarde", "Sauvegarder et fusionner"], ["historique", "Lire l'Historique"], ["suite", "Ce qui arrive ensuite"]];
+function vueAide() { titre("❓ Aide", "fonctionne sans internet");
+  $("#vue").innerHTML = '<table><thead><tr><th style="width:36px">N°</th><th>Fiche</th></tr></thead><tbody>' + FICHES.map((x, i) => '<tr class="ligneH" data-do="fiche" data-f="' + x[0] + '"><td>' + (i + 1) + '</td><td><b>' + esc(x[1]) + '</b> ›</td></tr>').join("") + '</tbody></table>'; }
+function etat(ok, fait, afaire) { return ok ? '<span class="ok">✅ ' + (fait || "Fait") + '</span>' : '<span class="att">⚠️ ' + (afaire || "À faire") + '</span>'; }
+function fichePremiere() { const bat = Pont.batterieOk(), notif = Pont.notifOk(), imp = BASE.imports.length ? BASE.imports[BASE.imports.length - 1] : null, faits = [bat, notif, !!imp].filter(Boolean).length;
+  titre("Première utilisation", faits + " réglage" + (faits > 1 ? "s" : "") + " fait" + (faits > 1 ? "s" : "") + " sur 3");
+  return '<table><thead><tr><th style="width:30px">N°</th><th>À faire une seule fois</th><th style="width:84px">État</th></tr></thead><tbody>' +
+    '<tr' + (bat ? "" : ' class="afaire"') + '><td><b>1</b></td><td><b>Batterie Samsung</b><br>Sans ce réglage, le téléphone coupe l\'appli quand l\'écran s\'éteint. Touche le bouton, puis « Autoriser ».' + (bat ? "" : '<div class="ligne" style="margin-top:8px"><button class="main" data-do="batterie">Ouvrir le réglage</button></div>') + '</td><td>' + etat(bat) + '</td></tr>' +
+    '<tr' + (notif ? "" : ' class="afaire"') + '><td><b>2</b></td><td><b>Notifications</b><br>Pour voir la séance et ses boutons sur l\'écran verrouillé.' + (notif ? "" : '<div class="ligne" style="margin-top:8px"><button class="main" data-do="notif">Autoriser</button></div>') + '</td><td>' + etat(notif) + '</td></tr>' +
+    '<tr' + (imp ? "" : ' class="afaire"') + '><td><b>3</b></td><td><b>Importer mes données du Hub</b><br>Dans le Hub : appui long sur 💾, puis « Enregistrer sous… ». Ici, choisis ce fichier « MonHub-sauvegarde ». Rien n\'est écrasé, tu peux le refaire.<div class="ligne" style="margin-top:8px"><button class="' + (imp ? "sec" : "main") + '" data-do="importer">' + (imp ? "Importer encore" : "Choisir le fichier") + '</button></div></td><td>' + etat(!!imp) + (imp ? '<br><span class="gris">' + N.dateFr(imp.t).slice(0, 5) + '</span>' : "") + '</td></tr>' +
+    '<tr><td class="gris"><b>4</b></td><td class="gris"><b>Ceinture Polar H10</b><br>Bluetooth : arrive avec l\'étape 2.</td><td class="gris">Plus tard</td></tr>' +
+    '<tr><td class="gris"><b>5</b></td><td class="gris"><b>GPS</b><br>Position : arrive avec l\'étape 4.</td><td class="gris">Plus tard</td></tr></tbody></table>' +
+    '<p class="aide">Si le réglage n° 1 saute (mise à jour Samsung), l\'appli te prévient en haut de l\'écran.</p>'; }
+const TEXTES = {
+  accueil: ["L'accueil et les activités", "<p><b>Une tuile = une activité.</b> Touche la tuile, puis « ▶ Démarrer ».</p><p>La tuile <b>💪 Pompes</b> remplace l'ancienne tuile Muscu du Hub : tes séances de pompes y sont rangées. La tuile <b>🏋️ Muscu</b> est nouvelle, pour le reste du renforcement.</p><p><b>➕ Nouvelle</b> : crée ta propre activité, il suffit de lui donner un nom.</p><p>Pour cacher une tuile : ⚙️ en haut, tableau « Activités affichées ».</p>"],
+  import: ["Importer mes données du Hub", "<p><b>1.</b> Dans le Hub : appui long sur 💾 en haut, puis « 💾 Enregistrer sous… ». Le fichier s'appelle « MonHub-sauvegarde ».</p><p><b>2.</b> Ici : ⚙️ puis « 📥 Importer / fusionner un fichier », et choisis ce fichier.</p><p><b>3.</b> L'appli affiche le <b>descriptif</b> : ce qui a été ajouté, ce qui était déjà là. Bouton 📋 Copier pour l'envoyer à Claude.</p><p><b>Tu peux recommencer autant que tu veux</b> : ce qui est déjà là n'est jamais ajouté deux fois, et rien n'est écrasé.</p><p>La journée du 30/08/2025 (889 pompes) et les 6 séances du Carnet sont déjà dans l'appli.</p>"],
+  sauvegarde: ["Sauvegarder et fusionner", "<p><b>💾 Sauvegarder</b> (dans ⚙️) : un fichier dans le dossier Téléchargements du téléphone.</p><p><b>📤 Partager</b> : envoie la même sauvegarde vers Google Drive, par le menu Partager du téléphone.</p><p><b>📥 Importer / fusionner</b> : ajoute ce qui manque depuis une sauvegarde de cette appli ou du Hub. Le descriptif liste tout ce qui a été ajouté.</p><p><b>Sauvegarde automatique</b> : une par jour, à l'ouverture de l'appli. Les 7 dernières sont gardées dans le téléphone (tableau dans ⚙️).</p>"],
+  historique: ["Lire l'Historique", "<p>Une ligne = une séance. <b>Touche un titre de colonne</b> pour trier (date, activité, durée, nombre de pompes). Touche encore pour inverser.</p><p><b>Touche une ligne</b> pour voir le détail : chaque note avec son heure et la fréquence cardiaque.</p><p>Les boutons du haut filtrent par activité.</p><p><span class='al'>⚠️ trous</span> : moments où l'enregistrement de la ceinture H10 s'est arrêté plus d'une minute.</p><p><span class='src'>(Carnet)</span> et <span class='src'>(montre COROS)</span> : séances venues d'ailleurs que du Journal.</p>"],
+  suite: ["Ce qui arrive ensuite", "<p><b>Étape 2</b> — Ceinture H10 sans coupure, écran éteint ; enregistrement du tennis.</p><p><b>Étape 3</b> — Pompes : toucher, +1, repos, fantôme, test TOI / H10, boutons sur l'écran verrouillé, voix ; bilans complets.</p><p><b>Étape 4</b> — GPS et fantôme de course vocal.</p><p><b>Étape 5</b> — Activités personnalisables complètes, calibration, import COROS.</p>"]
+};
+function vueFiche() { const fi = ECRAN.param || "premiere"; let h;
+  if (fi === "premiere") h = fichePremiere(); else { const t = TEXTES[fi] || TEXTES.suite; titre(t[0], "aide"); h = '<div style="background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:16px">' + t[1] + '</div>'; }
+  $("#vue").innerHTML = h + '<div class="ligne"><button class="sec" data-do="retour">‹ Retour</button><button class="sec" data-do="onglet" data-o="aide">Toutes les fiches</button></div>'; }
+const AIDE_DE = { activites: "accueil", historique: "historique", bilans: "suite", reglages: "sauvegarde", descriptif: "import", aide: "premiere", fiche: "premiere" };
+
+/* ===== ⚙️ Réglages : données, sauvegardes, activités ===== */
+function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
+  const autos = Pont.sauvegardesAuto(), mas = N.lireListe(BASE.reglages["acts-masquees"]);
+  let h = '<h2>Mes données</h2><div class="ligne"><button class="main" data-do="importer">📥 Importer / fusionner un fichier</button></div><div class="ligne"><button class="sec" data-do="sauvegarder">💾 Sauvegarder</button><button class="sec" data-do="partager">📤 Partager (Drive)</button></div>';
+  h += '<h2>Sauvegardes automatiques (7 derniers jours)</h2>' + (autos.length ? '<table class="milieu"><thead><tr><th>Jour</th><th class="n">Taille</th><th></th></tr></thead><tbody>' + autos.map(s => '<tr><td>' + esc(s.jour) + '</td><td class="n">' + Math.max(1, Math.round(s.taille / 1024)) + ' Ko</td><td><button class="sec" data-do="fusionAuto" data-n="' + esc(s.nom) + '" style="min-height:44px">📥 Fusionner</button></td></tr>').join("") + '</tbody></table>' : '<p class="aide">' + (Pont.natif ? "La première sera faite demain, à l'ouverture de l'appli." : "Seulement dans l'APK.") + '</p>');
+  h += '<h2>Activités affichées</h2><table class="milieu"><tbody>' + N.toutesActs(BASE).map(a => { const m = mas.includes(a); return '<tr><td' + (m ? ' class="gris"' : "") + '>' + esc(N.actNom(a)) + '</td><td style="width:1%"><button class="sec" data-do="masquer" data-a="' + esc(a) + '" style="min-height:44px;white-space:nowrap">' + (m ? "Afficher" : "Masquer") + '</button></td></tr>'; }).join("") + '</tbody></table>';
+  h += '<h2>Imports déjà faits</h2>' + (BASE.imports.length ? '<table><thead><tr><th>Quand</th><th>Fichier</th><th></th></tr></thead><tbody>' + BASE.imports.slice().reverse().map(i => '<tr><td class="date">' + esc(N.dateFr(i.t).slice(0, 5)) + '<br>' + N.heure(i.t) + '</td><td style="font-size:13px">' + esc(i.source) + '</td><td><button class="sec" data-do="copierImport" data-t="' + i.t + '" style="min-height:44px" aria-label="Copier ce descriptif">📋</button></td></tr>').join("") + '</tbody></table>' : '<p class="aide">Aucun import pour l\'instant.</p>');
+  h += '<h2>Pour Claude</h2><div class="ligne"><button class="sec" data-do="copierEtat">📋 Copier l\'état de l\'appli</button></div><div class="ligne"><button class="sec" data-do="retour">‹ Retour</button></div>';
+  $("#vue").innerHTML = h; }
+function masquer(a) { const l = N.lireListe(BASE.reglages["acts-masquees"]), i = l.indexOf(a); if (i >= 0) l.splice(i, 1); else { if (N.actsVisibles(BASE).length <= 1) { toast("Garde au moins une activité affichée."); return; } l.push(a); }
+  BASE.reglages["acts-masquees"] = JSON.stringify(l); sauver(); vueReglages(); }
+function etatAppli() { const tt = N.totaux(BASE), txt = JSON.stringify(BASE);
+  return ["ÉTAT — Journal d'activité (APK) — " + N.dateHeure(Date.now()), "Version : " + Pont.version(), "Batterie Samsung réglée : " + (Pont.batterieOk() ? "oui" : "NON"), "Notifications autorisées : " + (Pont.notifOk() ? "oui" : "NON"),
+    "Séances enregistrées : " + BASE.courses.length + " (dont " + BASE.courses.filter(c => !c.notes.length).length + " vide)", "Historique : " + N.pl(tt.lignes, "ligne") + " · " + N.nb(tt.pompes) + " pompes", "Réglages : " + Object.keys(BASE.reglages).length + " clés",
+    "Imports faits : " + BASE.imports.length + (BASE.imports.length ? " (dernier le " + N.dateHeure(BASE.imports[BASE.imports.length - 1].t) + ")" : ""), "Taille des données : " + Math.round(txt.length / 1024) + " Ko",
+    "Sauvegardes automatiques : " + Pont.sauvegardesAuto().map(s => s.jour).join(", "), "Écriture : " + (ecritureKo ? "EN PANNE" : "ok") + (baseIllisible ? " · fichier abîmé mis de côté" : "")].join("\n"); }
+
+/* ===== 📥 Import / fusion + descriptif ===== */
+let DESC = null;
+function traiterFichier(objet, nom) { const copie = JSON.parse(JSON.stringify(BASE)); let d;
+  try { d = N.importer(copie, objet, { nom, version: Pont.version() }); } catch (e) { info("Fichier refusé", "<p>" + esc(e && e.message || e) + "</p><p class='aide' style='margin-top:8px'>Rien n'a été changé dans l'appli.</p>"); return; }
+  BASE = copie; if (!sauver()) { info("⚠️ Import non enregistré", "<p>Le téléphone a refusé l'écriture. Tes données d'avant sont intactes.</p>"); return; }
+  DESC = d; aller("descriptif"); }
+/* la partie Android a fini de lire le fichier choisi (ou a échoué) */
+window.surFichier = function (ok, message) { fermerFenetre(); if (!ok) { if (message) info("Fichier refusé", "<p>" + esc(message) + "</p><p class='aide' style='margin-top:8px'>Rien n'a été changé dans l'appli.</p>"); return; }
+  let o; try { o = JSON.parse(Pont.lire("import.json")); } catch (e) { info("Fichier refusé", "<p>Ce fichier est illisible.</p>"); return; } traiterFichier(o, message || ""); };
+window.surLecture = function () { fenetre('<div class="t">⏳ Lecture du fichier…</div><p>La sauvegarde du Hub est grosse : compte quelques secondes.</p>'); };
+$("#fichierNav").onchange = async () => { const fi = $("#fichierNav").files[0]; if (!fi) return; let o; try { o = JSON.parse(await fi.text()); } catch (e) { info("Fichier refusé", "<p>Ce fichier est illisible.</p>"); return; } $("#fichierNav").value = ""; traiterFichier(o, fi.name); };
+function fusionAuto(nom) { let o; try { o = JSON.parse(Pont.lire("sauvegardes/" + nom)); } catch (e) { info("Sauvegarde illisible", "<p>Cette sauvegarde automatique est abîmée.</p>"); return; } traiterFichier(o, "sauvegarde automatique " + nom); }
+function vueDescriptif() { const d = DESC; if (!d) { aller("reglages"); return; }
+  titre(d.rien ? "Rien à ajouter" : "✅ Import terminé", d.rien ? "tout était déjà là" : "rien n'a été écrasé");
+  let h = '<p style="font-size:14px">' + esc(d.source) + '</p><table><thead><tr><th>Élément</th><th class="n">Ajouté</th><th class="n">Déjà là</th></tr></thead><tbody>' +
+    d.rows.map(r => '<tr><td>' + esc(r[0]) + '</td><td class="n' + (r[1] !== "0" ? " ok" : "") + '">' + esc(r[1]) + '</td><td class="n">' + esc(r[2]) + '</td></tr>').join("") +
+    d.infos.map(r => '<tr><td>' + esc(r[0]) + '</td><td class="n" colspan="2" style="white-space:normal">' + esc(r[1]) + '</td></tr>').join("") +
+    d.integre.map(r => '<tr class="ligneH special"><td>Déjà dans l\'appli : ' + esc(r[0]) + '</td><td class="n" colspan="2"><b>' + esc(r[1]) + '</b></td></tr>').join("") + '</tbody></table>';
+  if (d.obs.length) h += '<div class="boiteInfo"><b>⚠️ À savoir</b><ul>' + d.obs.map(o => '<li>' + esc(o) + '</li>').join("") + '</ul></div>';
+  h += '<div class="ligne"><button class="sec" data-do="copierResume">📋 Copier le résumé</button><button class="sec" data-do="copierTout">📋 Copier tout</button><button class="sec" data-do="fichierDesc">💾 Fichier</button></div><div class="ligne"><button class="main" data-do="onglet" data-o="historique" style="min-height:60px;font-size:19px">Voir l\'historique</button></div>';
+  $("#vue").innerHTML = h; }
+async function copie(txt, quoi) { toast((await Pont.copier(txt)) ? "✅ " + quoi + " copié : colle-le dans la conversation avec Claude." : "⚠️ Copie refusée par le téléphone : utilise 💾 Fichier.", 4000); }
+function fichierTexte(nom, txt) { const ou = Pont.enregistrer(nom, txt, "text/plain"); toast(ou ? "✅ Enregistré : " + ou : "⚠️ Enregistrement impossible.", 4000); }
+function sauvegarder() { const ou = Pont.enregistrer(N.nomSauvegarde(), JSON.stringify(N.sauvegarde(BASE, Pont.version())), "application/json"); toast(ou ? "✅ Sauvegarde enregistrée : " + ou : "⚠️ Sauvegarde impossible.", 5000); }
+function partager() { if (!Pont.partager(N.nomSauvegarde(), JSON.stringify(N.sauvegarde(BASE, Pont.version())), "application/json")) toast("⚠️ Partage impossible ici : utilise 💾 Sauvegarder.", 4000); }
+
+/* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
+const ACTIONS = {
+  fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct,
+  filtre: (b) => { H.filtre = b.dataset.a; vueHistorique(); },
+  tri: (b) => { const c = b.dataset.c; if (H.tri === c) H.sens = -H.sens; else { H.tri = c; H.sens = c === "act" ? 1 : -1; } vueHistorique(); },
+  ouvrir: (b) => { const id = b.dataset.id; if (H.ouverts.has(id)) H.ouverts.delete(id); else H.ouverts.add(id); const y = $("#vue").scrollTop; vueHistorique(); $("#vue").scrollTop = y; },
+  copierHisto: () => copie(N.rapportHistorique(BASE, Pont.version()), "Historique"),
+  fiche: (b) => aller("fiche", b.dataset.f), onglet: (b) => { PRECEDENT = null; aller(b.dataset.o); },
+  batterie: () => Pont.ouvrirBatterie(), notif: () => Pont.demanderNotif(), importer: () => Pont.choisirFichier(),
+  sauvegarder, partager, fusionAuto: (b) => fusionAuto(b.dataset.n), masquer: (b) => masquer(b.dataset.a),
+  copierImport: (b) => { const i = BASE.imports.find(x => String(x.t) === b.dataset.t); if (i) copie(i.resume, "Descriptif"); },
+  copierEtat: () => copie(etatAppli(), "État de l'appli"),
+  copierResume: () => copie(DESC.resume, "Résumé"), copierTout: () => copie(DESC.tout, "Rapport complet"),
+  fichierDesc: () => fichierTexte("JournalActivite-import_" + N.horodatage(DESC.t) + ".txt", DESC.tout)
+};
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-do]"); if (!b) return; const fn = ACTIONS[b.dataset.do]; if (fn) fn(b); });
+document.querySelectorAll("#onglets button").forEach(b => b.onclick = () => { PRECEDENT = null; aller(b.dataset.o); });
+$("#bAide").onclick = () => aller("fiche", AIDE_DE[ECRAN.nom] || "premiere");
+$("#bRegl").onclick = () => { if (ECRAN.nom === "reglages") retourEcran(); else aller("reglages"); };
+$("#bDemarrer").onclick = demarrer;
+$("#voile").addEventListener("click", (e) => { if (e.target.id === "voile" && $("#boite").querySelector("[data-do]")) fermerFenetre(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "naNom") creerAct(); });
+
+/* ===== Démarrage ===== */
+chargerBase();
+if (!BASE.courses.length && !BASE.imports.length) aller("fiche", "premiere"); else dessiner();
+</script>
+</body>
+</html>

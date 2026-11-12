@@ -1,0 +1,50 @@
+# Fabrique l'APK « Journal d'activité » et la met en téléchargement dans « Releases ».
+# Se lance tout seul à chaque modification sur la branche de travail apk-activite, ou à la main (onglet Actions).
+# La fabrication des squats (apk.yml, dossier android/) n'est pas touchée.
+name: Fabrication APK Journal d'activité
+
+on:
+  push:
+    branches: [apk-activite]
+    paths: ["activite/**", "android-activite/**", ".github/workflows/apk-activite.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  activite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tester le cœur de l'appli (import, fusion, totaux)
+        run: node activite/tests/test-noyau.js
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Copier l'appli dans l'APK
+        run: |
+          mkdir -p android-activite/app/src/main/assets/www
+          cp activite/index.html activite/noyau.js activite/donnees-integrees.js android-activite/app/src/main/assets/www/
+      - name: Fabriquer et signer
+        working-directory: android-activite
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }}
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
+          gradle --no-daemon assembleRelease -PnumVersion=${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../JournalActivite.apk
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: activite-v${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: "Journal d'activité — version 1.${{ github.run_number }}"
+          body: "Télécharge **JournalActivite.apk** ci-dessous et ouvre-le sur le téléphone pour l'installer (ou le mettre à jour : tes données sont gardées)."
+          files: JournalActivite.apk
+          make_latest: false

@@ -1,0 +1,36 @@
+plugins { id "com.android.application" }
+
+// Journal d'activité : projet Android à part de celui des squats (dossier android/), pour ne jamais casser l'un avec l'autre.
+// Le numéro de version est donné par la fabrication (GitHub).
+def numVersion = (project.findProperty("numVersion") ?: "1") as int
+
+android {
+    namespace "fr.mesapplis.activite"
+    compileSdk 34
+    defaultConfig {
+        applicationId "fr.mesapplis.activite"
+        minSdk 24
+        targetSdk 34
+        versionCode numVersion
+        versionName "1." + numVersion
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("CLE_FICHIER") ?: "../../signature/mes-applis.keystore")
+            storePassword System.getenv("CLE_MOT_DE_PASSE")
+            keyAlias "mesapplis"
+            keyPassword System.getenv("CLE_MOT_DE_PASSE")
+            storeType "pkcs12"
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    lint { checkReleaseBuilds false; abortOnError false }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+
+dependencies {
+    implementation "androidx.webkit:webkit:1.11.0"
+    implementation "androidx.core:core:1.13.1"
+}

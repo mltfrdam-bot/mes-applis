@@ -1,0 +1,5 @@
+# La page de l'appli (dossier activite/) est copiée ici au moment de la fabrication
+app/src/main/assets/
+build/
+app/build/
+.gradle/
