@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v29</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v30</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
@@ -171,7 +171,8 @@
     <div class="chips" style="margin-bottom:6px"><button class="chip" id="pTest">🧪 Test comptage H10 (toi + la ceinture)</button></div>
     <div id="pTestAide" style="margin-bottom:8px"><div class="aide">Tu touches l'écran comme d'habitude ; en parallèle la ceinture compte avec son capteur de mouvement. Chaque série de test est gardée (tes appuis + le mouvement) pour que Claude règle la détection.</div>
       <label class="opt">Type de pompes</label><div class="chips" id="pExo"></div>
-      <div class="ligne" style="margin-top:6px"><button class="sec" id="pExport" style="flex:1">📤 Envoyer les tests H10 à Claude</button></div><div class="aide" id="pExpInfo"></div></div>
+      <label class="opt">Sensibilité du comptage H10</label><div class="pSens" style="display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0"><button class="sec pdMoins" style="flex:0 0 auto;padding:8px 10px">− sensible</button><b class="pdVal" style="font-size:18px;min-width:90px;text-align:center"></b><button class="sec pdPlus" style="flex:0 0 auto;padding:8px 10px">+ sensible</button></div>
+      <div class="ligne" style="margin-top:6px"><button class="sec" id="pRapH10" style="flex:1">📋 Rapport des essais</button><button class="sec" id="pExport" style="flex:1">📤 Envoyer à Claude</button></div><div id="pRapZone" class="cache" style="overflow:auto;margin-top:6px"></div><div class="aide" id="pExpInfo"></div></div>
     <label class="opt">Repos visé (signal de reprise)</label><div class="chips" id="pRepos"></div>
     <div id="pSeanceReg">
     <label class="opt">Objectif (pompes au total)</label><div class="chips" id="pObj"></div>
@@ -191,7 +192,7 @@
           <div><div style="font-size:15px;font-weight:700;color:#5b6470">👆 TOI</div><div id="ptMoi" style="font-size:56px;font-weight:800;line-height:1">0</div></div>
           <div style="font-size:30px;font-weight:800;color:#8a929c;padding-bottom:10px">vs</div>
           <div><div style="font-size:15px;font-weight:700;color:#5b6470">🫀 H10</div><div id="ptH10" style="font-size:56px;font-weight:800;line-height:1;color:#5b4b8a">–</div></div></div>
-        <div id="ptTotal" style="font-size:17px;font-weight:700;margin-top:6px"></div><div id="ptEtat" style="font-size:14px;color:#5b6470;padding:6px;text-decoration:underline"></div></div>
+        <div id="ptTotal" style="font-size:17px;font-weight:700;margin-top:6px"></div><div id="ptEtat" style="font-size:14px;color:#5b6470;padding:6px;text-decoration:underline"></div><div class="pSens" style="display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0"><button class="sec pdMoins" style="flex:0 0 auto;padding:8px 10px">− sensible</button><b class="pdVal" style="font-size:18px;min-width:90px;text-align:center"></b><button class="sec pdPlus" style="flex:0 0 auto;padding:8px 10px">+ sensible</button></div></div>
       <div id="pTestLive" style="font-size:24px;font-weight:700;color:#c0392b"></div>
       <div id="pGuide" style="width:92%"><div id="pgTxt" style="font-size:16px;font-weight:700"></div><svg id="pgSvg" viewBox="0 0 300 64" style="width:100%;height:64px"></svg></div><div id="pSous" style="font-size:17px;color:#5b6470"></div></div>
     <div class="ligne" id="pBarre" style="padding:10px"><button class="main" id="pFinSerie" style="font-size:20px;padding:16px">Fin de série</button><button class="sec" id="pMoins" style="flex:0 0 auto">−1</button><button class="sec" id="pPlus" style="flex:0 0 auto">+1</button></div>
@@ -360,7 +361,10 @@ function fcMaxEntre(a, b) { const l = fcSerie.filter(x => x[0] >= a && x[0] <= b
 let accOn = false, accVoulu = false, accBuf = [], accEv = [], accDet = null, accErr = "";
 const ACC_HZ = 50, ACC_DT = 1000 / ACC_HZ;
 /* réglages de détection — seront ajustés par Claude d'après tes séries de test */
-const DET = { court: 0.2, long: 2, fen: 4, seuilMin: 35, seuilK: 0.6, ecartMin: 600 };
+const DET = { court: 0.2, long: 2, fen: 4, seuilMin: 35, seuilK: 0.6, ecartMin: 600, niveau: 6 };
+/* niveau 1 (peu sensible) → 10 (très sensible) */
+const detNiveau = (n) => ({ seuilK: Math.round((1 - 0.08 * (n - 1)) * 100) / 100, seuilMin: 60 - 5 * (n - 1) });
+try { const n = Number(localStorage.getItem("pompes-det-niveau")); if (n >= 1 && n <= 10) { DET.niveau = n; Object.assign(DET, detNiveau(n)); } } catch (e) {}
 function accDetReset() { accDet = { c: [], l: [], s: [], etat: "", der: 0 }; }
 /* 📡 Enregistrement H10 seconde par seconde (tennis, footing…) : FC + mouvement résumé */
 let REC = null, recSec = null, recSauveT = 0;
@@ -612,7 +616,7 @@ function testsH10() { const l = []; lire().forEach(c => c.notes.forEach(n => { c
 $("#pExport").onclick = () => { const l = testsH10(); if (!l.length) { $("#pExpInfo").textContent = "Rien à envoyer : fais d'abord une séance avec 🧪 Test."; return; }
   const nom = "tests-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v29", series: l });
   const res = "TESTS H10 — comptage des pompes\n" + l.map((x, i) => (i + 1) + ". " + (x.quand || "").slice(0, 16).replace("T", " ") + " · " + (x.exo || "") + " · toi " + x.tap + (x.man ? " (dont " + x.man + " ajoutées)" : "") + " / H10 " + x.polar + (x.diff != null ? " · " + DIFF[x.diff] : "")).join("\n");
-  exporterChoix($("#pExpInfo"), nom, txt, res); };
+  const z = document.createElement("div"); z.innerHTML = pdRapport(); exporterChoix($("#pExpInfo"), nom, JSON.stringify(Object.assign(JSON.parse(txt), { reglages: pdLog(), niveau: DET.niveau })), res + "\n\n" + z.innerText); };
 $("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
 let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
@@ -731,7 +735,35 @@ $("#pMoins").onclick = () => { if (pCur && pCur.d.length) { pCur.d.pop(); pTl.po
 function pFermerSerie(sr) { const now = performance.now(); sr.p1 = now; sr.fcMax = fcMaxEntre(sr.p0, now) || fcFraiche(); sr.fcFin = fcFraiche();
   if (accOn) setTimeout(() => { sr.polar = accCompte(sr.p0 - 2000, sr.p1 + 1500); const a0 = sr.p0 - 3000; sr.acc = accBuf.filter(x => x[0] >= a0 && x[0] <= sr.p1 + 2000).map(x => [Math.round(x[0] - sr.p0), x[2], x[3], x[4]]);
     sr.ev = accEv.filter(t => t >= a0 && t <= sr.p1 + 2000).map(t => Math.round(t - sr.p0)); }, 1600); }
+/* journal des essais et réglages du comptage H10 (pompes) */
+const pdLog = () => { try { return JSON.parse(localStorage.getItem("pompes-det-log") || "[]"); } catch (e) { return []; } };
+function pdNoter(x) { const l = pdLog(); l.push(Object.assign({ t: Date.now() }, x)); try { localStorage.setItem("pompes-det-log", JSON.stringify(l.slice(-500))); } catch (e) {} }
+function pdMaj() { document.querySelectorAll(".pdVal").forEach(x => x.textContent = "Niveau " + DET.niveau + "/10"); }
+function pdRegler(d) { const n = Math.min(10, Math.max(1, DET.niveau + d)); if (n === DET.niveau) return; DET.niveau = n; Object.assign(DET, detNiveau(n));
+  try { localStorage.setItem("pompes-det-niveau", n); } catch (e) {} pdNoter({ type: "reglage", niveau: n, ctx: enSeance ? "seance" : "options", serie: enSeance ? pSeries.length + 1 : null }); vib(20); pdMaj(); }
+document.querySelectorAll(".pdPlus").forEach(b => { b.addEventListener("pointerdown", e => e.stopPropagation()); b.onclick = () => pdRegler(+1); });
+document.querySelectorAll(".pdMoins").forEach(b => { b.addEventListener("pointerdown", e => e.stopPropagation()); b.onclick = () => pdRegler(-1); });
+/* rejoue la détection sur le mouvement enregistré d'une série, avec un autre niveau */
+function simuler(serie, n) { if (!serie.acc || !serie.acc.length || !serie.taps || !serie.taps.length) return null; const P = Object.assign({}, DET, detNiveau(n)), hz = serie.hz || 50;
+  const nc = Math.round(P.court * hz), nl = Math.round(P.long * hz), nf = Math.round(P.fen * hz); let c = [], L = [], S = [], etat = "", der = -1e9, nb = 0; const fin = serie.taps[serie.taps.length - 1] + 1500;
+  serie.acc.forEach(([t, x, y, z]) => { const m = Math.hypot(x, y, z); c.push(m); if (c.length > nc) c.shift(); L.push(m); if (L.length > nl) L.shift();
+    const v = c.reduce((a, b) => a + b, 0) / c.length - L.reduce((a, b) => a + b, 0) / L.length; S.push(v); if (S.length > nf) S.shift();
+    const rms = Math.sqrt(S.reduce((a, b) => a + b * b, 0) / S.length), thr = Math.max(P.seuilMin, P.seuilK * rms);
+    if (etat !== "h" && v > thr) etat = "h"; else if (etat === "h" && v < -thr) { etat = "b"; if (t - der > P.ecartMin) { der = t; if (t >= -2000 && t <= fin) nb++; } } }); return nb; }
+function pdRapport() { const l = testsH10().filter(x => x.acc && x.acc.length); const lg = pdLog();
+  if (!l.length) return "<p class='aide'>Pas encore de série de test avec le mouvement enregistré (version 17 ou plus).</p>";
+  const err = {}; for (let n = 1; n <= 10; n++) { let e = 0, ok = 0; l.forEach(x => { const r = simuler(x, n); if (r == null) return; e += Math.abs(r - x.tap); if (r === x.tap) ok++; }); err[n] = { e, ok }; }
+  const best = Object.keys(err).map(Number).sort((a, b) => err[a].e - err[b].e || Math.abs(a - DET.niveau) - Math.abs(b - DET.niveau))[0];
+  let h = "<b>📋 Rapport des essais H10 (pompes)</b><br><small>" + l.length + " séries · " + l.reduce((a, x) => a + x.tap, 0) + " pompes · réglage actuel niveau " + DET.niveau + "</small>";
+  h += "<table><tr><th>Série</th><th>Toi</th><th>H10 (en direct)</th><th>Niveau</th><th>Au niveau " + best + "</th></tr>" + l.slice().reverse().slice(0, 40).map(x => `<tr><td>${(x.quand || "").slice(5, 16).replace("T", " ")}<br><small>${x.exo || ""}</small></td><td>${x.tap}</td><td>${x.polar}${x.polar === x.tap ? " ✅" : ""}</td><td>${x.det && x.det.niveau || "–"}</td><td>${simuler(x, best)}</td></tr>`).join("") + "</table>";
+  h += "<b>Si tu avais été réglé à chaque niveau</b> (rejoué sur ton mouvement enregistré) :<table><tr><th>Niveau</th><th>Erreur totale</th><th>Séries justes</th></tr>" + Object.keys(err).map(n => `<tr style="${n == best ? "background:#e6f5ec;font-weight:700" : ""}"><td>${n}${n == DET.niveau ? " (actuel)" : ""}</td><td>${err[n].e} pompe(s)</td><td>${err[n].ok}/${l.length}</td></tr>`).join("") + "</table>";
+  if (best !== DET.niveau) h += `<div class="ligne"><button class="main" id="pdAppliquer">Appliquer le niveau ${best}</button></div>`;
+  const rg = lg.filter(x => x.type === "reglage").slice(-15).reverse(); if (rg.length) h += "<b>Tes derniers réglages</b><br><small>" + rg.map(x => new Date(x.t).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " " + hh(x.t).slice(0, 5) + " → niveau " + x.niveau + (x.serie ? " (avant la série " + x.serie + ")" : "")).join("<br>") + "</small>";
+  return h; }
+$("#pRapH10").onclick = () => { const z = $("#pRapZone"); z.classList.toggle("cache"); if (z.classList.contains("cache")) return; z.innerHTML = pdRapport();
+  const b = $("#pdAppliquer"); if (b) b.onclick = () => { const n = Number(b.textContent.match(/\d+/)[0]); pdRegler(n - DET.niveau); z.innerHTML = pdRapport(); }; };
 function testSerie(x) { let c = 0; const taps = x.d.map(v => Math.round((c += v) * 1000));
+  pdNoter({ type: "serie", tap: x.d.length, polar: x.polar, niveau: DET.niveau });
   return { tap: x.d.length, man: x.man || 0, polar: x.polar, diff: x.diff ?? null, exo: PO.exo || "sol", hz: ACC_HZ, det: Object.assign({}, DET), taps, ev: x.ev || [], acc: x.acc || [] }; }
 function pTestTxt(series) { const l = series.filter(x => x.polar != null); if (!l.length) return ""; const t = l.reduce((a, x) => a + x.d.length, 0), p = l.reduce((a, x) => a + x.polar, 0);
   return "🧪 Toi " + t + " / H10 " + p + " (" + l.map(x => x.d.length + "/" + x.polar).join(", ") + ")"; }
@@ -900,7 +932,7 @@ try { const r = JSON.parse(localStorage.getItem("h10-rec") || "null"); if (r && 
     $("#recReprendre").onclick = async () => { if (!(h10 && h10.gatt.connected)) await h10Connecter(); if (!(h10 && h10.gatt.connected)) return;
       REC = recAttente; recAttente = null; REC.coupures = (REC.coupures || 0) + 1; recSec = null; accDetReset(); await accDemarrer(); garderEcran(); sonPret(); $("#recAct").textContent = actNom(REC.act); }; }
   else { localStorage.removeItem("h10-rec"); ajouter({ h10rec: { debut: r.debut, act: r.act, res: recResume(r), l: r.l, coupe: true } }); } } } catch (e) {}
-sensMaj();
+sensMaj(); pdMaj();
 afficher();
 </script>
 </body>
