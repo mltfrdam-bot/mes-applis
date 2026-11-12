@@ -57,7 +57,7 @@
 </head>
 <body>
 <main id="principal">
-  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v30</small></h1>
+  <h1>📒 Journal d'activité <span id="jour"></span> <small style="font-size:13px;color:#8a929c;font-weight:600">v31</small></h1>
   <div class="acts" id="acts"></div>
   <div class="ligne"><button class="sec bH10" style="flex:1">❤️ Connecter la H10</button><button class="sec" id="bRec" style="flex:1">📡 Enregistrer (H10)</button></div>
   <div class="ligne"><button class="sec" id="bCal" style="flex:1">🎯 Régler la détection des impacts</button><button class="sec" id="bCalRap" style="flex:0 0 auto">📋</button></div>
@@ -617,7 +617,7 @@ $("#pExport").onclick = () => { const l = testsH10(); if (!l.length) { $("#pExpI
   const nom = "tests-h10-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".json", txt = JSON.stringify({ appli: "Journal d'activité v29", series: l });
   const res = "TESTS H10 — comptage des pompes\n" + l.map((x, i) => (i + 1) + ". " + (x.quand || "").slice(0, 16).replace("T", " ") + " · " + (x.exo || "") + " · toi " + x.tap + (x.man ? " (dont " + x.man + " ajoutées)" : "") + " / H10 " + x.polar + (x.diff != null ? " · " + DIFF[x.diff] : "")).join("\n");
   const z = document.createElement("div"); z.innerHTML = pdRapport(); exporterChoix($("#pExpInfo"), nom, JSON.stringify(Object.assign(JSON.parse(txt), { reglages: pdLog(), niveau: DET.niveau })), res + "\n\n" + z.innerText); };
-$("#pTest").onclick = () => { PO.test = !PO.test; pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
+$("#pTest").onclick = () => { PO.test = !PO.test; PO.testNon = !PO.test && !!(h10 && h10.gatt.connected); pReglage(); if (PO.test && !(h10 && h10.gatt.connected)) h10Connecter(); };
 $("#pAnnul").onclick = () => $("#pomp").classList.add("cache");
 let pF = null, pT0 = 0, pPhase = "", pTl = [], pSeries = [], pCur = null, pDern = 0, pTick = null, pDebutRepos = 0;
 const pNow = () => (performance.now() - pT0) / 1000;
@@ -712,7 +712,7 @@ $("#ptEtat").addEventListener("pointerdown", (e) => { e.stopPropagation(); if (!
 { const base = pMaj; pMaj = function () { base(); if (enSeance) { pReposSignal(pNow()); pGuideMaj(); } }; }
 $("#pGo").onclick = () => { pF = pChoisi() || pompesFantome(PO.obj); pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran();
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#poTitre").textContent = "👻 " + PO.obj + " pompes" + (pF ? " contre " + (pFT(PO.obj) != null ? gm(pFT(PO.obj)) : pF.nom) : "");
-  pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
+  if (h10 && h10.gatt.connected && !PO.testNon) PO.test = true; pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pZone").addEventListener("pointerdown", (e) => { e.preventDefault(); if (!enSeance || $("#pSeance").classList.contains("cache")) return; const now = performance.now();
   if (now - pDern < 350) return; if (!$("#pDiff").classList.contains("cache")) pDiffFermer(); if (pPhase !== "serie") { pPhase = "serie"; pT0 = pTl.length ? pT0 : now; pCur = { debut: pNow(), d: [], p0: now }; const f = fcFraiche(); if (f) { pCur.fcDepart = f; } pDern = now - 1000; }
   const v = (now - pDern) / 1000; pDern = now; pCur.d.push(pCur.d.length ? Math.round(v * 100) / 100 : 0); pTl.push(Math.round(pNow() * 10) / 10);
@@ -750,6 +750,9 @@ function simuler(serie, n) { if (!serie.acc || !serie.acc.length || !serie.taps 
     const v = c.reduce((a, b) => a + b, 0) / c.length - L.reduce((a, b) => a + b, 0) / L.length; S.push(v); if (S.length > nf) S.shift();
     const rms = Math.sqrt(S.reduce((a, b) => a + b * b, 0) / S.length), thr = Math.max(P.seuilMin, P.seuilK * rms);
     if (etat !== "h" && v > thr) etat = "h"; else if (etat === "h" && v < -thr) { etat = "b"; if (t - der > P.ecartMin) { der = t; if (t >= -2000 && t <= fin) nb++; } } }); return nb; }
+function meilleurNiveau() { const l = testsH10().filter(x => x.acc && x.acc.length); if (!l.length) return null; const err = {};
+  for (let n = 1; n <= 10; n++) { let e = 0; l.forEach(x => { const r = simuler(x, n); if (r != null) e += Math.abs(r - x.tap); }); err[n] = e; }
+  const best = Object.keys(err).map(Number).sort((a, b) => err[a] - err[b] || Math.abs(a - DET.niveau) - Math.abs(b - DET.niveau))[0]; return { best, err, nb: l.length }; }
 function pdRapport() { const l = testsH10().filter(x => x.acc && x.acc.length); const lg = pdLog();
   if (!l.length) return "<p class='aide'>Pas encore de série de test avec le mouvement enregistré (version 17 ou plus).</p>";
   const err = {}; for (let n = 1; n <= 10; n++) { let e = 0, ok = 0; l.forEach(x => { const r = simuler(x, n); if (r == null) return; e += Math.abs(r - x.tap); if (r === x.tap) ok++; }); err[n] = { e, ok }; }
@@ -777,7 +780,14 @@ function pTerminer() { clearInterval(pTick); sonStop(); $("#pZone").style.backgr
     ajouter({ pompes: { obj: PO.obj, total: n, temps: Math.round(t), series: sers.map(s => s.d.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff ?? null) : null, reposMoy: rm, tl: pTl, fcs: fcs.some(x => x[1]) ? fcs : null, test, res: res + (test ? " — " + pTestTxt(sers) : "") } }); accArreter(); }, 1700);
   else accArreter();
   $("#pPhase").textContent = "Terminé"; $("#pGros").textContent = n; $("#pSous").textContent = res + (rm ? " — repos moyen " + gm(rm) : "");
-  setTimeout(() => { $("#pomp").classList.add("cache"); afficher(); }, 7000); }
+  if (n && PO.test && accOn) { setTimeout(() => { if (!sers.some(x => x.polar != null)) { $("#pomp").classList.add("cache"); afficher(); return; } const m = meilleurNiveau(), tt = sers.reduce((a, x) => a + x.d.length, 0), hp = sers.reduce((a, x) => a + (x.polar || 0), 0);
+      let h = "<div style='border:3px solid #5b4b8a;border-radius:14px;padding:8px;margin-top:8px'><b>🧪 Comptage H10 cette séance :</b> toi " + tt + " / H10 " + hp + " (niveau " + DET.niveau + ")";
+      if (m) h += "<br>Sur tes " + m.nb + " séries de test : niveau " + DET.niveau + " → " + m.err[DET.niveau] + " pompe(s) d'erreur" + (m.best !== DET.niveau ? "<br><b>Conseillé : niveau " + m.best + "</b> → " + m.err[m.best] + " pompe(s) d'erreur <button class='main' id='pdAppl2' style='margin-top:6px'>Appliquer le niveau " + m.best + "</button>" : "<br>✅ Ton réglage est déjà le meilleur.");
+      h += "<div class='ligne' style='margin-top:6px'><button class='sec' id='pFermerFin'>Fermer</button></div></div>"; $("#pTestLive").innerHTML = h;
+      ["#pdAppl2", "#pFermerFin"].forEach(id => { const b = $(id); if (b) b.addEventListener("pointerdown", e => e.stopPropagation()); });
+      if ($("#pdAppl2")) $("#pdAppl2").onclick = () => { pdRegler(m.best - DET.niveau); $("#pdAppl2").outerHTML = "✅ Niveau " + m.best + " appliqué."; };
+      $("#pFermerFin").onclick = () => { $("#pomp").classList.add("cache"); afficher(); }; }, 1900); }
+  else setTimeout(() => { $("#pomp").classList.add("cache"); afficher(); }, 7000); }
 $("#pStop").onclick = () => { if (!PJ && !confirm("Terminer la séance ?")) return; pTerminer(); };
 
 function pjFinSeance() { const tl = PJ.tlCours || []; if (tl.length) { const sers = pSeries.slice(), sc = { off: tl[0], tl, ns: sers.length, diffs: sers.map(x => x.diff ?? null), fcs: sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]) }; PJ.seances.push(sc);
@@ -828,7 +838,7 @@ $("#pjGo").onclick = () => {
   pF = null; pTl = []; pSeries = []; pCur = null; pPhase = "attente"; enSeance = true; garderEcran(); PJ.cours = 0;
   $("#pReglage").classList.add("cache"); $("#pSeance").classList.remove("cache"); $("#pStop").textContent = "⏸ Fin de séance";
   $("#poTitre").textContent = "📅 Séance " + (PJ.seances.length + 1) + " — " + PJ.g.nom.split(" (")[0];
-  pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
+  if (h10 && h10.gatt.connected && !PO.testNon) PO.test = true; pT0 = performance.now(); pRecord = recordSerie(); pRecordBattu = false; pObjAnnonce = false; pDiffFermer(); pPrepGuide(); pMaj(); clearInterval(pTick); pTick = setInterval(pMaj, 200); if (PO.test) accDemarrer(); sonPret(); };
 $("#pjClore").onclick = () => { if (!PJ || !confirm("Clore la journée ?")) return; pjClore(); };
 function pjClore() { const moi = PJ.seances.reduce((a, s) => a + s.tl.length, 0); if (!moi) { PJ = null; pjSauver(); pTypeMaj(); return; }
   const tl = [].concat(...PJ.seances.map(s => s.tl)), offs = PJ.seances.map(s => s.off), cut = []; let c = 0; PJ.seances.forEach(s => { c += s.tl.length; cut.push(c); });
