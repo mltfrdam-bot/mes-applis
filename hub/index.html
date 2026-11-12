@@ -97,7 +97,7 @@
    - Le registre partagé permet aux applis d'échanger des données (ex. regards).
    - Sauvegarde / fusion / restauration communes à toutes les applis.
    ===================================================================== */
-const HUB_VERSION = '1.34';
+const HUB_VERSION = '1.35';
 const PREFIXE = 'hubapp:';
 const APP_ANDROID = window.AndroidApp || null;
 
@@ -214,6 +214,8 @@ function HubPourApp(appId){
     enregistrer: (nom, contenu, type) => enregistrerFichier(nom, contenu, type),
     ouvrirLien: (url) => { if(!/^(sms|tel|mailto|geo|https?):/i.test(String(url))) return false; const l=document.createElement('a'); l.href=url; l.rel='noopener'; if(/^https?:/i.test(url)) l.target='_blank'; document.body.appendChild(l); HTMLAnchorElement.prototype.click.call(l); setTimeout(()=>l.remove(),1000); return true; },
     imprimer: (html) => imprimerPage(html),
+    /* 1.35 : une appli partage des fichiers (ex. photos des notes → Gmail) : fichiers = [{nom, blob}] ; true = partagé, false = impossible, AbortError = annulé */
+    partager: async (fichiers, titre, texte) => { const files=(fichiers||[]).map(f=>new File([f.blob], f.nom, {type:(f.blob&&f.blob.type)||'application/octet-stream'})); if(!(navigator.canShare && navigator.canShare({files}))) return false; await navigator.share({files, title:titre||'', text:texte||''}); return true; },
     dicter: (rappels) => dicterPourApp(rappels||{}),
     contact: (navigator.contacts && navigator.contacts.select) ? ((plusieurs) => navigator.contacts.select(['name','tel'], {multiple:!!plusieurs})) : undefined,
     registre: {
@@ -438,7 +440,7 @@ async function ouvrirApp(id, objet){ appliModifiee=true; localSale=true;
   const zone=$('#vueApp'); zone.style.display='block';
   urlApp=URL.createObjectURL(new Blob([preparerCode(a.code, a.id)],{type:'text/html'}));
   const fr=document.createElement('iframe');
-  fr.setAttribute('allow','camera *; microphone *; accelerometer *; gyroscope *; magnetometer *; geolocation *; fullscreen *; bluetooth *; screen-wake-lock *; clipboard-write *; autoplay *');
+  fr.setAttribute('allow','camera *; microphone *; accelerometer *; gyroscope *; magnetometer *; geolocation *; fullscreen *; bluetooth *; screen-wake-lock *; clipboard-write *; autoplay *; web-share *');
   fr.setAttribute('allowfullscreen','');
   fr.src=urlApp;
   zone.innerHTML=''; zone.appendChild(fr);
