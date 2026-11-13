@@ -96,7 +96,10 @@ final class Fantome {
     double ecartM(double sec, double maDist) { return maDist - distA(sec); }
 
     /** Secondes d'avance (positif) ou de retard (négatif). Une fois la distance du fantôme dépassée : l'avance sur son temps final. */
-    double ecartS(double sec, double maDist) { return tempsA(maDist) - sec; }
+    double ecartS(double sec, double maDist) {
+        if (!fini(sec) && Math.abs(ecartM(sec, maDist)) < 3) return 0;   // au même endroit que lui (même s'il est à l'arrêt) : égalité
+        return tempsA(maDist) - sec;
+    }
 
     /** Le fantôme a-t-il fini sa course après « sec » secondes ? */
     boolean fini(double sec) { return sec >= temps(); }

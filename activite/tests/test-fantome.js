@@ -25,7 +25,7 @@ test("quand le fantôme a fini, ou quand on a dépassé sa distance : l'écart r
 
 test("fantôme qui s'est arrêté 2 minutes (feu rouge) : le temps à une distance donnée reste le bon", () => {
   const p = []; for (let s = 0; s <= 600; s += 5) p.push(s < 200 ? s * 3 : s < 320 ? 600 : 600 + (s - 320) * 3); const G = { ref: 1, nom: "Arrêt", premier: 0, duree: 600, dist: 1440, pas: 5, prof: p }, e = java(G, ["E 250 600", "E 250 590", "E 250 610", "E 330 600"]).reponses;
-  assert.deepStrictEqual([e[0].m, e[0].dist], [0, 600]); assert.strictEqual(e[0].s, -50, "le fantôme est passé ici à 200 s"); assert.ok(Math.abs(e[1].s + 53) <= 1, String(e[1].s)); assert.ok(Math.abs(e[2].s - 73) <= 1, "10 m plus loin : le fantôme y passera à 323 s : " + e[2].s); assert.deepStrictEqual([e[3].m, e[3].s], [-30, -130]); });
+  assert.deepStrictEqual([e[0].m, e[0].dist], [0, 600]); assert.strictEqual(e[0].s, 0, "au même endroit que le fantôme arrêté : égalité"); assert.ok(Math.abs(e[1].s + 53) <= 1, String(e[1].s)); assert.ok(Math.abs(e[2].s - 73) <= 1, "10 m plus loin : le fantôme y passera à 323 s : " + e[2].s); assert.deepStrictEqual([e[3].m, e[3].s], [-30, -130]); });
 
 test("les phrases dites par la voix", () => {
   const e = java(F, ["P 52 12", "P -30 9", "P 2 1", "P 148 61", "P -1250 400", "P 2400 -3", "P 12 0.2", "P -7 1", "P 1000 120"]).reponses;
