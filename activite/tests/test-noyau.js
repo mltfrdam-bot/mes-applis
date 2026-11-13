@@ -223,6 +223,26 @@ test("version 1.9 : distance par les positions, réglage des impacts par activit
   assert.deepStrictEqual(N.impPour(b, "tennis"), { seuil: 1838, rearme: 1503, ecart: 400, bip: true, auto: false }); assert.deepStrictEqual(N.impPour(b, "velo"), N.impPour(b, "tennis"));
   const vieux = courseGps(); assert.strictEqual(N.impTexte(vieux, N.impLire(b)), "1,8 g"); assert.strictEqual(N.impTexte(vieux, null), ""); assert.strictEqual(N.gpsBilan(vieux).methode, "vitesse"); });
 
+test("fantôme de course : choisir une course, fabriquer le fantôme, bilan à la fin et à chaque km", () => {
+  const b = N.baseVide(), ref = courseGps({ sansTours: true }); N.ajouterEnregistrement(b, ref); assert.strictEqual(N.fantPour(b, "footing"), null); assert.strictEqual(N.fantLire(b).rythme, "m500");
+  N.fantChoisir(b, "footing", ref.debut); assert.strictEqual(N.fantPour(b, "footing").debut, ref.debut); assert.strictEqual(N.fantPour(b, "marche"), null); assert.deepStrictEqual(JSON.parse(b.reglages["fantome-opt"]), { refs: { footing: ref.debut }, rythme: "m500" });
+  assert.strictEqual(N.fantRythme(b).rythme, "km1"); assert.strictEqual(N.rythmeTxt("km1"), "à chaque km"); N.fantRythme(b); N.fantRythme(b); N.fantRythme(b); assert.strictEqual(N.fantRythme(b).rythme, "m500");
+  const F = N.fantFabriquer(ref); assert.deepStrictEqual([F.ref, F.nom, F.premier, F.duree, F.dist, F.pas, F.recalcule, F.prof.length], [ref.debut, "Course du 14/11/2026 05:30", 8, 1650, 3650, 5, false, 331]);
+  const recalc = Object.assign({}, ref.gps, { dist: 3780, prof: ref.gps.prof.map(d => Math.round(d * 3780 / 3650)) }), F2 = N.fantFabriquer(ref, recalc); assert.strictEqual(F2.dist, 3780); assert.strictEqual(F2.recalcule, true);
+  assert.strictEqual(N.fantFabriquer(courseGps({ sansPosition: true })), null); assert.strictEqual(N.fantTotal(F), 3650); assert.strictEqual(N.fantTemps(F), 1642); assert.ok(Math.abs(N.fantDistA(F, 821) - 1825) < 3); assert.ok(Math.abs(N.fantTempsA(F, 1825) - 821) < 2); assert.strictEqual(N.fantTempsA(F, 9999), 1642); assert.strictEqual(N.fantDistA(F, 5000), 3650);
+  /* une nouvelle course, 5 % plus rapide que le fantôme, sur la même distance */
+  const moi = courseGps({ sansTours: true }); moi.debut += 86400000; moi.fin = moi.debut + 1572000; const v = 3650 / 1564; moi.gps.duree = 1572; moi.gps.km = [1, 2, 3].map(k => Math.round(8 + k * 1000 / v)); moi.gps.prof = []; for (let sec = 0; sec <= 1572; sec += 5) moi.gps.prof.push(Math.round(Math.max(0, Math.min(3650, (sec - 8) * v)))); moi.l = moi.l.slice(0, 1572); moi.gps.fantome = F;
+  const fb = N.fantBilan(moi); assert.strictEqual(fb.complet, true); assert.ok(Math.abs(fb.s - 78) <= 2, "78 s d'avance : " + fb.s); assert.ok(Math.abs(fb.m - 173) <= 5, "173 m d'avance à l'arrivée : " + fb.m); assert.strictEqual(fb.kms.length, 3); assert.ok(Math.abs(fb.kms[0].ecart - 21) <= 2 && Math.abs(fb.kms[2].ecart - 64) <= 2, JSON.stringify(fb.kms));
+  assert.ok(/^Sur la distance du fantôme \(3,65 km\) : 17\d m d'avance \(1:1\d\)\.$/.test(fb.texte), fb.texte); N.ajouterEnregistrement(b, moi); const d = N.detailLigne(b, N.lignesHistorique(b).find(l => l.t === moi.debut).id, "1.10");
+  assert.ok(d.includes("👻 Fantôme : Course du 14/11/2026 05:30 — 3,65 km en 27:22 (distance d'origine, tracé complet absent)") && d.includes("Km | Moi | Fantôme | Écart") && /1 \| 7:0\d \| 7:30 \| \+2\d s d'avance/.test(d), d);
+  assert.ok(N.rapportEnregistrement(moi, null, "1.10").resume.includes("👻 Fantôme (Course du 14/11/2026 05:30) : Sur la distance du fantôme"));
+  /* arrêt avant la fin du fantôme, en retard */
+  const court = courseGps({ sansTours: true }); court.gps.duree = 608; court.gps.dist = 1200; court.gps.km = [508]; court.gps.prof = []; for (let sec = 0; sec <= 608; sec += 5) court.gps.prof.push(Math.max(0, (sec - 8) * 2)); court.gps.fantome = F;
+  const fc = N.fantBilan(court); assert.strictEqual(fc.complet, false); assert.ok(Math.abs(fc.m + 134) <= 3 && Math.abs(fc.s + 60) <= 2, fc.m + " m, " + fc.s + " s"); assert.ok(fc.texte.startsWith("À ton arrêt (1,20 km sur les 3,65 km du fantôme) : 13"), fc.texte); assert.strictEqual(N.fantBilan(ref), null);
+  assert.strictEqual(N.ecartTxt(3, 1), "à égalité"); assert.strictEqual(N.ecartTxt(-52, -12), "52 m de retard (12 s)");
+  /* la course de référence supprimée : plus de fantôme */
+  N.supprimerLigne(b, N.lignesHistorique(b).find(l => l.t === ref.debut).id, Date.now()); assert.strictEqual(N.fantPour(b, "footing"), null); });
+
 test("GPS : réglages (activités avec GPS, source, vibration au km) gardés dans la base", () => {
   const b = N.baseVide(); assert.deepStrictEqual(N.gpsLire(b), { acts: ["footing", "marche", "velo"], source: "sat", km: true }); assert.ok(N.gpsPour(b, "footing") && !N.gpsPour(b, "tennis"));
   N.gpsBasculer(b, "tennis"); N.gpsBasculer(b, "velo"); assert.deepStrictEqual(N.gpsLire(b).acts, ["footing", "marche", "tennis"]); const o = N.gpsLire(b); o.source = "mix"; o.km = false; N.gpsEcrire(b, o);

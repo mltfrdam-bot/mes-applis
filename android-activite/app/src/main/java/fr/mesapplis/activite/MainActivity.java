@@ -478,6 +478,24 @@ public class MainActivity extends Activity {
             if (s != null) s.reglerGps(km);
         }
 
+        /** Refait le calcul d'un tracé gardé (« gps-….txt ») avec le calcul d'aujourd'hui et renvoie son résumé. Vide si le fichier manque. Sert au fantôme. */
+        @JavascriptInterface public String traceResume(String nom) {
+            try {
+                if (nom == null || !NOM_TRACE.matcher(nom).matches()) return "";
+                Parcours p = Parcours.relire(new File(new File(dossier, "enregistrements"), nom));
+                return p == null ? "" : p.resumeJson(p.finConnue());
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        /** Rythme des annonces du fantôme : "m500", "km1", "min1", "min2" ou "non" (pas de voix). */
+        @JavascriptInterface public void fantomeRegler(String rythme) {
+            getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("fantomeRythme", rythme == null ? "m500" : rythme).apply();
+            ServiceSeance s = ServiceSeance.actif;
+            if (s != null) s.reglerFantome(rythme);
+        }
+
         /** Démarre l'enregistrement d'une séance avec le GPS (la ceinture reste utilisée si le Bluetooth est autorisé). */
         @JavascriptInterface public boolean seanceDemarrerGps(String act) { return lancerService(ServiceSeance.ACTION_DEMARRER, act == null ? "" : act, true); }
 

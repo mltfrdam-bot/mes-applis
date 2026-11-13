@@ -240,7 +240,7 @@ function ajouterEnregistrement(base, R) { if (!enregistrementValide(R)) throw ne
 function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); (base.corbeille || []).forEach(e => { if (e.notes.some(n => n.h10rec)) vus.add(idSeance(e.seance)); }); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
 function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule = Math.max(L.length, Math.round(((R.fin || R.debut) - R.debut) / 1000)), tr = trousH10(R), de = R.deconnexions || [];
   return { ecoule, enregistre: L.length, perdu: Math.max(0, ecoule - L.length), actif: r.actif || 0, impacts: r.pics || 0, fcMoy: r.fcMoy, fcMax: r.fcMax, trous: tr, deconnexions: de, tempsDeconnecte: de.reduce((a, x) => a + x[1], 0),
-    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R) }; }
+    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R), fantome: fantBilan(R) }; }
 function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [], g = b.gps;
   T.push("ENREGISTREMENT " + (g ? (b.sansCeinture ? "GPS" : "GPS + H10") : "H10") + " — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
   if (g) lignesGps(T, g);
@@ -250,8 +250,9 @@ function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(
   T.push("Coupures de la ceinture : " + b.deconnexions.length + (b.deconnexions.length ? " (" + dureeCourte(b.tempsDeconnecte) + " en tout)" : ""));
   T.push("Trous de plus d'une minute : " + b.trous.length + (b.trous.length ? " (" + b.trous.map(x => v1(x.duree / 60)).join(" · ") + " min)" : ""));
   T.push("Reprises après fermeture de l'appli : " + b.reprises);
+  if (b.fantome) T.push("👻 Fantôme (" + b.fantome.nom + ") : " + b.fantome.texte);
   const resume = T.join("\n"), D = T.slice();
-  if (g && g.ok) tablesGps(D, R, g);
+  if (g && g.ok) tablesGps(D, R, g); if (b.fantome) lignesFantome(D, b.fantome);
   if (b.deconnexions.length) { D.push("", "Coupures de la ceinture :"); b.deconnexions.forEach(x => D.push("- " + heureS(R.debut + x[0] * 1000) + " pendant " + dureeCourte(x[1]))); }
   if (b.trous.length) { D.push("", "Trous :"); b.trous.forEach(x => D.push("- " + v1(x.duree / 60) + " min à partir de " + heure(R.debut + x.a * 1000))); }
   D.push("", "Par tranche de 10 minutes :", "Tranche | secondes | FC moy/max | mouvement moy | secondes > 1,5 g / > 2 g / > 2,5 g | impacts");
@@ -317,6 +318,42 @@ function traceSvg(G, largeur, hauteur) { if (!G || !Array.isArray(G.trace)) retu
   (G.tours || []).forEach(x => { const p = a(x[0]); h += '<path d="M' + X(p) + ' ' + Y(p) + ' v-14 l9 4 l-9 4" fill="#1f6b43" stroke="#1f6b43" stroke-width="1.5" stroke-linejoin="round"/>'; });
   const d = pts[0], f = pts[pts.length - 1]; h += '<circle cx="' + X(d) + '" cy="' + Y(d) + '" r="6" fill="#1f6b43" stroke="#fff" stroke-width="2"/><rect x="' + (Number(X(f)) - 5) + '" y="' + (Number(Y(f)) - 5) + '" width="10" height="10" fill="#a52a1f" stroke="#fff" stroke-width="2"/>';
   return h + '</svg>'; }
+
+/* ===== 👻 Fantôme de course (version 1.10) =====
+   On court contre une de ses courses passées. Réglage « fantome-opt » = {refs: {activité: début de la course choisie}, rythme des annonces}.
+   Au départ, la page fabrique le fantôme (fantFabriquer) et l'écrit dans « fantome-en-cours.json » ; le service Android compare chaque
+   seconde, annonce l'écart à la voix (Fantome.java) et range le fantôme dans la séance (gps.fantome) pour le bilan.
+   Les deux courses sont comparées à partir de leur première position GPS. Écart positif = avance. */
+const RYTHMES = [["m500", "tous les 500 m"], ["km1", "à chaque km"], ["min1", "toutes les minutes"], ["min2", "toutes les 2 minutes"], ["non", "pas de voix"]];
+function fantLire(base) { let o = {}; try { o = JSON.parse(base.reglages["fantome-opt"] || "{}") || {}; } catch (e) { o = {}; } return { refs: o.refs && typeof o.refs === "object" ? o.refs : {}, rythme: RYTHMES.some(r => r[0] === o.rythme) ? o.rythme : "m500" }; }
+function fantEcrire(base, o) { base.reglages["fantome-opt"] = JSON.stringify({ refs: o.refs, rythme: o.rythme }); return fantLire(base); }
+function fantChoisir(base, act, debut) { const o = fantLire(base); if (debut) o.refs[act] = debut; else delete o.refs[act]; return fantEcrire(base, o); }
+function fantRythme(base) { const o = fantLire(base), i = RYTHMES.findIndex(r => r[0] === o.rythme); o.rythme = RYTHMES[(i + 1) % RYTHMES.length][0]; return fantEcrire(base, o); }
+const rythmeTxt = (r) => (RYTHMES.find(x => x[0] === r) || RYTHMES[0])[1];
+function recParDebut(base, debut) { for (const x of paires(base.courses)) if (x.n.h10rec && x.n.h10rec.debut === debut) return x.n.h10rec; return null; }
+/* la course choisie comme fantôme pour cette activité (null si aucune, ou si elle a été supprimée) */
+function fantPour(base, act) { const d = fantLire(base).refs[act], R = d ? recParDebut(base, d) : null; return R && gpsUtile(R) ? R : null; }
+/* Le fantôme à donner au service. G = le résumé GPS recalculé depuis le tracé complet quand il existe, sinon celui gardé dans la séance. */
+function fantFabriquer(R, G) { const recalcule = !!G && G !== R.gps; G = G || R.gps; if (!G || !(G.premier >= 0) || !Array.isArray(G.prof) || G.prof.length < 3 || !(G.dist >= 50) || G.duree - G.premier < 30) return null;
+  return { ref: R.debut, nom: (actInfo(R.act).nom + " du " + dateHeure(R.debut)).replace(/["\\]/g, ""), premier: G.premier, duree: G.duree, dist: G.dist, pas: G.pas || 5, recalcule, prof: G.prof.slice() }; }
+/* mêmes calculs que Fantome.java */
+function fantBrute(F, s) { const p = F.prof, x = s / F.pas, i = Math.floor(x); if (i < 0) return p[0]; if (i >= p.length - 1) { const t0 = (p.length - 1) * F.pas, reste = F.duree - t0; return reste > 0 && s < F.duree ? p[p.length - 1] + (F.dist - p[p.length - 1]) * (s - t0) / reste : F.dist; } return p[i] + (p[i + 1] - p[i]) * (x - i); }
+const fantTotal = (F) => F.dist, fantTemps = (F) => Math.max(0, F.duree - F.premier);
+function fantDistA(F, sec) { return sec <= 0 ? 0 : sec >= fantTemps(F) ? F.dist : Math.min(F.dist, fantBrute(F, sec + F.premier)); }
+function fantTempsA(F, m) { const cible = m; if (m <= 0) return 0; if (cible >= F.dist) return fantTemps(F); let bas = F.premier, haut = F.duree; while (haut - bas > 1) { const mi = Math.floor((bas + haut) / 2); if (fantBrute(F, mi) < cible) bas = mi; else haut = mi; }
+  const a = fantBrute(F, bas), b = fantBrute(F, haut); return bas - F.premier + (b > a ? (cible - a) / (b - a) : 0); }
+/* seconde de la séance où on a atteint m mètres (pour comparer quand on a couru plus loin que le fantôme) */
+function gpsTempsA(G, m) { if (m <= 0) return Math.max(0, G.premier); if (m >= G.dist) return G.duree; let bas = Math.max(0, G.premier), haut = G.duree; while (haut - bas > 1) { const mi = Math.floor((bas + haut) / 2); if (gpsDistA(G, mi) < m) bas = mi; else haut = mi; } return haut; }
+const secTxt = (s) => s < 60 ? s + " s" : chrono(s);
+const ecartTxt = (m, s) => Math.abs(m) < 5 ? "à égalité" : Math.round(Math.abs(m)) + " m " + (m > 0 ? "d'avance" : "de retard") + (Math.abs(s) >= 1 ? " (" + secTxt(Math.round(Math.abs(s))) + ")" : "");
+/* Bilan contre le fantôme : l'écart à la fin, et à chaque kilomètre (moi, lui, écart en secondes, positif = avance). */
+function fantBilan(R) { const G = R && R.gps, F = G && G.fantome; if (!F || !gpsUtile(R) || !Array.isArray(F.prof) || F.prof.length < 3) return null; const total = fantTotal(F), tF = fantTemps(F), depart = Math.max(0, G.premier), temps = Math.max(0, G.duree - depart);
+  const plusLoin = G.dist >= total, moiAuBout = plusLoin ? gpsTempsA(G, total) - depart : temps;       // on compare sur la plus courte des deux distances
+  const b = { nom: F.nom || "", ref: F.ref, total, temps: tF, complet: plusLoin, recalcule: !!F.recalcule, s: plusLoin ? tF - moiAuBout : fantTempsA(F, G.dist) - temps, m: !plusLoin ? G.dist - fantDistA(F, temps) : moiAuBout <= tF ? total - fantDistA(F, moiAuBout) : gpsDistA(G, tF + depart) - total, kms: [] };   // en mètres : où était l'autre quand le premier des deux est arrivé
+  (G.km || []).forEach((sec, i) => { const d = (i + 1) * 1000, moi = sec - depart; if (d <= total) { const lui = fantTempsA(F, d); b.kms.push({ n: i + 1, moi, lui: Math.round(lui), ecart: Math.round(lui - moi) }); } });
+  b.texte = (b.complet ? "Sur la distance du fantôme (" + kmTxt(total) + ") : " : "À ton arrêt (" + kmTxt(G.dist) + " sur les " + kmTxt(total) + " du fantôme) : ") + ecartTxt(b.m, b.s) + "."; return b; }
+function lignesFantome(T, f) { T.push("", "👻 Fantôme : " + f.nom + " — " + kmTxt(f.total) + " en " + chrono(f.temps) + (f.recalcule ? "" : " (distance d'origine, tracé complet absent)"), f.texte);
+  if (f.kms.length) { T.push("Km | Moi | Fantôme | Écart"); let moiAvant = 0, luiAvant = 0; f.kms.forEach(k => { T.push([k.n, chrono(k.moi - moiAvant), chrono(k.lui - luiAvant), (k.ecart > 0 ? "+" : k.ecart < 0 ? "−" : "") + secTxt(Math.abs(k.ecart)) + (k.ecart > 0 ? " d'avance" : k.ecart < 0 ? " de retard" : "")].join(" | ")); moiAvant = k.moi; luiAvant = k.lui; }); } }
 
 /* ===== Réglage des impacts (repris de la v31) =====
    impact-reglage = {seuil, rearme, bip} en millièmes de g ; impact-essais = journal de chaque réglage et de chaque essai. */
@@ -453,6 +490,7 @@ function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R),
     if ((R.deconnexions || []).length) { T.push("Coupures de la ceinture : " + R.deconnexions.length); R.deconnexions.forEach(x => T.push("- " + h(x[0]) + " pendant " + dureeCourte(x[1]))); }
     if (R.coupures) T.push("Reprises après fermeture de l'appli : " + R.coupures); }
   if (G) tablesGps(T, R, g);
+  const fb = fantBilan(R); if (fb) lignesFantome(T, fb);
   T.push("", "Minute | " + (G ? "Distance (m) | Allure | " : "") + "FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes");
   const parMin = new Map(); L.forEach(x => { const k = Math.floor(x[0] / 60); if (!parMin.has(k)) parMin.set(k, []); parMin.get(k).push(x); });
   if (G) for (let k = 0; k * 60 < G.duree; k++) if (!parMin.has(k)) parMin.set(k, []);
@@ -512,6 +550,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
   DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
+  RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impPour, impTexte, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,

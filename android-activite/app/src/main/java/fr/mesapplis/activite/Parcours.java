@@ -256,6 +256,8 @@ final class Parcours {
     }
 
     synchronized double distance() { return dist; }
+    /** Seconde de la première position utilisable (-1 tant qu'il n'y en a pas) : le départ de la course. */
+    synchronized int premier() { return premier; }
     /** Heure du dernier point reçu (pour clôturer une vieille séance à sa vraie fin). */
     synchronized long finConnue() { return debut + Math.max(0, dernierT); }
     synchronized boolean journalEnPanne() { return journalKo; }

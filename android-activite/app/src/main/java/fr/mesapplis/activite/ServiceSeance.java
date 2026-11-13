@@ -14,6 +14,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.location.LocationRequest;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Build;
@@ -23,9 +24,11 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
+import android.speech.tts.TextToSpeech;
 import android.os.Vibrator;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -40,6 +43,8 @@ import java.util.Locale;
  * - À la fin, l'enregistrement complet est écrit dans « enregistrements/rec-<début>.json » ; la page l'ajoute à l'Historique.
  * - Étape 4 : pour une course, il écoute aussi le GPS (un point par seconde), écran éteint. Le calcul est dans Parcours ;
  *   tous les points sont gardés dans « enregistrements/gps-<début>.txt ».
+ * - Fantôme de course (version 1.10) : la page écrit la course de référence dans « fantome-en-cours.json » ; le service compare
+ *   chaque seconde et annonce l'écart à la voix, écran éteint. Le calcul est dans Fantome.
  */
 public class ServiceSeance extends Service implements LienH10.Ecoute {
     static final String ACTION_CONNECTER = "fr.mesapplis.activite.CONNECTER";
@@ -48,6 +53,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     static final String ACTION_TOUR = "fr.mesapplis.activite.TOUR";
     static final String EXTRA_ACT = "act";
     static final String EXTRA_GPS = "gps";
+    static final String FANTOME = "fantome-en-cours.json";
     /** États du GPS pour l'écran. */
     static final int GPS_ARRET = 0, GPS_RECHERCHE = 1, GPS_OK = 2, GPS_ETEINT = 3, GPS_SANS_DROIT = 4, GPS_LIMITE = 5;
     static final String JOURNAL = "seance-en-cours.txt";
@@ -69,6 +75,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private boolean gpsEcoute = false, gpsLimite = false, gpsKm = true;
     private int typePremierPlan = -1;
     private long gpsEssai = 0;
+    private volatile Fantome fantome;                   // la course contre laquelle on court, s'il y en a une
+    private TextToSpeech voix;
+    private boolean voixPrete = false, fantomeArriveDit = false;
+    private String aDire = null, rythme = "m500";
+    private long annonceRang = -1;
     private File dossier;
     private PowerManager.WakeLock verrou;
     private ToneGenerator son;
@@ -117,10 +128,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             String parcours = null;
             try {
                 Parcours p = Parcours.relire(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut));
-                if (p != null) { fin = Math.max(fin, p.finConnue()); parcours = p.resumeJson(fin); }
+                if (p != null) { fin = Math.max(fin, p.finConnue()); parcours = avecFantome(p.resumeJson(fin), lireFantome(dossier)); }
             } catch (Exception ignored) {}
             String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK (séance clôturée après coup)", parcours));
-            if (!nom.isEmpty()) journal.delete();
+            if (!nom.isEmpty()) { journal.delete(); new File(dossier, FANTOME).delete(); }
         } catch (Exception ignored) {}
     }
 
@@ -149,6 +160,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         gpsKm = p.getBoolean("gpsKm", true);
         Enregistreur e = enr;
         if (e != null) { try { gps = Parcours.reprendre(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut), System.currentTimeMillis()); } catch (Exception x) { gps = null; } }
+        rythme = p.getString("fantomeRythme", "m500");
+        if (gps != null) chargerFantome();
     }
 
     @Override
@@ -167,6 +180,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                     SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
                     gpsKm = p.getBoolean("gpsKm", true);
                     try { gps = Parcours.nouveau(Parcours.fichierDe(dossierEnregistrements(dossier), debut), debut, "velo".equals(act) ? 28 : 12, p.getString("gpsSource", "sat")); } catch (Exception x) { gps = null; }
+                    rythme = p.getString("fantomeRythme", "m500");
+                    if (gps != null) chargerFantome();
                 }
             } catch (Exception e) {
                 enr = null;
@@ -208,6 +223,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         Parcours g = gps;
         gps = null;
         if (g != null) g.fermer();                       // le fichier du tracé reste : la séance pourra reprendre
+        try { if (voix != null) voix.shutdown(); } catch (Exception ignored) {}
+        voix = null;
         relacher();
         try { if (son != null) son.release(); } catch (Exception ignored) {}
         if (actif == this) actif = null;
@@ -295,7 +312,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         try { Bundle x = l.getExtras(); if (x != null) satellites = x.getInt("satellites", 0); } catch (Exception ignored) {}
         double vitesse = l.hasSpeed() && !(l.hasSpeedAccuracy() && l.getSpeedAccuracyMetersPerSecond() > 2) ? l.getSpeed() : -1;
         int r = p.point(maintenant - p.debut, l.getLatitude(), l.getLongitude(), l.hasAccuracy() ? l.getAccuracy() : 0, l.hasAltitude() ? l.getAltitude() : 0, vitesse, satellites);
-        if ((r & Parcours.PREMIER) != 0) { vibrer(new long[]{0, 150, 120, 150}); h.post(() -> majNotification(false)); }
+        if ((r & Parcours.PREMIER) != 0) {
+            vibrer(new long[]{0, 150, 120, 150});
+            if (fantome != null && !"non".equals(rythme)) dire("GPS prêt. Le fantôme part avec toi.");
+            h.post(() -> majNotification(false));
+        }
         if ((r & Parcours.KM) != 0 && gpsKm) vibrer(new long[]{0, 500, 200, 500});
     }
 
@@ -351,6 +372,87 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     void ecranRevenu() { if (gps != null && (gpsLimite || !gpsEcoute)) h.post(this::ajuster); }
 
     void reglerGps(boolean km) { gpsKm = km; }
+
+    // ---------- Fantôme de course ----------
+
+    static Fantome lireFantome(File dossier) {
+        try {
+            File f = new File(dossier, FANTOME);
+            if (!f.exists() || f.length() < 20) return null;
+            byte[] b = new byte[(int) Math.min(f.length(), 2000000)];
+            try (FileInputStream in = new FileInputStream(f)) { int lu = 0; while (lu < b.length) { int n = in.read(b, lu, b.length - lu); if (n < 0) break; lu += n; } }
+            return Fantome.lire(new String(b, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Range le fantôme dans le résumé du parcours, pour que le bilan puisse être refait plus tard. */
+    static String avecFantome(String parcours, Fantome f) {
+        if (parcours == null || f == null || !parcours.endsWith("}")) return parcours;
+        try { new org.json.JSONObject(f.json()); } catch (Exception e) { return parcours; }   // jamais de texte abîmé dans l'enregistrement
+        return parcours.substring(0, parcours.length() - 1) + ",\"fantome\":" + f.json() + "}";
+    }
+
+    private void chargerFantome() {
+        fantome = lireFantome(dossier);
+        annonceRang = -1;
+        fantomeArriveDit = false;
+        if (fantome != null && voix == null) {
+            try {
+                voix = new TextToSpeech(this, etat -> {
+                    if (etat != TextToSpeech.SUCCESS || voix == null) return;
+                    try {
+                        voix.setLanguage(Locale.FRANCE);
+                        voix.setSpeechRate(1.1f);
+                        // comme un guidage : passe par-dessus la musique, aussi dans les écouteurs
+                        voix.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+                    } catch (Exception ignored) {}
+                    voixPrete = true;
+                    if (aDire != null) { String t = aDire; aDire = null; dire(t); }
+                });
+            } catch (Exception e) { voix = null; }
+        }
+    }
+
+    private void dire(String texte) {
+        try {
+            if (voixPrete && voix != null) voix.speak(texte, TextToSpeech.QUEUE_ADD, null, "fantome");
+            else aDire = texte;
+        } catch (Exception ignored) {}
+    }
+
+    /** Numéro de l'annonce où on en est, selon le rythme choisi : la voix parle quand il augmente. */
+    private long rang(double sec, double metres) {
+        switch (rythme) {
+            case "km1": return (long) (metres / 1000);
+            case "min1": return (long) (sec / 60);
+            case "min2": return (long) (sec / 120);
+            default: return (long) (metres / 500);
+        }
+    }
+
+    /** Une fois par seconde pendant une course avec fantôme. */
+    private void suivreFantome(long maintenant) {
+        Parcours g = gps;
+        Fantome f = fantome;
+        if (g == null || f == null || enr == null || !g.aPosition()) return;
+        double sec = (maintenant - g.debut) / 1000.0 - g.premier(), d = g.distance();
+        if (f.fini(sec) && !fantomeArriveDit) {
+            fantomeArriveDit = true;
+            if (annonceRang >= 0 && !"non".equals(rythme)) dire("Le fantôme est arrivé. " + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)));
+            annonceRang = rang(sec, d);
+            return;
+        }
+        long r = rang(sec, d);
+        if (annonceRang < 0) { annonceRang = r; return; }   // départ ou reprise : pas d'annonce tout de suite
+        if (r > annonceRang) {
+            annonceRang = r;
+            if (!"non".equals(rythme)) dire(("km1".equals(rythme) ? "Kilomètre " + r + ". " : "") + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)));
+        }
+    }
+
+    void reglerFantome(String r) { rythme = r == null ? "m500" : r; annonceRang = -1; }
 
     private void relacher() { try { if (verrou != null && verrou.isHeld()) verrou.release(); } catch (Exception ignored) {} }
 
@@ -437,6 +539,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             if (g != null) {
                 g.tic(maintenant);
                 if (!gpsEcoute && maintenant - gpsEssai > 10000) ecouterGps(true);   // autorisation donnée ou GPS rallumé entre-temps
+                suivreFantome(maintenant);
             }
             if (maintenant - dernierTaux >= 2000) { accTaux = (int) Math.round(accCompte * 1000.0 / Math.max(1, maintenant - dernierTaux)); accCompte = 0; dernierTaux = maintenant; }
             if (++compteur % 5 == 0) majNotification(false);
@@ -527,7 +630,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         int etatGps = gpsEtat(maintenant);
         sb.append(",\"gps\":");
         if (g == null) sb.append("null");
-        else sb.append("{\"etat\":").append(etatGps).append(",\"texte\":").append(Json.texte(texteGps(etatGps))).append(",\"p\":").append(g.etatJson(maintenant)).append('}');
+        else {
+            Fantome f = fantome;
+            sb.append("{\"etat\":").append(etatGps).append(",\"texte\":").append(Json.texte(texteGps(etatGps))).append(",\"p\":").append(g.etatJson(maintenant))
+              .append(",\"f\":").append(f == null || !g.aPosition() ? "null" : f.etatJson((maintenant - g.debut) / 1000.0 - g.premier(), g.distance())).append('}');
+        }
         sb.append(",\"enr\":").append(e == null ? "null" : e.etatJson(maintenant)).append('}');
         return sb.toString();
     }
@@ -559,8 +666,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         if (e == null) return "";
         long fin = System.currentTimeMillis();
         Parcours g = gps;
-        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK " + version, g == null ? null : g.resumeJson(fin)));
+        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK " + version, g == null ? null : avecFantome(g.resumeJson(fin), fantome)));
         if (nom.isEmpty()) return "";
+        fantome = null;
+        new File(dossier, FANTOME).delete();
         enr = null;
         e.fermerJournal(true);
         gps = null;
