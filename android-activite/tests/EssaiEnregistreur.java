@@ -25,7 +25,7 @@ public class EssaiEnregistreur {
             while ((ligne = r.readLine()) != null) {
                 String[] p = ligne.split(" ", 4);
                 switch (p[0]) {
-                    case "S": suivi.regler(Integer.parseInt(p[1]), Integer.parseInt(p[2]), p[3].equals("1")); break;
+                    case "S": { String[] q = p[3].split(" "); if (q.length > 1) suivi.regler(Integer.parseInt(p[1]), Integer.parseInt(p[2]), q[0].equals("1"), Integer.parseInt(q[1])); else suivi.regler(Integer.parseInt(p[1]), Integer.parseInt(p[2]), q[0].equals("1")); break; }   // S seuil réarmement bip [temps minimum en ms]
                     case "N": e = Enregistreur.nouveau(journal, Long.parseLong(p[1]), ligne.substring(ligne.indexOf(' ', 2) + 1)); if (fichierBrut != null) brut = Brut.ouvrir(fichierBrut, e.debut); break;
                     case "H": e.fc(Trames.fc(hex(p[2])), Long.parseLong(p[1])); break;
                     case "F": {
@@ -69,5 +69,5 @@ public class EssaiEnregistreur {
         System.out.println("OK");
     }
 
-    private static SuiviImpacts copie(SuiviImpacts s) { SuiviImpacts n = new SuiviImpacts(); n.regler(s.seuil, s.rearme, s.bip); return n; }
+    private static SuiviImpacts copie(SuiviImpacts s) { SuiviImpacts n = new SuiviImpacts(); n.regler(s.seuil, s.rearme, s.bip, s.ecart); return n; }
 }

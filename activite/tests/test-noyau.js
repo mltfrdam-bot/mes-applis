@@ -196,7 +196,7 @@ test("GPS : une course devient une ligne avec distance et allure ; kilomètres e
 test("GPS : le détail à copier donne les tours, le km par km et la distance minute par minute", () => {
   const b = N.baseVide(), R = courseGps(); N.ajouterEnregistrement(b, R); const d = N.detailLigne(b, N.lignesHistorique(b).find(l => l.t === R.debut).id, "1.7"), L = d.split("\n");
   assert.strictEqual(L[0], "DÉTAIL — Course — 14/11/2026 05:30 (APK 1.7)"); assert.ok(L.includes("GPS : 3,65 km en 27:22 · allure moyenne 7:30 /km · attente du GPS au départ 8 s"), d);
-  assert.ok(L.some(x => x.startsWith("Qualité du GPS : précision moyenne 4,2 m · 1 640 points, 12 écartés, 0 saut · satellites seuls · distance par les positions seules 3,61 km")), d);
+  assert.ok(L.some(x => x.startsWith("Qualité du GPS : précision moyenne 4,2 m · 1 640 points, 12 écartés, 0 saut · satellites seuls · distance calculée par la vitesse du GPS (calcul de la version 1.7) · par les positions seules : 3,61 km")), d);
   assert.ok(L.includes("Tour | Départ | Temps | Distance | Allure | FC moy | FC max | Impacts") && L.includes("1 | 05:30:08 | 4:52 | 0,65 km | 7:30 /km | 122 | 124 | 146") && L.includes("3 (fin) | 05:45:00 | 12:30 | 1,67 km | 7:30 /km | 141 | 147 | 375"), d);
   assert.ok(L.includes("Km | Départ | Temps | Allure | FC moy | FC max | Impacts") && L.includes("1 | 05:30:08 | 7:30 | 7:30 /km | 123 | 127 | 225") && L.includes("reste 650 m | 05:52:38 | 4:52 | 7:29 /km | 145 | 147 | 146"), d);
   assert.ok(L.includes("Minute | Distance (m) | Allure | FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes") && L.includes("05:31 | 133 | 7:31 /km | 121 | 121 | 30 | 0,30 | 1,9 | 60"), d);
@@ -212,6 +212,16 @@ test("GPS : course sans ceinture, course sans tours, GPS resté muet, anciens en
   assert.ok(y.resultat.startsWith("GPS : aucune position · ❤️ 133 / 147"), y.resultat); assert.strictEqual(y.dist, 0); assert.strictEqual(N.traceSvg(M.gps), ""); assert.ok(N.detailLigne(b2, y.id).includes("GPS : aucune position reçue pendant la séance"));
   assert.ok(N.detailLigne(b2, y.id).includes("Minute | FC moy | FC max"), "sans position, le tableau reste celui de la ceinture");
   const b3 = N.baseVide(); N.importer(b3, hubFictif(), {}); const t = N.lignesHistorique(b3).find(l => l.act === "tennis"); assert.ok(t.resultat.startsWith("H10 · 4 impacts"), t.resultat); assert.strictEqual(t.dist, 0); assert.strictEqual(N.gpsBilan(t.ref.n.h10rec), null); });
+
+test("version 1.9 : distance par les positions, réglage des impacts par activité, écrit dans la séance", () => {
+  const b = N.baseVide(), R = courseGps(); delete R.gps.distP; R.gps.distV = 3520; R.gps.methode = "positions"; R.gps.tremble = "0.10"; R.reglage = { seuil: 1800, rearme: 1480, ecart: 250 }; N.ajouterEnregistrement(b, R);
+  const g = N.gpsBilan(R); assert.strictEqual(g.methode, "positions"); assert.deepStrictEqual(g.autre, { nom: "par la vitesse du GPS", d: 3520 });
+  const d = N.detailLigne(b, N.lignesHistorique(b)[0].id, "1.9"); assert.ok(d.includes("distance calculée par les positions · par la vitesse du GPS : 3,52 km"), d); assert.ok(d.includes("825 impacts (réglage 1,8 g · 0,25 s)"), d);
+  assert.ok(N.rapportEnregistrement(R, N.impLire(b), "1.9").resume.includes("Impacts : 825 (réglage 1,8 g · 0,25 s)"));
+  b.reglages["impact-reglage"] = JSON.stringify({ seuil: 1838, rearme: 1503, bip: true });
+  assert.deepStrictEqual(N.impPour(b, "footing"), { seuil: 1800, rearme: 1480, ecart: 250, bip: false, auto: true }); assert.deepStrictEqual(N.impPour(b, "marche"), { seuil: 1250, rearme: 1150, ecart: 300, bip: false, auto: true });
+  assert.deepStrictEqual(N.impPour(b, "tennis"), { seuil: 1838, rearme: 1503, ecart: 400, bip: true, auto: false }); assert.deepStrictEqual(N.impPour(b, "velo"), N.impPour(b, "tennis"));
+  const vieux = courseGps(); assert.strictEqual(N.impTexte(vieux, N.impLire(b)), "1,8 g"); assert.strictEqual(N.impTexte(vieux, null), ""); assert.strictEqual(N.gpsBilan(vieux).methode, "vitesse"); });
 
 test("GPS : réglages (activités avec GPS, source, vibration au km) gardés dans la base", () => {
   const b = N.baseVide(); assert.deepStrictEqual(N.gpsLire(b), { acts: ["footing", "marche", "velo"], source: "sat", km: true }); assert.ok(N.gpsPour(b, "footing") && !N.gpsPour(b, "tennis"));

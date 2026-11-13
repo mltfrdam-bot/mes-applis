@@ -514,10 +514,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void seanceActivite(String act) { ServiceSeance s = ServiceSeance.actif; if (s != null && act != null) s.activite(act); }
 
         /** Réglage des impacts (seuil et réarmement en millièmes de g, bip oui/non) : gardé aussi côté Android pour une reprise sans écran. */
-        @JavascriptInterface public void impRegler(int seuil, int rearme, boolean bip) {
-            getSharedPreferences("reglages", MODE_PRIVATE).edit().putInt("impSeuil", seuil).putInt("impRearme", rearme).putBoolean("impBip", bip).apply();
+        @JavascriptInterface public void impRegler(int seuil, int rearme, boolean bip) { impRegler4(seuil, rearme, bip, 400); }
+
+        /** Pareil, avec le temps minimum entre deux impacts en millisecondes (propre à chaque activité depuis la version 1.9). */
+        @JavascriptInterface public void impRegler4(int seuil, int rearme, boolean bip, int ecart) {
+            getSharedPreferences("reglages", MODE_PRIVATE).edit().putInt("impSeuil", seuil).putInt("impRearme", rearme).putBoolean("impBip", bip).putInt("impEcart", ecart).apply();
             ServiceSeance s = ServiceSeance.actif;
-            if (s != null) s.regler(seuil, rearme, bip);
+            if (s != null) s.regler(seuil, rearme, bip, ecart);
         }
 
         /** Réglage « N coups » : début / fin de l'essai, et mesures fortes relevées pendant l'essai ([[t, m], …]). */

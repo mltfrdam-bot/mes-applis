@@ -104,5 +104,17 @@ test("séance jamais terminée (appli tuée pour de bon) : clôturée depuis le 
   const L = ["S 2500 1800 0", "N " + T0 + " tennis"], fcb = (v) => hex(Buffer.from([0x10, v])); for (let s = 0; s < 120; s++) { const h = T0 + s * 1000 + 500; L.push("H " + h + " " + fcb(120), "T " + (h + 400)); } L.push("V");
   const r = java(L); assert.strictEqual(r.rec.coupures, 0); assert.ok(r.rec.l.length >= 118 && r.rec.l.length <= 120); const der = r.rec.l[r.rec.l.length - 1][0]; assert.strictEqual(r.rec.fin, T0 + (der + 1) * 1000); assert.strictEqual(r.rec.res.fcMoy, 120); });
 
+/* ----- version 1.9 : le temps minimum entre deux impacts dépend de l'activité ----- */
+function course(reglage, pasParMinute, minutes) { const L = ["S " + reglage, "N " + T0 + " footing"], periode = 60000 / pasParMinute; let h = T0 + 137, t = 5000137, i = 0, pas = 0, prochain = 300; const fin = T0 + minutes * 60000;
+  while (h < fin) { const ech = []; for (let k = 0; k < 36; k++, i++) { const ms = i * 20; let z = 400 + Math.round((alea() - 0.5) * 80);                 // entre deux pas : le corps est en l'air, force faible
+      if (ms >= prochain) { pas++; prochain += periode + (alea() - 0.5) * 30; z = 2700 + Math.round(alea() * 600); } else if (ms >= prochain - periode + 20 && ms < prochain - periode + 60) z = 1900; ech.push([30, -20, z]); }
+    L.push("F " + h + " " + t + " " + hex(trameBrute(ech))); h += 720; t += 720; }
+  L.push("E " + h); return { lignes: L, pas }; }
+test("course à 165 pas par minute : avec 0,4 s (règle du tennis) un pas sur deux est refusé, avec 0,25 s tous les pas sont comptés", () => {
+  const a = course("1800 1480 0 250", 165, 5), ra = java(a.lignes).rec; assert.ok(Math.abs(ra.res.pics - a.pas) <= 2, ra.res.pics + " impacts pour " + a.pas + " pas"); assert.deepStrictEqual(ra.reglage, { seuil: 1800, rearme: 1480, ecart: 250 });
+  const b = course("1800 1480 0", 165, 5), rb = java(b.lignes).rec; assert.ok(rb.res.pics < b.pas * 0.75 && rb.res.pics > b.pas * 0.45, rb.res.pics + " impacts pour " + b.pas + " pas"); assert.deepStrictEqual(rb.reglage, { seuil: 1800, rearme: 1480, ecart: 400 });
+  const c = course("1800 1480 0 250", 200, 2), rc = java(c.lignes).rec; assert.ok(Math.abs(rc.res.pics - c.pas) <= 2, "sprint à 200 pas par minute : " + rc.res.pics + " pour " + c.pas);
+  console.log("   165 pas/min pendant 5 min : " + a.pas + " pas → " + ra.res.pics + " impacts avec 0,25 s, " + rb.res.pics + " avec 0,4 s"); });
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("\n" + n + " tests réussis.");

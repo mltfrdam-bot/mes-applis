@@ -140,7 +140,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         }
         try { version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) {}
         SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
-        suivi.regler(p.getInt("impSeuil", 2500), p.getInt("impRearme", 1800), p.getBoolean("impBip", true));
+        suivi.regler(p.getInt("impSeuil", 2500), p.getInt("impRearme", 1800), p.getBoolean("impBip", true), p.getInt("impEcart", 400));
         lien = new LienH10(this, this);
         try { son = new ToneGenerator(AudioManager.STREAM_MUSIC, 90); } catch (Exception e) { son = null; }
         cloturerVieuxJournal(this);
@@ -537,8 +537,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                 + Json.texte(c.getSharedPreferences("reglages", MODE_PRIVATE).getString("h10Nom", "")) + ",\"fc\":0,\"depuis\":0},\"enr\":null}";
     }
 
-    void regler(int seuil, int rearme, boolean bip) {
-        suivi.regler(seuil, rearme, bip);
+    void regler(int seuil, int rearme, boolean bip, int ecart) {
+        suivi.regler(seuil, rearme, bip, ecart);
     }
 
     void activite(String a) { Enregistreur e = enr; if (e != null) { e.activite(a); h.post(() -> majNotification(true)); } }

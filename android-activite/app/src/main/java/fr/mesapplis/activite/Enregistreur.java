@@ -142,6 +142,8 @@ final class Enregistreur {
      * Une mesure de mouvement. m = force (millièmes de g), t = heure précise de la mesure (ms), horloge = heure du téléphone (ms).
      * Renvoie vrai quand un impact vient d'être compté ET qu'il faut biper.
      */
+    private int rSeuil = 0, rRearme = 0, rEcart = 0;   // dernier réglage des impacts vu pendant la séance
+
     synchronized boolean mesure(double m, long t, long horloge, SuiviImpacts suivi) {
         boolean biper = false;
         int sec = seconde(horloge);
@@ -155,7 +157,8 @@ final class Enregistreur {
         if (sS != sec) { if (sS >= 0) fermer(horloge); sS = sec; sN = 0; sSom = 0; sMax = 0; sPics = 0; sEnPic = false; }
         double dv = Math.abs(m - 1000);
         sN++; sSom += dv; if (dv > sMax) sMax = dv;
-        if (m > suivi.seuil && !sEnPic && (!aImpact || t - dernierImpactT > 400)) { sPics++; aImpact = true; dernierImpactT = t; sEnPic = true; }
+        rSeuil = suivi.seuil; rRearme = suivi.rearme; rEcart = suivi.ecart;
+        if (m > suivi.seuil && !sEnPic && (!aImpact || t - dernierImpactT > suivi.ecart)) { sPics++; aImpact = true; dernierImpactT = t; sEnPic = true; }
         else if (m < suivi.rearme) sEnPic = false;
         return biper;
     }
@@ -211,6 +214,7 @@ final class Enregistreur {
         sb.append(",\"deconnexions\":");
         liste(sb, deco);
         sb.append(",\"fin\":").append(horloge).append(",\"source\":").append(Json.texte(source));
+        if (rSeuil > 0) sb.append(",\"reglage\":{\"seuil\":").append(rSeuil).append(",\"rearme\":").append(rRearme).append(",\"ecart\":").append(rEcart).append('}');   // le réglage des impacts utilisé pendant la séance
         if (gps != null) sb.append(",\"gps\":").append(gps);
         sb.append('}');
         return sb.toString();

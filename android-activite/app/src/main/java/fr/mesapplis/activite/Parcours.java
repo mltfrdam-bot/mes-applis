@@ -22,10 +22,11 @@ import java.util.Locale;
  *    même les points écartés. Rien n'est jeté : on pourra recalculer, couper ou découper un parcours plus tard.
  *    Appli tuée = rien de perdu : à la reprise, le fichier est relu et le calcul repart au même endroit.
  *  - la distance est calculée sur des points filtrés : points trop imprécis écartés, sauts impossibles écartés,
- *    rien de compté à l'arrêt. Elle additionne la vitesse donnée par le GPS (mesurée directement sur les satellites,
- *    bien plus régulière que la position) ; quand la vitesse manque (trou de réception, position « mélangée »),
- *    elle se sert des positions. Une deuxième distance, calculée seulement avec les positions lissées, est gardée
- *    à côté pour comparer avec la montre.
+ *    rien de compté à l'arrêt. Depuis la version 1.9 elle additionne les déplacements entre positions, par petits pas :
+ *    2 m quand le GPS est propre, jusqu'à 15 m (et positions lissées) quand il tremble. Le tremblement est mesuré
+ *    en continu sur trois points de suite. Sur la course de référence du 13/11/2026 (43 min, COROS 6,26 km) :
+ *    6,26 km avec ce calcul, contre 6,04 km avec la vitesse donnée par le GPS (version 1.7), qui est trop basse par moments.
+ *    La distance « vitesse × temps » reste gardée à côté (distV) pour comparer.
  *
  * Fichier (texte, une ligne par événement, temps en millisecondes depuis le début de la séance) :
  *   G <début> <vitesse max m/s> <source>      en-tête
@@ -41,7 +42,9 @@ final class Parcours {
     private static final double PREC_DEPART = 15;       // la toute première position doit être bonne (15 m)…
     private static final long ATTENTE_DEPART = 30000;   // …sauf si ça fait 30 s qu'on attend : on prend alors ce qu'on a
     private static final int PAS = 5;                   // le profil (distance, position) est gardé toutes les 5 secondes
-    private static final double PAS_POSITION = 10;      // distance par les positions : comptée par bouts de 10 m (sinon les petites erreurs s'additionnent)
+    private static final double PAS_MINI = 2, PAS_MAXI = 15;   // distance : comptée par pas de 2 m (GPS propre) à 15 m (GPS qui tremble)
+    private static final double PAS_PAR_TREMBLE = 12;   // pas = 12 × le tremblement mesuré
+    private static final double TREMBLE_LISSE = 0.4;    // au-delà de 0,4 m de tremblement, les positions sont lissées avant d'être comptées
     private static final double BRUIT = 3;              // lissage : on suppose qu'on peut changer de vitesse de 3 m/s en 1 s
     private static final long ATTENTE_SAUT = 10000;     // un « saut » qui dure 10 s n'en est pas un : on repart de la nouvelle position
 
@@ -55,17 +58,17 @@ final class Parcours {
 
     // position lissée, dernier point compté dans la distance, dernier point brut accepté
     private boolean aPos = false;
-    private double fLat, fLon, fVar, aLat, aLon, bLat, bLon, cLat, cLon;
-    private long fT = 0, bT = -1, refusT = -1, dernierT = -1, dernierOk = -1, attenteT = -1;
-    private double dist = 0, distP = 0, precSomme = 0, precDerniere = -1, vitDerniere = -1;
-    private int points = 0, gardes = 0, rejetes = 0, sauts = 0, sats = 0, premier = -1;
+    private double fLat, fLon, fVar, aLat, aLon, bLat, bLon, gLat, gLon, p1Lat, p1Lon, p2Lat, p2Lon, tremble = 0;
+    private long fT = 0, bT = -1, refusT = -1, dernierT = -1, dernierOk = -1, attenteT = -1, p1T = -1, p2T = -1;
+    private double dist = 0, distV = 0, precSomme = 0, precDerniere = -1, vitDerniere = -1;
+    private int points = 0, gardes = 0, rejetes = 0, sauts = 0, sats = 0, premier = -1, trembleN = 0;
 
     private final List<Integer> km = new ArrayList<>();        // seconde de passage de chaque kilomètre
     private final List<int[]> tours = new ArrayList<>();       // tours à la main : [seconde, distance en m, FC]
     private final List<Integer> prof = new ArrayList<>();      // distance (m) toutes les 5 s
     private final List<Integer> trace = new ArrayList<>();     // latitude, longitude (× 100 000) toutes les 5 s ; 0,0 = pas encore de position
-    private final long[] fenT = new long[24];                  // derniers points comptés, pour l'allure du moment
-    private final double[] fenD = new double[24];
+    private final long[] fenT = new long[24];                  // dernières positions, pour l'allure du moment
+    private final double[] fenLa = new double[24], fenLo = new double[24];
     private int fenN = 0;
 
     private Parcours(File fichier, long debut) { this.fichier = fichier; this.debut = debut; }
@@ -140,20 +143,21 @@ final class Parcours {
     private void avancer(long t) {
         while ((long) prof.size() * PAS * 1000 <= t && prof.size() < 20000) {
             prof.add((int) Math.round(dist));
-            trace.add(aPos ? (int) Math.round(fLat * 1e5) : 0);
-            trace.add(aPos ? (int) Math.round(fLon * 1e5) : 0);
+            trace.add(aPos ? (int) Math.round(gLat * 1e5) : 0);
+            trace.add(aPos ? (int) Math.round(gLon * 1e5) : 0);
         }
     }
 
     private void repartirDe(long t, double lat, double lon, double prec) {
         fLat = lat; fLon = lon; fVar = prec * prec; fT = t;
         aLat = lat; aLon = lon;
-        cLat = lat; cLon = lon;
+        gLat = lat; gLon = lon;
+        p1Lat = lat; p1Lon = lon; p1T = t; p2T = -1;
         bLat = lat; bLon = lon; bT = t;
         refusT = -1;
     }
 
-    private void noter(long t) { fenT[fenN % fenT.length] = t; fenD[fenN % fenT.length] = dist; fenN++; }
+    private void noter(long t) { int i = fenN % fenT.length; fenT[i] = t; fenLa[i] = gLat; fenLo[i] = gLon; fenN++; }
 
     /**
      * Un point reçu du GPS. t = millisecondes depuis le début ; précision en mètres ; vitesse en m/s (-1 si le GPS ne la donne pas).
@@ -197,19 +201,26 @@ final class Parcours {
         fLon += k * (lon - fLon);
         fVar *= (1 - k);
         fT = t;
-        // distance par les positions lissées : rien à l'arrêt (vitesse GPS presque nulle), et par bouts de 10 m
+        // tremblement du GPS : écart du point à la ligne de ses deux voisins, sur trois points de suite à une seconde d'intervalle
+        if (p2T >= 0 && t - p1T > 500 && t - p1T < 1500 && p1T - p2T > 500 && p1T - p2T < 1500) {
+            double dy = (lat - 2 * p1Lat + p2Lat) * 110574.0, dx = (lon - 2 * p1Lon + p2Lon) * 111320.0 * Math.cos(Math.toRadians(p1Lat));
+            double q = Math.min(25, (dx * dx + dy * dy) / 12);
+            tremble = trembleN < 20 ? (tremble * trembleN + q) / (trembleN + 1) : tremble + (q - tremble) / 20;
+            trembleN++;
+        }
+        p2Lat = p1Lat; p2Lon = p1Lon; p2T = p1T; p1Lat = lat; p1Lon = lon; p1T = t;
+        // distance par les positions : rien à l'arrêt (vitesse GPS presque nulle), et par pas d'autant plus grands que le GPS tremble
+        double j = Math.sqrt(tremble), part = j > TREMBLE_LISSE ? 0.5 : 1;
+        gLat += part * (lat - gLat);
+        gLon += part * (lon - gLon);
         boolean arret = vit >= 0 && vit < 0.3;
-        double pas = metres(aLat, aLon, fLat, fLon);
-        if (!arret && pas >= PAS_POSITION) { distP += pas; aLat = fLat; aLon = fLon; }
-        // distance retenue : vitesse du GPS × temps ; après un manque de réception, la ligne droite ; sans vitesse, les positions
+        double pas = metres(aLat, aLon, gLat, gLon);
+        if (!arret && pas >= Math.min(PAS_MAXI, Math.max(PAS_MINI, PAS_PAR_TREMBLE * j))) { dist += pas; aLat = gLat; aLon = gLon; }
+        // deuxième mesure, gardée pour comparer : vitesse du GPS × temps (ligne droite après un manque de réception)
         double db = (t - bT) / 1000.0;
-        if (vit < 0) {
-            double secours = metres(cLat, cLon, fLat, fLon);
-            if (secours >= Math.max(PAS_POSITION, prec)) { dist += secours; cLat = fLat; cLon = fLon; }
-        } else {
-            if (db <= 3) dist += arret ? 0 : Math.min(vit, vMax) * db;
-            else { double droit = metres(bLat, bLon, lat, lon); if (!arret && droit > 2 * prec) dist += droit; }
-            cLat = fLat; cLon = fLon;
+        if (vit >= 0) {
+            if (db <= 3) distV += arret ? 0 : Math.min(vit, vMax) * db;
+            else { double droit = metres(bLat, bLon, lat, lon); if (!arret && droit > 2 * prec) distV += droit; }
         }
         bLat = lat; bLon = lon; bT = t;
         dernierOk = t; precDerniere = prec; vitDerniere = vit; precSomme += prec; gardes++;
@@ -228,13 +239,20 @@ final class Parcours {
     /** À appeler une fois par seconde. */
     synchronized void tic(long horloge) { avancer(horloge - debut); }
 
-    /** Vitesse du moment (m/s) sur les 12 dernières secondes ; -1 si on ne sait pas. */
+    /** Vitesse du moment (m/s) : chemin parcouru sur les 12 dernières secondes, mesuré par bouts de 4 s ; -1 si on ne sait pas. */
     private double vitesse(long t) {
         if (fenN < 2 || t - dernierOk > 6000) return -1;
-        int n = Math.min(fenN, fenT.length), dernier = (fenN - 1) % fenT.length, choisi = dernier;
-        for (int i = 1; i < n; i++) { int j = ((fenN - 1 - i) % fenT.length + fenT.length) % fenT.length; if (fenT[dernier] - fenT[j] > 12000) break; choisi = j; }
-        double duree = (fenT[dernier] - fenT[choisi]) / 1000.0;
-        return duree < 3 ? -1 : Math.max(0, (fenD[dernier] - fenD[choisi]) / duree);
+        int n = Math.min(fenN, fenT.length), dernier = (fenN - 1) % fenT.length, ancien = dernier;
+        for (int i = 1; i < n; i++) { int j = ((fenN - 1 - i) % fenT.length + fenT.length) % fenT.length; if (fenT[dernier] - fenT[j] > 12000) break; ancien = j; }
+        double duree = (fenT[dernier] - fenT[ancien]) / 1000.0;
+        if (duree < 3) return -1;
+        double chemin = 0;
+        int avant = ancien;
+        for (int j = ancien; j != dernier; ) {
+            j = (j + 1) % fenT.length;
+            if (fenT[j] - fenT[avant] >= 4000 || j == dernier) { chemin += metres(fenLa[avant], fenLo[avant], fenLa[j], fenLo[j]); avant = j; }
+        }
+        return chemin / duree;
     }
 
     synchronized double distance() { return dist; }
@@ -268,7 +286,7 @@ final class Parcours {
         long t = Math.max(0, horloge - debut);
         avancer(t);
         StringBuilder sb = new StringBuilder(prof.size() * 24 + 400);
-        sb.append("{\"dist\":").append(Math.round(dist)).append(",\"distP\":").append(Math.round(distP)).append(",\"duree\":").append(t / 1000)
+        sb.append("{\"dist\":").append(Math.round(dist)).append(",\"distV\":").append(Math.round(distV)).append(",\"methode\":\"positions\",\"tremble\":").append(nombre(Math.sqrt(tremble), 2)).append(",\"duree\":").append(t / 1000)
           .append(",\"premier\":").append(premier).append(",\"dernier\":").append(dernierOk < 0 ? -1 : dernierOk / 1000)
           .append(",\"points\":").append(points).append(",\"gardes\":").append(gardes).append(",\"rejetes\":").append(rejetes).append(",\"sauts\":").append(sauts)
           .append(",\"precMoy\":").append(gardes > 0 ? nombre(precSomme / gardes, 1) : "null").append(",\"reprises\":").append(reprises)

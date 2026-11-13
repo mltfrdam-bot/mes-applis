@@ -37,7 +37,7 @@ const pc = (x) => x.toFixed(1).replace(".", ",") + " %";
 
 test("ligne droite de 3,03 km à 3 m/s : distance à moins de 2 %, 3 kilomètres annoncés", () => {
   const r = java(["N 1000 12 sat", ...gps(droite(3), 1010), "F 1011000"]), g = r.resume;
-  assert.ok(ecart(g.dist, 3030) < 2, "distance " + g.dist); assert.ok(ecart(g.distP, 3030) < 2, "distance par les positions " + g.distP);
+  assert.ok(ecart(g.dist, 3030) < 2, "distance " + g.dist); assert.ok(ecart(g.distV, 3030) < 2, "distance par la vitesse " + g.distV); assert.strictEqual(g.methode, "positions");
   assert.strictEqual(r.km, 3); assert.strictEqual(g.km.length, 3); g.km.forEach((s, i) => assert.ok(Math.abs(s - (i + 1) * 333.3) < 8, "km " + (i + 1) + " à " + s + " s"));
   assert.strictEqual(r.premiers, 1); assert.strictEqual(g.premier, 0); assert.strictEqual(g.points, 1011); assert.strictEqual(g.rejetes, 0); assert.strictEqual(g.duree, 1011);
   assert.strictEqual(g.pas, 5); assert.strictEqual(g.prof.length, 203); assert.strictEqual(g.trace.length, 406); assert.ok(Math.abs(g.prof[100] - 1500) < 30, "profil à 500 s : " + g.prof[100]);

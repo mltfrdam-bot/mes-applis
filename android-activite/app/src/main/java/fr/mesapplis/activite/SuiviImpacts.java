@@ -6,13 +6,14 @@ import java.util.List;
 /**
  * Suit chaque mouvement net de la ceinture (« pic ») et dit s'il compte comme un impact, selon le réglage.
  * Même règle que la v31 (picSuivre) : un pic commence au-dessus de 1,25 g, finit sous 1,15 g,
- * est retenu s'il dépasse 1,4 g et s'il est à plus de 0,4 s du précédent ; il compte s'il dépasse le seuil.
+ * est retenu s'il dépasse 1,4 g et s'il est à plus de « ecart » (0,4 s au départ) du précédent ; il compte s'il dépasse le seuil.
  * Java simple (rien d'Android).
  */
 final class SuiviImpacts {
     static final int RIEN = 0, PIC = 1, PIC_COMPTE = 2;
 
     int seuil = 2500, rearme = 1800;          // millièmes de g
+    int ecart = 400;                          // temps minimum entre deux impacts, en millisecondes (0,4 s au tennis ; 0,25 s en course, sinon un pas sur deux est refusé)
     boolean bip = true;
 
     private boolean enPic = false;
@@ -27,6 +28,7 @@ final class SuiviImpacts {
     private List<double[]> essai = null;
 
     synchronized void regler(int seuil, int rearme, boolean bip) { this.seuil = seuil; this.rearme = rearme; this.bip = bip; }
+    synchronized void regler(int seuil, int rearme, boolean bip, int ecart) { regler(seuil, rearme, bip); this.ecart = Math.max(100, Math.min(2000, ecart)); }
 
     synchronized void essaiDemarrer() { essai = new ArrayList<>(); }
     synchronized void essaiArreter() { essai = null; }
@@ -51,7 +53,7 @@ final class SuiviImpacts {
         if (m > picM) picM = m;
         if (m >= 1150) return RIEN;
         enPic = false;
-        if (picM > 1400 && (!aDernier || t - dernierT > 400)) {
+        if (picM > 1400 && (!aDernier || t - dernierT > ecart)) {
             aDernier = true; dernierT = t; dernierM = picM; dernierSeuil = seuil; dernierCompte = picM > seuil;
             return dernierCompte ? PIC_COMPTE : PIC;
         }

@@ -246,7 +246,7 @@ function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(
   if (g) lignesGps(T, g);
   T.push(b.sansCeinture && g ? "Durée : " + chrono(b.ecoule) + " · sans ceinture (pas de cardio ni de mouvement)" : "Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
   T.push("FC : moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–"));
-  T.push(b.sansCeinture && g ? "Mouvement : pas de ceinture" : b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
+  T.push(b.sansCeinture && g ? "Mouvement : pas de ceinture" : b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
   T.push("Coupures de la ceinture : " + b.deconnexions.length + (b.deconnexions.length ? " (" + dureeCourte(b.tempsDeconnecte) + " en tout)" : ""));
   T.push("Trous de plus d'une minute : " + b.trous.length + (b.trous.length ? " (" + b.trous.map(x => v1(x.duree / 60)).join(" · ") + " min)" : ""));
   T.push("Reprises après fermeture de l'appli : " + b.reprises);
@@ -290,7 +290,7 @@ function h10Entre(R, a, b) { let n = 0, som = 0, max = 0, imp = 0; (R.l || []).f
 /* Tout ce qu'on sait du parcours : le temps compte à partir de la première position (« attente » = secondes avant).
    kms = un par kilomètre entier, plus le reste ; tours = un par appui sur « Tour », plus le dernier bout jusqu'à la fin. */
 function gpsBilan(R) { const G = R && R.gps; if (!G || typeof G !== "object") return null; const ok = gpsUtile(R), depart = Math.max(0, G.premier || 0), duree = G.duree || 0, temps = Math.max(0, duree - depart), dist = G.dist || 0;
-  const b = { ok, dist, distP: G.distP || 0, duree, attente: depart, temps, allure: allureTxt(dist, temps), points: G.points || 0, rejetes: G.rejetes || 0, sauts: G.sauts || 0, precMoy: G.precMoy == null ? null : Number(G.precMoy),
+  const b = { ok, dist, distP: G.distP || 0, autre: G.methode === "positions" ? { nom: "par la vitesse du GPS", d: G.distV || 0 } : { nom: "par les positions seules", d: G.distP || 0 }, methode: G.methode === "positions" ? "positions" : "vitesse", duree, attente: depart, temps, allure: allureTxt(dist, temps), points: G.points || 0, rejetes: G.rejetes || 0, sauts: G.sauts || 0, precMoy: G.precMoy == null ? null : Number(G.precMoy),
     source: G.source === "mix" ? "position mélangée" : "satellites seuls", reprises: G.reprises || 0, fichier: G.fichier || "", kms: [], tours: [] };
   if (!ok) return b; const km = G.km || []; let prec = depart;
   km.forEach((sec, i) => { b.kms.push(Object.assign({ n: i + 1, debut: prec, d: 1000, t: sec - prec, allure: allureTxt(1000, sec - prec) }, h10Entre(R, prec, sec))); prec = sec; });
@@ -301,7 +301,7 @@ function gpsBilan(R) { const G = R && R.gps; if (!G || typeof G !== "object") re
   return b; }
 function lignesGps(T, g) { if (!g.ok) { T.push("GPS : aucune position reçue pendant la séance (" + g.points + " points, tous écartés ou absents)."); return; }
   T.push("GPS : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure moyenne " + g.allure + (g.attente > 2 ? " · attente du GPS au départ " + dureeCourte(g.attente) : ""));
-  T.push("Qualité du GPS : précision moyenne " + (g.precMoy == null ? "–" : v1(g.precMoy) + " m") + " · " + nb(g.points) + " points, " + g.rejetes + " écartés, " + pl(g.sauts, "saut") + " · " + g.source + " · distance par les positions seules " + kmTxt(g.distP) + (g.reprises ? " · " + pl(g.reprises, "reprise") : "")); }
+  T.push("Qualité du GPS : précision moyenne " + (g.precMoy == null ? "–" : v1(g.precMoy) + " m") + " · " + nb(g.points) + " points, " + g.rejetes + " écartés, " + pl(g.sauts, "saut") + " · " + g.source + " · distance calculée par " + (g.methode === "positions" ? "les positions" : "la vitesse du GPS (calcul de la version 1.7)") + " · " + g.autre.nom + " : " + kmTxt(g.autre.d) + (g.reprises ? " · " + pl(g.reprises, "reprise") : "")); }
 function tablesGps(T, R, g) { const f = (v) => v == null ? "–" : v, h = (sec) => heureS(R.debut + sec * 1000);
   if (g.tours.length) { T.push("", "Mes tours (bouton Tour) :", "Tour | Départ | Temps | Distance | Allure | FC moy | FC max | Impacts");
     g.tours.forEach(x => T.push([x.n + (x.fin ? " (fin)" : ""), h(x.debut), chrono(x.t), kmTxt(x.d), x.allure, f(x.fcMoy), f(x.fcMax), x.impacts].join(" | "))); }
@@ -320,6 +320,13 @@ function traceSvg(G, largeur, hauteur) { if (!G || !Array.isArray(G.trace)) retu
 
 /* ===== Réglage des impacts (repris de la v31) =====
    impact-reglage = {seuil, rearme, bip} en millièmes de g ; impact-essais = journal de chaque réglage et de chaque essai. */
+/* Depuis la version 1.9 : réglage automatique par activité. En course, la règle du tennis (0,4 s minimum entre deux impacts,
+   soit 150 par minute au plus) refusait un pas sur deux ; vérifié sur les mesures brutes des deux courses du 13/11/2026.
+   Les autres activités gardent le réglage général (celui qu'on règle avec ± ou « N coups ») et 0,4 s. ecart = millisecondes. */
+const IMP_AUTO = { footing: { seuil: 1800, rearme: 1480, ecart: 250 }, marche: { seuil: 1250, rearme: 1150, ecart: 300 } };
+function impPour(base, act) { const g = impLire(base), a = IMP_AUTO[act]; return a ? { seuil: a.seuil, rearme: a.rearme, ecart: a.ecart, bip: false, auto: true } : { seuil: g.seuil, rearme: g.rearme, ecart: 400, bip: g.bip, auto: false }; }
+/* le réglage des impacts écrit dans la séance (depuis la 1.9), sinon le réglage général du moment */
+function impTexte(R, imp) { const r = R && R.reglage; return r && r.seuil ? gg(r.seuil) + " g · " + (r.ecart / 1000).toFixed(2).replace(".", ",") + " s" : imp ? gg(imp.seuil) + " g" : ""; }
 function impLire(base) { let i = { seuil: 2500, rearme: 1800 }; try { i = Object.assign(i, JSON.parse(base.reglages["impact-reglage"] || "{}")); } catch (e) {} i.bip = i.bip !== false; return i; }
 function impEcrire(base, imp) { base.reglages["impact-reglage"] = JSON.stringify(imp); }
 function essaisLire(base) { return lireListe(base.reglages["impact-essais"]); }
@@ -440,7 +447,7 @@ function manquesH10(R) { const L = R.l || [], fin = R.fin ? Math.round((R.fin - 
 function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000), g = b.gps, G = g && g.ok ? R.gps : null;
   if (g) lignesGps(T, g);
   if (b.sansCeinture && g) T.push("Sans ceinture : pas de cardio ni de mouvement.");
-  else { T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · actif " + hm(b.actif)));
+  else { T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · actif " + hm(b.actif)));
     T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
     if (m.petits) T.push("Petits manques (1 à 5 s) : " + m.petits + " s en tout");
     if ((R.deconnexions || []).length) { T.push("Coupures de la ceinture : " + R.deconnexions.length); R.deconnexions.forEach(x => T.push("- " + h(x[0]) + " pendant " + dureeCourte(x[1]))); }
@@ -507,7 +514,7 @@ const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, l
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
-  impLire, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
+  impLire, impPour, impTexte, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
   baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };
 g.Noyau = N;
 if (typeof module !== "undefined" && module.exports) module.exports = N;
