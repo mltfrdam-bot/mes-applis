@@ -143,8 +143,34 @@ test("enchaînement (tuile Muscu) : exercices à la suite, exercice ajouté en r
   assert.ok(s.notes[0].t < s.notes[1].t && s.notes[1].t < s.notes[2].t); assert.strictEqual(s.notes[2].reps.charges, undefined);
   N.fusionner(b, { courses: [s], reglages: {} }); const l = N.lignesHistorique(b).filter(x => x.act === "muscu"); assert.strictEqual(l.length, 1); assert.strictEqual(l[0].pompes, 15);
   assert.strictEqual(l[0].resultat, "Squats 18 (20 kg) · Pompes 15 · Tractions 6 · ❤️ max 130"); assert.strictEqual(l[0].detail.length, 3); assert.strictEqual(N.recordSerie(b, "Squats"), 10); assert.strictEqual(N.recordSerie(b, "Tractions"), 6);
-  const r = N.rapportReps(s, "1.5"); assert.ok(r.resume.includes("Squats : 18 répétitions") && r.resume.includes("il manque 2") && r.tout.includes("1 | 10 | 20 kg | 😐 Moyen | 100/105/105"), r.tout);
+  const r = N.rapportReps(s, "1.5"); assert.ok(r.resume.includes("Squats : 18 répétitions") && r.resume.includes("il manque 2") && r.tout.includes("1 | 10 | 18 s | – | 20 kg | 😐 Moyen | 100/105/105"), r.tout);
   assert.strictEqual(N.repsSeance(N.repsNouveau(b, "muscu", ["Squats"], T0), T0 + 5000), null, "séance sans aucune répétition : rien à ranger");
   const copie = JSON.parse(JSON.stringify(st)); assert.strictEqual(N.stable(N.repsSeance(copie, t + 1000)), N.stable(s), "la séance écrite dans le téléphone puis relue donne le même résultat"); });
+
+/* ----- supprimer une séance (corbeille) et 📋 copier le détail ----- */
+test("supprimer une séance : elle part dans la corbeille, « Annuler » la remet à l'identique, un nouvel import ne la fait pas revenir", () => {
+  const b = N.baseVide(); N.importer(b, hubFictif(), {}); N.ajouterEnregistrement(b, recFictif(T0 + 48 * 3600e3)); const avant = N.stable(b.courses), tt = N.totaux(b);
+  const l = N.lignesHistorique(b), tennis = l.find(x => x.act === "tennis" && x.t === T0 + 3600e3), pompes = l.find(x => x.id === "s" + T0), neuf = l.find(x => x.t === T0 + 48 * 3600e3);
+  assert.ok(N.supprimable(tennis) && N.supprimable(pompes)); assert.ok(!N.supprimable(l.find(x => x.id === "j3008")), "les lignes intégrées ne se suppriment pas"); assert.strictEqual(N.supprimerLigne(b, "carnet-0", 1), null);
+  const e1 = N.supprimerLigne(b, pompes.id, 1000); assert.strictEqual(e1.notes.length, 2); assert.strictEqual(N.totaux(b).pompes, tt.pompes - 100); assert.strictEqual(N.totaux(b).lignes, tt.lignes - 1); assert.ok(!b.courses.some(c => c.id === T0), "séance vidée retirée");
+  const e2 = N.supprimerLigne(b, tennis.id, 2000), e3 = N.supprimerLigne(b, neuf.id, 3000); assert.strictEqual(b.corbeille.length, 3); assert.strictEqual(N.lignesHistorique(b).filter(x => !x.source).length, 0);
+  assert.strictEqual(N.supprimerLigne(b, pompes.id, 4000), null, "déjà supprimée");
+  const d = N.importer(b, hubFictif(), {}); assert.strictEqual(N.lignesHistorique(b).filter(x => !x.source).length, 0, "le nouvel import ne remet pas ce qui est dans la corbeille"); assert.ok(d.obs.some(o => o.includes("corbeille")), d.obs.join(" / "));
+  assert.deepStrictEqual(N.enregistrementsManquants(b, ["rec-" + (T0 + 48 * 3600e3) + ".json"]), [], "le fichier d'enregistrement d'une séance supprimée n'est pas réimporté");
+  const s = JSON.parse(JSON.stringify(N.sauvegarde(b, "test"))); assert.strictEqual(s.corbeille.length, 3, "la corbeille est dans la sauvegarde");
+  const b2 = N.baseVide(); N.importer(b2, s, {}); assert.strictEqual(b2.corbeille.length, 3); assert.strictEqual(N.lignesHistorique(b2).filter(x => !x.source).length, 0);
+  const b3 = N.baseVide(); N.importer(b3, hubFictif(), {}); N.importer(b3, s, {}); assert.ok(N.lignesHistorique(b3).some(x => x.id === pompes.id), "une fusion ne supprime jamais une séance encore présente"); assert.strictEqual(b3.corbeille.length, 1, "seule la séance absente de l'appli arrive dans sa corbeille");
+  assert.ok(N.restaurer(b, e2.t, e2.id)); assert.ok(N.restaurer(b, e1.t, e1.id)); assert.ok(N.restaurer(b, e3.t, e3.id)); assert.ok(!N.restaurer(b, e3.t, e3.id)); assert.strictEqual(b.corbeille.length, 0);
+  assert.strictEqual(N.stable(b.courses), avant, "tout est revenu à l'identique"); assert.deepStrictEqual(N.totaux(b), tt); });
+
+test("📋 copier le détail : minute par minute et heure exacte des trous (H10), série par série (pompes, Carnet)", () => {
+  const b = N.baseVide(); N.ajouterEnregistrement(b, recFictif(T0)); const id = N.lignesHistorique(b).find(x => x.act === "tennis").id, t = N.detailLigne(b, id, "1.6");
+  assert.ok(t.startsWith("DÉTAIL — Tennis — 11/11/2026 15:00 (APK 1.6)"), t.slice(0, 80)); assert.ok(t.includes("Trous (plus de 5 s sans mesure) : 1") && t.includes("- de 15:05:00 à 15:07:00 (2:00)"), t.slice(0, 600));
+  assert.ok(t.includes("Petits manques (1 à 5 s) : 5 s en tout")); assert.ok(t.includes("Coupures de la ceinture : 1") && t.includes("- 15:05:00 pendant 2 min"));
+  const lignes = t.split("\n"), i = lignes.indexOf("Minute | FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes"); assert.ok(i > 0); assert.strictEqual(lignes.length - i - 1, 13, "15 minutes moins les 2 minutes du trou");
+  assert.strictEqual(lignes[i + 1], "15:00 | 130 | 159 | 6 | 0,11 | 3,7 | 60"); assert.ok(lignes.some(x => x.startsWith("15:07 | ")) && !lignes.some(x => x.startsWith("15:05 | ") || x.startsWith("15:06 | ")));
+  N.importer(b, hubFictif(), {}); const p = N.detailLigne(b, "s" + T0, "1.6"); assert.ok(p.includes("Pompes — série | répétitions | durée | repos avant |") && p.includes("Notes :") && p.includes("Sensation : Très facile"), p);
+  const c = N.detailLigne(b, "carnet-0"); assert.ok(c.includes("(Carnet)") && c.split("\n").filter(x => /^\d+ \| /.test(x)).length === 4, c); assert.ok(c.includes("2 | 10 | 7 s | 1:06 |"), c);
+  assert.strictEqual(N.detailLigne(b, "inconnu"), ""); });
 
 console.log("\n" + n + " tests réussis.");

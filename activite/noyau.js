@@ -67,9 +67,9 @@ function libelle(x) {
   return (x.voix ? "🎤 " : "📝 ") + (x.note || ""); }
 
 /* ===== Base de l'appli ===== */
-function baseVide() { return { format: FORMAT, version: 1, courses: [], reglages: {}, imports: [] }; }
+function baseVide() { return { format: FORMAT, version: 1, courses: [], reglages: {}, imports: [], corbeille: [] }; }
 function baseValide(b) { return !!b && typeof b === "object" && b.format === FORMAT && Array.isArray(b.courses) && !!b.reglages && typeof b.reglages === "object"; }
-function normaliser(b) { if (!Array.isArray(b.imports)) b.imports = []; b.courses.forEach(c => { if (!Array.isArray(c.notes)) c.notes = []; }); return b; }
+function normaliser(b) { if (!Array.isArray(b.imports)) b.imports = []; if (!Array.isArray(b.corbeille)) b.corbeille = []; b.courses.forEach(c => { if (!Array.isArray(c.notes)) c.notes = []; }); return b; }
 
 /* écriture stable d'une valeur (clés triées) : sert à savoir si deux éléments sont identiques */
 function stable(v) { if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
@@ -105,11 +105,14 @@ function paquetDepuisHub(j) { const ls = j.localStorage || {}; let courses;
 function fusionner(base, paquet) {
   const b = { seances: { aj: 0, pres: 0 }, notes: { aj: 0, pres: 0, diff: 0 }, reglages: { aj: 0, pres: 0, completes: 0, diff: 0 }, seancesAj: [], notesAj: [], cles: [] };
   const index = new Map(); base.courses.forEach(c => index.set(idSeance(c), c));
+  const jetees = clesCorbeille(base); b.corbeille = 0;   // ce que Frédéric a supprimé n'est jamais remis par une fusion
   (paquet.courses || []).forEach(c => { const cur = index.get(idSeance(c));
-    if (!cur) { const copie = JSON.parse(JSON.stringify(c)); if (!Array.isArray(copie.notes)) copie.notes = []; base.courses.push(copie); index.set(idSeance(copie), copie);
+    if (!cur) { const copie = JSON.parse(JSON.stringify(c)); if (!Array.isArray(copie.notes)) copie.notes = [];
+      const avant = copie.notes.length; copie.notes = copie.notes.filter(n => !jetees.has(cleCorbeille(idSeance(copie), n))); b.corbeille += avant - copie.notes.length; if (avant && !copie.notes.length) return;
+      base.courses.push(copie); index.set(idSeance(copie), copie);
       b.seances.aj++; b.seancesAj.push(copie); copie.notes.forEach(n => { b.notes.aj++; b.notesAj.push({ c: copie, n }); }); return; }
     b.seances.pres++; let ajout = false;
-    (c.notes || []).forEach(n => { const memes = cur.notes.filter(x => x.t === n.t && typeNote(x) === typeNote(n));
+    (c.notes || []).forEach(n => { if (jetees.has(cleCorbeille(idSeance(cur), n))) { b.corbeille++; return; } const memes = cur.notes.filter(x => x.t === n.t && typeNote(x) === typeNote(n));
       if (!memes.length) { const copie = JSON.parse(JSON.stringify(n)); cur.notes.push(copie); b.notes.aj++; b.notesAj.push({ c: cur, n: copie }); ajout = true; }
       else if (memes.some(x => stable(x) === stable(n))) b.notes.pres++;
       else { b.notes.pres++; b.notes.diff++; } });
@@ -149,13 +152,13 @@ function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R),
   const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
   (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
-  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr }; }
+  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }; }
 function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
   const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost), X = notes.filter(n => n.reps);
   if (X.length) { /* séance de plusieurs exercices (enchaînement) : un résumé par exercice, dans l'ordre */
     const E = notes.filter(n => n.reps || n.pompes).map(n => n.reps || Object.assign({ exo: "Pompes" }, n.pompes)); pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0);
     const fin = notes[notes.length - 1].t, fcs = [].concat(...E.map(e => (e.fcs || []).map(x => x[1]).filter(Boolean)));
-    return { id: "s" + idSeance(c), t, act, duree: Math.max(0, (fin - t) / 1000), pompes, resultat: E.map(e => e.exo + " " + nb(e.total) + chargeTxt(e, " (", ")")).join(" · ") + (fcs.length ? " · ❤️ max " + Math.max(...fcs) : ""), alerte: "", source: "", detail: notes.map(detailNote) }; }
+    return { id: "s" + idSeance(c), t, act, duree: Math.max(0, (fin - t) / 1000), pompes, resultat: E.map(e => e.exo + " " + nb(e.total) + chargeTxt(e, " (", ")")).join(" · ") + (fcs.length ? " · ❤️ max " + Math.max(...fcs) : ""), alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }; }
   if (J.length) { const j = J[0].pjour; pompes = J.reduce((a, n) => a + (n.pjour.total || 0), 0) + P.reduce((a, n) => a + (n.pompes.total || 0), 0);
     duree = (j.tl && j.tl.length) ? j.tl[j.tl.length - 1] : duree; res = nb(pompes) + " · " + pl((j.seances || j.offs || []).length, "séance") + " (journée)"; }
   else if (P.length) { pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0); duree = P.reduce((a, n) => a + (n.pompes.temps || 0), 0);
@@ -164,15 +167,15 @@ function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || 
     if (fcs.length) m.push("❤️ max " + Math.max(...fcs)); res = m.join(" · "); }
   else if (G.length) { duree = G.reduce((a, n) => a + (n.ghost.temps || 0), 0); res = "👻 " + G[0].ghost.res; }
   else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
-  return { id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote) }; }
+  return { id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }; }
 function lignesHistorique(base) { const l = [];
   base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(ligneH10(c, n)); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
   Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
     l.push({ id: "carnet-" + i, t: m ? reunion(2026, Number(m[2]), Number(m[1]), Number(m[3]), Number(m[4])) : 0, act: "pompes", duree: x.tl[x.tl.length - 1], pompes: x.tl.length,
-      resultat: nb(x.tl.length) + " · " + pl(sr.length, "série"), alerte: "", source: "Carnet", detail: ["Séance reprise du Carnet d'entraînement — séries " + sr.join("-")] }); });
+      resultat: nb(x.tl.length) + " · " + pl(sr.length, "série"), alerte: "", source: "Carnet", detail: ["Séance reprise du Carnet d'entraînement — séries " + sr.join("-")], ref: { tl: x.tl } }); });
   const J = Integre.JOUR_3008; l.push({ id: "j3008", t: reunion(2025, 8, 30, 6, 20), act: "pompes", duree: J.tl[J.tl.length - 1], pompes: J.tl.length, journee: true,
     resultat: nb(J.tl.length) + " · " + pl(J.offs.length, "séance"), alerte: "", source: "montre COROS",
-    detail: ["Journée relevée sur la montre COROS — séances de " + J.cut.map((v, i) => v - (J.cut[i - 1] || 0)).join(" + ") + " pompes"] });
+    detail: ["Journée relevée sur la montre COROS — séances de " + J.cut.map((v, i) => v - (J.cut[i - 1] || 0)).join(" + ") + " pompes"], ref: { tl: J.tl } });
   return l; }
 function totaux(base, lignes) { const l = lignes || lignesHistorique(base); return { lignes: l.length, pompes: l.reduce((a, x) => a + (x.pompes || 0), 0) }; }
 function derniereParAct(lignes) { const d = {}; lignes.forEach(x => { if (!d[x.act] || x.t > d[x.act]) d[x.act] = x.t; }); return d; }
@@ -203,6 +206,7 @@ function descriptif(base, paquet, bilan, meta) { const tout = inventaire(paquet.
     if (a !== (c.act || "footing")) obs.push("L'enregistrement H10 du " + dateHeure(R.debut || n.t) + " était rangé dans « " + actInfo(c.actOrigine || c.act || "footing").nom + " » : affiché en " + actInfo(a).nom + ".");
     const tr = trousH10(R); if (tr.length) obs.push(actInfo(a).nom + " du " + dateHeure(R.debut || n.t) + " : " + pl(tr.length, "trou") + " dans l'enregistrement H10 (" + tr.map(x => v1(x.duree / 60)).join(" · ") + " min)."); });
   CLES_EN_COURS.forEach(k => { const v = (paquet.reglages || {})[k]; if (v && v !== "null") obs.push("Une séance n'était pas terminée dans le Hub (" + k + ") : gardée telle quelle."); });
+  if (bilan.corbeille) obs.push(pl(bilan.corbeille, "élément du fichier que tu avais supprimé : laissé", "éléments du fichier que tu avais supprimés : laissés") + " dans la corbeille.");
   if (bilan.notes.diff) obs.push(pl(bilan.notes.diff, "note différente", "notes différentes") + " entre le fichier et l'appli : la valeur de l'appli est gardée.");
   if (bilan.reglages.diff) obs.push(pl(bilan.reglages.diff, "réglage différent", "réglages différents") + " : celui de l'appli est gardé.");
   const rien = !bilan.seances.aj && !bilan.notes.aj && !(bilan.reglages.aj + bilan.reglages.completes);
@@ -230,7 +234,7 @@ function seanceDepuisEnregistrement(R) { const fin = R.fin || (R.debut + ((R.l |
 function enregistrementValide(R) { return !!R && typeof R === "object" && typeof R.debut === "number" && Array.isArray(R.l) && !!R.res && typeof R.res === "object"; }
 function ajouterEnregistrement(base, R) { if (!enregistrementValide(R)) throw new Error("Enregistrement illisible."); return fusionner(base, { courses: [seanceDepuisEnregistrement(R)], reglages: {} }).seances.aj > 0; }
 /* noms de fichiers « rec-<début>.json » pas encore dans la base */
-function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
+function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); (base.corbeille || []).forEach(e => { if (e.notes.some(n => n.h10rec)) vus.add(idSeance(e.seance)); }); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
 function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule = Math.max(L.length, Math.round(((R.fin || R.debut) - R.debut) / 1000)), tr = trousH10(R), de = R.deconnexions || [];
   return { ecoule, enregistre: L.length, perdu: Math.max(0, ecoule - L.length), actif: r.actif || 0, impacts: r.pics || 0, fcMoy: r.fcMoy, fcMax: r.fcMax, trous: tr, deconnexions: de, tempsDeconnecte: de.reduce((a, x) => a + x[1], 0),
     reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]) }; }
@@ -355,15 +359,64 @@ function repsBilanBloc(b) { const sers = b.series.concat(b.cur && b.cur.tl.lengt
 function repsSeance(st, maintenant) { const notes = []; st.blocs.forEach(b => { const r = repsBilanBloc(b); if (!r) return; const d = r.donnees, repos = d.repos; delete d.repos; let t = r.fin; while (notes.some(n => n.t === t)) t++;
     const fcMax = d.fcs ? Math.max(...d.fcs.map(x => x[1] || 0)) : 0, n = { t }; if (fcMax) n.fc = fcMax; if (r.exo === "Pompes") n.pompes = d; else n.reps = Object.assign({ exo: r.exo }, d); notes.push(n); });
   if (!notes.length) return null; notes.sort((x, y) => x.t - y.t); return { id: st.debut, debut: st.debut, act: st.act, close: true, notes }; }
+/* séries d'un exercice à partir de l'heure de chaque répétition : durée de chaque série et repos avant elle */
+function seriesDetail(e) { const tl = (e.tl || []).slice().sort((x, y) => x - y), cs = e.series || [], sers = []; let i = 0;
+  if (cs.length && cs.reduce((a, x) => a + x, 0) === tl.length) cs.forEach(k => { sers.push(tl.slice(i, i + k)); i += k; }); else { let c = null; tl.forEach((t, k) => { if (!c || t - tl[k - 1] > 5) { c = []; sers.push(c); } c.push(t); }); }
+  return sers.filter(x => x.length).map((x, k) => ({ n: x.length, duree: x[x.length - 1] - x[0], repos: k ? x[0] - sers[k - 1][sers[k - 1].length - 1] : null })); }
+function tableSeries(D, nom, e) { D.push("", nom + " — série | répétitions | durée | repos avant | charge | difficulté | FC départ/max/fin");
+  seriesDetail(e).forEach((x, i) => D.push((i + 1) + " | " + x.n + " | " + Math.round(x.duree) + " s | " + (x.repos == null ? "–" : gm(x.repos)) + " | " + (e.charges && e.charges[i] ? kg(e.charges[i]) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(v => v || "–").join("/") : "–")));
+  if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1"); }
 function rapportReps(seance, version) { const T = ["SÉANCE — " + actInfo(seance.act).nom + " — " + dateHeure(seance.debut) + (version ? " (APK " + version + ")" : "")], D = [];
   seance.notes.forEach(n => { const e = n.reps || n.pompes, nom = n.reps ? n.reps.exo : "Pompes"; if (!e) return;
-    T.push(nom + " : " + e.res + (e.obj ? " (objectif " + e.obj + (e.total >= e.obj ? " atteint" : " : il manque " + (e.obj - e.total)) + ")" : "") + (e.reposMoy ? ", repos moyen " + gm(e.reposMoy) : ""));
-    D.push("", nom + " — série | répétitions | charge | difficulté | FC départ/max/fin"); (e.series || []).forEach((k, i) => D.push((i + 1) + " | " + k + " | " + (e.charges && e.charges[i] ? kg(e.charges[i]) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(x => x || "–").join("/") : "–")));
-    if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1"); });
+    T.push(nom + " : " + e.res + (e.obj ? " (objectif " + e.obj + (e.total >= e.obj ? " atteint" : " : il manque " + (e.obj - e.total)) + ")" : "") + (e.reposMoy ? ", repos moyen " + gm(e.reposMoy) : "")); tableSeries(D, nom, e); });
   const resume = T.join("\n"); return { resume, tout: resume + "\n" + D.join("\n") }; }
 
+/* ===== 📋 Détail d'une séance, à coller dans la conversation (validé le 13/11/2026) =====
+   Enregistrement H10 : minute par minute (cardio moyen/max, impacts, mouvement) et heure exacte de chaque trou.
+   Pompes et exercices : série par série. Autres séances : chaque note avec son heure. */
+function manquesH10(R) { const L = R.l || [], fin = R.fin ? Math.round((R.fin - R.debut) / 1000) : (L.length ? L[L.length - 1][0] + 1 : 0), trous = []; let petits = 0, prec = -1;
+  const vu = (jusqua) => { const m = jusqua - prec - 1; if (m > 5) trous.push({ a: prec + 1, duree: m }); else if (m >= 1) petits += m; };
+  L.forEach(x => { vu(x[0]); prec = x[0]; }); vu(fin); return { trous, petits, fin }; }
+function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000);
+  T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · actif " + hm(b.actif)));
+  T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
+  if (m.petits) T.push("Petits manques (1 à 5 s) : " + m.petits + " s en tout");
+  if ((R.deconnexions || []).length) { T.push("Coupures de la ceinture : " + R.deconnexions.length); R.deconnexions.forEach(x => T.push("- " + h(x[0]) + " pendant " + dureeCourte(x[1]))); }
+  if (R.coupures) T.push("Reprises après fermeture de l'appli : " + R.coupures);
+  T.push("", "Minute | FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes");
+  const parMin = new Map(); L.forEach(x => { const k = Math.floor(x[0] / 60); if (!parMin.has(k)) parMin.set(k, []); parMin.get(k).push(x); });
+  [...parMin.keys()].sort((x, y) => x - y).forEach(k => { const v = parMin.get(k), fcs = v.map(x => x[1]).filter(Boolean);
+    T.push(heure(R.debut + k * 60000) + " | " + (fcs.length ? Math.round(fcs.reduce((a, x) => a + x, 0) / fcs.length) : "–") + " | " + (fcs.length ? Math.max(...fcs) : "–") + " | " + v.reduce((a, x) => a + x[4], 0) + " | " +
+      (v.reduce((a, x) => a + x[2], 0) / v.length / 1000).toFixed(2).replace(".", ",") + " | " + ((1000 + Math.max(...v.map(x => x[3]))) / 1000).toFixed(1).replace(".", ",") + " | " + v.length); }); }
+function detailLigne(base, idLigne, version) { const x = lignesHistorique(base).find(l => l.id === idLigne); if (!x) return ""; const r = x.ref || {};
+  const T = ["DÉTAIL — " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " — " + dateHeure(x.t) + (version ? " (APK " + version + ")" : ""), "Durée " + dureeTxt(x) + " · " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " · " + x.alerte : "")];
+  if (r.n && r.n.h10rec) detailH10(T, r.n.h10rec, impLire(base));
+  else if (r.tl) tableSeries(T, "Pompes", { tl: r.tl });
+  else { const autres = []; (r.notes || []).forEach(n => { const e = n.reps || n.pompes || n.pjour; if (e && e.tl && e.tl.length) tableSeries(T, n.reps ? n.reps.exo : n.pjour ? "Pompes (journée)" : "Pompes", e); else autres.push(detailNote(n)); });
+    if (autres.length) { T.push("", "Notes :"); autres.forEach(a => T.push("- " + a)); } }
+  return T.join("\n"); }
+
+/* ===== 🗑 Supprimer une séance (validé le 13/11/2026) =====
+   Rien n'est effacé pour de bon : la séance supprimée part dans la corbeille (gardée dans la base et dans les sauvegardes),
+   d'où on peut la remettre. Une fusion ou un nouvel import ne la fait pas revenir. Les lignes intégrées (Carnet, 30/08/2025) ne se suppriment pas. */
+const cleCorbeille = (idS, n) => idS + "|" + n.t + "|" + typeNote(n);
+function clesCorbeille(base) { const s = new Set(); (base.corbeille || []).forEach(e => (e.notes || []).forEach(n => s.add(cleCorbeille(idSeance(e.seance), n)))); return s; }
+function supprimable(ligne) { return !!ligne && !ligne.source && !!ligne.ref && !!ligne.ref.c; }
+function supprimerLigne(base, idLigne, maintenant) { const x = lignesHistorique(base).find(l => l.id === idLigne); if (!supprimable(x)) return null; const c = x.ref.c, otees = x.ref.n ? [x.ref.n] : x.ref.notes;
+  if (!otees || !otees.length) return null; c.notes = c.notes.filter(n => !otees.includes(n)); if (!c.notes.length) base.courses.splice(base.courses.indexOf(c), 1);
+  const e = { t: maintenant, id: idLigne, seance: { id: c.id, debut: c.debut, act: c.act, close: c.close, actOrigine: c.actOrigine }, notes: otees, ligne: { t: x.t, act: x.act, duree: x.duree, pompes: x.pompes, resultat: x.resultat, journee: !!x.journee } };
+  if (!Array.isArray(base.corbeille)) base.corbeille = []; base.corbeille.push(e); return e; }
+/* remet une séance supprimée à sa place (rien en double) */
+function restaurer(base, t, idLigne) { const i = (base.corbeille || []).findIndex(e => e.t === t && e.id === idLigne); if (i < 0) return false; const e = base.corbeille[i], idS = idSeance(e.seance);
+  let c = base.courses.find(x => idSeance(x) === idS); if (!c) { c = Object.assign({}, e.seance, { notes: [] }); Object.keys(c).forEach(k => { if (c[k] === undefined) delete c[k]; }); base.courses.push(c); base.courses.sort((x, y) => (x.debut || 0) - (y.debut || 0)); }
+  e.notes.forEach(n => { if (!c.notes.some(y => y.t === n.t && typeNote(y) === typeNote(n))) c.notes.push(n); }); c.notes.sort((x, y) => x.t - y.t); base.corbeille.splice(i, 1); return true; }
+/* corbeille d'une sauvegarde : reprise seulement pour ce qui n'existe plus dans l'appli (une fusion ne supprime jamais rien) */
+function fusionnerCorbeille(base, entrees) { if (!Array.isArray(base.corbeille)) base.corbeille = []; let n = 0; const vivantes = new Set(); base.courses.forEach(c => c.notes.forEach(x => vivantes.add(cleCorbeille(idSeance(c), x))));
+  (entrees || []).forEach(e => { if (!e || !e.seance || !Array.isArray(e.notes) || !e.notes.length) return; const cles = e.notes.map(x => cleCorbeille(idSeance(e.seance), x)), deja = clesCorbeille(base);
+    if (cles.some(k => vivantes.has(k)) || cles.every(k => deja.has(k))) return; base.corbeille.push(JSON.parse(JSON.stringify(e))); n++; }); return n; }
+
 /* ===== Sauvegarde de l'appli ===== */
-function sauvegarde(base, version) { return { format: FORMAT, version: 1, creeeLe: new Date().toISOString(), appli: "APK Journal d'activité " + (version || ""), courses: base.courses, reglages: base.reglages, imports: base.imports }; }
+function sauvegarde(base, version) { return { format: FORMAT, version: 1, creeeLe: new Date().toISOString(), appli: "APK Journal d'activité " + (version || ""), courses: base.courses, reglages: base.reglages, imports: base.imports, corbeille: base.corbeille || [] }; }
 function nomSauvegarde(t) { return "JournalActivite-sauvegarde_" + horodatage(t == null ? Date.now() : t) + ".json"; }
 
 /* Importe un fichier déjà lu (objet) : sauvegarde du Hub (extrait ou complète) ou sauvegarde de l'appli. Renvoie le descriptif. */
@@ -377,6 +430,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
     source = "sauvegarde de l'appli" + (fichier.creeeLe ? " du " + dateHeure(Date.parse(fichier.creeeLe)) : ""); }
   else throw new Error("Ce fichier n'est ni une sauvegarde du Hub, ni une sauvegarde du Journal d'activité.");
   if (meta.nom) source += " (" + meta.nom + ")";
+  if (fichier.format === FORMAT) fusionnerCorbeille(base, fichier.corbeille);
   const bilan = fusionner(base, paquet);
   if (fichier.format === FORMAT) (fichier.imports || []).forEach(i => { if (!base.imports.some(x => x.t === i.t)) base.imports.push(i); });
   const d = descriptif(base, paquet, bilan, { source, version: meta.version });
@@ -385,6 +439,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
   DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
+  detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
   baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };
