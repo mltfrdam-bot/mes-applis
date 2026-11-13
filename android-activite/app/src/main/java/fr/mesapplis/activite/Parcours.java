@@ -38,6 +38,8 @@ import java.util.Locale;
 final class Parcours {
     static final int KM = 1, PREMIER = 2;
     static final double PREC_MAX = 35;                  // au-delà de 35 m de précision annoncée, le point est écarté
+    private static final double PREC_DEPART = 15;       // la toute première position doit être bonne (15 m)…
+    private static final long ATTENTE_DEPART = 30000;   // …sauf si ça fait 30 s qu'on attend : on prend alors ce qu'on a
     private static final int PAS = 5;                   // le profil (distance, position) est gardé toutes les 5 secondes
     private static final double PAS_POSITION = 10;      // distance par les positions : comptée par bouts de 10 m (sinon les petites erreurs s'additionnent)
     private static final double BRUIT = 3;              // lissage : on suppose qu'on peut changer de vitesse de 3 m/s en 1 s
@@ -54,7 +56,7 @@ final class Parcours {
     // position lissée, dernier point compté dans la distance, dernier point brut accepté
     private boolean aPos = false;
     private double fLat, fLon, fVar, aLat, aLon, bLat, bLon, cLat, cLon;
-    private long fT = 0, bT = -1, refusT = -1, dernierT = -1, dernierOk = -1;
+    private long fT = 0, bT = -1, refusT = -1, dernierT = -1, dernierOk = -1, attenteT = -1;
     private double dist = 0, distP = 0, precSomme = 0, precDerniere = -1, vitDerniere = -1;
     private int points = 0, gardes = 0, rejetes = 0, sauts = 0, sats = 0, premier = -1;
 
@@ -167,6 +169,8 @@ final class Parcours {
         avancer(t);
         sats = satellites;
         if (!aPos) {
+            if (attenteT < 0) attenteT = t;
+            if (prec > PREC_DEPART && t - attenteT < ATTENTE_DEPART) { rejetes++; return 0; }   // GPS pas encore stabilisé
             aPos = true;
             repartirDe(t, lat, lon, prec);
             premier = (int) (t / 1000);

@@ -155,8 +155,9 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     public int onStartCommand(Intent intent, int flags, int id) {
         String action = intent == null ? null : intent.getAction();
         boolean avecGps = ACTION_DEMARRER.equals(action) && enr == null && intent.getBooleanExtra(EXTRA_GPS, false);
+        // bouton « Tour » de la notification : le service tourne déjà, il n'y a rien d'autre à faire
+        if (ACTION_TOUR.equals(action) && premierPlan && enr != null) { tour(); return START_STICKY; }
         if (!mettreAuPremierPlan(avecGps || gps != null)) { stopSelf(); return START_NOT_STICKY; }
-        if (ACTION_TOUR.equals(action)) tour();
         if (ACTION_DEMARRER.equals(action) && enr == null) {
             try {
                 long debut = System.currentTimeMillis();

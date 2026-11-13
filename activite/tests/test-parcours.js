@@ -71,6 +71,11 @@ test("GPS qui se trompe d'endroit au départ puis se corrige : on repart de la b
   const g = java(["N 1000 12 sat", ...L, "F 301000"]).resume;
   assert.strictEqual(g.sauts, 1); assert.ok(g.dist > 780 && g.dist < 900, "distance " + g.dist + " pour 900 m vrais (10 s d'attente non comptées)"); });
 
+test("départ : le GPS n'est « prêt » qu'avec une position précise (15 m), ou après 30 s d'attente", () => {
+  const flou = (n) => (l, i) => { if (i >= n) return l; const x = l.split(" "); x[4] = "25.0"; return x.join(" "); };
+  const a = java(["N 1000 12 sat", ...gps(droite(3), 120).map(flou(12)), "F 121000"]); assert.strictEqual(a.resume.premier, 12); assert.strictEqual(a.premiers, 1); assert.strictEqual(a.resume.rejetes, 12); assert.ok(ecart(a.resume.dist, 324) < 4, "distance " + a.resume.dist);
+  const b = java(["N 1000 12 sat", ...gps(droite(3), 120).map(flou(200)), "F 121000"]).resume; assert.ok(b.premier === 30 || b.premier === 31, "premier " + b.premier); assert.strictEqual(b.rejetes, b.premier); });
+
 test("tours marqués à la main : heure, distance et cardio de chaque tour", () => {
   const L = gps(droite(4), 500), avec = []; L.forEach(l => { const t = Number(l.split(" ")[1]); avec.push(l); if (t >= 100000 && t < 101000) avec.push("T 100500 141"); if (t >= 250000 && t < 251000) avec.push("T 250400 150"); if (t >= 300000 && t < 301000) avec.push("E 300400"); });
   const r = java(["N 1000 12 sat", ...avec, "F 501000"]), g = r.resume, e = r.etats[0];
