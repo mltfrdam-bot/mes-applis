@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private static final int DEMANDE_BLUETOOTH = 43;
     private static final int NB_SAUVEGARDES = 7;
     private static final Pattern NOM_OK = Pattern.compile("^(sauvegardes/|enregistrements/)?[A-Za-z0-9._-]{1,80}$");
+    private static final Pattern NOM_BRUT = Pattern.compile("^brut-[0-9]{1,16}\\.bin$");
     private static final TimeZone REUNION = TimeZone.getTimeZone("Indian/Reunion");
 
     /** Vrai quand l'écran de l'appli est affiché (le service s'en sert pour s'arrêter quand il ne sert plus). */
@@ -438,6 +439,53 @@ public class MainActivity extends Activity {
                 if (noms != null) { Arrays.sort(noms); for (String n : noms) if (n.startsWith("rec-") && n.endsWith(".json")) l.put(n); }
             } catch (Exception ignored) {}
             return l.toString();
+        }
+
+        /** Fichiers de mesures brutes gardés dans le téléphone : [{"nom":"brut-….bin","taille":…}, …]. */
+        @JavascriptInterface public String brut() {
+            JSONArray l = new JSONArray();
+            try {
+                File[] tous = new File(dossier, "enregistrements").listFiles();
+                if (tous != null) {
+                    Arrays.sort(tous);
+                    for (File f : tous) {
+                        if (!NOM_BRUT.matcher(f.getName()).matches()) continue;
+                        JSONObject o = new JSONObject();
+                        o.put("nom", f.getName());
+                        o.put("taille", f.length());
+                        l.put(o);
+                    }
+                }
+            } catch (Exception ignored) {}
+            return l.toString();
+        }
+
+        /** Envoie un fichier de mesures brutes par le menu « Partager » d'Android (Google Drive, etc.). */
+        @JavascriptInterface public boolean partagerBrut(String nom) {
+            try {
+                if (nom == null || !NOM_BRUT.matcher(nom).matches()) return false;
+                File source = new File(new File(dossier, "enregistrements"), nom);
+                if (!source.exists()) return false;
+                File dir = new File(getCacheDir(), "partage");
+                if (!dir.exists()) dir.mkdirs();
+                File[] vieux = dir.listFiles();
+                if (vieux != null) for (File v : vieux) v.delete();
+                File f = new File(dir, nom);
+                MainActivity.copier(source, f);
+                final Uri u = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".fichiers", f);
+                final Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("application/octet-stream");
+                i.putExtra(Intent.EXTRA_STREAM, u);
+                i.putExtra(Intent.EXTRA_SUBJECT, nom);
+                i.setClipData(ClipData.newRawUri(nom, u));
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                runOnUiThread(() -> {
+                    try { startActivity(Intent.createChooser(i, "Envoyer les mesures brutes")); } catch (Exception ignored) {}
+                });
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
         }
 
         @JavascriptInterface public void parler(String t) {

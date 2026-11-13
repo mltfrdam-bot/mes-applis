@@ -50,6 +50,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private final Handler h = new Handler(Looper.getMainLooper());
     private LienH10 lien;
     private volatile Enregistreur enr;
+    private volatile Brut brut;                         // mesures brutes de la séance en cours (un fichier par séance)
     private File dossier;
     private PowerManager.WakeLock verrou;
     private ToneGenerator son;
@@ -135,6 +136,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             // relancé par Android sans rien à reprendre : on s'arrête
             if (lien.etat() == LienH10.ARRET) { arreter(); return START_NOT_STICKY; }
         }
+        Enregistreur e = enr;
+        if (e != null && brut == null) brut = Brut.ouvrir(new File(new File(dossier, "enregistrements"), "brut-" + e.debut + ".bin"), e.debut);
         lien.demarrer(getSharedPreferences("reglages", MODE_PRIVATE).getString("h10Adresse", ""));
         ajuster();
         h.removeCallbacks(tic);
@@ -158,6 +161,9 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         Enregistreur e = enr;
         if (e != null) e.fermerJournal(false);          // le journal reste sur le téléphone : la séance pourra reprendre
         enr = null;
+        Brut b = brut;
+        brut = null;
+        if (b != null) b.fermer();
         relacher();
         try { if (son != null) son.release(); } catch (Exception ignored) {}
         if (actif == this) actif = null;
@@ -293,6 +299,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         int n = v.length / 3;
         long horloge = System.currentTimeMillis();
         Enregistreur e = enr;
+        Brut b = brut;
+        if (b != null && e != null) b.trame(v, horloge);
         boolean biper = false;
         for (int i = 0; i < n; i++) {
             double x = v[3 * i], y = v[3 * i + 1], z = v[3 * i + 2];
@@ -379,6 +387,9 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         if (nom.isEmpty()) return "";
         enr = null;
         e.fermerJournal(true);
+        Brut b = brut;
+        brut = null;
+        if (b != null) b.fermer();
         h.post(this::ajuster);
         return nom;
     }

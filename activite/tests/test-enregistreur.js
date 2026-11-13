@@ -6,9 +6,10 @@
 const assert = require("assert"), fs = require("fs"), os = require("os"), path = require("path"), { execFileSync, spawnSync } = require("child_process");
 const racine = path.join(__dirname, "..", ".."), src = path.join(racine, "android-activite/app/src/main/java/fr/mesapplis/activite"), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "enreg-"));
 const env = Object.assign({}, process.env); delete env.JAVA_TOOL_OPTIONS;
-execFileSync("javac", ["-encoding", "UTF-8", "-d", path.join(tmp, "classes"), ...["Trames", "SuiviImpacts", "Enregistreur", "Json"].map(x => path.join(src, x + ".java")), path.join(racine, "android-activite/tests/EssaiEnregistreur.java")], { env, stdio: "inherit" });
-function java(lignes) { const sc = path.join(tmp, "scenario.txt"), sortie = path.join(tmp, "sortie.json"), journal = path.join(tmp, "journal.txt"); fs.writeFileSync(sc, lignes.join("\n") + "\n"); try { fs.unlinkSync(sortie); } catch (e) {}
-  const r = spawnSync("java", ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiEnregistreur", sc, journal, sortie], { env, encoding: "utf8" });
+execFileSync("javac", ["-encoding", "UTF-8", "-d", path.join(tmp, "classes"), ...["Trames", "SuiviImpacts", "Enregistreur", "Json", "Brut"].map(x => path.join(src, x + ".java")), path.join(racine, "android-activite/tests/EssaiEnregistreur.java")], { env, stdio: "inherit" });
+const BRUT = path.join(tmp, "brut.bin"), Lecteur = require("../outils/lire-brut.js");
+function java(lignes) { const sc = path.join(tmp, "scenario.txt"), sortie = path.join(tmp, "sortie.json"), journal = path.join(tmp, "journal.txt"); fs.writeFileSync(sc, lignes.join("\n") + "\n"); try { fs.unlinkSync(sortie); } catch (e) {} try { fs.unlinkSync(BRUT); } catch (e) {}
+  const r = spawnSync("java", ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiEnregistreur", sc, journal, sortie, BRUT], { env, encoding: "utf8" });
   assert.strictEqual((r.stdout || "").trim(), "OK", r.stderr); assert.ok(!fs.existsSync(journal), "le journal est effacé une fois l'enregistrement terminé"); return JSON.parse(fs.readFileSync(sortie, "utf8")); }
 let n = 0; function test(nom, fn) { fn(); n++; console.log("✅ " + nom); }
 
@@ -58,7 +59,7 @@ function scenario(minutes, options) { options = options || {}; const L = ["S 250
   let h = T0 + 137, t = 5000137, fcv = 110; const fin = T0 + minutes * 60000; let k = 0;
   while (h < fin) { k++;
     if (k % 2 === 0) { fcv = Math.max(60, Math.min(190, fcv + Math.round((alea() - 0.5) * 6))); const b = fcv > 150 && alea() < 0.5 ? Buffer.from([0x11, fcv & 255, fcv >> 8, 0x20, 0x03]) : Buffer.from([0x10, fcv, 0x20, 0x03]); L.push("H " + h + " " + hex(b)); ref.fc(h, new DataView(b.buffer, b.byteOffset, b.length)); }
-    const ech = signal(36, true), b = alea() < 0.3 ? trameBrute(ech) : trameCompressee(ech); L.push("F " + h + " " + t + " " + hex(b)); ref.trame(h, t, b);
+    const ech = signal(36, true), b = alea() < 0.3 ? trameBrute(ech) : trameCompressee(ech); L.push("F " + h + " " + t + " " + hex(b)); ref.trame(h, t, b); if (options.garder) options.garder.push({ ms: h - T0, mesures: ech.map(a => a.map(v => v + 0)) });
     if (options.reglage && k === 300) { L.push("S 1800 1480 1"); ref.regler(1800, 1480, true); }
     if (options.tuee && k === options.tuee) { L.push("K " + (h + 5)); ref.tuee(); }
     const pas = 720 + Math.round((alea() - 0.5) * 40); h += pas; t += pas; }
@@ -70,6 +71,13 @@ test("15 min de tennis : mêmes secondes, mêmes impacts, même résumé que la 
   assert.deepStrictEqual(r.rec.l, s.attendu.l); assert.deepStrictEqual(r.rec.pics, s.attendu.pics); assert.deepStrictEqual(r.rec.res, s.attendu.res);
   assert.strictEqual(r.bips, s.attendu.bips); assert.strictEqual(r.rec.debut, T0); assert.strictEqual(r.rec.act, "tennis"); assert.strictEqual(r.rec.coupures, 0); assert.deepStrictEqual(r.rec.deconnexions, []);
   console.log("   " + r.rec.l.length + " secondes, " + r.rec.res.pics + " impacts, " + r.rec.pics.length + " mouvements nets, FC moy " + r.rec.res.fcMoy + " / max " + r.rec.res.fcMax); });
+
+test("mesures brutes : le fichier de la séance redonne exactement chaque mesure, même après une appli tuée ou un fichier abîmé", () => {
+  graine = 4242; const garde = [], s = scenario(3, { tuee: 100, garder: garde }); java(s.lignes); const octets = fs.readFileSync(BRUT), r = Lecteur.lire(octets);
+  assert.strictEqual(r.debut, T0); assert.strictEqual(r.hz, 50); assert.strictEqual(r.blocs.length, garde.length); assert.deepStrictEqual(r.blocs, garde); assert.strictEqual(octets.length, 16 + garde.length * (8 + 36 * 6));
+  const abime = Buffer.concat([octets.subarray(0, 16 + 10 * 224), octets.subarray(16 + 10 * 224 + 57)]), r2 = Lecteur.lire(abime); assert.strictEqual(r2.blocs.length, garde.length - 1, "un bloc abîmé est sauté, les autres restent lisibles");
+  const coupe = Lecteur.lire(octets.subarray(0, octets.length - 30)); assert.strictEqual(coupe.blocs.length, garde.length - 1); assert.strictEqual(Lecteur.aPlat(r).length, garde.length * 36);
+  console.log("   " + r.mesures + " mesures, " + Math.round(octets.length / 1024) + " Ko pour 3 min (≈ " + (octets.length / 180 * 5400 / 1e6).toFixed(1) + " Mo pour 1 h 30)"); });
 
 test("appli tuée 2 fois en pleine séance : reprise depuis le journal, aucune seconde écrite n'est perdue", () => {
   graine = 777; const s = scenario(6, { tuee: 150 }); const i = s.lignes.findIndex((x, k) => k > 300 && x.startsWith("F ")); s.lignes.splice(i, 0, "K " + (Number(s.lignes[i].split(" ")[1]) - 1));
