@@ -109,4 +109,42 @@ test("réglage des impacts : ± 0,1 g entre 1,2 et 4 g, journal, essai « N coup
   const rap = N.rapportReglages(b); assert.ok(rap.includes("2 essais")); assert.ok(rap.includes("essai 4 coups | 3,1 · 3,0 · 2,9 · 2,6 | 1,7 | 2,1") || rap.includes("essai 4 coups | 3,1 · 3,0 · 2,9 · 2,6 | 1,7 | 2,2"), rap);
   assert.strictEqual(N.chrono(3725), "1:02:05"); assert.strictEqual(N.chrono(65), "1:05"); });
 
+/* ----- étape 3 : compteur de répétitions, charge, objectif, enchaînement d'exercices ----- */
+function serie(st, depart, nb, pas, fc) { let t = depart; for (let i = 0; i < nb; i++) { N.repsAppui(st, t, fc); t += pas; } return t - pas; }
+
+test("pompes : séries au toucher, +1, −1, repos, difficulté, objectif dépassé, record → même forme de note que la v31", () => {
+  const b = N.baseVide(); assert.strictEqual(N.recordSerie(b, "Pompes"), 45, "record de départ = plus longue série du Carnet et du 30/08/2025"); N.exoRegler(b, "Pompes", { obj: 30, charge: 5, repos: 90 });
+  assert.deepStrictEqual(JSON.parse(b.reglages["pompes-opt"]), { obj: 30, repos: 90, charge: 5 });
+  const st = N.repsNouveau(b, "pompes", ["Pompes"], T0), B = N.repsCourant(st); assert.strictEqual(B.phase, "attente");
+  let t = serie(st, T0 + 5000, 12, 900, 110); assert.strictEqual(N.repsAppui(st, t + 100, 110).length, 0, "double appui trop rapide ignoré"); assert.strictEqual(N.repsTotal(B), 12);
+  assert.ok(N.repsMoins(st, t + 500)); assert.ok(N.repsPlus(st, t + 1000)); assert.strictEqual(N.repsTotal(B), 12); N.repsFc(st, 131);
+  assert.ok(N.repsFinSerie(st, t + 2000, 128)); assert.strictEqual(B.phase, "repos"); assert.ok(B.attendDiff); N.repsDiff(st, 1); assert.ok(!N.repsFinSerie(st, t + 2100, 128), "pas de série vide");
+  assert.strictEqual(N.repsRepos(st, t + 2000 + 70000).signal, null); assert.strictEqual(N.repsRepos(st, t + 2000 + 81000).signal, "bientot"); assert.strictEqual(N.repsRepos(st, t + 2000 + 85000).signal, null); assert.strictEqual(N.repsRepos(st, t + 2000 + 90500).signal, "reprendre"); assert.strictEqual(N.repsRepos(st, t + 2000 + 95000).signal, null);
+  assert.ok(N.repsPlus(st, t + 3000), "+1 au repos : ajouté à la série finie"); assert.strictEqual(B.series[0].tl.length, 13);
+  N.repsCharge(st, 7.3); assert.strictEqual(B.charge, 7.5);
+  assert.strictEqual(B.record, 45); B.record = 16;   // pour le test : on fait comme si le record était de 16
+  const d2 = t + 2000 + 95000; let ev = []; let u = d2; for (let i = 0; i < 20; i++) { ev = ev.concat(N.repsAppui(st, u, 120)); u += 1000; }
+  assert.deepStrictEqual(ev, [["record", 17], ["objectif", 30]], "record annoncé une fois, objectif annoncé une fois, et on continue après"); assert.strictEqual(N.repsTotal(B), 33);
+  const s = N.repsSeance(st, u), p = s.notes[0].pompes; assert.strictEqual(s.act, "pompes"); assert.strictEqual(s.id, T0); assert.deepStrictEqual(p.series, [13, 20]); assert.strictEqual(p.total, 33); assert.strictEqual(p.obj, 30); assert.deepStrictEqual(p.charges, [5, 7.5]);
+  assert.deepStrictEqual(p.diffs, [1, null]); assert.strictEqual(p.tl.length, 33); assert.deepStrictEqual(p.tl, p.tl.slice().sort((x, y) => x - y)); assert.strictEqual(p.fcs[0][1], 131); assert.strictEqual(p.manuels, 2); assert.ok(p.reposMoy >= 95 && p.reposMoy <= 98, String(p.reposMoy));
+  assert.ok(p.res.startsWith("33 pompes en ") && p.res.includes("2 séries") && p.res.includes("charge 5 kg à 7,5 kg"), p.res); assert.strictEqual(s.notes[0].fc, 131);
+  N.fusionner(b, { courses: [s], reglages: {} }); const l = N.lignesHistorique(b).find(x => x.id === "s" + T0); assert.strictEqual(l.act, "pompes"); assert.strictEqual(l.pompes, 33); assert.ok(l.resultat.includes("33 · 2 séries") && l.resultat.includes("+5 kg à 7,5 kg"), l.resultat);
+  assert.strictEqual(N.recordSerie(b, "Pompes"), 45); assert.ok(N.rapportReps(s, "1.5").resume.includes("Pompes : 33 pompes") && N.rapportReps(s).resume.includes("objectif 30 atteint")); });
+
+test("enchaînement (tuile Muscu) : exercices à la suite, exercice ajouté en route, un seul passage dans l'Historique", () => {
+  const b = N.baseVide(); assert.deepStrictEqual(N.exosLire(b).map(x => x.nom), ["Pompes", "Squats", "Développé couché", "Biceps barre"]);
+  assert.strictEqual(N.exoAjouter(b, "  Tractions ").nom, "Tractions"); assert.strictEqual(N.exoAjouter(b, "tractions").nom, "Tractions"); assert.strictEqual(N.exosLire(b).length, 5); N.exoRegler(b, "Squats", { obj: 20, charge: 20 });
+  N.programmeEcrire(b, ["Squats", "Inconnu", "Pompes"]); assert.deepStrictEqual(N.programmeLire(b), ["Squats", "Pompes"]);
+  const st = N.repsNouveau(b, "muscu", N.programmeLire(b), T0); let t = serie(st, T0 + 1000, 10, 2000, 100); N.repsFinSerie(st, t + 1000, 105); N.repsDiff(st, 2); t = serie(st, t + 60000, 8, 2000, 108);
+  assert.ok(N.repsSuivant(st, t + 500, 110, b)); assert.strictEqual(N.repsCourant(st).exo, "Pompes"); assert.strictEqual(N.repsCourant(st).t0, null); t = serie(st, t + 30000, 15, 900, 120);
+  assert.ok(N.repsSuivant(st, t + 500, 125, b, "Tractions"), "exercice ajouté en route"); assert.strictEqual(N.repsCourant(st).exo, "Tractions"); t = serie(st, t + 40000, 6, 2500, 130);
+  assert.ok(!N.repsSuivant(st, t + 500, 130, b), "plus d'exercice : la séance est finie");
+  const s = N.repsSeance(st, t + 1000); assert.strictEqual(s.act, "muscu"); assert.deepStrictEqual(s.notes.map(n => n.reps ? n.reps.exo : "Pompes"), ["Squats", "Pompes", "Tractions"]); assert.deepStrictEqual(s.notes[0].reps.series, [10, 8]); assert.deepStrictEqual(s.notes[0].reps.charges, [20, 20]);
+  assert.ok(s.notes[0].t < s.notes[1].t && s.notes[1].t < s.notes[2].t); assert.strictEqual(s.notes[2].reps.charges, undefined);
+  N.fusionner(b, { courses: [s], reglages: {} }); const l = N.lignesHistorique(b).filter(x => x.act === "muscu"); assert.strictEqual(l.length, 1); assert.strictEqual(l[0].pompes, 15);
+  assert.strictEqual(l[0].resultat, "Squats 18 (20 kg) · Pompes 15 · Tractions 6 · ❤️ max 130"); assert.strictEqual(l[0].detail.length, 3); assert.strictEqual(N.recordSerie(b, "Squats"), 10); assert.strictEqual(N.recordSerie(b, "Tractions"), 6);
+  const r = N.rapportReps(s, "1.5"); assert.ok(r.resume.includes("Squats : 18 répétitions") && r.resume.includes("il manque 2") && r.tout.includes("1 | 10 | 20 kg | 😐 Moyen | 100/105/105"), r.tout);
+  assert.strictEqual(N.repsSeance(N.repsNouveau(b, "muscu", ["Squats"], T0), T0 + 5000), null, "séance sans aucune répétition : rien à ranger");
+  const copie = JSON.parse(JSON.stringify(st)); assert.strictEqual(N.stable(N.repsSeance(copie, t + 1000)), N.stable(s), "la séance écrite dans le téléphone puis relue donne le même résultat"); });
+
 console.log("\n" + n + " tests réussis.");

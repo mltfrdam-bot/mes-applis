@@ -58,6 +58,7 @@ function libelle(x) {
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
   if (x.h10rec) { const r = x.h10rec.res || {}; return "📡 H10 : " + hm(r.duree || 0) + ", actif " + hm(r.actif || 0) + ", " + (r.pics || 0) + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : ""); }
   if (x.pjour) return "📅 Journée pompes : " + x.pjour.res;
+  if (x.reps) return "🏋️ " + x.reps.exo + " : " + x.reps.res + " (séries " + (x.reps.series || []).join("-") + (x.reps.reposMoy ? ", repos moyen " + gm(x.reps.reposMoy) : "") + ")";
   if (x.pompes && x.pompes.diffs) return "👻 Pompes : " + x.pompes.res + " — " + (x.pompes.series || []).map((n, i) => n + (x.pompes.diffs[i] != null && DIFF[x.pompes.diffs[i]] ? DIFF[x.pompes.diffs[i]].split(" ")[0] : "")).join(" ");
   if (x.pompes) return "👻 Pompes : " + x.pompes.res + " (séries " + (x.pompes.series || []).join("-") + (x.pompes.reposMoy ? ", repos moyen " + gm(x.pompes.reposMoy) : "") + ")";
   if (x.ghost) return "👻 Contre « " + x.ghost.contre + " » — " + x.ghost.res;
@@ -74,7 +75,7 @@ function normaliser(b) { if (!Array.isArray(b.imports)) b.imports = []; b.course
 function stable(v) { if (v === null || typeof v !== "object") return JSON.stringify(v === undefined ? null : v);
   if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
   return "{" + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ":" + stable(v[k])).join(",") + "}"; }
-const TYPES = ["pompes", "pjour", "h10rec", "ghost", "frac", "tr", "boire", "manger", "arret", "douleur", "sensLibre", "fracDebut", "fracFin", "n", "km", "rep", "note"];
+const TYPES = ["pompes", "reps", "pjour", "h10rec", "ghost", "frac", "tr", "boire", "manger", "arret", "douleur", "sensLibre", "fracDebut", "fracFin", "n", "km", "rep", "note"];
 function typeNote(n) { return TYPES.find(k => n[k] != null) || "autre"; }
 const idSeance = (c) => String(c.id != null ? c.id : c.debut);
 
@@ -150,12 +151,16 @@ function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R),
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
   return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr }; }
 function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
-  const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost);
+  const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost), X = notes.filter(n => n.reps);
+  if (X.length) { /* séance de plusieurs exercices (enchaînement) : un résumé par exercice, dans l'ordre */
+    const E = notes.filter(n => n.reps || n.pompes).map(n => n.reps || Object.assign({ exo: "Pompes" }, n.pompes)); pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0);
+    const fin = notes[notes.length - 1].t, fcs = [].concat(...E.map(e => (e.fcs || []).map(x => x[1]).filter(Boolean)));
+    return { id: "s" + idSeance(c), t, act, duree: Math.max(0, (fin - t) / 1000), pompes, resultat: E.map(e => e.exo + " " + nb(e.total) + chargeTxt(e, " (", ")")).join(" · ") + (fcs.length ? " · ❤️ max " + Math.max(...fcs) : ""), alerte: "", source: "", detail: notes.map(detailNote) }; }
   if (J.length) { const j = J[0].pjour; pompes = J.reduce((a, n) => a + (n.pjour.total || 0), 0) + P.reduce((a, n) => a + (n.pompes.total || 0), 0);
     duree = (j.tl && j.tl.length) ? j.tl[j.tl.length - 1] : duree; res = nb(pompes) + " · " + pl((j.seances || j.offs || []).length, "séance") + " (journée)"; }
   else if (P.length) { pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0); duree = P.reduce((a, n) => a + (n.pompes.temps || 0), 0);
     const series = P.reduce((a, n) => a + (n.pompes.series || []).length, 0), fcs = [].concat(...P.map(n => (n.pompes.fcs || []).map(x => x[1]).filter(Boolean)));
-    const m = [nb(pompes), pl(series, "série")]; if (P.length > 1) m.push(P.length + " séances"); else if (P[0].pompes.reposMoy) m.push("repos " + gm(P[0].pompes.reposMoy));
+    const m = [nb(pompes), pl(series, "série")]; if (P.length > 1) m.push(P.length + " séances"); else { if (P[0].pompes.reposMoy) m.push("repos " + gm(P[0].pompes.reposMoy)); const ch = chargeTxt(P[0].pompes, "+", ""); if (ch) m.push(ch); }
     if (fcs.length) m.push("❤️ max " + Math.max(...fcs)); res = m.join(" · "); }
   else if (G.length) { duree = G.reduce((a, n) => a + (n.ghost.temps || 0), 0); res = "👻 " + G[0].ghost.res; }
   else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
@@ -281,6 +286,82 @@ function rapportReglages(base) { const l = essaisLire(base).slice().reverse(), i
   return T.join("\n"); }
 const chrono = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0"); };
 
+/* ===== Exercices à répétitions (étape 3) : pompes, squats, développé couché… =====
+   Idées de Frédéric (13/11/2026) : une charge possible pour chaque exercice (sac de 2 ou 5 kg, barre…), un objectif
+   de répétitions qu'on peut toujours dépasser, et l'enchaînement de plusieurs exercices dans une même séance (tuile Muscu).
+   Tout le compteur est ici, sans écran, pour être testé seul. Les heures sont celles du téléphone (millisecondes) :
+   la séance est écrite à chaque appui, donc elle reprend telle quelle si l'appli est fermée. */
+const EXOS_DEPART = [{ nom: "Pompes", obj: 100, charge: 0, repos: 90 }, { nom: "Squats", obj: 50, charge: 0, repos: 90 }, { nom: "Développé couché", obj: 30, charge: 0, repos: 120 }, { nom: "Biceps barre", obj: 30, charge: 0, repos: 90 }];
+const kg = (v) => String(Math.round(v * 10) / 10).replace(".", ",") + " kg";
+function chargeTxt(e, avant, apres) { const l = (e.charges || []).filter(x => x > 0); if (!l.length) return ""; const mn = Math.min(...l), mx = Math.max(...l); return avant + (mn === mx ? kg(mx) : kg(mn) + " à " + kg(mx)) + apres; }
+function exosLire(base) { let l = lireListe(base.reglages["exos"]).filter(x => x && typeof x.nom === "string" && x.nom); if (!l.length) l = JSON.parse(JSON.stringify(EXOS_DEPART));
+  let po = {}; try { po = JSON.parse(base.reglages["pompes-opt"] || "{}") || {}; } catch (e) {}
+  if (!l.some(x => x.nom === "Pompes")) l.unshift(Object.assign({}, EXOS_DEPART[0]));
+  return l.map(x => { const e = { nom: x.nom, obj: Number(x.obj) > 0 ? Math.round(x.obj) : 0, charge: Number(x.charge) > 0 ? Number(x.charge) : 0, repos: Number(x.repos) >= 0 ? Math.round(x.repos) : 90 };
+    if (e.nom === "Pompes") { if (Number(po.obj) > 0) e.obj = Math.round(po.obj); if (po.repos != null && Number(po.repos) >= 0) e.repos = Math.round(po.repos); if (Number(po.charge) >= 0) e.charge = Number(po.charge); } return e; }); }
+/* les réglages des pompes restent aussi dans « pompes-opt », la clé de la v31 */
+function exosEcrire(base, l) { base.reglages["exos"] = JSON.stringify(l); const p = l.find(x => x.nom === "Pompes"); if (p) { let po = {}; try { po = JSON.parse(base.reglages["pompes-opt"] || "{}") || {}; } catch (e) {} po.obj = p.obj; po.repos = p.repos; po.charge = p.charge; base.reglages["pompes-opt"] = JSON.stringify(po); } }
+function exoRegler(base, nom, champs) { const l = exosLire(base); let e = l.find(x => x.nom === nom); if (!e) { e = { nom, obj: 30, charge: 0, repos: 90 }; l.push(e); }
+  if (champs.obj != null) e.obj = Math.min(2000, Math.max(0, Math.round(champs.obj))); if (champs.charge != null) e.charge = Math.min(500, Math.max(0, Math.round(champs.charge * 2) / 2)); if (champs.repos != null) e.repos = Math.min(900, Math.max(0, Math.round(champs.repos)));
+  exosEcrire(base, l); return e; }
+function exoAjouter(base, nom) { nom = String(nom || "").trim().slice(0, 30); if (!nom) return null; const l = exosLire(base), deja = l.find(x => x.nom.toLowerCase() === nom.toLowerCase()); if (deja) return deja; const e = { nom, obj: 30, charge: 0, repos: 90 }; l.push(e); exosEcrire(base, l); return e; }
+/* l'enchaînement de la tuile Muscu : la liste ordonnée des exercices */
+function programmeLire(base) { const ex = exosLire(base).map(x => x.nom); return lireListe(base.reglages["muscu-programme"]).filter(n => ex.includes(n)); }
+function programmeEcrire(base, l) { base.reglages["muscu-programme"] = JSON.stringify(l); }
+/* plus longue série déjà faite pour un exercice (pour l'annonce « record battu ») */
+function recordSerie(base, nom) { let r = 0; const vu = (n) => { if (n > r) r = n; };
+  if (nom === "Pompes") { Integre.CARNET_POMPES.forEach(x => seriesDe(x.tl).forEach(vu)); seriesDe(Integre.JOUR_3008.tl).forEach(vu); }
+  paires(base.courses).forEach(({ n }) => { if (nom === "Pompes") { if (n.pompes && n.pompes.series) n.pompes.series.forEach(vu); if (n.pjour && n.pjour.tl) seriesDe(n.pjour.tl).forEach(vu); } else if (n.reps && n.reps.exo === nom && n.reps.series) n.reps.series.forEach(vu); }); return r; }
+
+const r1 = (x) => Math.round(x * 10) / 10;
+function repsBloc(e, record) { return { exo: e.nom, obj: e.obj || 0, charge: e.charge || 0, repos: e.repos || 0, t0: null, series: [], cur: null, phase: "attente", debutRepos: 0, signal: 0, objAnnonce: false, record: record || 0, recordBattu: false, attendDiff: false }; }
+function repsNouveau(base, act, noms, maintenant) { const ex = exosLire(base); return { v: 1, debut: maintenant, maj: maintenant, act, index: 0, dernierAppui: 0, blocs: noms.map(n => repsBloc(ex.find(x => x.nom === n) || { nom: n, obj: 0, charge: 0, repos: 90 }, recordSerie(base, n))) }; }
+const repsCourant = (st) => st.blocs[st.index];
+const repsT = (b, maintenant) => b.t0 == null ? 0 : (maintenant - b.t0) / 1000;
+const repsTotal = (b) => b.series.reduce((a, x) => a + x.tl.length, 0) + (b.cur ? b.cur.tl.length : 0);
+/* un appui sur l'écran = une répétition. Renvoie les annonces à faire : ["record", n] ou ["objectif", n]. */
+function repsAppui(st, maintenant, fc) { const b = repsCourant(st), ev = []; if (!b || maintenant - st.dernierAppui < 350) return ev;
+  if (b.phase !== "serie") { if (b.t0 == null) b.t0 = maintenant; b.phase = "serie"; b.attendDiff = false; b.cur = { tl: [], man: 0, charge: b.charge, fcDepart: fc || null, fcMax: fc || null, fcFin: null, diff: null }; }
+  st.dernierAppui = maintenant; st.maj = maintenant; b.cur.tl.push(r1(repsT(b, maintenant)));
+  if (b.record && !b.recordBattu && b.cur.tl.length > b.record) { b.recordBattu = true; ev.push(["record", b.cur.tl.length]); }
+  if (b.obj && !b.objAnnonce && repsTotal(b) >= b.obj) { b.objAnnonce = true; ev.push(["objectif", b.obj]); } return ev; }
+/* +1 : une répétition faite mais pas prise par l'écran (en série : maintenant ; au repos : ajoutée à la série finie) */
+function repsPlus(st, maintenant) { const b = repsCourant(st); if (!b) return false; let sr = null, t = 0;
+  if (b.phase === "serie" && b.cur && b.cur.tl.length) { sr = b.cur; t = r1(repsT(b, maintenant)); st.dernierAppui = maintenant; }
+  else if (b.phase === "repos" && b.series.length) { sr = b.series[b.series.length - 1]; const l = sr.tl; t = r1(l[l.length - 1] + (l.length > 1 ? (l[l.length - 1] - l[0]) / (l.length - 1) : 1)); }
+  if (!sr) return false; sr.tl.push(t); sr.man = (sr.man || 0) + 1; st.maj = maintenant; if (b.obj && !b.objAnnonce && repsTotal(b) >= b.obj) b.objAnnonce = true; return true; }
+function repsMoins(st, maintenant) { const b = repsCourant(st); if (!b || b.phase !== "serie" || !b.cur || !b.cur.tl.length) return false; b.cur.tl.pop(); st.maj = maintenant; return true; }
+function repsFc(st, fc) { const b = repsCourant(st); if (b && b.cur && fc && (!b.cur.fcMax || fc > b.cur.fcMax)) b.cur.fcMax = fc; }
+function repsFinSerie(st, maintenant, fc) { const b = repsCourant(st); if (!b || b.phase !== "serie" || !b.cur || !b.cur.tl.length) return false;
+  b.cur.fcFin = fc || null; if (fc && (!b.cur.fcMax || fc > b.cur.fcMax)) b.cur.fcMax = fc; b.series.push(b.cur); if (b.cur.tl.length > b.record) b.record = b.cur.tl.length; b.recordBattu = false;
+  b.cur = null; b.phase = "repos"; b.debutRepos = r1(repsT(b, maintenant)); b.signal = 0; b.attendDiff = true; st.maj = maintenant; return true; }
+function repsDiff(st, d) { const b = repsCourant(st); if (!b || !b.series.length) return; b.series[b.series.length - 1].diff = d; b.attendDiff = false; }
+function repsCharge(st, v) { const b = repsCourant(st); if (!b) return; b.charge = Math.min(500, Math.max(0, Math.round(v * 2) / 2)); if (b.cur && !b.cur.tl.length) b.cur.charge = b.charge; }
+/* repos : temps écoulé, temps restant, et le signal à donner une seule fois ("bientot" à 10 s, "reprendre" à 0) */
+function repsRepos(st, maintenant) { const b = repsCourant(st); if (!b || b.phase !== "repos") return null; const ecoule = repsT(b, maintenant) - b.debutRepos, r = { ecoule, reste: b.repos ? b.repos - ecoule : null, signal: null };
+  if (b.repos) { if (r.reste <= 0 && b.signal < 2) { b.signal = 2; r.signal = "reprendre"; } else if (r.reste > 0 && r.reste <= 10 && b.signal === 0) { b.signal = 1; r.signal = "bientot"; } } return r; }
+/* exercice suivant : ferme la série en cours et passe au suivant (ajouté à la suite s'il n'était pas prévu) */
+function repsSuivant(st, maintenant, fc, base, nomSuivant) { repsFinSerie(st, maintenant, fc); const b = repsCourant(st); if (b) { b.attendDiff = false; b.fini = true; }
+  if (nomSuivant) { const ex = exosLire(base); st.blocs.splice(st.index + 1, 0, repsBloc(ex.find(x => x.nom === nomSuivant) || { nom: nomSuivant, obj: 0, charge: 0, repos: 90 }, recordSerie(base, nomSuivant))); }
+  if (st.index + 1 >= st.blocs.length) return false; st.index++; st.maj = maintenant; return true; }
+function repsBilanBloc(b) { const sers = b.series.concat(b.cur && b.cur.tl.length ? [b.cur] : []), tl = [].concat(...sers.map(x => x.tl)).sort((x, y) => x - y), n = tl.length; if (!n) return null;
+  const repos = sers.slice(1).map((x, i) => Math.round(x.tl[0] - sers[i].tl[sers[i].tl.length - 1])), fcs = sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]), charges = sers.map(x => x.charge || 0);
+  const temps = Math.round(tl[n - 1]), pompes = b.exo === "Pompes", mot = pompes ? (n > 1 ? "pompes" : "pompe") : (n > 1 ? "répétitions" : "répétition");
+  const d = { obj: b.obj, total: n, temps, series: sers.map(x => x.tl.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff == null ? null : x.diff) : null, reposMoy: repos.length ? Math.round(repos.reduce((a, x) => a + x, 0) / repos.length) : 0, tl,
+    fcs: fcs.some(x => x[1]) ? fcs : null, res: nb(n) + " " + mot + " en " + gm(temps) + ", " + pl(sers.length, "série") };
+  if (charges.some(x => x > 0)) { d.charges = charges; d.res += ", " + chargeTxt(d, "charge ", ""); } const man = sers.reduce((a, x) => a + (x.man || 0), 0); if (man) d.manuels = man; d.repos = repos;
+  return { exo: b.exo, fin: b.t0 + Math.round(tl[n - 1] * 1000), donnees: d }; }
+/* fin de séance → la séance à ranger dans la base (null si aucune répétition). Les pompes gardent la forme de la v31 (note « pompes »). */
+function repsSeance(st, maintenant) { const notes = []; st.blocs.forEach(b => { const r = repsBilanBloc(b); if (!r) return; const d = r.donnees, repos = d.repos; delete d.repos; let t = r.fin; while (notes.some(n => n.t === t)) t++;
+    const fcMax = d.fcs ? Math.max(...d.fcs.map(x => x[1] || 0)) : 0, n = { t }; if (fcMax) n.fc = fcMax; if (r.exo === "Pompes") n.pompes = d; else n.reps = Object.assign({ exo: r.exo }, d); notes.push(n); });
+  if (!notes.length) return null; notes.sort((x, y) => x.t - y.t); return { id: st.debut, debut: st.debut, act: st.act, close: true, notes }; }
+function rapportReps(seance, version) { const T = ["SÉANCE — " + actInfo(seance.act).nom + " — " + dateHeure(seance.debut) + (version ? " (APK " + version + ")" : "")], D = [];
+  seance.notes.forEach(n => { const e = n.reps || n.pompes, nom = n.reps ? n.reps.exo : "Pompes"; if (!e) return;
+    T.push(nom + " : " + e.res + (e.obj ? " (objectif " + e.obj + (e.total >= e.obj ? " atteint" : " : il manque " + (e.obj - e.total)) + ")" : "") + (e.reposMoy ? ", repos moyen " + gm(e.reposMoy) : ""));
+    D.push("", nom + " — série | répétitions | charge | difficulté | FC départ/max/fin"); (e.series || []).forEach((k, i) => D.push((i + 1) + " | " + k + " | " + (e.charges && e.charges[i] ? kg(e.charges[i]) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(x => x || "–").join("/") : "–")));
+    if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1"); });
+  const resume = T.join("\n"); return { resume, tout: resume + "\n" + D.join("\n") }; }
+
 /* ===== Sauvegarde de l'appli ===== */
 function sauvegarde(base, version) { return { format: FORMAT, version: 1, creeeLe: new Date().toISOString(), appli: "APK Journal d'activité " + (version || ""), courses: base.courses, reglages: base.reglages, imports: base.imports }; }
 function nomSauvegarde(t) { return "JournalActivite-sauvegarde_" + horodatage(t == null ? Date.now() : t) + ".json"; }
@@ -303,6 +384,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
   return d; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
+  DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
   baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };
