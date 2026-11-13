@@ -77,6 +77,12 @@
   .reglage .rl { display: flex; align-items: center; justify-content: center; gap: 8px; } .reglage .rl b { font-size: 24px; min-width: 76px; }
   .reglage .rder { font-size: 18px; font-weight: 700; min-height: 24px; }
   .pre { white-space: pre-line; }
+  /* exercices à répétitions */
+  .petit { min-height: 44px; padding: 6px 12px; } .reglageExo td:first-child { width: 86px; font-weight: 700; } .reglageExo .rl { display: flex; align-items: center; gap: 8px; } .reglageExo .rl b { font-size: 22px; min-width: 70px; text-align: center; }
+  .zone { flex: 1 1 auto; min-height: 260px; width: 100%; background: #fff; border: 3px solid #B5451B; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; touch-action: manipulation; }
+  .zone:active { transform: none; background: #fdf1ec; }
+  .rphase { font-size: 20px; font-weight: 700; text-align: center; } .rgros { font-size: 130px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; } .rsous { font-size: 16px; color: #5b6470; text-align: center; }
+  .bandeau { background: #1f6b43; color: #fff; border-radius: 12px; padding: 10px 12px; font-size: 18px; font-weight: 900; text-align: center; }
   #toast { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 30; background: #1b1f23; color: #fff; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; text-align: center; }
 </style>
 </head>
@@ -139,6 +145,9 @@ const Pont = {
   essaiDonnees() { try { return JSON.parse(A.essaiDonnees() || "[]"); } catch (e) { return []; } },
   enregistrements() { try { return JSON.parse(A.enregistrements() || "[]"); } catch (e) { return []; } },
   vibrer(ms) { try { if (A) A.vibrer(ms); } catch (e) {} },
+  bip(n) { try { if (A) A.bip(n); } catch (e) {} },
+  parler(t) { try { if (A) A.parler(t); } catch (e) {} },
+  ecranAllume(oui) { oui = !!oui; if (Pont._ecran === oui) return; Pont._ecran = oui; try { if (A) A.ecranAllume(oui); } catch (e) {} },
   brut() { try { return JSON.parse(A.brut() || "[]"); } catch (e) { return []; } },
   partagerBrut(nom) { try { return A ? !!A.partagerBrut(nom) : false; } catch (e) { return false; } }
 };
@@ -176,8 +185,9 @@ function aller(nom, param) { if (ECRAN.nom === "essai" && nom !== "essai") { Pon
 function retourEcran() { const p = PRECEDENT || { nom: "activites" }; PRECEDENT = null; ECRAN = p; dessiner(); }
 function dessiner() { const e = ECRAN, o = ONGLETS.includes(e.nom) ? e.nom : (e.nom === "fiche" ? "aide" : (PRECEDENT ? PRECEDENT.nom : ""));
   document.querySelectorAll("#onglets button").forEach(b => { if (b.dataset.o === o) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
+  $("#onglets").classList.toggle("cache", e.nom === "reps"); if (e.nom !== "reps") Pont.ecranAllume(false);
   $("#pied").classList.toggle("cache", e.nom !== "activites" && e.nom !== "seance"); $("#bDemarrer").classList.toggle("cache", e.nom !== "activites"); $("#bArreter").classList.toggle("cache", e.nom !== "seance");
-  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif, seance: vueSeance, bilan: vueBilan, essai: vueEssai })[e.nom]();
+  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif, seance: vueSeance, bilan: vueBilan, essai: vueEssai, depart: vueDepart, reps: vueReps, bilanReps: vueBilanReps })[e.nom]();
   majAlerte(); }
 function titre(t, sous) { $("#hTitre").textContent = t; $("#hSous").textContent = sous || ""; }
 /* bouton Retour du téléphone : appelé par la partie Android. Renvoie false quand il n'y a plus rien à fermer. */
@@ -194,15 +204,16 @@ function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereP
     return '<button class="tuile" data-do="act" data-a="' + esc(a) + '" aria-pressed="' + (a === cur) + '"><span class="ic">' + i.icone + '</span><span class="nom">' + esc(i.nom) + '</span><span class="sous">' + (der[a] ? "dernière : " + N.jourCourt(der[a]) : "aucune séance") + '</span></button>'; }).join("") +
     '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>';
   majDemarrer(); }
-function majDemarrer() { $("#bDemarrer").textContent = S.enr ? "● Séance en cours : " + N.actInfo(S.enr.act).nom : "▶ Démarrer " + N.actInfo(actCourante()).nom; }
+function majDemarrer() { $("#bDemarrer").textContent = REPS ? "● Séance en cours : " + N.repsCourant(REPS).exo : S.enr ? "● Séance en cours : " + N.actInfo(S.enr.act).nom : "▶ Démarrer " + N.actInfo(actCourante()).nom; }
 function choisirAct(a) { BASE.reglages["act-courante"] = a; sauver(); vueActivites(); }
 function nouvelleAct() { fenetre('<div class="t">➕ Nouvelle activité</div><label for="naNom">Son nom (ex. Corde à sauter)</label><input id="naNom" maxlength="30" autocomplete="off"><div class="ligne"><button class="main" data-do="creerAct">Créer</button><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#naNom"); if (i) i.focus(); }, 50); }
 function creerAct() { const nom = ($("#naNom").value || "").trim(); if (!nom) return; const existe = N.toutesActs(BASE).find(a => N.actInfo(a).nom.toLowerCase() === nom.toLowerCase() || a.toLowerCase() === nom.toLowerCase());
   const a = existe || nom; if (!existe) { const p = N.lireListe(BASE.reglages["acts-perso"]); p.push(nom); BASE.reglages["acts-perso"] = JSON.stringify(p); }
   BASE.reglages["acts-masquees"] = JSON.stringify(N.lireListe(BASE.reglages["acts-masquees"]).filter(x => x !== a)); BASE.reglages["act-courante"] = a; sauver(); fermerFenetre(); vueActivites(); }
 function demarrer() { const act = actCourante(), a = N.actInfo(act);
+  if (REPS) { PRECEDENT = { nom: "activites" }; aller("reps"); return; }
   if (S.enr) { aller("seance"); return; }
-  if (act === "pompes") { info("▶ Pompes : étape 3", "<p>Le compteur de pompes (toucher, +1, repos, fantôme) arrive à l'étape 3.</p><p style='margin-top:8px'>En attendant, fais ta séance dans le Hub, puis réimporte ta sauvegarde ici : rien n'est mis en double.</p>"); return; }
+  if (act === "pompes" || act === "muscu") { aller("depart", act); return; }
   if (!Pont.natif) { info("Seulement dans l'APK", "<p>L'enregistrement a besoin de l'appli installée sur le téléphone.</p>"); return; }
   if (!btPret()) return;
   if (!Pont.batterieOk()) { fenetre('<div class="t">⚠️ Batterie Samsung pas réglée</div><p>Sans ce réglage, le téléphone peut couper l\'appli quand l\'écran s\'éteint : l\'enregistrement aurait des trous.</p><div class="ligne"><button class="main" data-do="batterie">Régler maintenant</button></div><div class="ligne"><button class="sec" data-do="lancerSeance">Démarrer quand même</button><button class="sec" data-do="fermer">Annuler</button></div>'); return; }
@@ -234,7 +245,7 @@ function vueBilans() { const lg = N.lignesHistorique(BASE), par = {}; lg.forEach
     '<p class="aide">Les bilans complets (records, séances comparables, chaque repos en couleur) arrivent avec les pompes, à l\'étape 3. Rien n\'est perdu : ils seront calculés sur tout ton historique.</p>'; }
 
 /* ===== ❓ Aide ===== */
-const FICHES = [["premiere", "Première utilisation"], ["accueil", "L'accueil et les activités"], ["import", "Importer mes données du Hub"], ["ceinture", "La ceinture H10"], ["seance", "Enregistrer une séance"], ["impacts", "Régler les impacts"], ["sauvegarde", "Sauvegarder et fusionner"], ["historique", "Lire l'Historique"], ["suite", "Ce qui arrive ensuite"]];
+const FICHES = [["premiere", "Première utilisation"], ["accueil", "L'accueil et les activités"], ["import", "Importer mes données du Hub"], ["ceinture", "La ceinture H10"], ["seance", "Enregistrer une séance"], ["impacts", "Régler les impacts"], ["reps", "Pompes, charge et enchaînement"], ["sauvegarde", "Sauvegarder et fusionner"], ["historique", "Lire l'Historique"], ["suite", "Ce qui arrive ensuite"]];
 function vueAide() { titre("❓ Aide", "fonctionne sans internet");
   $("#vue").innerHTML = '<table><thead><tr><th style="width:36px">N°</th><th>Fiche</th></tr></thead><tbody>' + FICHES.map((x, i) => '<tr class="ligneH" data-do="fiche" data-f="' + x[0] + '"><td>' + (i + 1) + '</td><td><b>' + esc(x[1]) + '</b> ›</td></tr>').join("") + '</tbody></table>'; }
 function etat(ok, fait, afaire) { return ok ? '<span class="ok">✅ ' + (fait || "Fait") + '</span>' : '<span class="att">⚠️ ' + (afaire || "À faire") + '</span>'; }
@@ -249,19 +260,20 @@ function fichePremiere() { const bat = Pont.batterieOk(), notif = Pont.notifOk()
     '<tr><td class="gris"><b>5</b></td><td class="gris"><b>GPS</b><br>Position : arrive avec l\'étape 4.</td><td class="gris">Plus tard</td></tr></tbody></table>' +
     '<p class="aide">Si le réglage n° 1 saute (mise à jour Samsung), l\'appli te prévient en haut de l\'écran.</p>'; }
 const TEXTES = {
-  accueil: ["L'accueil et les activités", "<p><b>Une tuile = une activité.</b> Touche la tuile, puis « ▶ Démarrer » : l'appli enregistre la séance avec la ceinture H10 (pompes : étape 3).</p><p>La tuile <b>💪 Pompes</b> remplace l'ancienne tuile Muscu du Hub : tes séances de pompes y sont rangées. La tuile <b>🏋️ Muscu</b> est nouvelle, pour le reste du renforcement.</p><p><b>➕ Nouvelle</b> : crée ta propre activité, il suffit de lui donner un nom.</p><p>Pour cacher une tuile : ⚙️ en haut, tableau « Activités affichées ».</p>"],
+  accueil: ["L'accueil et les activités", "<p><b>Une tuile = une activité.</b> Touche la tuile, puis « ▶ Démarrer ». Tennis, Course… : l'appli enregistre la séance avec la ceinture H10. Pompes : le compteur au toucher. Muscu : l'enchaînement de tes exercices.</p><p>La tuile <b>💪 Pompes</b> remplace l'ancienne tuile Muscu du Hub : tes séances de pompes y sont rangées. La tuile <b>🏋️ Muscu</b> est nouvelle, pour le reste du renforcement.</p><p><b>➕ Nouvelle</b> : crée ta propre activité, il suffit de lui donner un nom.</p><p>Pour cacher une tuile : ⚙️ en haut, tableau « Activités affichées ».</p>"],
   import: ["Importer mes données du Hub", "<p><b>1.</b> Dans le Hub : appui long sur 💾 en haut, puis « 💾 Enregistrer sous… ». Le fichier s'appelle « MonHub-sauvegarde ».</p><p><b>2.</b> Ici : ⚙️ puis « 📥 Importer / fusionner un fichier », et choisis ce fichier.</p><p><b>3.</b> L'appli affiche le <b>descriptif</b> : ce qui a été ajouté, ce qui était déjà là. Bouton 📋 Copier pour l'envoyer à Claude.</p><p><b>Tu peux recommencer autant que tu veux</b> : ce qui est déjà là n'est jamais ajouté deux fois, et rien n'est écrasé.</p><p>La journée du 30/08/2025 (889 pompes) et les 6 séances du Carnet sont déjà dans l'appli.</p>"],
   sauvegarde: ["Sauvegarder et fusionner", "<p><b>💾 Sauvegarder</b> (dans ⚙️) : un fichier dans le dossier Téléchargements du téléphone.</p><p><b>📤 Partager</b> : envoie la même sauvegarde vers Google Drive, par le menu Partager du téléphone.</p><p><b>📥 Importer / fusionner</b> : ajoute ce qui manque depuis une sauvegarde de cette appli ou du Hub. Le descriptif liste tout ce qui a été ajouté.</p><p><b>Sauvegarde automatique</b> : une par jour, à l'ouverture de l'appli. Les 7 dernières sont gardées dans le téléphone (tableau dans ⚙️).</p>"],
   historique: ["Lire l'Historique", "<p>Une ligne = une séance. <b>Touche un titre de colonne</b> pour trier (date, activité, durée, nombre de pompes). Touche encore pour inverser.</p><p><b>Touche une ligne</b> pour voir le détail : chaque note avec son heure et la fréquence cardiaque.</p><p>Les boutons du haut filtrent par activité.</p><p><span class='al'>⚠️ trous</span> : moments où l'enregistrement de la ceinture H10 s'est arrêté plus d'une minute.</p><p><span class='src'>(Carnet)</span> et <span class='src'>(montre COROS)</span> : séances venues d'ailleurs que du Journal.</p>"],
   ceinture: ["La ceinture H10", "<p><b>❤️ en haut de l'écran</b> : touche-le pour connecter la ceinture. Porte-la, électrodes mouillées. La première fois, l'appli la cherche ; ensuite elle la retrouve toute seule.</p><p>Connectée, le bouton affiche ta fréquence cardiaque. <b>❤️ …</b> = connexion en cours. <b>❤️ ⚠️</b> = ceinture perdue, l'appli essaie de la retrouver sans s'arrêter.</p><p>C'est un <b>service permanent</b> qui tient la ceinture : il continue écran éteint, téléphone dans le sac. Tant qu'il tourne, une notification reste affichée.</p><p>Sans séance et appli fermée, la ceinture est lâchée au bout de 10 minutes pour économiser sa pile.</p><p>Si une autre appli (Hub, Polar, COROS) tient déjà la ceinture, ferme-la : la H10 n'accepte qu'un téléphone à la fois, sauf réglage spécial.</p>"],
   seance: ["Enregistrer une séance", "<p><b>1.</b> Choisis la tuile (Tennis, Course…), puis « ▶ Démarrer ».</p><p><b>2.</b> L'appli enregistre chaque seconde : fréquence cardiaque, mouvement, impacts. Tu peux <b>éteindre l'écran</b> et ranger le téléphone.</p><p><b>3.</b> À la fin : « ⏹ Arrêter et enregistrer ». Le bilan s'affiche, avec les boutons 📋 Copier.</p><p><b>Rien n'est perdu</b> : chaque seconde est écrite tout de suite dans le téléphone. Si l'appli est fermée par erreur, rouvre-la : l'enregistrement reprend.</p><p><b>Mesures brutes</b> : l'appli garde aussi tout ce que la ceinture envoie (50 mesures par seconde) dans un fichier par séance, environ 2 Mo pour 1 h 30. Le bouton « 📤 Envoyer les mesures brutes » du bilan sert à les donner à Claude pour régler les impacts après coup.</p><p><b>Coupure de ceinture</b> : le signal a sauté ; l'appli a reconnecté toute seule et note la durée. <b>Trou</b> : plus d'une minute sans aucune mesure.</p><p>Les pompes arrivent à l'étape 3, le GPS de la course à l'étape 4.</p>"],
   impacts: ["Régler les impacts", "<p>Un <b>impact</b> = un coup assez fort senti par la ceinture (frappe de balle, appui). Le <b>seuil</b> dit à partir de quelle force on compte.</p><p><b>− sensible / + sensible</b> : change le seuil de 0,1 g, même en pleine séance. « Dernier » montre la force du dernier mouvement et s'il a été compté.</p><p><b>🎯 Régler (N coups)</b> : fais par exemple 10 coups à ta force normale, touche « J'ai fini », donne le nombre : l'appli choisit le seuil qui en compte exactement autant.</p><p><b>🔔 Bip</b> : un bip et une vibration à chaque impact compté.</p><p>Chaque réglage est gardé dans un journal : ⚙️ puis « 📋 Rapport des réglages ».</p>"],
+  reps: ["Pompes, charge et enchaînement", "<p><b>💪 Pompes</b> : règle l'objectif, la charge et le repos, puis « ▶ Démarrer ». <b>Touche la grande zone à chaque pompe.</b> « ✔ Série finie » lance le repos ; touche de nouveau la zone pour la série suivante.</p><p><b>+1</b> : une pompe faite mais pas prise par l'écran. <b>−1</b> : un appui en trop.</p><p><b>Repos</b> : la zone devient jaune 10 secondes avant la fin, puis verte avec 3 bips et « On reprend ».</p><p><b>Objectif</b> : il peut être dépassé, le compteur ne s'arrête jamais.</p><p><b>⚖️ Charge</b> : sac lesté, barre… Elle peut changer entre deux séries, chaque série garde la sienne.</p><p><b>🏋️ Muscu = enchaînement</b> : compose ta liste d'exercices (pompes, squats, développé couché, biceps barre, ou les tiens). Pendant la séance, « Suivant › » passe à l'exercice suivant et ➕ en ajoute un en route. Toute la séance fait une seule ligne dans l'Historique.</p><p>Si l'appli se ferme, rouvre-la : la séance reprend où elle en était. L'écran reste allumé pendant la séance.</p><p>À venir : fantôme, test TOI / H10, boutons sur l'écran verrouillé.</p>"],
   suite: ["Ce qui arrive ensuite", "<p><b>Étape 2</b> (faite) — Ceinture H10 sans coupure, écran éteint ; enregistrement du tennis.</p><p><b>Étape 3</b> — Pompes : toucher, +1, repos, fantôme, test TOI / H10, boutons sur l'écran verrouillé, voix ; bilans complets.</p><p><b>Étape 4</b> — GPS et fantôme de course vocal.</p><p><b>Étape 5</b> — Activités personnalisables complètes, calibration, import COROS.</p>"]
 };
 function vueFiche() { const fi = ECRAN.param || "premiere"; let h;
   if (fi === "premiere") h = fichePremiere(); else { const t = TEXTES[fi] || TEXTES.suite; titre(t[0], "aide"); h = '<div style="background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:16px">' + t[1] + '</div>'; }
   $("#vue").innerHTML = h + '<div class="ligne"><button class="sec" data-do="retour">‹ Retour</button><button class="sec" data-do="onglet" data-o="aide">Toutes les fiches</button></div>'; }
-const AIDE_DE = { activites: "accueil", historique: "historique", bilans: "suite", reglages: "sauvegarde", descriptif: "import", aide: "premiere", fiche: "premiere", seance: "seance", bilan: "seance", essai: "impacts" };
+const AIDE_DE = { activites: "accueil", historique: "historique", bilans: "suite", reglages: "sauvegarde", descriptif: "import", aide: "premiere", fiche: "premiere", seance: "seance", bilan: "seance", essai: "impacts", depart: "reps", reps: "reps", bilanReps: "reps" };
 
 /* ===== ⚙️ Réglages : données, sauvegardes, activités ===== */
 function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
@@ -281,7 +293,7 @@ function etatAppli() { lireEtat(); const tt = N.totaux(BASE), txt = JSON.stringi
     "Imports faits : " + BASE.imports.length + (BASE.imports.length ? " (dernier le " + N.dateHeure(BASE.imports[BASE.imports.length - 1].t) + ")" : ""), "Taille des données : " + Math.round(txt.length / 1024) + " Ko",
     "Sauvegardes automatiques : " + Pont.sauvegardesAuto().map(s => s.jour).join(", "),
     "Bluetooth : " + (bt.present ? (bt.droit ? "autorisé" : "NON autorisé") + ", " + (bt.allume ? "allumé" : "ÉTEINT") : "absent"), "Ceinture : " + (S.h10.nom || "jamais connectée") + " — " + (S.service ? S.h10.texte : "service arrêté") + (S.acc && S.acc.erreur ? " — " + S.acc.erreur : ""),
-    "Enregistrements H10 : " + recs + " dans l'Historique, " + Pont.enregistrements().length + " fichier(s) dans le téléphone" + (S.enr ? " — séance en cours depuis " + N.hm(S.enr.ecoule) : "") + (S.aReprendre ? " — UNE SÉANCE À REPRENDRE" : ""), "Réglage des impacts : " + N.gg(imp.seuil) + " g, bip " + (imp.bip ? "oui" : "non"), "Mesures brutes : " + bruts.length + " fichier(s), " + mo(bruts.reduce((a, x) => a + x.taille, 0)), "Écriture : " + (ecritureKo ? "EN PANNE" : "ok") + (baseIllisible ? " · fichier abîmé mis de côté" : "")].join("\n"); }
+    "Enregistrements H10 : " + recs + " dans l'Historique, " + Pont.enregistrements().length + " fichier(s) dans le téléphone" + (S.enr ? " — séance en cours depuis " + N.hm(S.enr.ecoule) : "") + (S.aReprendre ? " — UNE SÉANCE À REPRENDRE" : ""), "Réglage des impacts : " + N.gg(imp.seuil) + " g, bip " + (imp.bip ? "oui" : "non"), "Mesures brutes : " + bruts.length + " fichier(s), " + mo(bruts.reduce((a, x) => a + x.taille, 0)), "Séance au toucher en cours : " + (REPS ? N.repsCourant(REPS).exo + " (" + N.repsTotal(N.repsCourant(REPS)) + ")" : "non"), "Écriture : " + (ecritureKo ? "EN PANNE" : "ok") + (baseIllisible ? " · fichier abîmé mis de côté" : "")].join("\n"); }
 
 /* ===== 📥 Import / fusion + descriptif ===== */
 let DESC = null;
@@ -366,7 +378,7 @@ function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage();
   al.classList.toggle("cache", !msg); al.innerHTML = msg; majReglage(); }
 function sens(b) { const imp = N.impRegler(BASE, Number(b.dataset.d), b.dataset.c, S.dernier ? S.dernier.m : null); sauver(); Pont.impRegler(imp); Pont.vibrer(20); majReglage(); if (ECRAN.nom === "essai") majEssai(); }
 function basculerBip() { const imp = N.impBip(BASE, !N.impLire(BASE).bip); sauver(); Pont.impRegler(imp); majReglage(); }
-function changerAct() { fenetre('<div class="t">✎ Activité de cette séance</div>' + N.actsVisibles(BASE).filter(a => a !== "pompes").map(a => '<div class="ligne"><button class="sec" data-do="seanceAct" data-a="' + esc(a) + '">' + esc(N.actNom(a)) + '</button></div>').join("") + '<div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
+function changerAct() { fenetre('<div class="t">✎ Activité de cette séance</div>' + N.actsVisibles(BASE).filter(a => a !== "pompes" && a !== "muscu").map(a => '<div class="ligne"><button class="sec" data-do="seanceAct" data-a="' + esc(a) + '">' + esc(N.actNom(a)) + '</button></div>').join("") + '<div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
 function seanceAct(a) { fermerFenetre(); Pont.seanceActivite(a); BASE.reglages["act-courante"] = a; sauver(); setTimeout(tic, 300); }
 function arreterSeance() { fenetre('<div class="t">⏹ Arrêter l\'enregistrement ?</div><p>La séance sera rangée dans l\'Historique.</p><div class="ligne"><button class="rouge" data-do="finSeance">Oui, arrêter</button></div><div class="ligne"><button class="sec" data-do="fermer">Continuer la séance</button></div>'); }
 function lireEnregistrement(nom) { try { return JSON.parse(Pont.lire("enregistrements/" + nom)); } catch (e) { return null; } }
@@ -405,6 +417,88 @@ function essaiFini() { fenetre('<div class="t">Combien de coups as-tu faits ?</d
 function essaiValider() { const n = parseInt($("#eNb").value, 10); if (!n || n < 1) return; fermerFenetre(); const r = N.impEssai(BASE, Pont.essaiDonnees(), n); sauver(); Pont.impRegler(r.imp); Pont.essaiArreter(); ESSAI = { etape: "resultat", texte: r.texte, ctx: ESSAI ? ESSAI.ctx : "essai" }; vueEssai(); }
 function essaiFermer() { Pont.essaiArreter(); ESSAI = null; aller(S.enr ? "seance" : "activites"); }
 
+/* ===== 💪 Exercices à répétitions (étape 3) : pompes, squats… avec charge, objectif et enchaînement =====
+   Le compteur est dans noyau.js. Ici : l'écran. La séance est écrite dans le téléphone à chaque appui
+   (reps-en-cours.json) : si l'appli est fermée, elle reprend telle quelle. */
+let REPS = null, BILANR = null, bandeauT = null;
+const FICHIER_REPS = "reps-en-cours.json";
+function repsSauver() { if (!Pont.ecrire(FICHIER_REPS, REPS ? JSON.stringify(REPS) : "")) { ecritureKo = true; majAlerte(); } }
+function repsCharger() { try { const t = Pont.lire(FICHIER_REPS); const st = t ? JSON.parse(t) : null; if (st && st.v === 1 && Array.isArray(st.blocs) && st.blocs.length) REPS = st; } catch (e) { REPS = null; }
+  /* séance oubliée depuis plus de 3 heures : elle est rangée telle quelle dans l'Historique */
+  if (REPS && Date.now() - (REPS.maj || REPS.debut) > 3 * 3600e3) repsRanger(); }
+function repsRanger() { const st = REPS; REPS = null; if (!st) return null; const s = N.repsSeance(st, Date.now()); if (s) { N.fusionner(BASE, { courses: [s], reglages: {} }); if (!sauver()) { REPS = st; return null; } } repsSauver(); Pont.ecranAllume(false); return s; }
+const motRep = (exo, n) => exo === "Pompes" ? (n > 1 ? "pompes" : "pompe") : (n > 1 ? "répétitions" : "répétition");
+const iconeExo = (nom) => nom === "Pompes" ? "💪" : "🏋️";
+const reposTxt = (r) => r ? N.gm(r) : "libre";
+
+/* ----- avant de démarrer : réglage (pompes) ou liste des exercices (Muscu) ----- */
+function lignesReglageExo(e) { const b = (c, d, t) => '<button class="sec petit" data-do="exoR" data-n="' + esc(e.nom) + '" data-c="' + c + '" data-d="' + d + '">' + t + '</button>', v = (c, x, t) => '<button class="chip" data-do="exoR" data-n="' + esc(e.nom) + '" data-c="' + c + '" data-v="' + x + '" aria-pressed="' + (e[c] === x) + '">' + t + '</button>';
+  return '<tr><td>Objectif</td><td><div class="rl">' + b("obj", -10, "−10") + '<b>' + (e.obj || "libre") + '</b>' + b("obj", 10, "+10") + '</div><div class="chips" style="margin-top:6px">' + [30, 50, 100, 150, 200].map(x => v("obj", x, x)).join("") + '</div></td></tr>' +
+    '<tr><td>Charge</td><td><div class="rl">' + b("charge", -1, "−1") + '<b>' + (e.charge ? N.kg(e.charge) : "sans") + '</b>' + b("charge", 1, "+1") + '</div><div class="chips" style="margin-top:6px">' + [0, 2, 5, 10, 20].map(x => v("charge", x, x ? x + " kg" : "Sans")).join("") + '</div></td></tr>' +
+    '<tr><td>Repos</td><td><div class="chips">' + [0, 60, 90, 120, 180].map(x => v("repos", x, x ? N.gm(x) : "Libre")).join("") + '</div></td></tr>'; }
+function vueDepart() { const act = ECRAN.param || "pompes", ex = N.exosLire(BASE);
+  if (act === "pompes") { const e = ex.find(x => x.nom === "Pompes"); titre("💪 Pompes", "réglage de la séance");
+    $("#vue").innerHTML = '<table class="milieu reglageExo"><tbody>' + lignesReglageExo(e) + '</tbody></table><p style="font-size:16px">🏆 Record sur une série : <b>' + N.recordSerie(BASE, "Pompes") + '</b></p>' +
+      '<p class="aide">L\'objectif peut être dépassé : le compteur ne s\'arrête jamais. La charge (sac lesté…) peut changer entre deux séries. Le fantôme et le test TOI / H10 arrivent dans la prochaine version.</p>' +
+      '<div class="ligne"><button class="gros" data-do="repsDemarrer" data-a="pompes">▶ Démarrer</button></div><div class="ligne"><button class="sec" data-do="retour">‹ Retour</button></div>'; return; }
+  const prog = N.programmeLire(BASE); titre("🏋️ Muscu", "enchaînement d'exercices");
+  $("#vue").innerHTML = (prog.length ? '<table class="milieu"><thead><tr><th style="width:30px">N°</th><th>Exercice</th><th style="width:1%"></th></tr></thead><tbody>' + prog.map((n, i) => { const e = ex.find(x => x.nom === n);
+      return '<tr><td><b>' + (i + 1) + '</b></td><td class="ligneH" data-do="exoOuvrir" data-n="' + esc(n) + '"><b>' + esc(n) + '</b> ✎<br><span class="gris" style="font-size:13px">objectif ' + (e.obj || "libre") + ' · ' + (e.charge ? N.kg(e.charge) : "sans charge") + ' · repos ' + reposTxt(e.repos) + '</span></td>' +
+        '<td style="white-space:nowrap">' + (i ? '<button class="sec petit" data-do="progMonter" data-i="' + i + '" aria-label="Monter">↑</button> ' : "") + '<button class="sec petit" data-do="progOter" data-i="' + i + '" aria-label="Retirer">✕</button></td></tr>'; }).join("") + '</tbody></table>'
+      : '<div class="boiteInfo" style="font-size:16px">Compose ta séance : ajoute les exercices dans l\'ordre où tu veux les faire.</div>') +
+    '<div class="ligne"><button class="sec" data-do="progAjouter">➕ Ajouter un exercice</button></div><p class="aide">Touche un exercice pour régler son objectif, sa charge et son repos. Pendant la séance, « Suivant › » passe à l\'exercice suivant, et tu peux en ajouter un en route.</p>' +
+    '<div class="ligne"><button class="gros" data-do="repsDemarrer" data-a="muscu">▶ Démarrer</button></div><div class="ligne"><button class="sec" data-do="retour">‹ Retour</button></div>'; }
+function exoR(b) { const e = N.exosLire(BASE).find(x => x.nom === b.dataset.n); if (!e) return; const c = b.dataset.c, ch = {}; ch[c] = b.dataset.v != null ? Number(b.dataset.v) : e[c] + Number(b.dataset.d); N.exoRegler(BASE, e.nom, ch); sauver();
+  if (fenetreOuverte() && $("#feExo")) exoOuvrir(e.nom); else dessiner(); }
+function exoOuvrir(nom) { const e = N.exosLire(BASE).find(x => x.nom === nom); if (!e) return; fenetre('<div class="t" id="feExo">' + iconeExo(nom) + ' ' + esc(nom) + '</div><table class="milieu reglageExo"><tbody>' + lignesReglageExo(e) + '</tbody></table><p style="font-size:15px">🏆 Record sur une série : <b>' + N.recordSerie(BASE, nom) + '</b></p><div class="ligne"><button class="main" data-do="fermerRedessiner">OK</button></div>'); }
+function listeExos(action, titreF) { fenetre('<div class="t">' + titreF + '</div>' + N.exosLire(BASE).map(e => '<div class="ligne"><button class="sec" data-do="' + action + '" data-n="' + esc(e.nom) + '">' + iconeExo(e.nom) + ' ' + esc(e.nom) + '</button></div>').join("") +
+    '<label for="neNom" style="font-size:15px">Ou un nouvel exercice :</label><input id="neNom" maxlength="30" autocomplete="off" placeholder="ex. Tractions" data-action="' + action + '"><div class="ligne"><button class="main" data-do="exoCreer" data-action="' + action + '">Créer et ajouter</button><button class="sec" data-do="fermer">Annuler</button></div>'); }
+function exoCreer(action) { const e = N.exoAjouter(BASE, ($("#neNom") || {}).value); if (!e) return; sauver(); ACTIONS[action]({ dataset: { n: e.nom } }); }
+function progAjouter(nom) { const l = N.programmeLire(BASE); l.push(nom); N.programmeEcrire(BASE, l); sauver(); fermerFenetre(); dessiner(); }
+function progModifier(i, monter) { const l = N.programmeLire(BASE); if (monter) { const x = l[i]; l[i] = l[i - 1]; l[i - 1] = x; } else l.splice(i, 1); N.programmeEcrire(BASE, l); sauver(); dessiner(); }
+function repsDemarrer(act) { const noms = act === "pompes" ? ["Pompes"] : N.programmeLire(BASE); if (!noms.length) { toast("Ajoute d'abord au moins un exercice."); return; }
+  REPS = N.repsNouveau(BASE, act, noms, Date.now()); repsSauver(); PRECEDENT = { nom: "activites" }; aller("reps"); }
+
+/* ----- pendant la séance ----- */
+function vueReps() { if (!REPS) { aller("activites"); return; } const b = N.repsCourant(REPS), muscu = REPS.act === "muscu"; Pont.ecranAllume(true);
+  $("#vue").innerHTML = '<div id="rBandeau" class="bandeau cache"></div><button id="rZone" class="zone" aria-label="Touche ici à chaque répétition"><span id="rPhase" class="rphase"></span><span id="rGros" class="rgros">0</span><span id="rSous" class="rsous"></span><span id="rFc" class="fcGros" style="font-size:30px"></span></button>' +
+    '<div class="ligne" id="rBarre"><button class="sec" data-do="repsMoins" style="flex:0 0 64px">−1</button><button class="sec" data-do="repsPlus" style="flex:0 0 64px">+1</button><button class="main" data-do="repsFinSerie" style="min-height:64px;font-size:19px">✔ Série finie</button></div>' +
+    '<div id="rDiff" class="cache"><div class="aide" style="text-align:center">Cette série était…</div><div class="ligne">' + N.DIFF.map((d, i) => '<button class="sec" data-do="repsDiff" data-d="' + i + '" style="padding:6px 2px;font-size:13px"><span style="font-size:26px;display:block">' + d.split(" ")[0] + '</span>' + d.split(" ").slice(1).join(" ") + '</button>').join("") + '</div></div>' +
+    '<div class="ligne"><button class="sec" data-do="repsChargeOuvrir" id="rCharge"></button>' + (muscu ? '<button class="sec" data-do="repsAjouterExo" style="flex:0 0 56px" aria-label="Ajouter un exercice">➕</button><button class="sec" data-do="repsSuivant" id="rSuivant">Suivant ›</button>' : "") + '<button class="rouge" data-do="repsArreter" style="min-height:52px;font-size:16px;flex:0 0 auto">⏹ Terminer</button></div>';
+  $("#rZone").addEventListener("pointerdown", (e) => { e.preventDefault(); repsAppui(); }); majReps(); }
+function majReps() { if (!REPS || !$("#rZone")) return; const now = Date.now(), b = N.repsCourant(REPS), total = N.repsTotal(b), z = $("#rZone"), fc = S.h10.fc || 0; N.repsFc(REPS, fc);
+  const pos = REPS.act === "muscu" ? " (" + (REPS.index + 1) + "/" + REPS.blocs.length + ")" : "", t1 = iconeExo(b.exo) + " " + b.exo + pos; if ($("#hTitre").textContent !== t1) titre(t1, ""); $("#hSous").textContent = b.charge ? "charge " + N.kg(b.charge) : "sans charge";
+  let phase, gros, fond = "";
+  if (b.phase === "repos") { const r = N.repsRepos(REPS, now); gros = N.gm(Math.max(0, r.ecoule));
+    if (r.signal === "bientot") { Pont.bip(1); repsSauver(); } else if (r.signal === "reprendre") { Pont.bip(3); Pont.vibrer(400); Pont.parler("On reprend"); repsSauver(); }
+    if (r.reste == null) phase = "Repos — série " + (b.series.length + 1) + " ensuite"; else if (r.reste > 0) { phase = "Repos — reprise dans " + N.gm(Math.ceil(r.reste)); if (r.reste <= 10) fond = "#fff6d6"; } else { phase = "▶ C'EST LE MOMENT DE REPRENDRE"; fond = "#d6f5e0"; } }
+  else if (b.phase === "serie") { gros = b.cur.tl.length; phase = "Série " + (b.series.length + 1); }
+  else { gros = 0; phase = "Touche l'écran à chaque " + motRep(b.exo, 1); }
+  $("#rGros").textContent = gros; $("#rPhase").textContent = phase; z.style.background = fond;
+  $("#rSous").textContent = (b.obj && total >= b.obj ? "✅ " : "") + total + (b.obj ? " / " + b.obj : "") + " " + motRep(b.exo, total) + (b.t0 ? " — " + N.gm(N.repsT(b, now)) : "") + (b.series.length ? " · séries " + b.series.map(x => x.tl.length).join("-") : "");
+  $("#rFc").textContent = fc ? "❤️ " + fc : ""; $("#rDiff").classList.toggle("cache", !b.attendDiff); $("#rBarre").classList.toggle("cache", !!b.attendDiff);
+  $("#rCharge").textContent = "⚖️ " + (b.charge ? N.kg(b.charge) : "Sans charge"); const sv = $("#rSuivant"); if (sv) { const nx = REPS.blocs[REPS.index + 1]; sv.textContent = nx ? "Suivant : " + nx.exo + " ›" : "Suivant ›"; } }
+function bandeau(txt) { const b = $("#rBandeau"); if (b) { b.textContent = txt; b.classList.remove("cache"); clearTimeout(bandeauT); bandeauT = setTimeout(() => { const x = $("#rBandeau"); if (x) x.classList.add("cache"); }, 5000); } Pont.vibrer(200); Pont.bip(2); Pont.parler(txt.replace(/[^\p{L}\p{N} ,']/gu, "")); }
+function repsAppui() { if (!REPS) return; const b = N.repsCourant(REPS), avant = N.repsTotal(b), ev = N.repsAppui(REPS, Date.now(), S.h10.fc || 0); if (N.repsTotal(b) === avant) return; Pont.vibrer(25); repsSauver(); majReps();
+  ev.forEach(e => bandeau(e[0] === "record" ? "🏆 Record battu sur une série : " + e[1] : "🎯 " + e[1] + " atteint — continue !")); }
+function repsAction(nom, param) { if (!REPS) return; const now = Date.now(), fc = S.h10.fc || 0; let ok = true;
+  if (nom === "plus") { ok = N.repsPlus(REPS, now); if (ok) Pont.vibrer(40); } else if (nom === "moins") ok = N.repsMoins(REPS, now);
+  else if (nom === "fin") { ok = N.repsFinSerie(REPS, now, fc); if (ok) { Pont.parler("Repos"); Pont.vibrer(150); } } else if (nom === "diff") { N.repsDiff(REPS, param); Pont.vibrer(40); }
+  if (ok) { repsSauver(); majReps(); } }
+function repsChargeOuvrir() { const b = N.repsCourant(REPS), bt = (d, t) => '<button class="sec petit" data-do="repsChargeR" data-d="' + d + '">' + t + '</button>';
+  fenetre('<div class="t">⚖️ Charge — ' + esc(b.exo) + '</div><div class="reglage" style="border:none"><div class="rl">' + bt(-1, "−1") + '<b>' + (b.charge ? N.kg(b.charge) : "sans") + '</b>' + bt(1, "+1") + '</div><div class="chips" style="justify-content:center">' + [0, 2, 5, 10, 20].map(x => '<button class="chip" data-do="repsChargeR" data-v="' + x + '" aria-pressed="' + (b.charge === x) + '">' + (x ? x + " kg" : "Sans") + '</button>').join("") + '</div></div><p class="aide">Vaut pour la série en cours si elle n\'a pas commencé, sinon pour la suivante.</p><div class="ligne"><button class="main" data-do="fermer">OK</button></div>'); }
+function repsChargeR(b) { const c = N.repsCourant(REPS); N.repsCharge(REPS, b.dataset.v != null ? Number(b.dataset.v) : c.charge + Number(b.dataset.d)); repsSauver(); repsChargeOuvrir(); majReps(); }
+function repsSuivant(nom) { if (!REPS) return; fermerFenetre(); if (!nom && REPS.index + 1 >= REPS.blocs.length) { listeExos("repsSuivantExo", "Quel exercice ensuite ?"); return; }
+  if (N.repsSuivant(REPS, Date.now(), S.h10.fc || 0, BASE, nom || null)) { repsSauver(); const b = N.repsCourant(REPS); Pont.parler("Exercice suivant : " + b.exo); Pont.vibrer(150); majReps(); } }
+function repsArreter() { fenetre('<div class="t">⏹ Terminer la séance ?</div><p>Elle sera rangée dans l\'Historique.</p><div class="ligne"><button class="rouge" data-do="repsFin">Oui, terminer</button></div><div class="ligne"><button class="sec" data-do="fermer">Continuer la séance</button></div>'); }
+function repsFin() { fermerFenetre(); const s = repsRanger(); if (REPS) { info("⚠️ Séance non rangée", "<p>Le téléphone a refusé l'écriture. La séance reste en cours, rien n'est perdu. Réessaie.</p>"); return; }
+  PRECEDENT = null; if (!s) { toast("Séance vide : rien n'a été enregistré."); aller("activites"); return; } BILANR = N.rapportReps(s, Pont.version()); BILANR.seance = s; aller("bilanReps"); }
+function vueBilanReps() { const B = BILANR; if (!B) { aller("historique"); return; } const s = B.seance; titre("✅ Enregistré", N.actInfo(s.act).nom + " · " + N.dateHeure(s.debut));
+  $("#vue").innerHTML = '<table><thead><tr><th>Exercice</th><th class="n">Total</th><th>Séries</th><th>Charge</th></tr></thead><tbody>' + s.notes.map(n => { const e = n.reps || n.pompes, nom = n.reps ? n.reps.exo : "Pompes";
+      return '<tr><td><b>' + esc(nom) + '</b><br><span class="gris" style="font-size:13px">' + N.gm(e.temps) + (e.reposMoy ? " · repos " + N.gm(e.reposMoy) : "") + '</span></td><td class="n"><b style="font-size:18px">' + e.total + '</b>' + (e.obj ? '<br><span class="' + (e.total >= e.obj ? "ok" : "gris") + '" style="font-size:13px">/ ' + e.obj + '</span>' : "") + '</td><td>' + e.series.join("-") + '</td><td>' + (N.chargeTxt(e, "", "") || "–") + '</td></tr>'; }).join("") + '</tbody></table>' +
+    '<div class="ligne"><button class="sec" data-do="copierReps">📋 Copier le résumé</button><button class="sec" data-do="copierRepsTout">📋 Copier tout</button><button class="sec" data-do="fichierReps">💾 Fichier</button></div><div class="ligne"><button class="main" data-do="onglet" data-o="historique" style="min-height:60px;font-size:19px">Voir l\'historique</button></div>'; }
+setInterval(() => { if (ECRAN.nom === "reps") majReps(); }, 200);
+
 /* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
 const ACTIONS = {
   fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct,
@@ -422,6 +516,11 @@ const ACTIONS = {
   h10: ouvrirH10, h10Arreter, btDemander: () => { fermerFenetre(); Pont.btDemander(); }, lancerSeance, sens, bip: basculerBip, changerAct, seanceAct: (b) => seanceAct(b.dataset.a), arreterSeance, finSeance,
   copierBilan: () => copie(BILAN.resume, "Résumé"), copierBilanTout: () => copie(BILAN.tout, "Rapport complet"), fichierBilan: () => fichierTexte("JournalActivite-seance_" + N.horodatage(BILAN.R.debut) + ".txt", BILAN.tout),
   essai: ouvrirEssai, essaiFini, essaiValider, essaiFermer,
+  exoR, exoOuvrir: (b) => exoOuvrir(b.dataset.n), fermerRedessiner: () => { fermerFenetre(); dessiner(); }, exoCreer: (b) => exoCreer(b.dataset.action),
+  progAjouter: (b) => { if (b.dataset.n) progAjouter(b.dataset.n); else listeExos("progAjouter", "➕ Ajouter un exercice"); }, progMonter: (b) => progModifier(Number(b.dataset.i), true), progOter: (b) => progModifier(Number(b.dataset.i), false),
+  repsDemarrer: (b) => repsDemarrer(b.dataset.a), repsPlus: () => repsAction("plus"), repsMoins: () => repsAction("moins"), repsFinSerie: () => repsAction("fin"), repsDiff: (b) => repsAction("diff", Number(b.dataset.d)),
+  repsChargeOuvrir, repsChargeR, repsSuivant: () => repsSuivant(null), repsSuivantExo: (b) => repsSuivant(b.dataset.n), repsAjouterExo: () => listeExos("repsSuivantExo", "Passer à quel exercice ?"), repsArreter, repsFin,
+  copierReps: () => copie(BILANR.resume, "Résumé"), copierRepsTout: () => copie(BILANR.tout, "Rapport complet"), fichierReps: () => fichierTexte("JournalActivite-seance_" + N.horodatage(BILANR.seance.debut) + ".txt", BILANR.tout),
   partagerBrut: () => { if (!BILAN || !BILAN.brut || !Pont.partagerBrut(BILAN.brut.nom)) toast("⚠️ Envoi impossible."); },
   copierReglages: () => copie(N.rapportReglages(BASE), "Rapport des réglages"), copierRecs: () => copie(N.resumeEnregistrements(BASE, Pont.version()), "Résumé des enregistrements")
 };
@@ -433,12 +532,12 @@ $("#bDemarrer").onclick = demarrer;
 $("#bH10").onclick = ouvrirH10;
 $("#bArreter").onclick = arreterSeance;
 $("#voile").addEventListener("click", (e) => { if (e.target.id === "voile" && $("#boite").querySelector("[data-do]")) fermerFenetre(); });
-document.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; if (e.target.id === "naNom") creerAct(); else if (e.target.id === "eNb") essaiValider(); });
+document.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; if (e.target.id === "naNom") creerAct(); else if (e.target.id === "eNb") essaiValider(); else if (e.target.id === "neNom") exoCreer(e.target.dataset.action); });
 
 /* ===== Démarrage ===== */
 chargerBase();
-pousserReglage(); lireEtat(); importerEnregistrements();
-if (S.enr) { seanceVue = true; aller("seance"); } else if (!BASE.courses.length && !BASE.imports.length) aller("fiche", "premiere"); else dessiner();
+pousserReglage(); lireEtat(); importerEnregistrements(); repsCharger();
+if (REPS) { PRECEDENT = { nom: "activites" }; aller("reps"); } else if (S.enr) { seanceVue = true; aller("seance"); } else if (!BASE.courses.length && !BASE.imports.length) aller("fiche", "premiere"); else dessiner();
 majH10(); setInterval(tic, 1000);
 </script>
 </body>

@@ -9,6 +9,8 @@ import android.content.ContentValues;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -20,6 +22,7 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -72,6 +75,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private File dossier;
+    private ToneGenerator son;
     private TextToSpeech voix;
     private boolean voixPrete = false;
 
@@ -488,6 +492,26 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** n bips courts (signal de reprise, record…). */
+        @JavascriptInterface public void bip(final int n) {
+            runOnUiThread(() -> {
+                try {
+                    if (son == null) son = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
+                    for (int i = 0; i < Math.max(1, Math.min(5, n)); i++) web.postDelayed(() -> { try { if (son != null) son.startTone(ToneGenerator.TONE_PROP_BEEP, 200); } catch (Exception ignored) {} }, i * 350L);
+                } catch (Exception ignored) {}
+            });
+        }
+
+        /** Garde l'écran allumé pendant une séance au toucher (pompes, exercices à répétitions). */
+        @JavascriptInterface public void ecranAllume(final boolean oui) {
+            runOnUiThread(() -> {
+                try {
+                    if (oui) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                } catch (Exception ignored) {}
+            });
+        }
+
         @JavascriptInterface public void parler(String t) {
             if (voixPrete) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "c");
         }
@@ -563,6 +587,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (voix != null) voix.shutdown();
+        try { if (son != null) son.release(); } catch (Exception ignored) {}
         super.onDestroy();
     }
 }
