@@ -2,6 +2,7 @@ package fr.mesapplis.activite;
 
 import android.app.Activity;
 import android.app.NotificationManager;
+import android.bluetooth.BluetoothAdapter;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentValues;
@@ -60,9 +61,13 @@ import java.util.regex.Pattern;
 public class MainActivity extends Activity {
     private static final int CHOIX_FICHIER = 41;
     private static final int DEMANDE_NOTIF = 42;
+    private static final int DEMANDE_BLUETOOTH = 43;
     private static final int NB_SAUVEGARDES = 7;
-    private static final Pattern NOM_OK = Pattern.compile("^(sauvegardes/)?[A-Za-z0-9._-]{1,80}$");
+    private static final Pattern NOM_OK = Pattern.compile("^(sauvegardes/|enregistrements/)?[A-Za-z0-9._-]{1,80}$");
     private static final TimeZone REUNION = TimeZone.getTimeZone("Indian/Reunion");
+
+    /** Vrai quand l'écran de l'appli est affiché (le service s'en sert pour s'arrêter quand il ne sert plus). */
+    static volatile boolean visible = false;
 
     private WebView web;
     private File dossier;
@@ -75,6 +80,7 @@ public class MainActivity extends Activity {
         dossier = new File(getFilesDir(), "donnees");
         if (!dossier.exists()) dossier.mkdirs();
         try { sauvegardeDuJour(); } catch (Exception ignored) {}
+        reprendreSeance();
 
         final WebViewAssetLoader chargeur = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -102,6 +108,26 @@ public class MainActivity extends Activity {
 
         setContentView(web);
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
+    }
+
+    /** Une séance était en cours quand l'appli a été fermée : on relance le service, qui reprend l'enregistrement. */
+    private void reprendreSeance() {
+        try {
+            if (ServiceSeance.actif == null && ServiceSeance.aReprendre(this) && LienH10.droit(this))
+                startForegroundService(new Intent(this, ServiceSeance.class).setAction(ServiceSeance.ACTION_REPRENDRE));
+        } catch (Exception ignored) {}
+    }
+
+    private boolean lancerService(String action, String act) {
+        try {
+            if (!LienH10.droit(this)) return false;
+            Intent i = new Intent(this, ServiceSeance.class).setAction(action);
+            if (act != null) i.putExtra(ServiceSeance.EXTRA_ACT, act);
+            startForegroundService(i);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Lance un bout de code dans la page (depuis n'importe quel fil). */
@@ -191,7 +217,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface public boolean ecrire(String nom, String contenu) {
             File f = fichier(nom);
-            if (f == null || contenu == null || nom.startsWith("sauvegardes/")) return false;
+            if (f == null || contenu == null || nom.contains("/")) return false;
             return ecrireFichier(f, contenu);
         }
 
@@ -339,6 +365,80 @@ public class MainActivity extends Activity {
             });
         }
 
+        // ----- Ceinture H10 et séance (étape 2) -----
+
+        /** {"present", "droit", "allume"} : état du Bluetooth du téléphone. */
+        @JavascriptInterface public String btEtat() {
+            boolean droit = LienH10.droit(MainActivity.this), present = false, allume = false;
+            try {
+                BluetoothAdapter a = LienH10.adaptateur(MainActivity.this);
+                present = a != null;
+                allume = a != null && a.isEnabled();
+            } catch (Exception ignored) {}
+            return "{\"present\":" + present + ",\"droit\":" + droit + ",\"allume\":" + allume + "}";
+        }
+
+        /** Demande l'autorisation Bluetooth (1re fois : la question d'Android ; ensuite : l'écran de l'appli), puis d'allumer le Bluetooth. */
+        @JavascriptInterface public void btDemander() {
+            runOnUiThread(() -> {
+                try {
+                    if (!LienH10.droit(MainActivity.this)) {
+                        SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+                        if (!p.getBoolean("btDemande", false) || shouldShowRequestPermissionRationale("android.permission.BLUETOOTH_CONNECT")) {
+                            p.edit().putBoolean("btDemande", true).apply();
+                            requestPermissions(new String[]{"android.permission.BLUETOOTH_SCAN", "android.permission.BLUETOOTH_CONNECT"}, DEMANDE_BLUETOOTH);
+                        } else {
+                            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                        }
+                        return;
+                    }
+                    BluetoothAdapter a = LienH10.adaptateur(MainActivity.this);
+                    if (a != null && !a.isEnabled()) startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));
+                } catch (Exception ignored) {}
+            });
+        }
+
+        /** Connecte la ceinture (démarre le service permanent). Faux si le Bluetooth n'est pas autorisé. */
+        @JavascriptInterface public boolean h10Connecter() { return lancerService(ServiceSeance.ACTION_CONNECTER, null); }
+
+        /** Déconnecte la ceinture. Refusé (faux) pendant un enregistrement. */
+        @JavascriptInterface public boolean h10Arreter() { ServiceSeance s = ServiceSeance.actif; return s == null || s.arreterSiLibre(); }
+
+        /** Démarre l'enregistrement d'une séance pour cette activité. */
+        @JavascriptInterface public boolean seanceDemarrer(String act) { return lancerService(ServiceSeance.ACTION_DEMARRER, act == null ? "" : act); }
+
+        /** Termine l'enregistrement : renvoie le nom du fichier « enregistrements/rec-….json », ou "" en cas d'échec. */
+        @JavascriptInterface public String seanceArreter() { ServiceSeance s = ServiceSeance.actif; return s == null ? "" : s.terminer(); }
+
+        @JavascriptInterface public String seanceEtat() {
+            ServiceSeance s = ServiceSeance.actif;
+            try { return s != null ? s.etatJson() : ServiceSeance.etatHorsService(MainActivity.this); } catch (Exception e) { return "{\"service\":false,\"enr\":null}"; }
+        }
+
+        @JavascriptInterface public void seanceActivite(String act) { ServiceSeance s = ServiceSeance.actif; if (s != null && act != null) s.activite(act); }
+
+        /** Réglage des impacts (seuil et réarmement en millièmes de g, bip oui/non) : gardé aussi côté Android pour une reprise sans écran. */
+        @JavascriptInterface public void impRegler(int seuil, int rearme, boolean bip) {
+            getSharedPreferences("reglages", MODE_PRIVATE).edit().putInt("impSeuil", seuil).putInt("impRearme", rearme).putBoolean("impBip", bip).apply();
+            ServiceSeance s = ServiceSeance.actif;
+            if (s != null) s.regler(seuil, rearme, bip);
+        }
+
+        /** Réglage « N coups » : début / fin de l'essai, et mesures fortes relevées pendant l'essai ([[t, m], …]). */
+        @JavascriptInterface public boolean essaiDemarrer() { ServiceSeance s = ServiceSeance.actif; if (s == null) return false; s.essai(true); return true; }
+        @JavascriptInterface public void essaiArreter() { ServiceSeance s = ServiceSeance.actif; if (s != null) s.essai(false); }
+        @JavascriptInterface public String essaiDonnees() { ServiceSeance s = ServiceSeance.actif; return s == null ? "[]" : s.essaiJson(); }
+
+        /** Noms des enregistrements terminés gardés dans le téléphone : ["rec-….json", …]. */
+        @JavascriptInterface public String enregistrements() {
+            JSONArray l = new JSONArray();
+            try {
+                String[] noms = new File(dossier, "enregistrements").list();
+                if (noms != null) { Arrays.sort(noms); for (String n : noms) if (n.startsWith("rec-") && n.endsWith(".json")) l.put(n); }
+            } catch (Exception ignored) {}
+            return l.toString();
+        }
+
         @JavascriptInterface public void parler(String t) {
             if (voixPrete) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "c");
         }
@@ -388,13 +488,20 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] resultats) {
         super.onRequestPermissionsResult(code, permissions, resultats);
-        if (code == DEMANDE_NOTIF) js("window.surReprise && window.surReprise()");
+        if (code == DEMANDE_NOTIF || code == DEMANDE_BLUETOOTH) js("window.surReprise && window.surReprise()");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        visible = true;
         js("window.surReprise && window.surReprise()");
+    }
+
+    @Override
+    protected void onPause() {
+        visible = false;
+        super.onPause();
     }
 
     /** Bouton Retour : la page ferme d'abord ce qui est ouvert ; quand il n'y a plus rien, l'appli passe en arrière-plan. */

@@ -43,7 +43,7 @@ final class Enregistreur {
 
     private int fc = 0;
     private long fcT = 0;
-    private boolean relie = true;
+    private boolean relie = true, dejaRelie = false;
     private int decoDebut = -1;
 
     // totaux tenus à jour
@@ -114,14 +114,18 @@ final class Enregistreur {
     synchronized void activite(String a) { act = propre(a); ecrire("A " + act); }
     synchronized String activite() { return act; }
 
-    synchronized void fc(int bpm, long horloge) { fc = bpm; fcT = horloge; }
+    synchronized void fc(int bpm, long horloge) { fc = bpm; fcT = horloge; dejaRelie = true; }
 
-    /** La ceinture vient d'être perdue ou retrouvée. */
+    /**
+     * La ceinture vient d'être perdue ou retrouvée. L'attente de la toute première connexion
+     * (au début de la séance, ou après une relance de l'appli) n'est pas comptée comme une coupure.
+     */
     synchronized void lien(boolean ok, long horloge) {
+        if (ok) dejaRelie = true;
         if (ok == relie) return;
         relie = ok;
         int s = seconde(horloge);
-        if (!ok) { decoDebut = s; fc = 0; }
+        if (!ok) { fc = 0; if (dejaRelie) decoDebut = s; }
         else if (decoDebut >= 0) { int[] c = {decoDebut, Math.max(0, s - decoDebut)}; deco.add(c); ecrire("C " + c[0] + " " + c[1]); decoDebut = -1; }
     }
 

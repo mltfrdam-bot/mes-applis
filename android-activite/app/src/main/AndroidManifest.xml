@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Étape 1 (socle) : pas d'accès internet. Bluetooth, GPS et service permanent arrivent aux étapes 2 et 4. -->
+    <!-- Pas d'accès internet. Étape 2 : Bluetooth (ceinture H10) et service permanent. Le GPS arrive à l'étape 4. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -28,6 +34,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Service permanent de séance : tient la ceinture H10 et enregistre, même écran éteint -->
+        <service
+            android:name=".ServiceSeance"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <!-- Sert au menu « Partager » (envoi de la sauvegarde vers Google Drive) -->
         <provider

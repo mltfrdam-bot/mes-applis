@@ -23,6 +23,8 @@ jobs:
         run: node activite/tests/test-noyau.js
       - name: Tester la lecture d'une grosse sauvegarde du Hub (partie Android)
         run: node activite/tests/test-lecteur.js
+      - name: Tester l'enregistreur de séance contre le code de la v31 (partie Android)
+        run: node activite/tests/test-enregistreur.js
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.9" }
       - name: Copier l'appli dans l'APK

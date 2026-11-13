@@ -1,0 +1,32 @@
+# Vérification seulement : lance les tests et compile l'APK Journal d'activité, SANS la publier.
+# Sert à contrôler le code avant de l'envoyer sur la branche apk-activite (qui, elle, publie une version).
+name: Vérification APK Journal d'activité (sans publication)
+
+on:
+  push:
+    branches: [apk-activite-essai]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Tests
+        run: |
+          node activite/tests/test-noyau.js
+          node activite/tests/test-lecteur.js
+          node activite/tests/test-enregistreur.js
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Compiler (essai, sans signature)
+        working-directory: android-activite
+        run: |
+          mkdir -p app/src/main/assets/www
+          cp ../activite/index.html ../activite/noyau.js ../activite/donnees-integrees.js app/src/main/assets/www/
+          gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }}
