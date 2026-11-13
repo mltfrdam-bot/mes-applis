@@ -147,6 +147,8 @@ Première règle : l'historique existant (dont la journée du 30/08/2025 et tout
 
 **Rapports copiables.** Chaque rapport (séance, Bilans, calibration, tests H10) a trois boutons : 📋 Copier le résumé (court, pour coller à Claude), 📋 Copier tout, 💾 Fichier. Texte brut lisible, en français, avec dates et heures de La Réunion.
 
+**Pas de doublon.** En v31, une même séance de pompes est parfois enregistrée deux fois à quelques secondes d'écart (ex. 13/11/2026 05:06:04 et 05:06:10, mêmes chiffres). L'APK enregistre chaque séance une seule fois (identifiant unique), et l'import nettoie les doublons existants en les listant dans le descriptif. Une séance courte reste une vraie séance (ex. 12 pompes faites réellement) : ne jamais la supprimer automatiquement.
+
 ## 8. Hors ligne, technique et atelier APK
 
 L'appli fonctionne à 100 % sans internet pour tout l'usage quotidien.
