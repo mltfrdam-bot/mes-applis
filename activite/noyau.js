@@ -312,7 +312,7 @@ function traceSvg(G, largeur, hauteur) { if (!G || !Array.isArray(G.trace)) retu
   if (pts.length < 2) return ""; const W = largeur || 320, H = hauteur || 220, M = 14, laMin = Math.min(...pts.map(p => p.la)), laMax = Math.max(...pts.map(p => p.la)), loMin = Math.min(...pts.map(p => p.lo)), loMax = Math.max(...pts.map(p => p.lo));
   const kx = Math.cos((laMin + laMax) / 2 * Math.PI / 180), dx = Math.max(1e-6, (loMax - loMin) * kx), dy = Math.max(1e-6, laMax - laMin), ech = Math.min((W - 2 * M) / dx, (H - 2 * M) / dy), ox = (W - dx * ech) / 2, oy = (H - dy * ech) / 2;
   const X = (p) => (ox + (p.lo - loMin) * kx * ech).toFixed(1), Y = (p) => (oy + (laMax - p.la) * ech).toFixed(1), pas = G.pas || 5, a = (sec) => { const k = Math.round(sec / pas); return pts.find(p => p.i >= k) || pts[pts.length - 1]; };
-  let h = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Dessin du parcours" style="background:#fff;border:1px solid #d9dce1;border-radius:12px;display:block"><polyline fill="none" stroke="#B5451B" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="' + pts.map(p => X(p) + "," + Y(p)).join(" ") + '"/>';
+  let h = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Dessin du parcours" style="background:#fff;border:1px solid #d9dce1;border-radius:12px;display:block;width:100%;height:auto;aspect-ratio:' + W + '/' + H + ';flex:none"><polyline fill="none" stroke="#B5451B" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="' + pts.map(p => X(p) + "," + Y(p)).join(" ") + '"/>';
   (G.km || []).forEach((sec, i) => { const p = a(sec); h += '<circle cx="' + X(p) + '" cy="' + Y(p) + '" r="8" fill="#fff" stroke="#1b1f23" stroke-width="1.5"/><text x="' + X(p) + '" y="' + (Number(Y(p)) + 3.5) + '" font-size="10" font-weight="700" text-anchor="middle" fill="#1b1f23">' + (i + 1) + '</text>'; });
   (G.tours || []).forEach(x => { const p = a(x[0]); h += '<path d="M' + X(p) + ' ' + Y(p) + ' v-14 l9 4 l-9 4" fill="#1f6b43" stroke="#1f6b43" stroke-width="1.5" stroke-linejoin="round"/>'; });
   const d = pts[0], f = pts[pts.length - 1]; h += '<circle cx="' + X(d) + '" cy="' + Y(d) + '" r="6" fill="#1f6b43" stroke="#fff" stroke-width="2"/><rect x="' + (Number(X(f)) - 5) + '" y="' + (Number(Y(f)) - 5) + '" width="10" height="10" fill="#a52a1f" stroke="#fff" stroke-width="2"/>';
@@ -502,7 +502,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
   base.imports.push({ t: d.t, source, resume: d.resume }); base.imports.sort((x, y) => x.t - y.t);
   return d; }
 
-const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
+const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
   DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
