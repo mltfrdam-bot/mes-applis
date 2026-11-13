@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Pas d'accès internet. Étape 2 : Bluetooth (ceinture H10) et service permanent. Le GPS arrive à l'étape 4. -->
+    <!-- Pas d'accès internet. Étape 2 : Bluetooth (ceinture H10) et service permanent. Étape 4 : GPS pendant une course. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- « Toujours autoriser » : facultatif, sert seulement à relancer le GPS si le téléphone a coupé l'appli pendant une séance -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -35,11 +41,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Service permanent de séance : tient la ceinture H10 et enregistre, même écran éteint -->
+        <!-- Service permanent de séance : tient la ceinture H10, écoute le GPS et enregistre, même écran éteint -->
         <service
             android:name=".ServiceSeance"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
 
         <!-- Sert au menu « Partager » (envoi de la sauvegarde vers Google Drive) -->
         <provider

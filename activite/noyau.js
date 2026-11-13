@@ -56,7 +56,9 @@ function libelle(x) {
   if (x.tr) return "🧭 " + x.tr + (x.sens ? " — " + x.sens : "") + (x.dom ? " — " + x.dom : "") + (x.zone ? " (" + x.zone + ")" : "");
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
-  if (x.h10rec) { const r = x.h10rec.res || {}; return "📡 H10 : " + hm(r.duree || 0) + ", actif " + hm(r.actif || 0) + ", " + (r.pics || 0) + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : ""); }
+  if (x.h10rec) { const R = x.h10rec, r = R.res || {}, g = gpsBilan(R), avecH10 = (R.l || []).length > 0;
+    return (g ? "🛰 " + (g.ok ? kmTxt(g.dist) + " en " + chrono(g.temps) + " (" + g.allure + ")" : "GPS : aucune position reçue") + (avecH10 ? " — " : "") : "") +
+      (avecH10 || !g ? "📡 H10 : " + hm(r.duree || 0) + ", actif " + hm(r.actif || 0) + ", " + (r.pics || 0) + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : "") : ""); }
   if (x.pjour) return "📅 Journée pompes : " + x.pjour.res;
   if (x.reps) return "🏋️ " + x.reps.exo + " : " + x.reps.res + " (séries " + (x.reps.series || []).join("-") + (x.reps.reposMoy ? ", repos moyen " + gm(x.reps.reposMoy) : "") + ")";
   if (x.pompes && x.pompes.diffs) return "👻 Pompes : " + x.pompes.res + " — " + (x.pompes.series || []).map((n, i) => n + (x.pompes.diffs[i] != null && DIFF[x.pompes.diffs[i]] ? DIFF[x.pompes.diffs[i]].split(" ")[0] : "")).join(" ");
@@ -146,13 +148,14 @@ const paires = (courses) => [].concat(...courses.map(c => (c.notes || []).map(n 
    (dans la v31, il pouvait se retrouver dans la séance d'une autre activité). Les séances vides ne sont pas affichées. */
 function seriesDe(tl) { const l = []; let c = null; (tl || []).forEach((t, i) => { if (!c || t - tl[i - 1] > 5) { c = []; l.push(c); } c.push(t); }); return l.map(x => x.length); }
 function detailNote(n) { return heure(n.t) + " — " + libelle(n) + (n.fc ? " ❤️" + n.fc : ""); }
-function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R), total = tr.reduce((a, x) => a + x.duree, 0);
-  const res = ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax);
+function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R), total = tr.reduce((a, x) => a + x.duree, 0), g = gpsBilan(R), avecH10 = (R.l || []).length > 0;
+  const res = g ? (g.ok ? [kmTxt(g.dist), g.allure] : ["GPS : aucune position"]) : ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax); if (g && avecH10) res.push(pl(r.pics || 0, "impact"));
   const alerte = tr.length ? "⚠️ " + pl(tr.length, "trou") + " (" + Math.round(total / 60) + " min)" : (R.coupe ? "⚠️ enregistrement coupé" : "");
   const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
   (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
-  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }; }
+  if (g && g.ok) { if (g.kms.length) det.push("Par km : " + g.kms.map(k => (k.partiel ? "reste " + k.d + " m en " : "") + chrono(k.t)).join(" · ")); if (g.tours.length) det.push("Mes tours : " + g.tours.map(k => k.n + ") " + kmTxt(k.d) + " en " + chrono(k.t)).join(" · ")); }
+  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: g ? Math.max(g.duree, r.duree || 0) : (r.duree || (R.l || []).length), pompes: 0, dist: g && g.ok ? g.dist : 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }; }
 function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
   const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost), X = notes.filter(n => n.reps);
   if (X.length) { /* séance de plusieurs exercices (enchaînement) : un résumé par exercice, dans l'ordre */
@@ -177,7 +180,7 @@ function lignesHistorique(base) { const l = [];
     resultat: nb(J.tl.length) + " · " + pl(J.offs.length, "séance"), alerte: "", source: "montre COROS",
     detail: ["Journée relevée sur la montre COROS — séances de " + J.cut.map((v, i) => v - (J.cut[i - 1] || 0)).join(" + ") + " pompes"], ref: { tl: J.tl } });
   return l; }
-function totaux(base, lignes) { const l = lignes || lignesHistorique(base); return { lignes: l.length, pompes: l.reduce((a, x) => a + (x.pompes || 0), 0) }; }
+function totaux(base, lignes) { const l = lignes || lignesHistorique(base); return { lignes: l.length, pompes: l.reduce((a, x) => a + (x.pompes || 0), 0), dist: l.reduce((a, x) => a + (x.dist || 0), 0) }; }
 function derniereParAct(lignes) { const d = {}; lignes.forEach(x => { if (!d[x.act] || x.t > d[x.act]) d[x.act] = x.t; }); return d; }
 
 /* ===== Descriptif d'une fusion (écran + rapports à copier) ===== */
@@ -237,16 +240,18 @@ function ajouterEnregistrement(base, R) { if (!enregistrementValide(R)) throw ne
 function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); (base.corbeille || []).forEach(e => { if (e.notes.some(n => n.h10rec)) vus.add(idSeance(e.seance)); }); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
 function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule = Math.max(L.length, Math.round(((R.fin || R.debut) - R.debut) / 1000)), tr = trousH10(R), de = R.deconnexions || [];
   return { ecoule, enregistre: L.length, perdu: Math.max(0, ecoule - L.length), actif: r.actif || 0, impacts: r.pics || 0, fcMoy: r.fcMoy, fcMax: r.fcMax, trous: tr, deconnexions: de, tempsDeconnecte: de.reduce((a, x) => a + x[1], 0),
-    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]) }; }
-function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [];
-  T.push("ENREGISTREMENT H10 — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
-  T.push("Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
+    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R) }; }
+function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [], g = b.gps;
+  T.push("ENREGISTREMENT " + (g ? (b.sansCeinture ? "GPS" : "GPS + H10") : "H10") + " — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
+  if (g) lignesGps(T, g);
+  T.push(b.sansCeinture && g ? "Durée : " + chrono(b.ecoule) + " · sans ceinture (pas de cardio ni de mouvement)" : "Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
   T.push("FC : moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–"));
-  T.push(b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
+  T.push(b.sansCeinture && g ? "Mouvement : pas de ceinture" : b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
   T.push("Coupures de la ceinture : " + b.deconnexions.length + (b.deconnexions.length ? " (" + dureeCourte(b.tempsDeconnecte) + " en tout)" : ""));
   T.push("Trous de plus d'une minute : " + b.trous.length + (b.trous.length ? " (" + b.trous.map(x => v1(x.duree / 60)).join(" · ") + " min)" : ""));
   T.push("Reprises après fermeture de l'appli : " + b.reprises);
   const resume = T.join("\n"), D = T.slice();
+  if (g && g.ok) tablesGps(D, R, g);
   if (b.deconnexions.length) { D.push("", "Coupures de la ceinture :"); b.deconnexions.forEach(x => D.push("- " + heureS(R.debut + x[0] * 1000) + " pendant " + dureeCourte(x[1]))); }
   if (b.trous.length) { D.push("", "Trous :"); b.trous.forEach(x => D.push("- " + v1(x.duree / 60) + " min à partir de " + heure(R.debut + x.a * 1000))); }
   D.push("", "Par tranche de 10 minutes :", "Tranche | secondes | FC moy/max | mouvement moy | secondes > 1,5 g / > 2 g / > 2,5 g | impacts");
@@ -257,6 +262,61 @@ function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(
 function resumeEnregistrements(base, version) { const recs = paires(base.courses).filter(x => x.n.h10rec).map(x => x.n.h10rec).sort((a, b) => b.debut - a.debut), imp = impLire(base);
   const T = ["ENREGISTREMENTS H10 — résumé — " + dateHeure(Date.now()) + (version ? " (APK " + version + ")" : ""), "Réglage des impacts actuel : " + gg(imp.seuil) + " g", pl(recs.length, "enregistrement")];
   recs.forEach(R => T.push("", rapportEnregistrement(R, null, "").resume)); return T.join("\n"); }
+
+/* ===== 🛰 GPS (étape 4) =====
+   Le service Android écoute le GPS pendant la séance (Parcours.java) et range dans l'enregistrement un résumé « gps » :
+   distance, secondes de passage de chaque km, tours marqués à la main [seconde, distance, FC], et un profil toutes les 5 s
+   (« prof » = distance en mètres, « trace » = latitude et longitude × 100 000). Le tracé complet, un point par seconde,
+   reste dans le téléphone (« enregistrements/gps-<début>.txt ») : il servira à recalculer, couper ou découper un parcours.
+   Réglage « gps-opt » = {acts: activités avec GPS, source: "sat" (satellites seuls) ou "mix" (position mélangée), km: vibration à chaque km}. */
+const GPS_ACTS = ["footing", "marche", "velo"];
+function gpsLire(base) { let o = {}; try { o = JSON.parse(base.reglages["gps-opt"] || "{}") || {}; } catch (e) { o = {}; }
+  return { acts: Array.isArray(o.acts) ? o.acts.filter(a => typeof a === "string") : GPS_ACTS.slice(), source: o.source === "mix" ? "mix" : "sat", km: o.km !== false }; }
+function gpsEcrire(base, o) { base.reglages["gps-opt"] = JSON.stringify({ acts: o.acts, source: o.source, km: o.km }); return gpsLire(base); }
+function gpsPour(base, act) { return gpsLire(base).acts.includes(act); }
+function gpsBasculer(base, act) { const o = gpsLire(base), i = o.acts.indexOf(act); if (i >= 0) o.acts.splice(i, 1); else o.acts.push(act); return gpsEcrire(base, o); }
+const kmTxt = (m) => (m / 1000).toFixed(2).replace(".", ",") + " km";
+/* allure pour m mètres en s secondes ; « – » quand ça n'a pas de sens (presque pas de distance, ou plus de 60 min au km) */
+const allureTxt = (m, s) => m >= 20 && s > 0 && s / m < 3.6 ? gm(s / (m / 1000)) + " /km" : "–";
+const allureVit = (v) => v && v > 0.28 ? gm(1000 / v) + " /km" : "–";
+function gpsUtile(R) { const G = R && R.gps; return !!G && G.premier >= 0 && Array.isArray(G.prof) && G.prof.length > 0; }
+/* distance (m) à la seconde s de la séance */
+function gpsDistA(G, s) { const p = G.prof || [], pas = G.pas || 5, n = p.length; if (!n) return 0; if (s <= 0) return p[0]; if (s >= G.duree) return G.dist;
+  const i = Math.floor(s / pas); if (i >= n - 1) { const t0 = (n - 1) * pas, d = G.duree - t0; return d > 0 ? p[n - 1] + (G.dist - p[n - 1]) * (s - t0) / d : G.dist; }
+  return p[i] + (p[i + 1] - p[i]) * (s / pas - i); }
+/* cardio et impacts de la ceinture entre deux secondes */
+function h10Entre(R, a, b) { let n = 0, som = 0, max = 0, imp = 0; (R.l || []).forEach(x => { if (x[0] >= a && x[0] < b) { imp += x[4]; if (x[1]) { n++; som += x[1]; if (x[1] > max) max = x[1]; } } });
+  return { fcMoy: n ? Math.round(som / n) : null, fcMax: n ? max : null, impacts: imp }; }
+/* Tout ce qu'on sait du parcours : le temps compte à partir de la première position (« attente » = secondes avant).
+   kms = un par kilomètre entier, plus le reste ; tours = un par appui sur « Tour », plus le dernier bout jusqu'à la fin. */
+function gpsBilan(R) { const G = R && R.gps; if (!G || typeof G !== "object") return null; const ok = gpsUtile(R), depart = Math.max(0, G.premier || 0), duree = G.duree || 0, temps = Math.max(0, duree - depart), dist = G.dist || 0;
+  const b = { ok, dist, distP: G.distP || 0, duree, attente: depart, temps, allure: allureTxt(dist, temps), points: G.points || 0, rejetes: G.rejetes || 0, sauts: G.sauts || 0, precMoy: G.precMoy == null ? null : Number(G.precMoy),
+    source: G.source === "mix" ? "position mélangée" : "satellites seuls", reprises: G.reprises || 0, fichier: G.fichier || "", kms: [], tours: [] };
+  if (!ok) return b; const km = G.km || []; let prec = depart;
+  km.forEach((sec, i) => { b.kms.push(Object.assign({ n: i + 1, debut: prec, d: 1000, t: sec - prec, allure: allureTxt(1000, sec - prec) }, h10Entre(R, prec, sec))); prec = sec; });
+  const reste = dist - km.length * 1000; if (reste >= 20 && duree > prec) b.kms.push(Object.assign({ n: km.length + 1, debut: prec, d: Math.round(reste), t: duree - prec, allure: allureTxt(reste, duree - prec), partiel: true }, h10Entre(R, prec, duree + 1)));
+  if ((G.tours || []).length) { const bornes = [[depart, 0]].concat(G.tours.map(x => [x[0], x[1]]), [[duree, dist]]);
+    for (let i = 1; i < bornes.length; i++) { const a = bornes[i - 1], z = bornes[i], d = Math.max(0, z[1] - a[1]), t = Math.max(0, z[0] - a[0]), fin = i === bornes.length - 1;
+      b.tours.push(Object.assign({ n: i, debut: a[0], d, t, allure: allureTxt(d, t), fin, fcAppui: fin ? null : (G.tours[i - 1][2] || null) }, h10Entre(R, a[0], z[0] + (fin ? 1 : 0)))); } }
+  return b; }
+function lignesGps(T, g) { if (!g.ok) { T.push("GPS : aucune position reçue pendant la séance (" + g.points + " points, tous écartés ou absents)."); return; }
+  T.push("GPS : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure moyenne " + g.allure + (g.attente > 2 ? " · attente du GPS au départ " + dureeCourte(g.attente) : ""));
+  T.push("Qualité du GPS : précision moyenne " + (g.precMoy == null ? "–" : v1(g.precMoy) + " m") + " · " + nb(g.points) + " points, " + g.rejetes + " écartés, " + pl(g.sauts, "saut") + " · " + g.source + " · distance par les positions seules " + kmTxt(g.distP) + (g.reprises ? " · " + pl(g.reprises, "reprise") : "")); }
+function tablesGps(T, R, g) { const f = (v) => v == null ? "–" : v, h = (sec) => heureS(R.debut + sec * 1000);
+  if (g.tours.length) { T.push("", "Mes tours (bouton Tour) :", "Tour | Départ | Temps | Distance | Allure | FC moy | FC max | Impacts");
+    g.tours.forEach(x => T.push([x.n + (x.fin ? " (fin)" : ""), h(x.debut), chrono(x.t), kmTxt(x.d), x.allure, f(x.fcMoy), f(x.fcMax), x.impacts].join(" | "))); }
+  if (g.kms.length) { T.push("", "Km par km :", "Km | Départ | Temps | Allure | FC moy | FC max | Impacts");
+    g.kms.forEach(x => T.push([x.partiel ? "reste " + x.d + " m" : x.n, h(x.debut), chrono(x.t), x.allure, f(x.fcMoy), f(x.fcMax), x.impacts].join(" | "))); } }
+/* Dessin du parcours (sans carte) : départ en vert, arrivée en rouge, un point par km, un drapeau par tour. */
+function traceSvg(G, largeur, hauteur) { if (!G || !Array.isArray(G.trace)) return ""; const pts = []; for (let i = 0; i + 1 < G.trace.length; i += 2) if (G.trace[i] || G.trace[i + 1]) pts.push({ i: i / 2, la: G.trace[i] / 1e5, lo: G.trace[i + 1] / 1e5 });
+  if (pts.length < 2) return ""; const W = largeur || 320, H = hauteur || 220, M = 14, laMin = Math.min(...pts.map(p => p.la)), laMax = Math.max(...pts.map(p => p.la)), loMin = Math.min(...pts.map(p => p.lo)), loMax = Math.max(...pts.map(p => p.lo));
+  const kx = Math.cos((laMin + laMax) / 2 * Math.PI / 180), dx = Math.max(1e-6, (loMax - loMin) * kx), dy = Math.max(1e-6, laMax - laMin), ech = Math.min((W - 2 * M) / dx, (H - 2 * M) / dy), ox = (W - dx * ech) / 2, oy = (H - dy * ech) / 2;
+  const X = (p) => (ox + (p.lo - loMin) * kx * ech).toFixed(1), Y = (p) => (oy + (laMax - p.la) * ech).toFixed(1), pas = G.pas || 5, a = (sec) => { const k = Math.round(sec / pas); return pts.find(p => p.i >= k) || pts[pts.length - 1]; };
+  let h = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Dessin du parcours" style="background:#fff;border:1px solid #d9dce1;border-radius:12px;display:block"><polyline fill="none" stroke="#B5451B" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" points="' + pts.map(p => X(p) + "," + Y(p)).join(" ") + '"/>';
+  (G.km || []).forEach((sec, i) => { const p = a(sec); h += '<circle cx="' + X(p) + '" cy="' + Y(p) + '" r="8" fill="#fff" stroke="#1b1f23" stroke-width="1.5"/><text x="' + X(p) + '" y="' + (Number(Y(p)) + 3.5) + '" font-size="10" font-weight="700" text-anchor="middle" fill="#1b1f23">' + (i + 1) + '</text>'; });
+  (G.tours || []).forEach(x => { const p = a(x[0]); h += '<path d="M' + X(p) + ' ' + Y(p) + ' v-14 l9 4 l-9 4" fill="#1f6b43" stroke="#1f6b43" stroke-width="1.5" stroke-linejoin="round"/>'; });
+  const d = pts[0], f = pts[pts.length - 1]; h += '<circle cx="' + X(d) + '" cy="' + Y(d) + '" r="6" fill="#1f6b43" stroke="#fff" stroke-width="2"/><rect x="' + (Number(X(f)) - 5) + '" y="' + (Number(Y(f)) - 5) + '" width="10" height="10" fill="#a52a1f" stroke="#fff" stroke-width="2"/>';
+  return h + '</svg>'; }
 
 /* ===== Réglage des impacts (repris de la v31) =====
    impact-reglage = {seuil, rearme, bip} en millièmes de g ; impact-essais = journal de chaque réglage et de chaque essai. */
@@ -377,17 +437,22 @@ function rapportReps(seance, version) { const T = ["SÉANCE — " + actInfo(sean
 function manquesH10(R) { const L = R.l || [], fin = R.fin ? Math.round((R.fin - R.debut) / 1000) : (L.length ? L[L.length - 1][0] + 1 : 0), trous = []; let petits = 0, prec = -1;
   const vu = (jusqua) => { const m = jusqua - prec - 1; if (m > 5) trous.push({ a: prec + 1, duree: m }); else if (m >= 1) petits += m; };
   L.forEach(x => { vu(x[0]); prec = x[0]; }); vu(fin); return { trous, petits, fin }; }
-function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000);
-  T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · actif " + hm(b.actif)));
-  T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
-  if (m.petits) T.push("Petits manques (1 à 5 s) : " + m.petits + " s en tout");
-  if ((R.deconnexions || []).length) { T.push("Coupures de la ceinture : " + R.deconnexions.length); R.deconnexions.forEach(x => T.push("- " + h(x[0]) + " pendant " + dureeCourte(x[1]))); }
-  if (R.coupures) T.push("Reprises après fermeture de l'appli : " + R.coupures);
-  T.push("", "Minute | FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes");
+function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000), g = b.gps, G = g && g.ok ? R.gps : null;
+  if (g) lignesGps(T, g);
+  if (b.sansCeinture && g) T.push("Sans ceinture : pas de cardio ni de mouvement.");
+  else { T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · actif " + hm(b.actif)));
+    T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
+    if (m.petits) T.push("Petits manques (1 à 5 s) : " + m.petits + " s en tout");
+    if ((R.deconnexions || []).length) { T.push("Coupures de la ceinture : " + R.deconnexions.length); R.deconnexions.forEach(x => T.push("- " + h(x[0]) + " pendant " + dureeCourte(x[1]))); }
+    if (R.coupures) T.push("Reprises après fermeture de l'appli : " + R.coupures); }
+  if (G) tablesGps(T, R, g);
+  T.push("", "Minute | " + (G ? "Distance (m) | Allure | " : "") + "FC moy | FC max | Impacts | Mouvement moy (g) | Force max (g) | Secondes");
   const parMin = new Map(); L.forEach(x => { const k = Math.floor(x[0] / 60); if (!parMin.has(k)) parMin.set(k, []); parMin.get(k).push(x); });
-  [...parMin.keys()].sort((x, y) => x - y).forEach(k => { const v = parMin.get(k), fcs = v.map(x => x[1]).filter(Boolean);
-    T.push(heure(R.debut + k * 60000) + " | " + (fcs.length ? Math.round(fcs.reduce((a, x) => a + x, 0) / fcs.length) : "–") + " | " + (fcs.length ? Math.max(...fcs) : "–") + " | " + v.reduce((a, x) => a + x[4], 0) + " | " +
-      (v.reduce((a, x) => a + x[2], 0) / v.length / 1000).toFixed(2).replace(".", ",") + " | " + ((1000 + Math.max(...v.map(x => x[3]))) / 1000).toFixed(1).replace(".", ",") + " | " + v.length); }); }
+  if (G) for (let k = 0; k * 60 < G.duree; k++) if (!parMin.has(k)) parMin.set(k, []);
+  [...parMin.keys()].sort((x, y) => x - y).forEach(k => { const v = parMin.get(k), fcs = v.map(x => x[1]).filter(Boolean); let gps = "";
+    if (G) { const fin = Math.min((k + 1) * 60, G.duree), d = Math.max(0, gpsDistA(G, fin) - gpsDistA(G, k * 60)); gps = Math.round(d) + " | " + allureTxt(d, fin - k * 60) + " | "; }
+    T.push(heure(R.debut + k * 60000) + " | " + gps + (fcs.length ? Math.round(fcs.reduce((a, x) => a + x, 0) / fcs.length) : "–") + " | " + (fcs.length ? Math.max(...fcs) : "–") + " | " + v.reduce((a, x) => a + x[4], 0) + " | " +
+      (v.length ? (v.reduce((a, x) => a + x[2], 0) / v.length / 1000).toFixed(2).replace(".", ",") : "–") + " | " + (v.length ? ((1000 + Math.max(...v.map(x => x[3]))) / 1000).toFixed(1).replace(".", ",") : "–") + " | " + v.length); }); }
 function detailLigne(base, idLigne, version) { const x = lignesHistorique(base).find(l => l.id === idLigne); if (!x) return ""; const r = x.ref || {};
   const T = ["DÉTAIL — " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " — " + dateHeure(x.t) + (version ? " (APK " + version + ")" : ""), "Durée " + dureeTxt(x) + " · " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " · " + x.alerte : "")];
   if (r.n && r.n.h10rec) detailH10(T, r.n.h10rec, impLire(base));
@@ -440,6 +505,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
   DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
+  gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
   baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };

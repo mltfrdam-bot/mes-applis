@@ -8,10 +8,16 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.location.LocationRequest;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -22,6 +28,7 @@ import android.os.Vibrator;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 /**
  * Le service permanent de séance : c'est lui qui tient la ceinture H10 et qui enregistre, même écran éteint
@@ -31,12 +38,18 @@ import java.nio.charset.StandardCharsets;
  * - Chaque seconde est écrite tout de suite dans « seance-en-cours.txt ». Si l'appli est tuée, Android relance
  *   le service (ou l'appli le relance à son ouverture) et l'enregistrement reprend à partir de ce journal.
  * - À la fin, l'enregistrement complet est écrit dans « enregistrements/rec-<début>.json » ; la page l'ajoute à l'Historique.
+ * - Étape 4 : pour une course, il écoute aussi le GPS (un point par seconde), écran éteint. Le calcul est dans Parcours ;
+ *   tous les points sont gardés dans « enregistrements/gps-<début>.txt ».
  */
 public class ServiceSeance extends Service implements LienH10.Ecoute {
     static final String ACTION_CONNECTER = "fr.mesapplis.activite.CONNECTER";
     static final String ACTION_DEMARRER = "fr.mesapplis.activite.DEMARRER";
     static final String ACTION_REPRENDRE = "fr.mesapplis.activite.REPRENDRE";
+    static final String ACTION_TOUR = "fr.mesapplis.activite.TOUR";
     static final String EXTRA_ACT = "act";
+    static final String EXTRA_GPS = "gps";
+    /** États du GPS pour l'écran. */
+    static final int GPS_ARRET = 0, GPS_RECHERCHE = 1, GPS_OK = 2, GPS_ETEINT = 3, GPS_SANS_DROIT = 4, GPS_LIMITE = 5;
     static final String JOURNAL = "seance-en-cours.txt";
     private static final String CANAL = "seance";
     private static final int ID_NOTIF = 1;
@@ -51,6 +64,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private LienH10 lien;
     private volatile Enregistreur enr;
     private volatile Brut brut;                         // mesures brutes de la séance en cours (un fichier par séance)
+    private volatile Parcours gps;                      // parcours GPS de la séance en cours, s'il y en a un
+    private LocationManager positions;
+    private boolean gpsEcoute = false, gpsLimite = false, gpsKm = true;
+    private int typePremierPlan = -1;
+    private long gpsEssai = 0;
     private File dossier;
     private PowerManager.WakeLock verrou;
     private ToneGenerator son;
@@ -65,6 +83,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private String version = "";
 
     static File dossierDonnees(Context c) { return new File(c.getFilesDir(), "donnees"); }
+    static boolean droitGps(Context c) { return c.checkSelfPermission("android.permission.ACCESS_FINE_LOCATION") == PackageManager.PERMISSION_GRANTED; }
+    static File dossierEnregistrements(File dossier) { return new File(dossier, "enregistrements"); }
     static boolean aReprendre(Context c) { File f = new File(dossierDonnees(c), JOURNAL); return f.exists() && f.length() > 0; }
 
     /** Écrit un enregistrement terminé dans « enregistrements/rec-<début>.json ». Renvoie le nom du fichier, ou "" en cas d'échec. */
@@ -93,7 +113,13 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             if (System.currentTimeMillis() - journal.lastModified() < VIEUX_JOURNAL) return;
             Enregistreur e = Enregistreur.relire(journal);
             if (e == null) { journal.renameTo(new File(dossier, "seance-illisible-" + System.currentTimeMillis() + ".txt")); return; }
-            String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(e.finConnue(), "APK (séance clôturée après coup)"));
+            long fin = e.finConnue();
+            String parcours = null;
+            try {
+                Parcours p = Parcours.relire(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut));
+                if (p != null) { fin = Math.max(fin, p.finConnue()); parcours = p.resumeJson(fin); }
+            } catch (Exception ignored) {}
+            String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK (séance clôturée après coup)", parcours));
             if (!nom.isEmpty()) journal.delete();
         } catch (Exception ignored) {}
     }
@@ -119,15 +145,28 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         try { son = new ToneGenerator(AudioManager.STREAM_MUSIC, 90); } catch (Exception e) { son = null; }
         cloturerVieuxJournal(this);
         try { enr = Enregistreur.reprendre(new File(dossier, JOURNAL), System.currentTimeMillis()); } catch (Exception e) { enr = null; }
+        positions = (LocationManager) getSystemService(LOCATION_SERVICE);
+        gpsKm = p.getBoolean("gpsKm", true);
+        Enregistreur e = enr;
+        if (e != null) { try { gps = Parcours.reprendre(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut), System.currentTimeMillis()); } catch (Exception x) { gps = null; } }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int id) {
-        if (!mettreAuPremierPlan()) { stopSelf(); return START_NOT_STICKY; }
         String action = intent == null ? null : intent.getAction();
+        boolean avecGps = ACTION_DEMARRER.equals(action) && enr == null && intent.getBooleanExtra(EXTRA_GPS, false);
+        if (!mettreAuPremierPlan(avecGps || gps != null)) { stopSelf(); return START_NOT_STICKY; }
+        if (ACTION_TOUR.equals(action)) tour();
         if (ACTION_DEMARRER.equals(action) && enr == null) {
             try {
-                enr = Enregistreur.nouveau(new File(dossier, JOURNAL), System.currentTimeMillis(), intent.getStringExtra(EXTRA_ACT));
+                long debut = System.currentTimeMillis();
+                String act = intent.getStringExtra(EXTRA_ACT);
+                enr = Enregistreur.nouveau(new File(dossier, JOURNAL), debut, act);
+                if (avecGps) {
+                    SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+                    gpsKm = p.getBoolean("gpsKm", true);
+                    try { gps = Parcours.nouveau(Parcours.fichierDe(dossierEnregistrements(dossier), debut), debut, "velo".equals(act) ? 28 : 12, p.getString("gpsSource", "sat")); } catch (Exception x) { gps = null; }
+                }
             } catch (Exception e) {
                 enr = null;
             }
@@ -137,7 +176,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             if (lien.etat() == LienH10.ARRET) { arreter(); return START_NOT_STICKY; }
         }
         Enregistreur e = enr;
-        if (e != null && brut == null) brut = Brut.ouvrir(new File(new File(dossier, "enregistrements"), "brut-" + e.debut + ".bin"), e.debut);
+        if (e != null && brut == null && LienH10.droit(this)) brut = Brut.ouvrir(new File(new File(dossier, "enregistrements"), "brut-" + e.debut + ".bin"), e.debut);
         lien.demarrer(getSharedPreferences("reglages", MODE_PRIVATE).getString("h10Adresse", ""));
         ajuster();
         h.removeCallbacks(tic);
@@ -164,6 +203,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         Brut b = brut;
         brut = null;
         if (b != null) b.fermer();
+        ecouterGps(false);
+        Parcours g = gps;
+        gps = null;
+        if (g != null) g.fermer();                       // le fichier du tracé reste : la séance pourra reprendre
         relacher();
         try { if (son != null) son.release(); } catch (Exception ignored) {}
         if (actif == this) actif = null;
@@ -172,15 +215,27 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
 
     // ---------- Premier plan, veille, notification ----------
 
-    private boolean mettreAuPremierPlan() {
+    /**
+     * Android exige de dire pourquoi le service tourne : « appareil connecté » (ceinture) et, pour une course, « position ».
+     * Le type « position » n'est accepté que si l'appli est à l'écran à ce moment-là (ou si la position est autorisée « toujours ») :
+     * après une relance par Android en arrière-plan, on continue sans lui (GPS limité) et on le redemande au retour de l'écran.
+     */
+    private boolean mettreAuPremierPlan(boolean avecGps) {
+        int base = LienH10.droit(this) ? ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE : 0;
+        boolean veutGps = avecGps && droitGps(this);
+        if (veutGps && poser(base | ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)) { gpsLimite = false; return true; }
+        if (base != 0 && poser(base)) { gpsLimite = veutGps; return true; }
+        return false;                                    // par ex. autorisation Bluetooth retirée
+    }
+
+    private boolean poser(int type) {
         try {
-            Notification n = notification();
-            if (Build.VERSION.SDK_INT >= 29) startForeground(ID_NOTIF, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE);
-            else startForeground(ID_NOTIF, n);
+            startForeground(ID_NOTIF, notification(), type);
             premierPlan = true;
+            typePremierPlan = type;
             return true;
         } catch (Exception e) {
-            return false;                                // par ex. autorisation Bluetooth retirée
+            return false;
         }
     }
 
@@ -197,8 +252,104 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         } else {
             relacher();
         }
+        boolean avecGps = gps != null;
+        int voulu = (LienH10.droit(this) ? ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE : 0) | (avecGps && droitGps(this) ? ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION : 0);
+        if (premierPlan && voulu != typePremierPlan && (!gpsLimite || MainActivity.visible)) mettreAuPremierPlan(avecGps);
+        ecouterGps(avecGps);
         majNotification(true);
     }
+
+    // ---------- GPS ----------
+
+    private final LocationListener ecouteGps = new LocationListener() {
+        @Override public void onLocationChanged(Location l) { position(l); }
+        @Override public void onProviderEnabled(String f) { h.post(() -> majNotification(false)); }
+        @Override public void onProviderDisabled(String f) { h.post(() -> majNotification(false)); }
+        @Override public void onStatusChanged(String f, int etat, Bundle b) { }
+    };
+
+    private void ecouterGps(boolean oui) {
+        if (positions == null) return;
+        if (!oui) {
+            if (gpsEcoute) { try { positions.removeUpdates(ecouteGps); } catch (Exception ignored) {} gpsEcoute = false; }
+            return;
+        }
+        if (gpsEcoute || !droitGps(this)) return;
+        gpsEssai = System.currentTimeMillis();
+        try {
+            boolean melange = "mix".equals(getSharedPreferences("reglages", MODE_PRIVATE).getString("gpsSource", "sat")) && positions.hasProvider(LocationManager.FUSED_PROVIDER);
+            LocationRequest r = new LocationRequest.Builder(1000L).setQuality(LocationRequest.QUALITY_HIGH_ACCURACY).setMinUpdateIntervalMillis(500L).build();
+            positions.requestLocationUpdates(melange ? LocationManager.FUSED_PROVIDER : LocationManager.GPS_PROVIDER, r, getMainExecutor(), ecouteGps);
+            gpsEcoute = true;
+        } catch (Exception e) {
+            gpsEcoute = false;                           // GPS absent ou refusé : on réessaiera
+        }
+    }
+
+    private void position(Location l) {
+        Parcours p = gps;
+        if (p == null || enr == null || l == null) return;
+        long maintenant = System.currentTimeMillis();
+        int satellites = 0;
+        try { Bundle x = l.getExtras(); if (x != null) satellites = x.getInt("satellites", 0); } catch (Exception ignored) {}
+        double vitesse = l.hasSpeed() && !(l.hasSpeedAccuracy() && l.getSpeedAccuracyMetersPerSecond() > 2) ? l.getSpeed() : -1;
+        int r = p.point(maintenant - p.debut, l.getLatitude(), l.getLongitude(), l.hasAccuracy() ? l.getAccuracy() : 0, l.hasAltitude() ? l.getAltitude() : 0, vitesse, satellites);
+        if ((r & Parcours.PREMIER) != 0) { vibrer(new long[]{0, 150, 120, 150}); h.post(() -> majNotification(false)); }
+        if ((r & Parcours.KM) != 0 && gpsKm) vibrer(new long[]{0, 500, 200, 500});
+    }
+
+    private void vibrer(long[] motif) {
+        try {
+            Vibrator vb = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (vb != null) vb.vibrate(VibrationEffect.createWaveform(motif, -1));
+        } catch (Exception ignored) {}
+    }
+
+    private boolean gpsAllume() {
+        try { return positions != null && positions.isLocationEnabled() && positions.isProviderEnabled(LocationManager.GPS_PROVIDER); } catch (Exception e) { return false; }
+    }
+
+    private int gpsEtat(long maintenant) {
+        Parcours p = gps;
+        if (p == null) return GPS_ARRET;
+        if (!droitGps(this)) return GPS_SANS_DROIT;
+        if (!gpsAllume()) return GPS_ETEINT;
+        if (p.frais(maintenant)) return GPS_OK;
+        return gpsLimite ? GPS_LIMITE : GPS_RECHERCHE;
+    }
+
+    private static String texteGps(int etat) {
+        switch (etat) {
+            case GPS_OK: return "GPS prêt";
+            case GPS_RECHERCHE: return "recherche des satellites…";
+            case GPS_ETEINT: return "⚠️ position éteinte sur le téléphone";
+            case GPS_SANS_DROIT: return "⚠️ position non autorisée";
+            case GPS_LIMITE: return "⚠️ GPS en pause : ouvre l'appli";
+            default: return "";
+        }
+    }
+
+    static String kmTexte(double metres) { return String.format(Locale.FRANCE, "%.2f km", metres / 1000.0); }
+    static String allureTexte(double metresParSeconde) {
+        if (!(metresParSeconde > 0.4)) return "–";
+        int s = (int) Math.round(1000.0 / metresParSeconde);
+        return (s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60) + " /km";
+    }
+
+    /** Tour marqué à la main (bouton de l'écran ou de la notification). */
+    boolean tour() {
+        Parcours p = gps;
+        if (p == null || enr == null) return false;
+        p.tour(System.currentTimeMillis() - p.debut, fcFraiche());
+        vibrer(new long[]{0, 80});
+        h.post(() -> majNotification(true));
+        return true;
+    }
+
+    /** L'écran de l'appli vient de revenir : si le GPS avait été limité (service relancé en arrière-plan), on le remet en route. */
+    void ecranRevenu() { if (gps != null && (gpsLimite || !gpsEcoute)) h.post(this::ajuster); }
+
+    void reglerGps(boolean km) { gpsKm = km; }
 
     private void relacher() { try { if (verrou != null && verrou.isHeld()) verrou.release(); } catch (Exception ignored) {} }
 
@@ -232,8 +383,16 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private Notification notification() {
         Enregistreur e = enr;
         int f = fcFraiche();
+        Parcours g = gps;
+        long maintenant = System.currentTimeMillis();
         String titre = e != null ? "● " + nomAct(e.activite()) + " — enregistrement" : "Ceinture H10";
-        String texte = (f > 0 ? "❤️ " + f + " · " : "") + (e != null ? "⚡ " + e.impacts() + " impacts · " : "") + texteLien();
+        String texte;
+        if (e != null && g != null) {
+            int etat = gpsEtat(maintenant);
+            texte = (g.aPosition() ? kmTexte(g.distance()) + " · " + allureTexte(g.allure(maintenant)) + " · " : "") + (f > 0 ? "❤️ " + f + " · " : "") + (etat == GPS_OK ? (g.nbTours() > 0 ? "tour " + (g.nbTours() + 1) : "GPS ok") : texteGps(etat));
+        } else {
+            texte = (f > 0 ? "❤️ " + f + " · " : "") + (e != null ? "⚡ " + e.impacts() + " impacts · " : "") + texteLien();
+        }
         derniereNotif = titre + "|" + texte;
         Intent ouvrir = new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, 0, ouvrir, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -248,6 +407,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setCategory(Notification.CATEGORY_SERVICE);
         if (e != null) b.setUsesChronometer(true).setWhen(e.debut);
+        if (e != null && g != null) {
+            PendingIntent pt = PendingIntent.getService(this, 1, new Intent(this, ServiceSeance.class).setAction(ACTION_TOUR), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            b.addAction(new Notification.Action.Builder(null, "🚩 Tour", pt).build());
+        }
         if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         return b.build();
     }
@@ -269,6 +432,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             long maintenant = System.currentTimeMillis();
             Enregistreur e = enr;
             if (e != null) e.tic(maintenant);
+            Parcours g = gps;
+            if (g != null) {
+                g.tic(maintenant);
+                if (!gpsEcoute && maintenant - gpsEssai > 10000) ecouterGps(true);   // autorisation donnée ou GPS rallumé entre-temps
+            }
             if (maintenant - dernierTaux >= 2000) { accTaux = (int) Math.round(accCompte * 1000.0 / Math.max(1, maintenant - dernierTaux)); accCompte = 0; dernierTaux = maintenant; }
             if (++compteur % 5 == 0) majNotification(false);
             // ceinture connectée pour rien (pas de séance, pas de réglage, appli fermée) : on s'arrête au bout de 10 minutes
@@ -354,6 +522,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         sb.append(",\"dernier\":");
         if (suivi.dernierM > 0) sb.append("{\"m\":").append(Math.round(suivi.dernierM)).append(",\"compte\":").append(suivi.dernierM > suivi.seuil).append('}'); else sb.append("null");
         sb.append(",\"essai\":").append(suivi.essaiEnCours());
+        Parcours g = gps;
+        int etatGps = gpsEtat(maintenant);
+        sb.append(",\"gps\":");
+        if (g == null) sb.append("null");
+        else sb.append("{\"etat\":").append(etatGps).append(",\"texte\":").append(Json.texte(texteGps(etatGps))).append(",\"p\":").append(g.etatJson(maintenant)).append('}');
         sb.append(",\"enr\":").append(e == null ? "null" : e.etatJson(maintenant)).append('}');
         return sb.toString();
     }
@@ -383,10 +556,14 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     synchronized String terminer() {
         Enregistreur e = enr;
         if (e == null) return "";
-        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(System.currentTimeMillis(), "APK " + version));
+        long fin = System.currentTimeMillis();
+        Parcours g = gps;
+        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK " + version, g == null ? null : g.resumeJson(fin)));
         if (nom.isEmpty()) return "";
         enr = null;
         e.fermerJournal(true);
+        gps = null;
+        if (g != null) g.fermer();
         Brut b = brut;
         brut = null;
         if (b != null) b.fermer();

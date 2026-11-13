@@ -194,7 +194,10 @@ final class Enregistreur {
     synchronized int impacts() { return totalPics + (sS >= 0 ? sPics : 0); }
 
     /** Fin de séance : renvoie l'enregistrement complet, au même format que la v31 (plus les coupures de ceinture). */
-    synchronized String terminer(long horloge, String source) {
+    synchronized String terminer(long horloge, String source) { return terminer(horloge, source, null); }
+
+    /** Pareil, avec le résumé du parcours GPS (déjà au format JSON) quand la séance en a un. */
+    synchronized String terminer(long horloge, String source, String gps) {
         if (sS >= 0) fermer(horloge);
         if (!relie && decoDebut >= 0) { int[] c = {decoDebut, Math.max(0, seconde(horloge) - decoDebut)}; deco.add(c); ecrire("C " + c[0] + " " + c[1]); decoDebut = -1; }
         StringBuilder sb = new StringBuilder(l.size() * 20 + 400);
@@ -207,7 +210,9 @@ final class Enregistreur {
         liste(sb, pics);
         sb.append(",\"deconnexions\":");
         liste(sb, deco);
-        sb.append(",\"fin\":").append(horloge).append(",\"source\":").append(Json.texte(source)).append('}');
+        sb.append(",\"fin\":").append(horloge).append(",\"source\":").append(Json.texte(source));
+        if (gps != null) sb.append(",\"gps\":").append(gps);
+        sb.append('}');
         return sb.toString();
     }
 

@@ -53,7 +53,7 @@ final class Parcours {
 
     // position lissée, dernier point compté dans la distance, dernier point brut accepté
     private boolean aPos = false;
-    private double fLat, fLon, fVar, aLat, aLon, bLat, bLon;
+    private double fLat, fLon, fVar, aLat, aLon, bLat, bLon, cLat, cLon;
     private long fT = 0, bT = -1, refusT = -1, dernierT = -1, dernierOk = -1;
     private double dist = 0, distP = 0, precSomme = 0, precDerniere = -1, vitDerniere = -1;
     private int points = 0, gardes = 0, rejetes = 0, sauts = 0, sats = 0, premier = -1;
@@ -146,6 +146,7 @@ final class Parcours {
     private void repartirDe(long t, double lat, double lon, double prec) {
         fLat = lat; fLon = lon; fVar = prec * prec; fT = t;
         aLat = lat; aLon = lon;
+        cLat = lat; cLon = lon;
         bLat = lat; bLon = lon; bT = t;
         refusT = -1;
     }
@@ -194,13 +195,18 @@ final class Parcours {
         fT = t;
         // distance par les positions lissées : rien à l'arrêt (vitesse GPS presque nulle), et par bouts de 10 m
         boolean arret = vit >= 0 && vit < 0.3;
-        double pas = metres(aLat, aLon, fLat, fLon), ajout = 0;
-        if (!arret && pas >= Math.max(PAS_POSITION, vit >= 0 ? 0 : prec)) { ajout = pas; distP += pas; aLat = fLat; aLon = fLon; }
+        double pas = metres(aLat, aLon, fLat, fLon);
+        if (!arret && pas >= PAS_POSITION) { distP += pas; aLat = fLat; aLon = fLon; }
         // distance retenue : vitesse du GPS × temps ; après un manque de réception, la ligne droite ; sans vitesse, les positions
         double db = (t - bT) / 1000.0;
-        if (vit < 0) dist += ajout;
-        else if (db <= 3) dist += arret ? 0 : Math.min(vit, vMax) * db;
-        else { double droit = metres(bLat, bLon, lat, lon); if (!arret && droit > 2 * prec) dist += droit; }
+        if (vit < 0) {
+            double secours = metres(cLat, cLon, fLat, fLon);
+            if (secours >= Math.max(PAS_POSITION, prec)) { dist += secours; cLat = fLat; cLon = fLon; }
+        } else {
+            if (db <= 3) dist += arret ? 0 : Math.min(vit, vMax) * db;
+            else { double droit = metres(bLat, bLon, lat, lon); if (!arret && droit > 2 * prec) dist += droit; }
+            cLat = fLat; cLon = fLon;
+        }
         bLat = lat; bLon = lon; bT = t;
         dernierOk = t; precDerniere = prec; vitDerniere = vit; precSomme += prec; gardes++;
         noter(t);
@@ -228,6 +234,8 @@ final class Parcours {
     }
 
     synchronized double distance() { return dist; }
+    /** Heure du dernier point reçu (pour clôturer une vieille séance à sa vraie fin). */
+    synchronized long finConnue() { return debut + Math.max(0, dernierT); }
     synchronized boolean journalEnPanne() { return journalKo; }
     synchronized int nbTours() { return tours.size(); }
     synchronized int nbKm() { return km.size(); }

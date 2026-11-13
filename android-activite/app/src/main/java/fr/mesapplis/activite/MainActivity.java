@@ -8,7 +8,9 @@ import android.content.ClipboardManager;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.location.LocationManager;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.net.Uri;
@@ -65,9 +67,11 @@ public class MainActivity extends Activity {
     private static final int CHOIX_FICHIER = 41;
     private static final int DEMANDE_NOTIF = 42;
     private static final int DEMANDE_BLUETOOTH = 43;
+    private static final int DEMANDE_GPS = 44;
     private static final int NB_SAUVEGARDES = 7;
     private static final Pattern NOM_OK = Pattern.compile("^(sauvegardes/|enregistrements/)?[A-Za-z0-9._-]{1,80}$");
     private static final Pattern NOM_BRUT = Pattern.compile("^brut-[0-9]{1,16}\\.bin$");
+    private static final Pattern NOM_TRACE = Pattern.compile("^gps-[0-9]{1,16}\\.txt$");
     private static final TimeZone REUNION = TimeZone.getTimeZone("Indian/Reunion");
 
     /** Vrai quand l'écran de l'appli est affiché (le service s'en sert pour s'arrêter quand il ne sert plus). */
@@ -119,16 +123,21 @@ public class MainActivity extends Activity {
     private void reprendreSeance() {
         try {
             if (ServiceSeance.actif == null) ServiceSeance.cloturerVieuxJournal(this);
-            if (ServiceSeance.actif == null && ServiceSeance.aReprendre(this) && LienH10.droit(this))
+            if (ServiceSeance.actif == null && ServiceSeance.aReprendre(this) && (LienH10.droit(this) || ServiceSeance.droitGps(this)))
                 startForegroundService(new Intent(this, ServiceSeance.class).setAction(ServiceSeance.ACTION_REPRENDRE));
         } catch (Exception ignored) {}
     }
 
-    private boolean lancerService(String action, String act) {
+    private boolean lancerService(String action, String act) { return lancerService(action, act, false); }
+
+    /** Le service a besoin d'au moins une raison de tourner : la ceinture (Bluetooth autorisé) ou le GPS (position autorisée). */
+    private boolean lancerService(String action, String act, boolean gps) {
         try {
-            if (!LienH10.droit(this)) return false;
+            boolean avecGps = gps && ServiceSeance.droitGps(this);
+            if (!LienH10.droit(this) && !avecGps) return false;
             Intent i = new Intent(this, ServiceSeance.class).setAction(action);
             if (act != null) i.putExtra(ServiceSeance.EXTRA_ACT, act);
+            if (avecGps) i.putExtra(ServiceSeance.EXTRA_GPS, true);
             startForegroundService(i);
             return true;
         } catch (Exception e) {
@@ -413,6 +422,87 @@ public class MainActivity extends Activity {
         /** Démarre l'enregistrement d'une séance pour cette activité. */
         @JavascriptInterface public boolean seanceDemarrer(String act) { return lancerService(ServiceSeance.ACTION_DEMARRER, act == null ? "" : act); }
 
+        // ----- GPS (étape 4) -----
+
+        /** {"droit", "toujours", "allume"} : la position est-elle autorisée (précise), autorisée même appli fermée, et allumée sur le téléphone ? */
+        @JavascriptInterface public String gpsEtat() {
+            boolean droit = ServiceSeance.droitGps(MainActivity.this), toujours = false, allume = false;
+            try { toujours = checkSelfPermission("android.permission.ACCESS_BACKGROUND_LOCATION") == PackageManager.PERMISSION_GRANTED; } catch (Exception ignored) {}
+            try {
+                LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+                allume = lm != null && lm.isLocationEnabled() && lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            } catch (Exception ignored) {}
+            return "{\"droit\":" + droit + ",\"toujours\":" + toujours + ",\"allume\":" + allume + "}";
+        }
+
+        /** Demande l'autorisation de position (1re fois : la question d'Android ; ensuite : l'écran de l'appli), puis d'allumer la position. */
+        @JavascriptInterface public void gpsDemander() {
+            runOnUiThread(() -> {
+                try {
+                    if (!ServiceSeance.droitGps(MainActivity.this)) {
+                        SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+                        if (!p.getBoolean("gpsDemande", false) || shouldShowRequestPermissionRationale("android.permission.ACCESS_FINE_LOCATION")) {
+                            p.edit().putBoolean("gpsDemande", true).apply();
+                            requestPermissions(new String[]{"android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"}, DEMANDE_GPS);
+                        } else {
+                            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                        }
+                        return;
+                    }
+                    LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+                    if (lm == null || !lm.isLocationEnabled() || !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                } catch (Exception ignored) {}
+            });
+        }
+
+        /** Position « toujours autorisée » (conseillé sur Samsung) : le GPS peut repartir tout seul si le téléphone a coupé l'appli. Android ouvre son écran de réglage. */
+        @JavascriptInterface public void gpsToujours() {
+            runOnUiThread(() -> {
+                try {
+                    if (!ServiceSeance.droitGps(MainActivity.this)) return;
+                    SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+                    if (!p.getBoolean("gpsToujoursDemande", false) || shouldShowRequestPermissionRationale("android.permission.ACCESS_BACKGROUND_LOCATION")) {
+                        p.edit().putBoolean("gpsToujoursDemande", true).apply();
+                        requestPermissions(new String[]{"android.permission.ACCESS_BACKGROUND_LOCATION"}, DEMANDE_GPS);
+                    } else {
+                        startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
+
+        /** Réglages du GPS gardés côté Android : source ("sat" = satellites seuls, "mix" = position mélangée) et vibration à chaque kilomètre. */
+        @JavascriptInterface public void gpsRegler(String source, boolean km) {
+            getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("gpsSource", "mix".equals(source) ? "mix" : "sat").putBoolean("gpsKm", km).apply();
+            ServiceSeance s = ServiceSeance.actif;
+            if (s != null) s.reglerGps(km);
+        }
+
+        /** Démarre l'enregistrement d'une séance avec le GPS (la ceinture reste utilisée si le Bluetooth est autorisé). */
+        @JavascriptInterface public boolean seanceDemarrerGps(String act) { return lancerService(ServiceSeance.ACTION_DEMARRER, act == null ? "" : act, true); }
+
+        /** Marque un tour à cet instant. Faux s'il n'y a pas de séance GPS en cours. */
+        @JavascriptInterface public boolean seanceTour() { ServiceSeance s = ServiceSeance.actif; return s != null && s.tour(); }
+
+        /** Tracés GPS complets gardés dans le téléphone : [{"nom":"gps-….txt","taille":…}, …]. */
+        @JavascriptInterface public String traces() {
+            JSONArray l = new JSONArray();
+            try {
+                File[] tous = new File(dossier, "enregistrements").listFiles();
+                if (tous != null) {
+                    Arrays.sort(tous);
+                    for (File f : tous) {
+                        if (!NOM_TRACE.matcher(f.getName()).matches()) continue;
+                        JSONObject o = new JSONObject();
+                        o.put("nom", f.getName());
+                        o.put("taille", f.length());
+                        l.put(o);
+                    }
+                }
+            } catch (Exception ignored) {}
+            return l.toString();
+        }
+
         /** Termine l'enregistrement : renvoie le nom du fichier « enregistrements/rec-….json », ou "" en cas d'échec. */
         @JavascriptInterface public String seanceArreter() { ServiceSeance s = ServiceSeance.actif; return s == null ? "" : s.terminer(); }
 
@@ -467,7 +557,7 @@ public class MainActivity extends Activity {
         /** Envoie un fichier de mesures brutes par le menu « Partager » d'Android (Google Drive, etc.). */
         @JavascriptInterface public boolean partagerBrut(String nom) {
             try {
-                if (nom == null || !NOM_BRUT.matcher(nom).matches()) return false;
+                if (nom == null || !(NOM_BRUT.matcher(nom).matches() || NOM_TRACE.matcher(nom).matches())) return false;
                 File source = new File(new File(dossier, "enregistrements"), nom);
                 if (!source.exists()) return false;
                 File dir = new File(getCacheDir(), "partage");
@@ -478,13 +568,13 @@ public class MainActivity extends Activity {
                 MainActivity.copier(source, f);
                 final Uri u = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".fichiers", f);
                 final Intent i = new Intent(Intent.ACTION_SEND);
-                i.setType("application/octet-stream");
+                i.setType(nom.endsWith(".txt") ? "text/plain" : "application/octet-stream");
                 i.putExtra(Intent.EXTRA_STREAM, u);
                 i.putExtra(Intent.EXTRA_SUBJECT, nom);
                 i.setClipData(ClipData.newRawUri(nom, u));
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 runOnUiThread(() -> {
-                    try { startActivity(Intent.createChooser(i, "Envoyer les mesures brutes")); } catch (Exception ignored) {}
+                    try { startActivity(Intent.createChooser(i, nom.endsWith(".txt") ? "Envoyer le tracé GPS" : "Envoyer les mesures brutes")); } catch (Exception ignored) {}
                 });
                 return true;
             } catch (Exception e) {
@@ -561,13 +651,15 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] resultats) {
         super.onRequestPermissionsResult(code, permissions, resultats);
-        if (code == DEMANDE_NOTIF || code == DEMANDE_BLUETOOTH) js("window.surReprise && window.surReprise()");
+        if (code == DEMANDE_NOTIF || code == DEMANDE_BLUETOOTH || code == DEMANDE_GPS) js("window.surReprise && window.surReprise()");
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         visible = true;
+        ServiceSeance s = ServiceSeance.actif;
+        if (s != null) s.ecranRevenu();
         js("window.surReprise && window.surReprise()");
     }
 
