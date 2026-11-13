@@ -42,6 +42,14 @@ public class EssaiEnregistreur {
                     case "A": e.activite(ligne.substring(2)); break;
                     case "Q": if (etats.length() > 1) etats.append(','); etats.append(e.etatJson(Long.parseLong(p[1]))); break;
                     case "K": e = null; suivi = copie(suivi); e = Enregistreur.reprendre(journal, Long.parseLong(p[1])); break;   // appli tuée puis relancée
+                    case "V": {   // vieille séance jamais terminée : clôturée depuis le journal, à sa vraie heure de fin
+                        e = null;
+                        Enregistreur v = Enregistreur.relire(journal);
+                        String json = v.terminer(v.finConnue(), "cloture");
+                        journal.delete();
+                        try (FileOutputStream o = new FileOutputStream(a[2])) { o.write(("{\"rec\":" + json + ",\"bips\":0,\"etats\":[]}").getBytes(StandardCharsets.UTF_8)); }
+                        break;
+                    }
                     case "E": {
                         String json = e.terminer(Long.parseLong(p[1]), "essai");
                         e.fermerJournal(true);

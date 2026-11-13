@@ -113,6 +113,7 @@ public class MainActivity extends Activity {
     /** Une séance était en cours quand l'appli a été fermée : on relance le service, qui reprend l'enregistrement. */
     private void reprendreSeance() {
         try {
+            if (ServiceSeance.actif == null) ServiceSeance.cloturerVieuxJournal(this);
             if (ServiceSeance.actif == null && ServiceSeance.aReprendre(this) && LienH10.droit(this))
                 startForegroundService(new Intent(this, ServiceSeance.class).setAction(ServiceSeance.ACTION_REPRENDRE));
         } catch (Exception ignored) {}

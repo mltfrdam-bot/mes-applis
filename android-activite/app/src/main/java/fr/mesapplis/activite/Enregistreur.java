@@ -63,8 +63,19 @@ final class Enregistreur {
         return e;
     }
 
-    /** Reprise après fermeture de l'appli : relit le journal. Renvoie null s'il n'y a rien à reprendre. */
+    /** Reprise après fermeture de l'appli : relit le journal et continue à écrire dedans. Renvoie null s'il n'y a rien à reprendre. */
     static Enregistreur reprendre(File fichier, long maintenant) throws IOException {
+        Enregistreur e = relire(fichier);
+        if (e == null) return null;
+        e.coupures++;
+        e.journal = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(fichier, true), StandardCharsets.UTF_8));
+        e.ecrire("");                                    // termine une éventuelle ligne coupée
+        e.ecrire("R " + maintenant);
+        return e;
+    }
+
+    /** Relit un journal sans rien y écrire (sert aussi à clôturer une vieille séance jamais terminée). */
+    static Enregistreur relire(File fichier) throws IOException {
         if (!fichier.exists() || fichier.length() == 0) return null;
         Enregistreur e = null;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(fichier), StandardCharsets.UTF_8))) {
@@ -85,13 +96,11 @@ final class Enregistreur {
                 } catch (NumberFormatException abimee) { /* dernière ligne coupée par la fermeture : ignorée */ }
             }
         }
-        if (e == null) return null;
-        e.coupures++;
-        e.journal = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(fichier, true), StandardCharsets.UTF_8));
-        e.ecrire("");                                    // termine une éventuelle ligne coupée
-        e.ecrire("R " + maintenant);
         return e;
     }
+
+    /** Heure de la dernière seconde enregistrée (pour clôturer une vieille séance à sa vraie fin). */
+    synchronized long finConnue() { return debut + (derniereSeconde + 1) * 1000L; }
 
     private static int n(String s) { return Integer.parseInt(s); }
 

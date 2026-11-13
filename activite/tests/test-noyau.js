@@ -79,4 +79,34 @@ test("un fichier inconnu est refusé sans rien changer", () => {
 
 test("dates à l'heure de La Réunion", () => { assert.strictEqual(N.dateHeure(T0), "11/11/2026 15:00"); assert.strictEqual(N.horodatage(T0), "2026-11-11_15h00"); });
 
+/* ----- étape 2 : enregistrements H10 faits par l'APK, réglage des impacts ----- */
+function recFictif(debut) { const l = []; for (let s = 0; s < 900; s++) { if (s >= 300 && s < 420) continue; l.push([s, 100 + (s % 60), s % 3 ? 150 : 40, 900 + (s % 7) * 300, s % 10 === 0 ? 1 : 0]); }
+  return { debut, act: "tennis", res: { duree: l.length, actif: l.filter(x => x[2] > 120).length, pics: l.reduce((a, x) => a + x[4], 0), fcMoy: 130, fcMax: 159 }, l, coupures: 1, pics: [[5, 2700, 1, 2500], [9, 1600, 0, 2500]], deconnexions: [[300, 120]], fin: debut + 905000, source: "APK test" }; }
+
+test("enregistrement de l'APK ajouté à la base : une séance, une ligne Tennis, jamais en double", () => {
+  const b = N.baseVide(), R = recFictif(T0);
+  assert.deepStrictEqual(N.enregistrementsManquants(b, ["rec-" + T0 + ".json", "autre.txt", "rec-abc.json"]), ["rec-" + T0 + ".json"]);
+  assert.strictEqual(N.ajouterEnregistrement(b, R), true); assert.strictEqual(N.ajouterEnregistrement(b, JSON.parse(JSON.stringify(R))), false); assert.strictEqual(b.courses.length, 1);
+  assert.deepStrictEqual(N.enregistrementsManquants(b, ["rec-" + T0 + ".json"]), []);
+  const l = N.lignesHistorique(b).find(x => x.act === "tennis"); assert.strictEqual(l.t, T0); assert.strictEqual(l.duree, 780); assert.ok(l.alerte.includes("1 trou")); assert.ok(l.detail.some(x => x.includes("ceinture perdue 2 min")));
+  assert.throws(() => N.ajouterEnregistrement(b, { debut: 1 })); });
+
+test("rapport d'un enregistrement : durée, temps perdu, coupures, tranches de 10 minutes", () => {
+  const r = N.rapportEnregistrement(recFictif(T0), { seuil: 2500 }, "1.3"); assert.strictEqual(r.bilan.ecoule, 905); assert.strictEqual(r.bilan.enregistre, 780); assert.strictEqual(r.bilan.perdu, 125);
+  assert.strictEqual(r.bilan.trous.length, 1); assert.strictEqual(r.bilan.tempsDeconnecte, 120); assert.strictEqual(r.bilan.mouvementsComptes, 1);
+  assert.ok(r.resume.includes("Tennis — 11/11/2026 15:00 (APK 1.3)")); assert.ok(r.resume.includes("perdu 2 min")); assert.ok(r.resume.includes("Coupures de la ceinture : 1 (2 min en tout)")); assert.ok(r.resume.includes("réglage 2,5 g"));
+  assert.ok(r.tout.includes("15:00 | 480 |") && r.tout.includes("15:10 | 300 |"), r.tout); assert.ok(r.tout.includes("- 15:05:00 pendant 2 min")); });
+
+test("réglage des impacts : ± 0,1 g entre 1,2 et 4 g, journal, essai « N coups » comme dans la v31", () => {
+  const b = N.baseVide(); assert.deepStrictEqual(N.impLire(b), { seuil: 2500, rearme: 1800, bip: true });
+  assert.deepStrictEqual(N.impRegler(b, -100, "enreg", 2700), { seuil: 2400, rearme: 1840, bip: true }); for (let i = 0; i < 30; i++) N.impRegler(b, +100); assert.strictEqual(N.impLire(b).seuil, 4000);
+  for (let i = 0; i < 40; i++) N.impRegler(b, -100); assert.strictEqual(N.impLire(b).seuil, 1200); assert.strictEqual(N.impBip(b, false).bip, false);
+  const mes = []; [3000, 2600, 2900, 1700, 3100, 1500].forEach((m, i) => { const t = 1000 + i * 1500; mes.push([t, 1300], [t + 20, m], [t + 40, 1400]); });
+  assert.deepStrictEqual(N.calPics(mes, 600).map(x => x[1]), [3000, 2600, 2900, 1700, 3100, 1500]);
+  const d = N.essaiEnDirect(mes, { seuil: 2500 }); assert.strictEqual(d.comptes, 4); assert.strictEqual(d.mouvements, 6);
+  const r = N.impEssai(b, mes, 4); assert.strictEqual(r.imp.seuil, 2150); assert.strictEqual(r.imp.rearme, 1690); assert.strictEqual(r.imp.bip, false); assert.ok(r.texte.includes("2,15 g")); assert.strictEqual(N.impLire(b).seuil, 2150);
+  assert.ok(N.impEssai(b, mes, 9).texte.includes("Je n'ai vu que 6 mouvements")); assert.strictEqual(N.impLire(b).seuil, 1300);
+  const rap = N.rapportReglages(b); assert.ok(rap.includes("2 essais")); assert.ok(rap.includes("essai 4 coups | 3,1 · 3,0 · 2,9 · 2,6 | 1,7 | 2,1") || rap.includes("essai 4 coups | 3,1 · 3,0 · 2,9 · 2,6 | 1,7 | 2,2"), rap);
+  assert.strictEqual(N.chrono(3725), "1:02:05"); assert.strictEqual(N.chrono(65), "1:05"); });
+
 console.log("\n" + n + " tests réussis.");

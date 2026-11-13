@@ -41,6 +41,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private static final String CANAL = "seance";
     private static final int ID_NOTIF = 1;
     private static final long ARRET_SI_INUTILE = 10 * 60 * 1000;
+    private static final long VIEUX_JOURNAL = 3 * 60 * 60 * 1000;
 
     /** Le service en marche, s'il y en a un (même processus que l'écran). */
     static volatile ServiceSeance actif;
@@ -65,6 +66,37 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     static File dossierDonnees(Context c) { return new File(c.getFilesDir(), "donnees"); }
     static boolean aReprendre(Context c) { File f = new File(dossierDonnees(c), JOURNAL); return f.exists() && f.length() > 0; }
 
+    /** Écrit un enregistrement terminé dans « enregistrements/rec-<début>.json ». Renvoie le nom du fichier, ou "" en cas d'échec. */
+    static String ecrireEnregistrement(File dossier, long debut, String json) {
+        String nom = "rec-" + debut + ".json";
+        try {
+            File dir = new File(dossier, "enregistrements");
+            if (!dir.exists()) dir.mkdirs();
+            File tmp = new File(dir, nom + ".tmp"), fin = new File(dir, nom);
+            try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(json.getBytes(StandardCharsets.UTF_8)); o.getFD().sync(); }
+            if (fin.exists()) fin.delete();
+            return tmp.renameTo(fin) ? nom : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Une séance jamais terminée et arrêtée depuis plus de 3 heures (appli tuée, téléphone éteint…) n'est pas reprise :
+     * elle est rangée telle quelle dans les enregistrements, avec sa vraie heure de fin. Rien n'est perdu.
+     */
+    static void cloturerVieuxJournal(Context c) {
+        try {
+            File dossier = dossierDonnees(c), journal = new File(dossier, JOURNAL);
+            if (!journal.exists() || journal.length() == 0) return;
+            if (System.currentTimeMillis() - journal.lastModified() < VIEUX_JOURNAL) return;
+            Enregistreur e = Enregistreur.relire(journal);
+            if (e == null) { journal.renameTo(new File(dossier, "seance-illisible-" + System.currentTimeMillis() + ".txt")); return; }
+            String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(e.finConnue(), "APK (séance clôturée après coup)"));
+            if (!nom.isEmpty()) journal.delete();
+        } catch (Exception ignored) {}
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -84,6 +116,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         suivi.regler(p.getInt("impSeuil", 2500), p.getInt("impRearme", 1800), p.getBoolean("impBip", true));
         lien = new LienH10(this, this);
         try { son = new ToneGenerator(AudioManager.STREAM_MUSIC, 90); } catch (Exception e) { son = null; }
+        cloturerVieuxJournal(this);
         try { enr = Enregistreur.reprendre(new File(dossier, JOURNAL), System.currentTimeMillis()); } catch (Exception e) { enr = null; }
     }
 
@@ -342,18 +375,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     synchronized String terminer() {
         Enregistreur e = enr;
         if (e == null) return "";
-        String json = e.terminer(System.currentTimeMillis(), "APK " + version);
-        String nom = "rec-" + e.debut + ".json";
-        try {
-            File dir = new File(dossier, "enregistrements");
-            if (!dir.exists()) dir.mkdirs();
-            File tmp = new File(dir, nom + ".tmp"), fin = new File(dir, nom);
-            try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(json.getBytes(StandardCharsets.UTF_8)); o.getFD().sync(); }
-            if (fin.exists()) fin.delete();
-            if (!tmp.renameTo(fin)) return "";
-        } catch (Exception ex) {
-            return "";
-        }
+        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(System.currentTimeMillis(), "APK " + version));
+        if (nom.isEmpty()) return "";
         enr = null;
         e.fermerJournal(true);
         h.post(this::ajuster);

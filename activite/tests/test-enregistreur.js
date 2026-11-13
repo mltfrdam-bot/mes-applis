@@ -92,5 +92,9 @@ test("trame au format 0 (petites valeurs) et trames inconnues ou coupées : pas 
   const L = ["S 2500 1800 1", "N " + T0 + " tennis", "F " + (T0 + 100) + " 1000 " + hex(f0), "F " + (T0 + 300) + " 1200 " + hex(coupee), "F " + (T0 + 500) + " 1400 " + hex(autre), "F " + (T0 + 600) + " 1500 02", "E " + (T0 + 2000)];
   const r = java(L); assert.strictEqual(r.rec.l.length, 1); assert.strictEqual(r.rec.l[0][0], 0); });
 
+test("séance jamais terminée (appli tuée pour de bon) : clôturée depuis le journal, à l'heure de sa dernière seconde", () => {
+  const L = ["S 2500 1800 0", "N " + T0 + " tennis"], fcb = (v) => hex(Buffer.from([0x10, v])); for (let s = 0; s < 120; s++) { const h = T0 + s * 1000 + 500; L.push("H " + h + " " + fcb(120), "T " + (h + 400)); } L.push("V");
+  const r = java(L); assert.strictEqual(r.rec.coupures, 0); assert.ok(r.rec.l.length >= 118 && r.rec.l.length <= 120); const der = r.rec.l[r.rec.l.length - 1][0]; assert.strictEqual(r.rec.fin, T0 + (der + 1) * 1000); assert.strictEqual(r.rec.res.fcMoy, 120); });
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("\n" + n + " tests réussis.");

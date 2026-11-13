@@ -146,6 +146,7 @@ function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R),
   const res = ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax);
   const alerte = tr.length ? "⚠️ " + pl(tr.length, "trou") + " (" + Math.round(total / 60) + " min)" : (R.coupe ? "⚠️ enregistrement coupé" : "");
   const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
+  (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
   return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: r.duree || (R.l || []).length, pompes: 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr }; }
 function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
@@ -214,6 +215,72 @@ function dureeTxt(x) { return x.duree >= 3600 || x.act !== "pompes" || x.journee
 function rapportHistorique(base, version) { const lg = lignesHistorique(base).sort((x, y) => y.t - x.t), tt = totaux(base, lg);
   return ["HISTORIQUE — Journal d'activité (APK" + (version ? " " + version : "") + ") — " + dateHeure(Date.now()), pl(tt.lignes, "ligne") + " · " + nb(tt.pompes) + " pompes", "", "Date | Activité | Durée | Résultat"].concat(lg.map(texteLigne)).join("\n"); }
 
+/* ===== Enregistrements H10 faits par l'APK (étape 2) =====
+   Le service Android écrit un fichier par séance (même forme que la note « h10rec » de la v31, plus les coupures
+   de ceinture). La page l'ajoute à la base comme une séance : identifiant = heure de début, donc jamais de doublon. */
+const dureeCourte = (s) => s < 60 ? Math.round(s) + " s" : hm(s);
+const gg = (v) => v == null ? "–" : (v / 1000).toFixed(1).replace(".", ",");
+function seanceDepuisEnregistrement(R) { const fin = R.fin || (R.debut + ((R.l || []).length ? (R.l[R.l.length - 1][0] + 1) * 1000 : 0));
+  return { id: R.debut, debut: R.debut, act: R.act || "tennis", close: true, notes: [{ t: fin, h10rec: R }] }; }
+function enregistrementValide(R) { return !!R && typeof R === "object" && typeof R.debut === "number" && Array.isArray(R.l) && !!R.res && typeof R.res === "object"; }
+function ajouterEnregistrement(base, R) { if (!enregistrementValide(R)) throw new Error("Enregistrement illisible."); return fusionner(base, { courses: [seanceDepuisEnregistrement(R)], reglages: {} }).seances.aj > 0; }
+/* noms de fichiers « rec-<début>.json » pas encore dans la base */
+function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
+function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule = Math.max(L.length, Math.round(((R.fin || R.debut) - R.debut) / 1000)), tr = trousH10(R), de = R.deconnexions || [];
+  return { ecoule, enregistre: L.length, perdu: Math.max(0, ecoule - L.length), actif: r.actif || 0, impacts: r.pics || 0, fcMoy: r.fcMoy, fcMax: r.fcMax, trous: tr, deconnexions: de, tempsDeconnecte: de.reduce((a, x) => a + x[1], 0),
+    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]) }; }
+function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [];
+  T.push("ENREGISTREMENT H10 — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
+  T.push("Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
+  T.push("FC : moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–"));
+  T.push(b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (imp ? " (réglage " + gg(imp.seuil) + " g)" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
+  T.push("Coupures de la ceinture : " + b.deconnexions.length + (b.deconnexions.length ? " (" + dureeCourte(b.tempsDeconnecte) + " en tout)" : ""));
+  T.push("Trous de plus d'une minute : " + b.trous.length + (b.trous.length ? " (" + b.trous.map(x => v1(x.duree / 60)).join(" · ") + " min)" : ""));
+  T.push("Reprises après fermeture de l'appli : " + b.reprises);
+  const resume = T.join("\n"), D = T.slice();
+  if (b.deconnexions.length) { D.push("", "Coupures de la ceinture :"); b.deconnexions.forEach(x => D.push("- " + heureS(R.debut + x[0] * 1000) + " pendant " + dureeCourte(x[1]))); }
+  if (b.trous.length) { D.push("", "Trous :"); b.trous.forEach(x => D.push("- " + v1(x.duree / 60) + " min à partir de " + heure(R.debut + x.a * 1000))); }
+  D.push("", "Par tranche de 10 minutes :", "Tranche | secondes | FC moy/max | mouvement moy | secondes > 1,5 g / > 2 g / > 2,5 g | impacts");
+  const tr = {}; (R.l || []).forEach(x => { const k = Math.floor(x[0] / 600); (tr[k] = tr[k] || []).push(x); });
+  Object.keys(tr).forEach(k => { const v = tr[k], fcs = v.map(x => x[1]).filter(Boolean), c = (th) => v.filter(x => x[3] > th - 1000).length;
+    D.push(heure(R.debut + k * 600000) + " | " + v.length + " | " + (fcs.length ? Math.round(fcs.reduce((a, x) => a + x, 0) / fcs.length) + "/" + Math.max(...fcs) : "–") + " | " + Math.round(v.reduce((a, x) => a + x[2], 0) / v.length) + " | " + c(1500) + " / " + c(2000) + " / " + c(2500) + " | " + v.reduce((a, x) => a + x[4], 0)); });
+  return { bilan: b, resume, tout: D.join("\n") }; }
+function resumeEnregistrements(base, version) { const recs = paires(base.courses).filter(x => x.n.h10rec).map(x => x.n.h10rec).sort((a, b) => b.debut - a.debut), imp = impLire(base);
+  const T = ["ENREGISTREMENTS H10 — résumé — " + dateHeure(Date.now()) + (version ? " (APK " + version + ")" : ""), "Réglage des impacts actuel : " + gg(imp.seuil) + " g", pl(recs.length, "enregistrement")];
+  recs.forEach(R => T.push("", rapportEnregistrement(R, null, "").resume)); return T.join("\n"); }
+
+/* ===== Réglage des impacts (repris de la v31) =====
+   impact-reglage = {seuil, rearme, bip} en millièmes de g ; impact-essais = journal de chaque réglage et de chaque essai. */
+function impLire(base) { let i = { seuil: 2500, rearme: 1800 }; try { i = Object.assign(i, JSON.parse(base.reglages["impact-reglage"] || "{}")); } catch (e) {} i.bip = i.bip !== false; return i; }
+function impEcrire(base, imp) { base.reglages["impact-reglage"] = JSON.stringify(imp); }
+function essaisLire(base) { return lireListe(base.reglages["impact-essais"]); }
+function essaiNoter(base, x) { const l = essaisLire(base); l.push(Object.assign({ t: Date.now() }, x)); base.reglages["impact-essais"] = JSON.stringify(l.slice(-300)); }
+/* − sensible / + sensible : par pas de 0,1 g, entre 1,2 g et 4 g */
+function impRegler(base, delta, contexte, dernier) { const imp = impLire(base); imp.seuil = Math.min(4000, Math.max(1200, Math.round((imp.seuil + delta) / 100) * 100)); imp.rearme = Math.round(1000 + (imp.seuil - 1000) * 0.6); impEcrire(base, imp);
+  essaiNoter(base, { type: "reglage", sens: delta < 0 ? "+ sensible" : "− sensible", seuil: imp.seuil, ctx: contexte || "essai", dernier: dernier || null }); return imp; }
+function impBip(base, oui) { const imp = impLire(base); imp.bip = !!oui; impEcrire(base, imp); return imp; }
+/* mouvements nets d'un essai : mesures fortes [[t, m], …] regroupées quand elles sont à moins de sep ms */
+function calPics(l, sep) { const p = []; let best = null; l.forEach(([t, m]) => { if (m < 1250) return; if (best && t - best[0] < sep) { if (m > best[1]) best = [t, m]; } else { if (best) p.push(best); best = [t, m]; } }); if (best) p.push(best);
+  return p.filter((x, i) => !(p[i + 1] && p[i + 1][0] - x[0] < sep && p[i + 1][1] > x[1])); }
+function essaiEnDirect(mesures, imp) { const p = calPics(mesures, 600).filter(x => x[1] > 1400); return { comptes: p.filter(x => x[1] > imp.seuil).length, mouvements: p.length, derniers: p.slice(-20).map(x => ({ m: x[1], compte: x[1] > imp.seuil })) }; }
+/* fin d'un essai « j'ai fait n coups » : cherche le seuil qui en compte exactement n */
+function impEssai(base, mesures, n) { const avant = impLire(base), pics = calPics(mesures, 600).map(x => x[1]).sort((a, b) => b - a); let imp, texte;
+  if (pics.length < n) { essaiNoter(base, { type: "essai", n, pics, nonCompte: null, seuil: 1300, manque: n - pics.length }); imp = { seuil: 1300, rearme: 1150 };
+    texte = "Je n'ai vu que " + pl(pics.length, "mouvement") + " pour " + pl(n, "coup") + " : la ceinture ne sent pas assez certains coups. Seuil mis au minimum (1,3 g)."; }
+  else { const fort = pics[n - 1], faible = pics[n] || 1250, s2 = Math.round((fort + faible) / 2); imp = { seuil: s2, rearme: Math.round(1000 + (s2 - 1000) * 0.6) };
+    essaiNoter(base, { type: "essai", n, pics: pics.slice(0, n + 5), nonCompte: pics[n] || null, seuil: s2 });
+    texte = "✅ Seuil réglé à " + (s2 / 1000).toFixed(2).replace(".", ",") + " g (avant : " + (avant.seuil / 1000).toFixed(2).replace(".", ",") + " g).\nTes " + pl(n, "coup") + " : " + pics.slice(0, n).map(gg).join(" · ") + " g\nPlus fort mouvement non compté : " + gg(faible) + " g" + (fort - faible < 150 ? "\n⚠️ Écart faible : coups et déplacements se ressemblent, refais un essai." : ""); }
+  imp.bip = avant.bip; impEcrire(base, imp); return { imp, texte }; }
+function rapportReglages(base) { const l = essaisLire(base).slice().reverse(), imp = impLire(base), essais = l.filter(x => x.type === "essai");
+  const T = ["RÉGLAGES DES IMPACTS — " + dateHeure(Date.now()), pl(essais.length, "essai") + " · réglage actuel " + gg(imp.seuil) + " g", "", "Quand | Quoi | Coups (g) | Non compté max | Seuil"];
+  l.forEach(x => { const q = dateFr(x.t).slice(0, 5) + " " + heure(x.t);
+    T.push(x.type === "essai" ? q + " | essai " + x.n + " coups | " + (x.pics || []).slice(0, x.n).map(gg).join(" · ") + " | " + gg(x.nonCompte) + " | " + gg(x.seuil)
+      : q + " | " + (x.ctx === "enreg" ? "en jeu" : "en essai") + " " + x.sens + " | " + (x.dernier ? "dernier " + gg(x.dernier) : "") + " | | " + gg(x.seuil)); });
+  if (essais.length > 1) { const tous = [].concat(...essais.map(x => (x.pics || []).slice(0, x.n))).sort((a, b) => a - b), nc = essais.map(x => x.nonCompte || 0);
+    if (tous.length) T.push("", "Sur tous les essais : coups entre " + gg(tous[0]) + " et " + gg(tous[tous.length - 1]) + " g (moitié au-dessus de " + gg(tous[Math.floor(tous.length / 2)]) + " g) · mouvements non comptés jusqu'à " + gg(Math.max(...nc)) + " g."); }
+  return T.join("\n"); }
+const chrono = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0"); };
+
 /* ===== Sauvegarde de l'appli ===== */
 function sauvegarde(base, version) { return { format: FORMAT, version: 1, creeeLe: new Date().toISOString(), appli: "APK Journal d'activité " + (version || ""), courses: base.courses, reglages: base.reglages, imports: base.imports }; }
 function nomSauvegarde(t) { return "JournalActivite-sauvegarde_" + horodatage(t == null ? Date.now() : t) + ".json"; }
@@ -236,6 +303,8 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
   return d; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, libelle,
+  seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
+  impLire, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
   baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer };
 g.Noyau = N;
 if (typeof module !== "undefined" && module.exports) module.exports = N;

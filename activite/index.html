@@ -65,17 +65,29 @@
   #boite { background: #fff; border-radius: 16px; padding: 16px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; max-height: 90%; overflow: auto; }
   #boite .t { font-size: 19px; font-weight: 900; }
   #boite input { font: inherit; font-size: 20px; padding: 12px; border: 2px solid #8a929c; border-radius: 12px; width: 100%; user-select: text; -webkit-user-select: text; }
+  /* ceinture H10 et séance */
+  #haut > div:first-child { min-width: 0; } #hTitre, #hSous { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pilule { height: 46px; padding: 0 10px; background: #fff; border: 1px solid #d9dce1; border-radius: 23px; font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .pilule.ok { color: #a52a1f; border-color: #a52a1f; } .pilule.ko { background: #fff6d6; border-color: #8a5a00; }
+  .grand { background: #fff; border: 1px solid #d9dce1; border-radius: 16px; padding: 10px; text-align: center; }
+  .chiffre { font-size: 64px; font-weight: 900; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .fcGros { font-size: 40px; font-weight: 900; color: #a52a1f; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .rouge { background: #a52a1f; color: #fff; font-weight: 900; min-height: 64px; font-size: 19px; padding: 10px 14px; }
+  .reglage { background: #fff; border: 1px solid #d9dce1; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; text-align: center; }
+  .reglage .rl { display: flex; align-items: center; justify-content: center; gap: 8px; } .reglage .rl b { font-size: 24px; min-width: 76px; }
+  .reglage .rder { font-size: 18px; font-weight: 700; min-height: 24px; }
+  .pre { white-space: pre-line; }
   #toast { position: fixed; left: 12px; right: 12px; bottom: 84px; z-index: 30; background: #1b1f23; color: #fff; border-radius: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; text-align: center; }
 </style>
 </head>
 <body>
 <header id="haut">
   <div><div id="hTitre">Journal d'activité</div><div id="hSous"></div></div>
-  <div class="outils"><button class="rond" id="bAide" aria-label="Aide de cet écran">❓</button><button class="rond" id="bRegl" aria-label="Réglages">⚙️</button></div>
+  <div class="outils"><button class="pilule" id="bH10" aria-label="Ceinture H10">❤️ H10</button><button class="rond" id="bAide" aria-label="Aide de cet écran">❓</button><button class="rond" id="bRegl" aria-label="Réglages">⚙️</button></div>
 </header>
 <div id="alerte" class="cache"></div>
 <main id="vue"></main>
-<div id="pied" class="cache"><button class="gros" id="bDemarrer">▶ Démarrer</button></div>
+<div id="pied" class="cache"><button class="gros" id="bDemarrer">▶ Démarrer</button><button class="rouge cache" id="bArreter" style="width:100%">⏹ Arrêter et enregistrer</button></div>
 <nav id="onglets">
   <button data-o="activites"><b>🏠</b>Activités</button>
   <button data-o="historique"><b>📜</b>Historique</button>
@@ -111,7 +123,22 @@ const Pont = {
   ouvrirBatterie() { if (A) A.ouvrirBatterie(); },
   notifOk() { try { return A ? !!A.notifOk() : true; } catch (e) { return true; } },
   demanderNotif() { if (A) A.demanderNotif(); },
-  sauvegardesAuto() { try { return A ? JSON.parse(A.sauvegardesAuto() || "[]") : []; } catch (e) { return []; } }
+  sauvegardesAuto() { try { return A ? JSON.parse(A.sauvegardesAuto() || "[]") : []; } catch (e) { return []; } },
+  /* ceinture H10 et séance (étape 2) */
+  btEtat() { try { return JSON.parse(A.btEtat()); } catch (e) { return { present: !!A, droit: true, allume: true }; } },
+  btDemander() { if (A) A.btDemander(); },
+  h10Connecter() { try { return A ? !!A.h10Connecter() : false; } catch (e) { return false; } },
+  h10Arreter() { try { return A ? !!A.h10Arreter() : true; } catch (e) { return false; } },
+  seanceDemarrer(act) { try { return A ? !!A.seanceDemarrer(act) : false; } catch (e) { return false; } },
+  seanceArreter() { try { return A ? (A.seanceArreter() || "") : ""; } catch (e) { return ""; } },
+  seanceEtat() { try { return JSON.parse(A.seanceEtat()); } catch (e) { return null; } },
+  seanceActivite(act) { try { if (A) A.seanceActivite(act); } catch (e) {} },
+  impRegler(imp) { try { if (A) A.impRegler(imp.seuil, imp.rearme, imp.bip !== false); } catch (e) {} },
+  essaiDemarrer() { try { return A ? !!A.essaiDemarrer() : false; } catch (e) { return false; } },
+  essaiArreter() { try { if (A) A.essaiArreter(); } catch (e) {} },
+  essaiDonnees() { try { return JSON.parse(A.essaiDonnees() || "[]"); } catch (e) { return []; } },
+  enregistrements() { try { return JSON.parse(A.enregistrements() || "[]"); } catch (e) { return []; } },
+  vibrer(ms) { try { if (A) A.vibrer(ms); } catch (e) {} }
 };
 
 /* ===== Données ===== */
@@ -130,7 +157,7 @@ function actCourante() { const vis = N.actsVisibles(BASE), a = regl("act-courant
 let toastT = null;
 function toast(txt, ms) { const t = $("#toast"); t.textContent = txt; t.classList.remove("cache"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add("cache"), ms || 3500); }
 function fenetre(html) { $("#boite").innerHTML = html; $("#voile").classList.remove("cache"); }
-function fermerFenetre() { $("#voile").classList.add("cache"); $("#boite").innerHTML = ""; }
+function fermerFenetre() { $("#voile").classList.add("cache"); $("#boite").innerHTML = ""; fenetreH10 = false; }
 const fenetreOuverte = () => !$("#voile").classList.contains("cache");
 function info(titre, html) { fenetre('<div class="t">' + esc(titre) + '</div><div>' + html + '</div><div class="ligne"><button class="main" data-do="fermer">OK</button></div>'); }
 function majAlerte() { const z = $("#alerte"); z.className = ""; z.innerHTML = "";
@@ -142,12 +169,13 @@ function majAlerte() { const z = $("#alerte"); z.className = ""; z.innerHTML = "
 /* ===== Navigation ===== */
 let ECRAN = { nom: "activites" }, PRECEDENT = null;
 const ONGLETS = ["activites", "historique", "bilans", "aide"];
-function aller(nom, param) { if (!ONGLETS.includes(nom) && ONGLETS.includes(ECRAN.nom)) PRECEDENT = ECRAN; ECRAN = { nom, param }; dessiner(); $("#vue").scrollTop = 0; }
+function aller(nom, param) { if (ECRAN.nom === "essai" && nom !== "essai") { Pont.essaiArreter(); ESSAI = null; }
+  if (!ONGLETS.includes(nom) && ONGLETS.includes(ECRAN.nom)) PRECEDENT = ECRAN; ECRAN = { nom, param }; dessiner(); $("#vue").scrollTop = 0; }
 function retourEcran() { const p = PRECEDENT || { nom: "activites" }; PRECEDENT = null; ECRAN = p; dessiner(); }
 function dessiner() { const e = ECRAN, o = ONGLETS.includes(e.nom) ? e.nom : (e.nom === "fiche" ? "aide" : (PRECEDENT ? PRECEDENT.nom : ""));
   document.querySelectorAll("#onglets button").forEach(b => { if (b.dataset.o === o) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
-  $("#pied").classList.toggle("cache", e.nom !== "activites");
-  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif })[e.nom]();
+  $("#pied").classList.toggle("cache", e.nom !== "activites" && e.nom !== "seance"); $("#bDemarrer").classList.toggle("cache", e.nom !== "activites"); $("#bArreter").classList.toggle("cache", e.nom !== "seance");
+  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif, seance: vueSeance, bilan: vueBilan, essai: vueEssai })[e.nom]();
   majAlerte(); }
 function titre(t, sous) { $("#hTitre").textContent = t; $("#hSous").textContent = sous || ""; }
 /* bouton Retour du téléphone : appelé par la partie Android. Renvoie false quand il n'y a plus rien à fermer. */
@@ -155,7 +183,7 @@ window.surRetour = function () { if (fenetreOuverte()) { fermerFenetre(); return
   if (!ONGLETS.includes(ECRAN.nom)) { retourEcran(); return true; }
   if (ECRAN.nom !== "activites") { aller("activites"); return true; } return false; };
 /* l'appli revient au premier plan (par ex. après le réglage de batterie) */
-window.surReprise = function () { if (ECRAN.nom === "fiche" || ECRAN.nom === "reglages") dessiner(); else majAlerte(); };
+window.surReprise = function () { lireEtat(); majH10(); if (ECRAN.nom === "fiche" || ECRAN.nom === "reglages") dessiner(); else majAlerte(); };
 
 /* ===== 🏠 Activités ===== */
 function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereParAct(lg), cur = actCourante();
@@ -163,14 +191,20 @@ function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereP
   $("#vue").innerHTML = '<div class="tuiles">' + N.actsVisibles(BASE).map(a => { const i = N.actInfo(a);
     return '<button class="tuile" data-do="act" data-a="' + esc(a) + '" aria-pressed="' + (a === cur) + '"><span class="ic">' + i.icone + '</span><span class="nom">' + esc(i.nom) + '</span><span class="sous">' + (der[a] ? "dernière : " + N.jourCourt(der[a]) : "aucune séance") + '</span></button>'; }).join("") +
     '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>';
-  $("#bDemarrer").textContent = "▶ Démarrer " + N.actInfo(cur).nom; }
+  majDemarrer(); }
+function majDemarrer() { $("#bDemarrer").textContent = S.enr ? "● Séance en cours : " + N.actInfo(S.enr.act).nom : "▶ Démarrer " + N.actInfo(actCourante()).nom; }
 function choisirAct(a) { BASE.reglages["act-courante"] = a; sauver(); vueActivites(); }
 function nouvelleAct() { fenetre('<div class="t">➕ Nouvelle activité</div><label for="naNom">Son nom (ex. Corde à sauter)</label><input id="naNom" maxlength="30" autocomplete="off"><div class="ligne"><button class="main" data-do="creerAct">Créer</button><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#naNom"); if (i) i.focus(); }, 50); }
 function creerAct() { const nom = ($("#naNom").value || "").trim(); if (!nom) return; const existe = N.toutesActs(BASE).find(a => N.actInfo(a).nom.toLowerCase() === nom.toLowerCase() || a.toLowerCase() === nom.toLowerCase());
   const a = existe || nom; if (!existe) { const p = N.lireListe(BASE.reglages["acts-perso"]); p.push(nom); BASE.reglages["acts-perso"] = JSON.stringify(p); }
   BASE.reglages["acts-masquees"] = JSON.stringify(N.lireListe(BASE.reglages["acts-masquees"]).filter(x => x !== a)); BASE.reglages["act-courante"] = a; sauver(); fermerFenetre(); vueActivites(); }
-function demarrer() { const a = N.actInfo(actCourante());
-  info("▶ " + a.nom + " : bientôt", "<p>Cette version est le <b>socle</b> : tes données, l'Historique, la sauvegarde.</p><p style='margin-top:8px'>Les séances arrivent juste après : <b>H10 et tennis</b> (étape 2), puis <b>pompes</b> (étape 3).</p><p style='margin-top:8px'>En attendant, fais ta séance dans le Hub, puis réimporte ta sauvegarde ici : rien n'est mis en double.</p>"); }
+function demarrer() { const act = actCourante(), a = N.actInfo(act);
+  if (S.enr) { aller("seance"); return; }
+  if (act === "pompes") { info("▶ Pompes : étape 3", "<p>Le compteur de pompes (toucher, +1, repos, fantôme) arrive à l'étape 3.</p><p style='margin-top:8px'>En attendant, fais ta séance dans le Hub, puis réimporte ta sauvegarde ici : rien n'est mis en double.</p>"); return; }
+  if (!Pont.natif) { info("Seulement dans l'APK", "<p>L'enregistrement a besoin de l'appli installée sur le téléphone.</p>"); return; }
+  if (!btPret()) return;
+  if (!Pont.batterieOk()) { fenetre('<div class="t">⚠️ Batterie Samsung pas réglée</div><p>Sans ce réglage, le téléphone peut couper l\'appli quand l\'écran s\'éteint : l\'enregistrement aurait des trous.</p><div class="ligne"><button class="main" data-do="batterie">Régler maintenant</button></div><div class="ligne"><button class="sec" data-do="lancerSeance">Démarrer quand même</button><button class="sec" data-do="fermer">Annuler</button></div>'); return; }
+  lancerSeance(); }
 
 /* ===== 📜 Historique ===== */
 const H = { filtre: "", tri: "t", sens: -1, ouverts: new Set() };
@@ -198,30 +232,34 @@ function vueBilans() { const lg = N.lignesHistorique(BASE), par = {}; lg.forEach
     '<p class="aide">Les bilans complets (records, séances comparables, chaque repos en couleur) arrivent avec les pompes, à l\'étape 3. Rien n\'est perdu : ils seront calculés sur tout ton historique.</p>'; }
 
 /* ===== ❓ Aide ===== */
-const FICHES = [["premiere", "Première utilisation"], ["accueil", "L'accueil et les activités"], ["import", "Importer mes données du Hub"], ["sauvegarde", "Sauvegarder et fusionner"], ["historique", "Lire l'Historique"], ["suite", "Ce qui arrive ensuite"]];
+const FICHES = [["premiere", "Première utilisation"], ["accueil", "L'accueil et les activités"], ["import", "Importer mes données du Hub"], ["ceinture", "La ceinture H10"], ["seance", "Enregistrer une séance"], ["impacts", "Régler les impacts"], ["sauvegarde", "Sauvegarder et fusionner"], ["historique", "Lire l'Historique"], ["suite", "Ce qui arrive ensuite"]];
 function vueAide() { titre("❓ Aide", "fonctionne sans internet");
   $("#vue").innerHTML = '<table><thead><tr><th style="width:36px">N°</th><th>Fiche</th></tr></thead><tbody>' + FICHES.map((x, i) => '<tr class="ligneH" data-do="fiche" data-f="' + x[0] + '"><td>' + (i + 1) + '</td><td><b>' + esc(x[1]) + '</b> ›</td></tr>').join("") + '</tbody></table>'; }
 function etat(ok, fait, afaire) { return ok ? '<span class="ok">✅ ' + (fait || "Fait") + '</span>' : '<span class="att">⚠️ ' + (afaire || "À faire") + '</span>'; }
-function fichePremiere() { const bat = Pont.batterieOk(), notif = Pont.notifOk(), imp = BASE.imports.length ? BASE.imports[BASE.imports.length - 1] : null, faits = [bat, notif, !!imp].filter(Boolean).length;
-  titre("Première utilisation", faits + " réglage" + (faits > 1 ? "s" : "") + " fait" + (faits > 1 ? "s" : "") + " sur 3");
+function fichePremiere() { const bat = Pont.batterieOk(), notif = Pont.notifOk(), imp = BASE.imports.length ? BASE.imports[BASE.imports.length - 1] : null, bt = Pont.btEtat(), h10ok = bt.droit && !!S.h10.nom, faits = [bat, notif, !!imp, h10ok].filter(Boolean).length;
+  titre("Première utilisation", faits + " réglage" + (faits > 1 ? "s" : "") + " fait" + (faits > 1 ? "s" : "") + " sur 4");
   return '<table><thead><tr><th style="width:30px">N°</th><th>À faire une seule fois</th><th style="width:84px">État</th></tr></thead><tbody>' +
     '<tr' + (bat ? "" : ' class="afaire"') + '><td><b>1</b></td><td><b>Batterie Samsung</b><br>Sans ce réglage, le téléphone coupe l\'appli quand l\'écran s\'éteint. Touche le bouton, puis « Autoriser ».' + (bat ? "" : '<div class="ligne" style="margin-top:8px"><button class="main" data-do="batterie">Ouvrir le réglage</button></div>') + '</td><td>' + etat(bat) + '</td></tr>' +
     '<tr' + (notif ? "" : ' class="afaire"') + '><td><b>2</b></td><td><b>Notifications</b><br>Pour voir la séance et ses boutons sur l\'écran verrouillé.' + (notif ? "" : '<div class="ligne" style="margin-top:8px"><button class="main" data-do="notif">Autoriser</button></div>') + '</td><td>' + etat(notif) + '</td></tr>' +
     '<tr' + (imp ? "" : ' class="afaire"') + '><td><b>3</b></td><td><b>Importer mes données du Hub</b><br>Dans le Hub : appui long sur 💾, puis « Enregistrer sous… ». Ici, choisis ce fichier « MonHub-sauvegarde ». Rien n\'est écrasé, tu peux le refaire.<div class="ligne" style="margin-top:8px"><button class="' + (imp ? "sec" : "main") + '" data-do="importer">' + (imp ? "Importer encore" : "Choisir le fichier") + '</button></div></td><td>' + etat(!!imp) + (imp ? '<br><span class="gris">' + N.dateFr(imp.t).slice(0, 5) + '</span>' : "") + '</td></tr>' +
-    '<tr><td class="gris"><b>4</b></td><td class="gris"><b>Ceinture Polar H10</b><br>Bluetooth : arrive avec l\'étape 2.</td><td class="gris">Plus tard</td></tr>' +
+    '<tr' + (h10ok ? "" : ' class="afaire"') + '><td><b>4</b></td><td><b>Ceinture Polar H10</b><br>Autorise le Bluetooth, puis connecte la ceinture une première fois (porte-la, électrodes mouillées). Ensuite, l\'appli la retrouve toute seule.' +
+      (h10ok ? "" : '<div class="ligne" style="margin-top:8px"><button class="main" data-do="' + (bt.droit && bt.allume ? "h10" : "btDemander") + '">' + (!bt.droit ? "Autoriser le Bluetooth" : !bt.allume ? "Allumer le Bluetooth" : "Connecter la ceinture") + '</button></div>') + '</td><td>' + etat(h10ok) + (h10ok ? '<br><span class="gris" style="font-size:12px">' + esc(S.h10.nom) + '</span>' : "") + '</td></tr>' +
     '<tr><td class="gris"><b>5</b></td><td class="gris"><b>GPS</b><br>Position : arrive avec l\'étape 4.</td><td class="gris">Plus tard</td></tr></tbody></table>' +
     '<p class="aide">Si le réglage n° 1 saute (mise à jour Samsung), l\'appli te prévient en haut de l\'écran.</p>'; }
 const TEXTES = {
-  accueil: ["L'accueil et les activités", "<p><b>Une tuile = une activité.</b> Touche la tuile, puis « ▶ Démarrer ».</p><p>La tuile <b>💪 Pompes</b> remplace l'ancienne tuile Muscu du Hub : tes séances de pompes y sont rangées. La tuile <b>🏋️ Muscu</b> est nouvelle, pour le reste du renforcement.</p><p><b>➕ Nouvelle</b> : crée ta propre activité, il suffit de lui donner un nom.</p><p>Pour cacher une tuile : ⚙️ en haut, tableau « Activités affichées ».</p>"],
+  accueil: ["L'accueil et les activités", "<p><b>Une tuile = une activité.</b> Touche la tuile, puis « ▶ Démarrer » : l'appli enregistre la séance avec la ceinture H10 (pompes : étape 3).</p><p>La tuile <b>💪 Pompes</b> remplace l'ancienne tuile Muscu du Hub : tes séances de pompes y sont rangées. La tuile <b>🏋️ Muscu</b> est nouvelle, pour le reste du renforcement.</p><p><b>➕ Nouvelle</b> : crée ta propre activité, il suffit de lui donner un nom.</p><p>Pour cacher une tuile : ⚙️ en haut, tableau « Activités affichées ».</p>"],
   import: ["Importer mes données du Hub", "<p><b>1.</b> Dans le Hub : appui long sur 💾 en haut, puis « 💾 Enregistrer sous… ». Le fichier s'appelle « MonHub-sauvegarde ».</p><p><b>2.</b> Ici : ⚙️ puis « 📥 Importer / fusionner un fichier », et choisis ce fichier.</p><p><b>3.</b> L'appli affiche le <b>descriptif</b> : ce qui a été ajouté, ce qui était déjà là. Bouton 📋 Copier pour l'envoyer à Claude.</p><p><b>Tu peux recommencer autant que tu veux</b> : ce qui est déjà là n'est jamais ajouté deux fois, et rien n'est écrasé.</p><p>La journée du 30/08/2025 (889 pompes) et les 6 séances du Carnet sont déjà dans l'appli.</p>"],
   sauvegarde: ["Sauvegarder et fusionner", "<p><b>💾 Sauvegarder</b> (dans ⚙️) : un fichier dans le dossier Téléchargements du téléphone.</p><p><b>📤 Partager</b> : envoie la même sauvegarde vers Google Drive, par le menu Partager du téléphone.</p><p><b>📥 Importer / fusionner</b> : ajoute ce qui manque depuis une sauvegarde de cette appli ou du Hub. Le descriptif liste tout ce qui a été ajouté.</p><p><b>Sauvegarde automatique</b> : une par jour, à l'ouverture de l'appli. Les 7 dernières sont gardées dans le téléphone (tableau dans ⚙️).</p>"],
   historique: ["Lire l'Historique", "<p>Une ligne = une séance. <b>Touche un titre de colonne</b> pour trier (date, activité, durée, nombre de pompes). Touche encore pour inverser.</p><p><b>Touche une ligne</b> pour voir le détail : chaque note avec son heure et la fréquence cardiaque.</p><p>Les boutons du haut filtrent par activité.</p><p><span class='al'>⚠️ trous</span> : moments où l'enregistrement de la ceinture H10 s'est arrêté plus d'une minute.</p><p><span class='src'>(Carnet)</span> et <span class='src'>(montre COROS)</span> : séances venues d'ailleurs que du Journal.</p>"],
-  suite: ["Ce qui arrive ensuite", "<p><b>Étape 2</b> — Ceinture H10 sans coupure, écran éteint ; enregistrement du tennis.</p><p><b>Étape 3</b> — Pompes : toucher, +1, repos, fantôme, test TOI / H10, boutons sur l'écran verrouillé, voix ; bilans complets.</p><p><b>Étape 4</b> — GPS et fantôme de course vocal.</p><p><b>Étape 5</b> — Activités personnalisables complètes, calibration, import COROS.</p>"]
+  ceinture: ["La ceinture H10", "<p><b>❤️ en haut de l'écran</b> : touche-le pour connecter la ceinture. Porte-la, électrodes mouillées. La première fois, l'appli la cherche ; ensuite elle la retrouve toute seule.</p><p>Connectée, le bouton affiche ta fréquence cardiaque. <b>❤️ …</b> = connexion en cours. <b>❤️ ⚠️</b> = ceinture perdue, l'appli essaie de la retrouver sans s'arrêter.</p><p>C'est un <b>service permanent</b> qui tient la ceinture : il continue écran éteint, téléphone dans le sac. Tant qu'il tourne, une notification reste affichée.</p><p>Sans séance et appli fermée, la ceinture est lâchée au bout de 10 minutes pour économiser sa pile.</p><p>Si une autre appli (Hub, Polar, COROS) tient déjà la ceinture, ferme-la : la H10 n'accepte qu'un téléphone à la fois, sauf réglage spécial.</p>"],
+  seance: ["Enregistrer une séance", "<p><b>1.</b> Choisis la tuile (Tennis, Course…), puis « ▶ Démarrer ».</p><p><b>2.</b> L'appli enregistre chaque seconde : fréquence cardiaque, mouvement, impacts. Tu peux <b>éteindre l'écran</b> et ranger le téléphone.</p><p><b>3.</b> À la fin : « ⏹ Arrêter et enregistrer ». Le bilan s'affiche, avec les boutons 📋 Copier.</p><p><b>Rien n'est perdu</b> : chaque seconde est écrite tout de suite dans le téléphone. Si l'appli est fermée par erreur, rouvre-la : l'enregistrement reprend.</p><p><b>Coupure de ceinture</b> : le signal a sauté ; l'appli a reconnecté toute seule et note la durée. <b>Trou</b> : plus d'une minute sans aucune mesure.</p><p>Les pompes arrivent à l'étape 3, le GPS de la course à l'étape 4.</p>"],
+  impacts: ["Régler les impacts", "<p>Un <b>impact</b> = un coup assez fort senti par la ceinture (frappe de balle, appui). Le <b>seuil</b> dit à partir de quelle force on compte.</p><p><b>− sensible / + sensible</b> : change le seuil de 0,1 g, même en pleine séance. « Dernier » montre la force du dernier mouvement et s'il a été compté.</p><p><b>🎯 Régler (N coups)</b> : fais par exemple 10 coups à ta force normale, touche « J'ai fini », donne le nombre : l'appli choisit le seuil qui en compte exactement autant.</p><p><b>🔔 Bip</b> : un bip et une vibration à chaque impact compté.</p><p>Chaque réglage est gardé dans un journal : ⚙️ puis « 📋 Rapport des réglages ».</p>"],
+  suite: ["Ce qui arrive ensuite", "<p><b>Étape 2</b> (faite) — Ceinture H10 sans coupure, écran éteint ; enregistrement du tennis.</p><p><b>Étape 3</b> — Pompes : toucher, +1, repos, fantôme, test TOI / H10, boutons sur l'écran verrouillé, voix ; bilans complets.</p><p><b>Étape 4</b> — GPS et fantôme de course vocal.</p><p><b>Étape 5</b> — Activités personnalisables complètes, calibration, import COROS.</p>"]
 };
 function vueFiche() { const fi = ECRAN.param || "premiere"; let h;
   if (fi === "premiere") h = fichePremiere(); else { const t = TEXTES[fi] || TEXTES.suite; titre(t[0], "aide"); h = '<div style="background:#fff;border:1px solid #d9dce1;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:16px">' + t[1] + '</div>'; }
   $("#vue").innerHTML = h + '<div class="ligne"><button class="sec" data-do="retour">‹ Retour</button><button class="sec" data-do="onglet" data-o="aide">Toutes les fiches</button></div>'; }
-const AIDE_DE = { activites: "accueil", historique: "historique", bilans: "suite", reglages: "sauvegarde", descriptif: "import", aide: "premiere", fiche: "premiere" };
+const AIDE_DE = { activites: "accueil", historique: "historique", bilans: "suite", reglages: "sauvegarde", descriptif: "import", aide: "premiere", fiche: "premiere", seance: "seance", bilan: "seance", essai: "impacts" };
 
 /* ===== ⚙️ Réglages : données, sauvegardes, activités ===== */
 function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
@@ -230,15 +268,18 @@ function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
   h += '<h2>Sauvegardes automatiques (7 derniers jours)</h2>' + (autos.length ? '<table class="milieu"><thead><tr><th>Jour</th><th class="n">Taille</th><th></th></tr></thead><tbody>' + autos.map(s => '<tr><td>' + esc(s.jour) + '</td><td class="n">' + Math.max(1, Math.round(s.taille / 1024)) + ' Ko</td><td><button class="sec" data-do="fusionAuto" data-n="' + esc(s.nom) + '" style="min-height:44px">📥 Fusionner</button></td></tr>').join("") + '</tbody></table>' : '<p class="aide">' + (Pont.natif ? "La première sera faite demain, à l'ouverture de l'appli." : "Seulement dans l'APK.") + '</p>');
   h += '<h2>Activités affichées</h2><table class="milieu"><tbody>' + N.toutesActs(BASE).map(a => { const m = mas.includes(a); return '<tr><td' + (m ? ' class="gris"' : "") + '>' + esc(N.actNom(a)) + '</td><td style="width:1%"><button class="sec" data-do="masquer" data-a="' + esc(a) + '" style="min-height:44px;white-space:nowrap">' + (m ? "Afficher" : "Masquer") + '</button></td></tr>'; }).join("") + '</tbody></table>';
   h += '<h2>Imports déjà faits</h2>' + (BASE.imports.length ? '<table><thead><tr><th>Quand</th><th>Fichier</th><th></th></tr></thead><tbody>' + BASE.imports.slice().reverse().map(i => '<tr><td class="date">' + esc(N.dateFr(i.t).slice(0, 5)) + '<br>' + N.heure(i.t) + '</td><td style="font-size:13px">' + esc(i.source) + '</td><td><button class="sec" data-do="copierImport" data-t="' + i.t + '" style="min-height:44px" aria-label="Copier ce descriptif">📋</button></td></tr>').join("") + '</tbody></table>' : '<p class="aide">Aucun import pour l\'instant.</p>');
+  h += '<h2>Ceinture H10 et impacts</h2><div class="ligne"><button class="sec" data-do="essai">🎯 Régler les impacts (N coups)</button></div><div class="ligne"><button class="sec" data-do="copierReglages">📋 Rapport des réglages</button><button class="sec" data-do="copierRecs">📋 Résumé des enregistrements</button></div>';
   h += '<h2>Pour Claude</h2><div class="ligne"><button class="sec" data-do="copierEtat">📋 Copier l\'état de l\'appli</button></div><div class="ligne"><button class="sec" data-do="retour">‹ Retour</button></div>';
   $("#vue").innerHTML = h; }
 function masquer(a) { const l = N.lireListe(BASE.reglages["acts-masquees"]), i = l.indexOf(a); if (i >= 0) l.splice(i, 1); else { if (N.actsVisibles(BASE).length <= 1) { toast("Garde au moins une activité affichée."); return; } l.push(a); }
   BASE.reglages["acts-masquees"] = JSON.stringify(l); sauver(); vueReglages(); }
-function etatAppli() { const tt = N.totaux(BASE), txt = JSON.stringify(BASE);
+function etatAppli() { lireEtat(); const tt = N.totaux(BASE), txt = JSON.stringify(BASE), bt = Pont.btEtat(), imp = N.impLire(BASE), recs = BASE.courses.reduce((a, c) => a + c.notes.filter(n => n.h10rec).length, 0);
   return ["ÉTAT — Journal d'activité (APK) — " + N.dateHeure(Date.now()), "Version : " + Pont.version(), "Batterie Samsung réglée : " + (Pont.batterieOk() ? "oui" : "NON"), "Notifications autorisées : " + (Pont.notifOk() ? "oui" : "NON"),
     "Séances enregistrées : " + BASE.courses.length + " (dont " + BASE.courses.filter(c => !c.notes.length).length + " vide)", "Historique : " + N.pl(tt.lignes, "ligne") + " · " + N.nb(tt.pompes) + " pompes", "Réglages : " + Object.keys(BASE.reglages).length + " clés",
     "Imports faits : " + BASE.imports.length + (BASE.imports.length ? " (dernier le " + N.dateHeure(BASE.imports[BASE.imports.length - 1].t) + ")" : ""), "Taille des données : " + Math.round(txt.length / 1024) + " Ko",
-    "Sauvegardes automatiques : " + Pont.sauvegardesAuto().map(s => s.jour).join(", "), "Écriture : " + (ecritureKo ? "EN PANNE" : "ok") + (baseIllisible ? " · fichier abîmé mis de côté" : "")].join("\n"); }
+    "Sauvegardes automatiques : " + Pont.sauvegardesAuto().map(s => s.jour).join(", "),
+    "Bluetooth : " + (bt.present ? (bt.droit ? "autorisé" : "NON autorisé") + ", " + (bt.allume ? "allumé" : "ÉTEINT") : "absent"), "Ceinture : " + (S.h10.nom || "jamais connectée") + " — " + (S.service ? S.h10.texte : "service arrêté") + (S.acc && S.acc.erreur ? " — " + S.acc.erreur : ""),
+    "Enregistrements H10 : " + recs + " dans l'Historique, " + Pont.enregistrements().length + " fichier(s) dans le téléphone" + (S.enr ? " — séance en cours depuis " + N.hm(S.enr.ecoule) : "") + (S.aReprendre ? " — UNE SÉANCE À REPRENDRE" : ""), "Réglage des impacts : " + N.gg(imp.seuil) + " g, bip " + (imp.bip ? "oui" : "non"), "Écriture : " + (ecritureKo ? "EN PANNE" : "ok") + (baseIllisible ? " · fichier abîmé mis de côté" : "")].join("\n"); }
 
 /* ===== 📥 Import / fusion + descriptif ===== */
 let DESC = null;
@@ -266,6 +307,100 @@ function fichierTexte(nom, txt) { const ou = Pont.enregistrer(nom, txt, "text/pl
 function sauvegarder() { const ou = Pont.enregistrer(N.nomSauvegarde(), JSON.stringify(N.sauvegarde(BASE, Pont.version())), "application/json"); toast(ou ? "✅ Sauvegarde enregistrée : " + ou : "⚠️ Sauvegarde impossible.", 5000); }
 function partager() { if (!Pont.partager(N.nomSauvegarde(), JSON.stringify(N.sauvegarde(BASE, Pont.version())), "application/json")) toast("⚠️ Partage impossible ici : utilise 💾 Sauvegarder.", 4000); }
 
+/* ===== ❤️ Ceinture H10 et séance (étape 2) =====
+   Le service Android tient la ceinture et enregistre, même écran éteint. Ici on ne fait qu'afficher son état,
+   une fois par seconde, et lui passer les ordres (démarrer, arrêter, réglage des impacts). */
+const H10 = { ARRET: 0, RECHERCHE: 1, CONNEXION: 2, PREPARATION: 3, CONNECTE: 4, PERDUE: 5, BT_ETEINT: 6, SANS_DROIT: 7 };
+const ETAT_VIDE = { service: false, aReprendre: false, h10: { etat: 0, texte: "", nom: "", fc: 0, depuis: 0 }, acc: { present: false, actif: false, taux: 0, erreur: "" }, dernier: null, essai: false, enr: null };
+let S = ETAT_VIDE, seanceVue = false, arretEnCours = false, demarrageT = 0, fenetreH10 = false, BILAN = null, ESSAI = null;
+function lireEtat() { const s = Pont.seanceEtat(); S = s && s.h10 ? Object.assign({}, ETAT_VIDE, s) : ETAT_VIDE; }
+function majH10() { const b = $("#bH10"), e = S.h10.etat; let t = "❤️ H10", c = "";
+  if (e === H10.CONNECTE) { t = "❤️ " + (S.h10.fc || "…"); c = " ok"; } else if (e === H10.PERDUE || e === H10.BT_ETEINT || e === H10.SANS_DROIT) { t = "❤️ ⚠️"; c = " ko"; } else if (e !== H10.ARRET) t = "❤️ …";
+  if (b.textContent !== t) b.textContent = t; b.className = "pilule" + c; }
+function btPret() { const b = Pont.btEtat();
+  if (!b.present) { info("Bluetooth absent", "<p>Ce téléphone n'a pas de Bluetooth utilisable.</p>"); return false; }
+  if (!b.droit) { fenetre('<div class="t">Autoriser le Bluetooth</div><p>Pour parler à la ceinture H10, l\'appli a besoin de l\'autorisation « Appareils à proximité ». Elle ne sert qu\'à ça.</p><div class="ligne"><button class="main" data-do="btDemander">Autoriser</button><button class="sec" data-do="fermer">Plus tard</button></div>'); return false; }
+  if (!b.allume) { fenetre('<div class="t">Bluetooth éteint</div><p>Allume le Bluetooth pour connecter la ceinture.</p><div class="ligne"><button class="main" data-do="btDemander">Allumer</button><button class="sec" data-do="fermer">Plus tard</button></div>'); return false; }
+  return true; }
+function pousserReglage() { Pont.impRegler(N.impLire(BASE)); }
+/* bouton ❤️ du haut : connecte la ceinture, ou montre son état */
+function ouvrirH10() { lireEtat();
+  if (!Pont.natif) { info("Seulement dans l'APK", "<p>La ceinture se connecte dans l'appli installée sur le téléphone.</p>"); return; }
+  if (!S.service) { if (!btPret()) return; pousserReglage(); if (!Pont.h10Connecter()) { toast("⚠️ Impossible de démarrer la ceinture."); return; } toast("Recherche de la ceinture… Porte-la, électrodes mouillées.", 5000); setTimeout(tic, 500); return; }
+  fenetreH10 = true; fenetre('<div class="t">❤️ Ceinture H10</div><table class="milieu"><tbody><tr><td>État</td><td id="fhEtat"></td></tr><tr><td>Ceinture</td><td id="fhNom"></td></tr><tr><td>Fréquence cardiaque</td><td id="fhFc" style="font-weight:900;font-size:20px"></td></tr></tbody></table>' +
+    (S.enr ? '<p class="aide">Une séance est en cours : la ceinture reste connectée.</p>' : '<div class="ligne"><button class="sec" data-do="essai">🎯 Régler les impacts</button><button class="sec" data-do="h10Arreter">Déconnecter</button></div>') + '<div class="ligne"><button class="main" data-do="fermer">OK</button></div>'); fenetreH10 = true; majFenetreH10(); }
+function majFenetreH10() { if (!$("#fhEtat")) return; $("#fhEtat").innerHTML = S.h10.etat === H10.CONNECTE ? '<span class="ok">✅ connectée</span>' : '<span class="att">' + esc(S.service ? S.h10.texte : "arrêtée") + '</span>'; $("#fhNom").textContent = S.h10.nom || "–"; $("#fhFc").textContent = S.h10.fc ? "❤️ " + S.h10.fc : "–"; }
+function h10Arreter() { fermerFenetre(); if (!Pont.h10Arreter()) toast("Une séance est en cours : la ceinture reste connectée."); setTimeout(tic, 500); }
+
+/* une fois par seconde */
+function tic() { lireEtat(); majH10();
+  if (S.enr && !seanceVue) { seanceVue = true; if (ECRAN.nom !== "seance" && ECRAN.nom !== "essai") aller("seance"); }
+  if (!S.enr && seanceVue && !arretEnCours && Date.now() - demarrageT > 6000) { seanceVue = false; const n = importerEnregistrements(); if (ECRAN.nom === "seance") { if (demarrageT && !n) info("⚠️ L'enregistrement n'a pas démarré", "<p>Le service n'a pas pu se lancer. Vérifie l'autorisation Bluetooth, puis réessaie.</p>"); aller(n ? "historique" : "activites"); } demarrageT = 0; }
+  if (ECRAN.nom === "seance") majSeance(); else if (ECRAN.nom === "essai") majEssai(); else if (ECRAN.nom === "activites") majDemarrer();
+  if (fenetreH10) majFenetreH10(); }
+
+/* ----- séance ----- */
+function lancerSeance() { fermerFenetre(); const act = actCourante(); pousserReglage();
+  if (!Pont.seanceDemarrer(act)) { info("⚠️ Démarrage impossible", "<p>Le service d'enregistrement n'a pas pu démarrer. Vérifie l'autorisation Bluetooth.</p>"); return; }
+  seanceVue = true; demarrageT = Date.now(); aller("seance"); setTimeout(tic, 500); }
+function htmlReglage(ctx) { return '<div class="reglage"><div class="rl"><button class="sec" data-do="sens" data-d="100" data-c="' + ctx + '">− sensible</button><b id="rSeuil"></b><button class="sec" data-do="sens" data-d="-100" data-c="' + ctx + '">+ sensible</button></div><div id="rDer" class="rder"></div><div class="ligne"><button class="sec" data-do="bip" id="rBip"></button></div></div>'; }
+function majReglage() { if (!$("#rSeuil")) return; const i = N.impLire(BASE), d = S.dernier; $("#rSeuil").textContent = N.gg(i.seuil) + " g"; $("#rBip").textContent = i.bip ? "🔔 Bip à chaque impact : oui" : "🔕 Bip à chaque impact : non";
+  $("#rDer").innerHTML = d ? "Dernier : " + N.gg(d.m) + " g " + (d.m > i.seuil ? '<span class="ok">✅ compté</span>' : '<span class="al">✗ pas compté</span>') : ""; }
+function vueSeance() { const act = S.enr ? S.enr.act : actCourante(); titre("● " + N.actInfo(act).nom, "enregistrement en cours");
+  $("#vue").innerHTML = '<div class="grand"><div class="chiffre" id="sTemps">0:00</div><div class="fcGros" id="sFc">❤️ –</div></div><div class="boiteInfo cache" id="sAlerte"></div>' +
+    '<table class="milieu"><tbody><tr><td>⚡ Impacts</td><td class="n" id="sImp" style="font-weight:900;font-size:20px">0</td></tr><tr><td>Temps actif</td><td class="n" id="sActif"></td></tr><tr><td>FC moyenne / max</td><td class="n" id="sFcm"></td></tr><tr><td>Enregistré</td><td class="n" id="sEnr"></td></tr>' +
+    '<tr><td>Ceinture</td><td class="n" id="sLien" style="white-space:normal"></td></tr><tr><td>Capteur de mouvement</td><td class="n" id="sAcc" style="white-space:normal"></td></tr><tr><td>Coupures de ceinture</td><td class="n" id="sDeco"></td></tr></tbody></table>' + htmlReglage("enreg") +
+    '<p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : l\'enregistrement continue.' + (act === "footing" ? " Course : le GPS arrive à l'étape 4, pour l'instant FC et mouvement." : "") + '</p>' +
+    '<div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button><button class="sec" data-do="essai">🎯 Régler (N coups)</button></div>';
+  majSeance(); }
+function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage(); return; } const a = S.acc || ETAT_VIDE.acc, ok = S.h10.etat === H10.CONNECTE;
+  if ($("#hTitre").textContent !== "● " + N.actInfo(e.act).nom) titre("● " + N.actInfo(e.act).nom, "enregistrement en cours");
+  $("#sTemps").textContent = N.chrono(e.ecoule); $("#sFc").textContent = "❤️ " + (S.h10.fc || "–"); $("#sImp").textContent = e.pics; $("#sActif").textContent = N.hm(e.actif); $("#sFcm").textContent = (e.fcMoy || "–") + " / " + (e.fcMax || "–");
+  $("#sEnr").innerHTML = N.hm(e.duree) + (e.perdu > 5 ? ' <span class="al">(perdu ' + N.dureeCourte(e.perdu) + ')</span>' : "");
+  $("#sLien").innerHTML = ok ? '<span class="ok">✅ connectée</span>' : '<span class="al">' + esc(S.h10.texte) + '</span>';
+  $("#sAcc").innerHTML = !ok ? "–" : !a.present ? '<span class="att">⚠️ non accessible</span>' : a.erreur ? '<span class="att">⚠️ ' + esc(a.erreur) + '</span>' : !a.actif ? "en attente…" : a.taux ? '<span class="ok">✅ ' + a.taux + ' mesures/s</span>' : '<span class="att">⚠️ aucune mesure reçue</span>';
+  $("#sDeco").textContent = e.deconnexions + (e.coupures ? " · " + N.pl(e.coupures, "reprise") : "");
+  const al = $("#sAlerte"), msg = e.journalKo ? "⚠️ Le téléphone refuse d'écrire : arrête la séance pour ne rien perdre." : !ok && S.h10.depuis > 3 && e.ecoule > 5 ? esc(S.h10.texte) + " depuis " + N.dureeCourte(S.h10.depuis) + ". L'appli réessaie sans s'arrêter." : "";
+  al.classList.toggle("cache", !msg); al.innerHTML = msg; majReglage(); }
+function sens(b) { const imp = N.impRegler(BASE, Number(b.dataset.d), b.dataset.c, S.dernier ? S.dernier.m : null); sauver(); Pont.impRegler(imp); Pont.vibrer(20); majReglage(); if (ECRAN.nom === "essai") majEssai(); }
+function basculerBip() { const imp = N.impBip(BASE, !N.impLire(BASE).bip); sauver(); Pont.impRegler(imp); majReglage(); }
+function changerAct() { fenetre('<div class="t">✎ Activité de cette séance</div>' + N.actsVisibles(BASE).filter(a => a !== "pompes").map(a => '<div class="ligne"><button class="sec" data-do="seanceAct" data-a="' + esc(a) + '">' + esc(N.actNom(a)) + '</button></div>').join("") + '<div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
+function seanceAct(a) { fermerFenetre(); Pont.seanceActivite(a); BASE.reglages["act-courante"] = a; sauver(); setTimeout(tic, 300); }
+function arreterSeance() { fenetre('<div class="t">⏹ Arrêter l\'enregistrement ?</div><p>La séance sera rangée dans l\'Historique.</p><div class="ligne"><button class="rouge" data-do="finSeance">Oui, arrêter</button></div><div class="ligne"><button class="sec" data-do="fermer">Continuer la séance</button></div>'); }
+function lireEnregistrement(nom) { try { return JSON.parse(Pont.lire("enregistrements/" + nom)); } catch (e) { return null; } }
+/* ajoute à l'Historique les enregistrements terminés qui n'y sont pas encore (par ex. séance finie pendant que l'écran était fermé) */
+function importerEnregistrements() { let n = 0; N.enregistrementsManquants(BASE, Pont.enregistrements()).forEach(nom => { const R = lireEnregistrement(nom); try { if (R && N.ajouterEnregistrement(BASE, R)) n++; } catch (e) {} }); if (n) sauver(); return n; }
+function finSeance() { fermerFenetre(); arretEnCours = true; const nom = Pont.seanceArreter();
+  if (!nom) { arretEnCours = false; info("⚠️ Séance non terminée", "<p>Le téléphone a refusé d'écrire le fichier. L'enregistrement continue, rien n'est perdu. Réessaie dans un instant.</p>"); return; }
+  importerEnregistrements(); const R = lireEnregistrement(nom); arretEnCours = false; seanceVue = false; demarrageT = 0; lireEtat(); majH10();
+  if (!R) { aller("historique"); return; } BILAN = N.rapportEnregistrement(R, N.impLire(BASE), Pont.version()); BILAN.R = R; aller("bilan"); }
+function vueBilan() { const B = BILAN; if (!B) { aller("historique"); return; } const b = B.bilan, R = B.R, propre = !b.trous.length && b.perdu <= 10;
+  titre("✅ Enregistré", N.actInfo(R.act).nom + " · " + N.dateHeure(R.debut));
+  const L = [["Durée", N.hm(b.ecoule)], ["Enregistré", N.hm(b.enregistre)], ["Temps perdu", N.dureeCourte(b.perdu)], ["Trous de plus d'une minute", String(b.trous.length)], ["Coupures de ceinture", b.deconnexions.length + (b.deconnexions.length ? " (" + N.dureeCourte(b.tempsDeconnecte) + ")" : "")],
+    ["Reprises après fermeture", String(b.reprises)], ["FC moyenne / max", (b.fcMoy || "–") + " / " + (b.fcMax || "–")], ["⚡ Impacts", b.sansMouvement ? "pas de mesure" : String(b.impacts)], ["Temps actif", b.sansMouvement ? "–" : N.hm(b.actif)]];
+  $("#vue").innerHTML = '<div class="boiteInfo" style="' + (propre ? "background:#e8f5ec;border-color:#1f6b43" : "") + '"><b>' + (propre ? "✅ Aucun trou : l'enregistrement est complet." : "⚠️ Il manque " + N.dureeCourte(b.perdu) + " dans cet enregistrement.") + '</b></div>' +
+    '<table><tbody>' + L.map(r => '<tr><td>' + esc(r[0]) + '</td><td class="n"><b>' + esc(r[1]) + '</b></td></tr>').join("") + '</tbody></table>' +
+    '<div class="ligne"><button class="sec" data-do="copierBilan">📋 Copier le résumé</button><button class="sec" data-do="copierBilanTout">📋 Copier tout</button><button class="sec" data-do="fichierBilan">💾 Fichier</button></div><div class="ligne"><button class="main" data-do="onglet" data-o="historique" style="min-height:60px;font-size:19px">Voir l\'historique</button></div>'; }
+
+/* ----- 🎯 réglage « N coups » ----- */
+function ouvrirEssai() { fermerFenetre(); lireEtat();
+  if (!Pont.natif) { info("Seulement dans l'APK", "<p>Le réglage se fait avec la ceinture, dans l'appli installée sur le téléphone.</p>"); return; }
+  if (!S.service) { if (!btPret()) return; pousserReglage(); if (!Pont.h10Connecter()) { toast("⚠️ Impossible de démarrer la ceinture."); return; } }
+  ESSAI = { etape: "coups", ctx: S.enr ? "enreg" : "essai", lance: false }; aller("essai"); }
+function vueEssai() { if (!ESSAI) { aller(S.enr ? "seance" : "activites"); return; } titre("🎯 Impacts", "réglage « N coups »");
+  if (ESSAI.etape === "resultat") { $("#vue").innerHTML = '<div class="boiteInfo pre" style="font-size:16px">' + esc(ESSAI.texte) + '</div>' + htmlReglage(ESSAI.ctx) + '<div class="ligne"><button class="sec" data-do="essai">Refaire un essai</button><button class="main" data-do="essaiFermer">Terminé</button></div>'; majReglage(); return; }
+  $("#vue").innerHTML = '<div class="boiteInfo" style="font-size:16px">Fais tes coups (par exemple 10), à ta force normale, puis touche « J\'ai fini ».</div><div class="grand"><div id="eVal" style="font-size:28px;font-weight:900">…</div><div id="eInfo" class="aide"></div><div id="eDer" style="font-size:16px;font-weight:700;line-height:1.7;margin-top:6px"></div></div>' + htmlReglage(ESSAI.ctx) +
+    '<div class="ligne"><button class="main" data-do="essaiFini">J\'ai fini</button><button class="sec" data-do="essaiFermer">Annuler</button></div>'; majEssai(); }
+function majEssai() { if (!ESSAI || ESSAI.etape !== "coups" || !$("#eVal")) { majReglage(); return; }
+  if (!ESSAI.lance && S.service) ESSAI.lance = Pont.essaiDemarrer();
+  const imp = N.impLire(BASE), d = N.essaiEnDirect(Pont.essaiDonnees(), imp), a = S.acc || ETAT_VIDE.acc;
+  $("#eVal").textContent = N.pl(d.comptes, "compté") + " au seuil " + N.gg(imp.seuil) + " g"; 
+  $("#eInfo").innerHTML = S.h10.etat !== H10.CONNECTE ? '<span class="att">' + esc(S.h10.texte || "connexion à la ceinture…") + '</span>' : !a.present ? '<span class="att">⚠️ capteur de mouvement non accessible</span>' : a.erreur ? '<span class="att">⚠️ ' + esc(a.erreur) + '</span>' : !a.actif || !a.taux ? "capteur de mouvement en attente…" : N.pl(d.mouvements, "mouvement") + " en tout · ❤️ " + (S.h10.fc || "–");
+  $("#eDer").innerHTML = d.derniers.map(x => x.compte ? '<span class="ok">' + N.gg(x.m) + '✅</span>' : '<span class="al">' + N.gg(x.m) + '✗</span>').join(" · "); majReglage(); }
+function essaiFini() { fenetre('<div class="t">Combien de coups as-tu faits ?</div><input id="eNb" type="number" inputmode="numeric" min="1" max="200" value="10"><div class="ligne"><button class="main" data-do="essaiValider">Valider</button><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#eNb"); if (i) { i.focus(); i.select(); } }, 50); }
+function essaiValider() { const n = parseInt($("#eNb").value, 10); if (!n || n < 1) return; fermerFenetre(); const r = N.impEssai(BASE, Pont.essaiDonnees(), n); sauver(); Pont.impRegler(r.imp); Pont.essaiArreter(); ESSAI = { etape: "resultat", texte: r.texte, ctx: ESSAI ? ESSAI.ctx : "essai" }; vueEssai(); }
+function essaiFermer() { Pont.essaiArreter(); ESSAI = null; aller(S.enr ? "seance" : "activites"); }
+
 /* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
 const ACTIONS = {
   fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct,
@@ -274,24 +409,32 @@ const ACTIONS = {
   ouvrir: (b) => { const id = b.dataset.id; if (H.ouverts.has(id)) H.ouverts.delete(id); else H.ouverts.add(id); const y = $("#vue").scrollTop; vueHistorique(); $("#vue").scrollTop = y; },
   copierHisto: () => copie(N.rapportHistorique(BASE, Pont.version()), "Historique"),
   fiche: (b) => aller("fiche", b.dataset.f), onglet: (b) => { PRECEDENT = null; aller(b.dataset.o); },
-  batterie: () => Pont.ouvrirBatterie(), notif: () => Pont.demanderNotif(), importer: () => Pont.choisirFichier(),
+  batterie: () => { if (fenetreOuverte()) fermerFenetre(); Pont.ouvrirBatterie(); }, notif: () => Pont.demanderNotif(), importer: () => Pont.choisirFichier(),
   sauvegarder, partager, fusionAuto: (b) => fusionAuto(b.dataset.n), masquer: (b) => masquer(b.dataset.a),
   copierImport: (b) => { const i = BASE.imports.find(x => String(x.t) === b.dataset.t); if (i) copie(i.resume, "Descriptif"); },
   copierEtat: () => copie(etatAppli(), "État de l'appli"),
   copierResume: () => copie(DESC.resume, "Résumé"), copierTout: () => copie(DESC.tout, "Rapport complet"),
-  fichierDesc: () => fichierTexte("JournalActivite-import_" + N.horodatage(DESC.t) + ".txt", DESC.tout)
+  fichierDesc: () => fichierTexte("JournalActivite-import_" + N.horodatage(DESC.t) + ".txt", DESC.tout),
+  h10: ouvrirH10, h10Arreter, btDemander: () => { fermerFenetre(); Pont.btDemander(); }, lancerSeance, sens, bip: basculerBip, changerAct, seanceAct: (b) => seanceAct(b.dataset.a), arreterSeance, finSeance,
+  copierBilan: () => copie(BILAN.resume, "Résumé"), copierBilanTout: () => copie(BILAN.tout, "Rapport complet"), fichierBilan: () => fichierTexte("JournalActivite-seance_" + N.horodatage(BILAN.R.debut) + ".txt", BILAN.tout),
+  essai: ouvrirEssai, essaiFini, essaiValider, essaiFermer,
+  copierReglages: () => copie(N.rapportReglages(BASE), "Rapport des réglages"), copierRecs: () => copie(N.resumeEnregistrements(BASE, Pont.version()), "Résumé des enregistrements")
 };
 document.addEventListener("click", (e) => { const b = e.target.closest("[data-do]"); if (!b) return; const fn = ACTIONS[b.dataset.do]; if (fn) fn(b); });
 document.querySelectorAll("#onglets button").forEach(b => b.onclick = () => { PRECEDENT = null; aller(b.dataset.o); });
 $("#bAide").onclick = () => aller("fiche", AIDE_DE[ECRAN.nom] || "premiere");
 $("#bRegl").onclick = () => { if (ECRAN.nom === "reglages") retourEcran(); else aller("reglages"); };
 $("#bDemarrer").onclick = demarrer;
+$("#bH10").onclick = ouvrirH10;
+$("#bArreter").onclick = arreterSeance;
 $("#voile").addEventListener("click", (e) => { if (e.target.id === "voile" && $("#boite").querySelector("[data-do]")) fermerFenetre(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.id === "naNom") creerAct(); });
+document.addEventListener("keydown", (e) => { if (e.key !== "Enter") return; if (e.target.id === "naNom") creerAct(); else if (e.target.id === "eNb") essaiValider(); });
 
 /* ===== Démarrage ===== */
 chargerBase();
-if (!BASE.courses.length && !BASE.imports.length) aller("fiche", "premiere"); else dessiner();
+pousserReglage(); lireEtat(); importerEnregistrements();
+if (S.enr) { seanceVue = true; aller("seance"); } else if (!BASE.courses.length && !BASE.imports.length) aller("fiche", "premiere"); else dessiner();
+majH10(); setInterval(tic, 1000);
 </script>
 </body>
 </html>
