@@ -29,6 +29,8 @@ jobs:
         run: node activite/tests/test-parcours.js
       - name: Tester le fantôme de course (partie Android)
         run: node activite/tests/test-fantome.js
+      - name: Tests du home-trainer
+        run: node activite/tests/test-ftms.js
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.9" }
       - name: Copier l'appli dans l'APK

@@ -430,7 +430,29 @@ function lancerSeance() { fermerFenetre(); const act = actCourante(), o = N.gpsL
 function htmlReglage(ctx) { return '<div class="reglage"><div class="rl"><button class="sec" data-do="sens" data-d="100" data-c="' + ctx + '">− sensible</button><b id="rSeuil"></b><button class="sec" data-do="sens" data-d="-100" data-c="' + ctx + '">+ sensible</button></div><div id="rDer" class="rder"></div><div class="ligne"><button class="sec" data-do="bip" id="rBip"></button></div></div>'; }
 function majReglage() { if (!$("#rSeuil")) return; const i = N.impLire(BASE), d = S.dernier; $("#rSeuil").textContent = N.gg(i.seuil) + " g"; $("#rBip").textContent = i.bip ? "🔔 Bip à chaque impact : oui" : "🔕 Bip à chaque impact : non";
   $("#rDer").innerHTML = d ? "Dernier : " + N.gg(d.m) + " g " + (d.m > i.seuil ? '<span class="ok">✅ compté</span>' : '<span class="al">✗ pas compté</span>') : ""; }
-function vueSeance() { const act = S.enr ? S.enr.act : actCourante(), gps = !!S.gps || (!S.enr && N.gpsPour(BASE, act) && !DEPART.sansGps); titre("● " + N.actInfo(act).nom, "enregistrement en cours");
+/* 1.14 : séance de home-trainer (Wahoo KICKR Core ou autre home-trainer FTMS) */
+const HT_MODES = [[0, "Libre", "", 0, 0], [1, "ERG", "W", 10, 120], [2, "Pente", "%", 0.5, 2], [3, "Résistance", "%", 5, 30]];
+let HT_VAL = (() => { try { return JSON.parse(localStorage.getItem("ht-valeurs")) || {}; } catch (e) { return {}; } })();
+function htValeur(m) { const d = HT_MODES[m]; return HT_VAL[m] != null ? HT_VAL[m] : d[4]; }
+function htRegler(mode, val) { const d = HT_MODES[mode]; if (mode === 1) val = Math.max(30, Math.min(800, Math.round(val))); else if (mode === 2) val = Math.max(-10, Math.min(20, Math.round(val * 2) / 2)); else if (mode === 3) val = Math.max(0, Math.min(100, Math.round(val)));
+  HT_VAL[mode] = val; try { localStorage.setItem("ht-valeurs", JSON.stringify(HT_VAL)); } catch (e) {}
+  if (!Pont.kickrRegler(mode, mode ? val : 0)) toast("Le home-trainer n'est pas prêt.", 1500); if (S.ht) { S.ht.mode = mode; S.ht.val = val; } majSeance(); }
+function vueSeanceHt() { titre("● " + N.actInfo("ht").nom, "enregistrement en cours");
+  $("#vue").innerHTML = '<div class="grand"><div class="chiffre" id="sTemps">0:00</div><div class="trio"><div><b id="hW" style="font-size:44px">–</b><small>watts</small></div><div><b id="hCad">–</b><small>tr/min</small></div><div class="fc"><b id="hFc">–</b><small>❤️ cardio</small></div></div></div>' +
+    '<div class="boiteInfo" id="hEtat">Recherche du home-trainer…</div>' +
+    '<div class="pages" style="grid-template-columns:repeat(4,1fr)">' + HT_MODES.map(m => '<button class="pg" data-do="htMode" data-m="' + m[0] + '" id="hM' + m[0] + '">' + m[1] + '</button>').join("") + '</div>' +
+    '<div class="fant" id="hCons"><small id="hConsT">Mode libre : tu règles toi-même</small><div class="ligne" style="align-items:center"><button class="sec" data-do="htPlus" data-s="-1" style="font-size:28px;min-width:70px">−</button><b id="hVal" style="flex:1;text-align:center;white-space:nowrap;font-size:38px">–</b><button class="sec" data-do="htPlus" data-s="1" style="font-size:28px;min-width:70px">+</button></div></div>' +
+    '<table class="milieu"><tbody><tr><td>Vitesse</td><td class="n" id="hVit"></td></tr><tr><td>Distance</td><td class="n" id="hDist"></td></tr><tr><td>FC moyenne / max</td><td class="n" id="sFcm"></td></tr><tr><td>Ceinture</td><td class="n" id="sLien" style="white-space:normal"></td></tr></tbody></table>' +
+    '<p class="aide">Ferme l\'appli Wahoo (et ne lance pas de séance pilotée sur la montre) : un seul pilote à la fois. Tu peux éteindre l\'écran : l\'enregistrement continue. ERG : des watts à tenir. Pente : la côte comme dehors. Résistance : dureté fixe.</p>';
+  majSeance(); }
+function majHt() { const e = S.enr, k = S.ht || {}, met = (id, v) => { const el = $(id); if (el && el.innerHTML !== v) el.innerHTML = v; };
+  met("#sTemps", N.chrono(e.ecoule)); met("#hW", k.w >= 0 ? String(k.w) : "–"); met("#hCad", k.cad >= 0 ? String(k.cad) : "–"); met("#hFc", String(S.h10 && S.h10.fc || "–"));
+  met("#hVit", Number(k.vit) >= 0 ? String(k.vit).replace(".", ",") + " km/h" : "–"); met("#hDist", N.kmTxt(k.dist || 0)); met("#sFcm", e.fcMoy ? e.fcMoy + " / " + e.fcMax : "–"); met("#sLien", esc(S.h10 && S.h10.texte || ""));
+  met("#hEtat", esc((k.nom ? k.nom + " : " : "") + (k.texte || "recherche du home-trainer…")) + (k.message ? "<br><b>⚠️ " + esc(k.message) + "</b>" : "")); const et = $("#hEtat"); if (et) et.classList.toggle("al", !k.ok);
+  const mode = k.mode || 0, d = HT_MODES[mode]; HT_MODES.forEach(m => { const b = $("#hM" + m[0]); if (b) b.setAttribute("aria-pressed", String(m[0] === mode)); });
+  met("#hConsT", mode === 0 ? "Mode libre : le home-trainer ne force rien" : mode === 1 ? "ERG : watts à tenir" : mode === 2 ? "Pente de la route" : "Résistance (0 à 100 %)");
+  met("#hVal", mode === 0 ? "–" : (mode === 2 ? String(Number(k.val).toFixed(1)).replace(".", ",") : String(Math.round(k.val))) + " " + d[2]); }
+function vueSeance() { const act = S.enr ? S.enr.act : actCourante(); if (act === "ht") { vueSeanceHt(); return; } const gps = !!S.gps || (!S.enr && N.gpsPour(BASE, act) && !DEPART.sansGps); titre("● " + N.actInfo(act).nom, "enregistrement en cours");
   if (gps) { $("#vue").innerHTML = '<div class="pages"><button class="pg" data-do="pageSeance" data-p="0" id="pgB0">Course</button><button class="pg" data-do="pageSeance" data-p="1" id="pgB1">👻 Prévision</button></div><div id="pg0"><div class="grand" data-gps="1"><div class="chiffre" id="sTemps">0:00</div><div class="trio"><div><b id="sDist">0,00</b><small>km</small></div><div><b id="sAllure">–</b><small>allure /km</small></div><div class="fc"><b id="sFc">–</b><small>❤️ cardio</small></div></div></div>' +
     '<div class="fant cache" id="sFant"><b id="sFantM"></b><small id="sFantT"></small></div><div class="boiteInfo cache" id="sAlerte"></div><div class="boiteInfo' + (S.gps ? " cache" : "") + '" id="sGps">' + (S.gps ? "" : "🛰 <b>Recherche des satellites…</b> Reste dehors, à ciel ouvert.") + '</div><button class="main" data-do="tour" id="bTour">🚩 Tour</button>' +
     '<table class="milieu"><tbody><tr><td>Tour en cours</td><td class="n" id="sTour" style="font-weight:900;font-size:18px"></td></tr><tr><td>Allure moyenne</td><td class="n" id="sMoy"></td></tr><tr><td>Dernier km</td><td class="n" id="sKm"></td></tr><tr><td>GPS</td><td class="n" id="sGpsL" style="white-space:normal"></td></tr>' +
@@ -451,7 +473,7 @@ function vueSeance() { const act = S.enr ? S.enr.act : actCourante(), gps = !!S.
     '<div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button><button class="sec" data-do="essai">🎯 Régler (N coups)</button></div>';
   majSeance(); }
 const GPS = { ARRET: 0, RECHERCHE: 1, OK: 2, ETEINT: 3, SANS_DROIT: 4, LIMITE: 5 };
-function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage(); return; } const a = S.acc || ETAT_VIDE.acc, ok = S.h10.etat === H10.CONNECTE, g = S.gps, vueGps = !!$("#vue [data-gps]");
+function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage(); return; } if ($("#hW")) { majHt(); return; } const a = S.acc || ETAT_VIDE.acc, ok = S.h10.etat === H10.CONNECTE, g = S.gps, vueGps = !!$("#vue [data-gps]");
   if (!!g !== vueGps) { vueSeance(); return; }                                   // la séance a (ou n'a pas) de GPS : on affiche le bon écran
   const met = (id, v, html) => { const el = $(id); if (el) { if (html) el.innerHTML = v; else el.textContent = v; } };
   if ($("#hTitre").textContent !== "● " + N.actInfo(e.act).nom) titre("● " + N.actInfo(e.act).nom, "enregistrement en cours");
@@ -662,6 +684,8 @@ const ACTIONS = {
   copierHisto: () => copie(N.rapportHistorique(BASE, Pont.version()), "Historique"),
   importerFit: () => Pont.choisirFichier(),
   pageSeance: (b) => pageSeance(Number(b.dataset.p)),
+  htMode: (b) => { const m = Number(b.dataset.m); htRegler(m, htValeur(m)); },
+  htPlus: (b) => { const m = S.ht ? S.ht.mode || 0 : 0; if (!m) { toast("Choisis d'abord ERG, Pente ou Résistance.", 1500); return; } htRegler(m, Number(S.ht.val) + Number(b.dataset.s) * HT_MODES[m][3]); },
   voixBascule: () => { const v = Pont.voixBasculer(); if (S.gps) S.gps.voix = v; majSeance(); toast(v ? "🔊 Voix remise" : "🔇 Voix coupée", 1200); },
   prevBascule: () => { const v = Pont.prevBasculer(); if (S.gps) S.gps.prevOn = v; majSeance(); },
   copierDetail: (b) => { const t = N.detailLigne(BASE, b.dataset.id, Pont.version()); if (t) copie(t, "Détail de la séance"); },

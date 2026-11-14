@@ -496,6 +496,9 @@ public class MainActivity extends Activity {
             if (s != null) s.reglerFantome(rythme);
         }
 
+        /** 1.14 : mode du home-trainer (0 libre, 1 ERG en watts, 2 pente en %, 3 résistance en %). */
+        @JavascriptInterface public boolean kickrRegler(int mode, double valeur) { ServiceSeance s = ServiceSeance.actif; return s != null && s.reglerKickr(mode, valeur); }
+
         /** 1.13 : coupe ou remet la voix (renvoie true si la voix parle). */
         @JavascriptInterface public boolean voixBasculer() {
             ServiceSeance s = ServiceSeance.actif;

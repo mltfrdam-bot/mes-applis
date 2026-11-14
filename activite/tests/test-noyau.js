@@ -311,4 +311,12 @@ test("Import d'une sortie de montre (.fit) : km par km, cardio, fantôme, pas de
   /* un fichier qui n'est pas un .fit est refusé sans rien changer */
   assert.throws(() => N.fitLire(new TextEncoder().encode('{"format":"x"}')), /pas un fichier \.fit/); });
 
+test("Home-trainer (1.14) : ligne d'Historique, bilan par tranches de 5 min, activité dans la liste", () => {
+  const L = [], l = []; for (let s = 0; s < 900; s++) { const m = s < 300 ? 0 : s < 600 ? 1 : 2; L.push([s, s < 300 ? 100 : s < 600 ? 150 : 210, 85, 300, m, m === 1 ? 1500 : m === 2 ? 60 : 0]); l.push([s, 120 + Math.floor(s / 30), 0, 0, 0]); }
+  const R = { debut: 1794700000000, fin: 1794700900000, act: "ht", res: { duree: 900, actif: 0, pics: 0, fcMoy: 135, fcMax: 149 }, l, coupures: 0, pics: [], deconnexions: [], source: "APK 1.14", velo: { pMoy: 153, pMax: 210, cadMoy: 85, vitMoy: 30, dist: 7500, kj: 138, l: L } };
+  const b = N.baseVide(); assert.ok(N.ajouterEnregistrement(b, R)); const ligne = N.lignesHistorique(b).find(x => x.t === R.debut);
+  assert.ok(/153 W moy · max 210/.test(ligne.resultat) && /7,50 km/.test(ligne.resultat) && !/impact/.test(ligne.resultat), ligne.resultat); assert.strictEqual(N.actInfo("ht").nom, "Home-trainer");
+  const T = N.veloTranches(R); assert.deepStrictEqual(T.map(t => [t.w, t.mode]), [[100, "libre"], [150, "ERG 150 W"], [210, "pente 6 %"]]);
+  const txt = N.rapportEnregistrement(R, null, "1.14").tout; assert.ok(/HOME-TRAINER : ⚡ 153 W moy/.test(txt) && /5:00 \| 150 \/ 150 \| 85 \| 30 km\/h/.test(txt), txt.slice(0, 600)); });
+
 console.log("\n" + n + " tests réussis.");

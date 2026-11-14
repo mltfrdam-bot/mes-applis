@@ -14,7 +14,7 @@ const CLES_LISTES = ["acts-perso", "acts-masquees", "pompes-det-log", "impact-es
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
-const ACTS = [["footing", "🏃", "Course"], ["tennis", "🎾", "Tennis"], ["pompes", "💪", "Pompes"], ["muscu", "🏋️", "Muscu"], ["velo", "🚴", "Vélo"], ["marche", "🚶", "Marche"]];
+const ACTS = [["footing", "🏃", "Course"], ["tennis", "🎾", "Tennis"], ["pompes", "💪", "Pompes"], ["muscu", "🏋️", "Muscu"], ["velo", "🚴", "Vélo"], ["marche", "🚶", "Marche"], ["ht", "🚲", "Home-trainer"]];
 function actInfo(a) { const x = ACTS.find(y => y[0] === a); if (x) return { id: a, icone: x[1], nom: x[2] };
   if (a === "chantier") return { id: a, icone: "🏗️", nom: "Chantier" }; return { id: a, icone: "✳️", nom: String(a || "Activité") }; }
 function actNom(a) { const i = actInfo(a); return i.icone + " " + i.nom; }
@@ -57,6 +57,7 @@ function libelle(x) {
   if (x.boire) return "💧 Boisson : " + x.boire; if (x.manger) return "🍎 Manger : " + x.manger; if (x.arret) return "⏸ Arrêt : " + x.arret;
   if (x.douleur) return "⚠️ Douleur : " + x.douleur; if (x.sensLibre) return "Sensation : " + x.sensLibre;
   if (x.h10rec) { const R = x.h10rec, r = R.res || {}, g = gpsBilan(R), avecH10 = (R.l || []).length > 0;
+    if (R.velo) return "🚲 Home-trainer : " + veloResume(R.velo).join(" · ") + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : "");
     if (R.importe && g) return "⌚ " + R.importe.montre + " : " + (g.ok ? kmTxt(g.dist) + " en " + chrono(g.temps) + " (" + g.allure + ")" : "aucune position") + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : "");
     return (g ? "🛰 " + (g.ok ? kmTxt(g.dist) + " en " + chrono(g.temps) + " (" + g.allure + ")" : "GPS : aucune position reçue") + (avecH10 ? " — " : "") : "") +
       (avecH10 || !g ? "📡 H10 : " + hm(r.duree || 0) + ", actif " + hm(r.actif || 0) + ", " + (r.pics || 0) + " impacts" + (r.fcMoy ? ", ❤️ moy " + r.fcMoy + " / max " + r.fcMax : "") : ""); }
@@ -150,7 +151,7 @@ const paires = (courses) => [].concat(...courses.map(c => (c.notes || []).map(n 
 function seriesDe(tl) { const l = []; let c = null; (tl || []).forEach((t, i) => { if (!c || t - tl[i - 1] > 5) { c = []; l.push(c); } c.push(t); }); return l.map(x => x.length); }
 function detailNote(n) { return heure(n.t) + " — " + libelle(n) + (n.fc ? " ❤️" + n.fc : ""); }
 function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R), total = tr.reduce((a, x) => a + x.duree, 0), g = gpsBilan(R), avecH10 = (R.l || []).length > 0 && !R.importe;
-  const res = g ? (g.ok ? [kmTxt(g.dist), g.allure] : ["GPS : aucune position"]) : ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax); if (g && avecH10) res.push(pl(r.pics || 0, "impact")); if (R.importe) res.push("⌚ " + R.importe.montre);
+  const V = R.velo, res = V ? veloResume(V) : g ? (g.ok ? [kmTxt(g.dist), g.allure] : ["GPS : aucune position"]) : ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax); if (g && avecH10) res.push(pl(r.pics || 0, "impact")); if (R.importe) res.push("⌚ " + R.importe.montre);
   const alerte = tr.length ? "⚠️ " + pl(tr.length, "trou") + " (" + Math.round(total / 60) + " min)" : (R.coupe ? "⚠️ enregistrement coupé" : "");
   const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
   (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
@@ -244,7 +245,7 @@ function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule =
     reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R), fantome: fantBilan(R) }; }
 function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [], g = b.gps;
   T.push((R.importe ? "SORTIE IMPORTÉE (" + R.importe.montre + (R.importe.fichier ? ", " + R.importe.fichier : "") + ")" : "ENREGISTREMENT " + (g ? (b.sansCeinture ? "GPS" : "GPS + H10") : "H10")) + " — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
-  if (g) lignesGps(T, g);
+  if (g) lignesGps(T, g); if (R.velo) lignesVelo(R).forEach(x => T.push(x));
   T.push(b.sansCeinture && g ? "Durée : " + chrono(b.ecoule) + " · sans ceinture (pas de cardio ni de mouvement)" : "Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
   T.push("FC : moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–"));
   T.push(b.sansCeinture && g ? "Mouvement : pas de ceinture" : b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
@@ -526,7 +527,7 @@ function manquesH10(R) { const L = R.l || [], fin = R.fin ? Math.round((R.fin - 
   const vu = (jusqua) => { const m = jusqua - prec - 1; if (m > 5) trous.push({ a: prec + 1, duree: m }); else if (m >= 1) petits += m; };
   L.forEach(x => { vu(x[0]); prec = x[0]; }); vu(fin); return { trous, petits, fin }; }
 function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000), g = b.gps, G = g && g.ok ? R.gps : null;
-  if (g) lignesGps(T, g);
+  if (g) lignesGps(T, g); if (R.velo) lignesVelo(R).forEach(x => T.push(x));
   if (b.sansCeinture && g) T.push("Sans ceinture : pas de cardio ni de mouvement.");
   else { T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · actif " + hm(b.actif)));
     T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
@@ -591,6 +592,18 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
   base.imports.push({ t: d.t, source, resume: d.resume }); base.imports.sort((x, y) => x.t - y.t);
   return d; }
 
+/* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
+const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
+function veloResume(V) { const t = []; if (V.pMoy != null) t.push("⚡ " + V.pMoy + " W moy · max " + V.pMax); if (V.cadMoy != null) t.push(V.cadMoy + " tr/min"); if (V.dist) t.push(kmTxt(V.dist)); if (V.kj) t.push(V.kj + " kJ"); return t.length ? t : ["home-trainer : aucune mesure"]; }
+/* tableau par tranches de 5 minutes (watts, cadence, vitesse, cardio, mode le plus utilisé) */
+function veloTranches(R, pas) { const V = R.velo, L = (V && V.l) || [], fc = {}, T = []; pas = pas || 300; (R.l || []).forEach(x => { if (x[1] > 0) fc[x[0]] = x[1]; });
+  for (let d = 0; d <= (L.length ? L[L.length - 1][0] : -1); d += pas) { const q = L.filter(x => x[0] >= d && x[0] < d + pas); if (!q.length) continue; const w = q.filter(x => x[1] >= 0).map(x => x[1]), c = q.filter(x => x[2] > 0).map(x => x[2]), v = q.filter(x => x[3] >= 0).map(x => x[3] / 10), f = q.map(x => fc[x[0]]).filter(Boolean), modes = {};
+    q.forEach(x => { const k = x[4] ? VELO_MODES[x[4]] + (x[4] === 1 ? " " + Math.round(x[5] / 10) + " W" : x[4] === 2 ? " " + (x[5] / 10).toLocaleString("fr-FR") + " %" : " " + Math.round(x[5] / 10) + " %") : "libre"; modes[k] = (modes[k] || 0) + 1; });
+    const moy = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null; T.push({ debut: d, sec: q.length, w: moy(w), wMax: w.length ? Math.max(...w) : null, cad: moy(c), vit: v.length ? Math.round(v.reduce((x, y) => x + y, 0) / v.length * 10) / 10 : null, fc: moy(f), mode: Object.keys(modes).sort((a, b) => modes[b] - modes[a])[0] }); }
+  return T; }
+function lignesVelo(R) { const V = R.velo; if (!V) return []; const T = ["", "HOME-TRAINER : " + veloResume(V).join(" · ") + (V.vitMoy != null ? " · " + String(V.vitMoy).replace(".", ",") + " km/h moy" : ""), "Tranche | Watts moy / max | Cadence | Vitesse | FC moy | Mode"];
+  veloTranches(R).forEach(t => T.push([chrono(t.debut), (t.w != null ? t.w + " / " + t.wMax : "–"), (t.cad != null ? t.cad : "–"), (t.vit != null ? String(t.vit).replace(".", ",") + " km/h" : "–"), (t.fc || "–"), t.mode].join(" | "))); return T; }
+
 /* ===== 📥 Import d'une sortie de montre (fichier .fit : COROS, Garmin…) =====
    fitLire(octets) lit les messages « record » (un point par seconde en général) : heure, position, distance, cardio, altitude.
    fitEnregistrement(fit, nom) en fait un enregistrement comme ceux de l'appli (R.l = cardio à la seconde, R.gps = résumé du parcours),
@@ -646,7 +659,7 @@ const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, l
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impPour, impTexte, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
-  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, prevFantome, PREV_FENETRE, fitLire, fitEnregistrement, fitImporter };
+  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, veloResume, veloTranches, lignesVelo, prevFantome, PREV_FENETRE, fitLire, fitEnregistrement, fitImporter };
 g.Noyau = N;
 if (typeof module !== "undefined" && module.exports) module.exports = N;
 })(typeof window !== "undefined" ? window : globalThis);

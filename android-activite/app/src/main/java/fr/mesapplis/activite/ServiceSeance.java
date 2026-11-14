@@ -46,7 +46,7 @@ import java.util.Locale;
  * - Fantôme de course (version 1.10) : la page écrit la course de référence dans « fantome-en-cours.json » ; le service compare
  *   chaque seconde et annonce l'écart à la voix, écran éteint. Le calcul est dans Fantome.
  */
-public class ServiceSeance extends Service implements LienH10.Ecoute {
+public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.Ecoute {
     static final String ACTION_CONNECTER = "fr.mesapplis.activite.CONNECTER";
     static final String ACTION_DEMARRER = "fr.mesapplis.activite.DEMARRER";
     static final String ACTION_REPRENDRE = "fr.mesapplis.activite.REPRENDRE";
@@ -80,7 +80,12 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private TextToSpeech voix;
     private boolean voixPrete = false, fantomeArriveDit = false;
     private String aDire = null, rythme = "m500";
-    private volatile boolean voixOn = true, prevOn = true;   // 1.13 : voix et prévision, coupables pendant la course
+    private volatile boolean voixOn = true, prevOn = true;
+    // 1.14 : home-trainer (activité « ht »)
+    static final String ACT_HT = "ht";
+    private LienKickr kickr;
+    private volatile Velo velo;
+    private static final Ftms.Mesure SANS_MESURE = new Ftms.Mesure();   // 1.13 : voix et prévision, coupables pendant la course
     private long annonceRang = -1;
     private File dossier;
     private PowerManager.WakeLock verrou;
@@ -132,7 +137,9 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                 Parcours p = Parcours.relire(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut));
                 if (p != null) { fin = Math.max(fin, p.finConnue()); parcours = avecFantome(p.resumeJson(fin), lireFantome(dossier)); }
             } catch (Exception ignored) {}
-            String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK (séance clôturée après coup)", parcours));
+            Velo v = null;
+            try { v = Velo.reprendre(Velo.fichierDe(dossierEnregistrements(dossier), e.debut), e.debut); } catch (Exception ignored) {}
+            String nom = ecrireEnregistrement(dossier, e.debut, avecVelo(e.terminer(fin, "APK (séance clôturée après coup)", parcours), v));
             if (!nom.isEmpty()) { journal.delete(); new File(dossier, FANTOME).delete(); }
         } catch (Exception ignored) {}
     }
@@ -165,6 +172,13 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         rythme = p.getString("fantomeRythme", "m500");
         voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
         if (gps != null) chargerFantome();
+        kickr = new LienKickr(this, this);
+        if (e != null && ACT_HT.equals(e.activite())) {
+            try { velo = Velo.reprendre(Velo.fichierDe(dossierEnregistrements(dossier), e.debut), e.debut); } catch (Exception x) { velo = null; }
+            if (velo == null) velo = Velo.nouveau(Velo.fichierDe(dossierEnregistrements(dossier), e.debut), e.debut);
+            kickr.regler(velo.mode(), velo.consigne());
+            kickr.demarrer(p.getString("kickrAdresse", ""));
+        }
     }
 
     @Override
@@ -187,6 +201,13 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                     rythme = p.getString("fantomeRythme", "m500");
                     voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
                     if (gps != null) chargerFantome();
+                }
+                if (ACT_HT.equals(act)) {
+                    SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+                    velo = Velo.nouveau(Velo.fichierDe(dossierEnregistrements(dossier), debut), debut);
+                    velo.regler(Ftms.LIBRE, 0);
+                    kickr.regler(Ftms.LIBRE, 0);
+                    kickr.demarrer(p.getString("kickrAdresse", ""));
                 }
             } catch (Exception e) {
                 enr = null;
@@ -218,6 +239,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     public void onDestroy() {
         h.removeCallbacksAndMessages(null);
         try { lien.arreter(); } catch (Exception ignored) {}
+        try { if (kickr != null) kickr.arreter(); } catch (Exception ignored) {}
         Enregistreur e = enr;
         if (e != null) e.fermerJournal(false);          // le journal reste sur le téléphone : la séance pourra reprendre
         enr = null;
@@ -392,6 +414,14 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         }
     }
 
+    /** Ajoute la séance de home-trainer (watts, cadence, vitesse à la seconde) à l'enregistrement. */
+    static String avecVelo(String enregistrement, Velo v) {
+        if (v == null || enregistrement == null || !enregistrement.endsWith("}")) return enregistrement;
+        String j = v.resumeJson();
+        try { new org.json.JSONObject(j); } catch (Exception e) { return enregistrement; }
+        return enregistrement.substring(0, enregistrement.length() - 1) + ",\"velo\":" + j + "}";
+    }
+
     /** Range le fantôme dans le résumé du parcours, pour que le bilan puisse être refait plus tard. */
     static String avecFantome(String parcours, Fantome f) {
         if (parcours == null || f == null || !parcours.endsWith("}")) return parcours;
@@ -489,6 +519,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             case "muscu": return "Muscu";
             case "velo": return "Vélo";
             case "marche": return "Marche";
+            case "ht": return "Home-trainer";
             default: return a;
         }
     }
@@ -514,7 +545,12 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         long maintenant = System.currentTimeMillis();
         String titre = e != null ? "● " + nomAct(e.activite()) + " — enregistrement" : "Ceinture H10";
         String texte;
-        if (e != null && g != null) {
+        Velo v = velo;
+        if (e != null && v != null) {
+            Ftms.Mesure m = kickr.mesure();
+            texte = (kickr.frais() ? "⚡ " + Math.max(0, m.puissance) + " W · " + (m.cadence >= 0 ? Math.round(m.cadence) + " tr/min · " : "") : "") + (f > 0 ? "❤️ " + f + " · " : "")
+                    + texteKickr() + (v.mode() != Ftms.LIBRE ? " · " + texteMode(v.mode(), v.consigne()) : "");
+        } else if (e != null && g != null) {
             int etat = gpsEtat(maintenant);
             texte = (g.aPosition() ? kmTexte(g.distance()) + " · " + allureTexte(g.allure(maintenant)) + " · " : "") + (f > 0 ? "❤️ " + f + " · " : "") + (etat == GPS_OK ? (g.nbTours() > 0 ? "tour " + (g.nbTours() + 1) : "GPS ok") : texteGps(etat));
         } else {
@@ -569,6 +605,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                 if (!gpsEcoute && maintenant - gpsEssai > 10000) ecouterGps(true);   // autorisation donnée ou GPS rallumé entre-temps
                 suivreFantome(maintenant);
             }
+            Velo v = velo;
+            if (v != null && e != null) { Ftms.Mesure m = kickr.frais() ? kickr.mesure() : SANS_MESURE; synchronized (m) { v.seconde((int) ((maintenant - e.debut) / 1000), m); } }
             if (maintenant - dernierTaux >= 2000) { accTaux = (int) Math.round(accCompte * 1000.0 / Math.max(1, maintenant - dernierTaux)); accCompte = 0; dernierTaux = maintenant; }
             if (++compteur % 5 == 0) majNotification(false);
             // ceinture connectée pour rien (pas de séance, pas de réglage, appli fermée) : on s'arrête au bout de 10 minutes
@@ -666,8 +704,61 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
             else { double sec = (maintenant - g.debut) / 1000.0 - g.premier(), d = g.distance(), td = g.tourDist();
                 sb.append(",\"f\":").append(f.etatJson(sec, d, f.prevision(sec, d), td > 0 ? 0 : -1, td)).append('}'); }
         }
+        Velo v = velo;
+        if (v != null) {
+            Ftms.Mesure m = kickr.mesure();
+            boolean ok = kickr.frais();
+            synchronized (m) {
+                sb.append(",\"ht\":{\"etat\":").append(kickr.etat()).append(",\"texte\":").append(Json.texte(texteKickr())).append(",\"nom\":").append(Json.texte(kickr.nom()))
+                  .append(",\"message\":").append(Json.texte(kickr.message())).append(",\"ok\":").append(ok)
+                  .append(",\"w\":").append(ok ? m.puissance : -1).append(",\"cad\":").append(ok && m.cadence >= 0 ? Math.round(m.cadence) : -1)
+                  .append(",\"vit\":").append(ok && m.vitesse >= 0 ? String.format(Locale.ROOT, "%.1f", m.vitesse) : "-1")
+                  .append(",\"dist\":").append(Math.round(v.distance())).append(",\"mode\":").append(v.mode()).append(",\"val\":").append(String.format(Locale.ROOT, "%.1f", v.consigne())).append('}');
+            }
+        }
         sb.append(",\"enr\":").append(e == null ? "null" : e.etatJson(maintenant)).append('}');
         return sb.toString();
+    }
+
+    // ---------- Home-trainer ----------
+
+    /** Mode du home-trainer choisi sur l'écran : ERG (watts), pente (%), résistance (%), libre. */
+    boolean reglerKickr(int mode, double valeur) {
+        Velo v = velo;
+        if (v == null) return false;
+        v.regler(mode, valeur);
+        h.post(() -> { kickr.regler(mode, valeur); majNotification(true); });
+        return true;
+    }
+
+    private String texteKickr() {
+        switch (kickr.etat()) {
+            case LienKickr.CONNECTE: return kickr.frais() ? "home-trainer ok" : "home-trainer : pédale pour le réveiller";
+            case LienKickr.RECHERCHE: return "recherche du home-trainer…";
+            case LienKickr.CONNEXION: case LienKickr.PREPARATION: return "connexion au home-trainer…";
+            case LienKickr.PERDU: return "⚠️ home-trainer perdu, reconnexion…";
+            case LienKickr.BT_ETEINT: return "⚠️ Bluetooth éteint";
+            case LienKickr.SANS_DROIT: return "⚠️ Bluetooth non autorisé";
+            default: return "home-trainer arrêté";
+        }
+    }
+
+    static String texteMode(int mode, double val) {
+        switch (mode) {
+            case Ftms.ERG: return "ERG " + Math.round(val) + " W";
+            case Ftms.PENTE: return "pente " + String.format(Locale.FRANCE, "%.1f", val) + " %";
+            case Ftms.RESISTANCE: return "résistance " + Math.round(val) + " %";
+            default: return "libre";
+        }
+    }
+
+    @Override public void mesure(Ftms.Mesure m) { }
+
+    @Override public void etatKickrChange() { h.post(() -> majNotification(false)); }
+
+    @Override
+    public void kickrTrouve(String adresse, String nom) {
+        getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("kickrAdresse", adresse).putString("kickrNom", nom).apply();
     }
 
     static String etatHorsService(Context c) {
@@ -697,8 +788,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         if (e == null) return "";
         long fin = System.currentTimeMillis();
         Parcours g = gps;
-        String nom = ecrireEnregistrement(dossier, e.debut, e.terminer(fin, "APK " + version, g == null ? null : avecFantome(g.resumeJson(fin), fantome)));
+        Velo v = velo;
+        String nom = ecrireEnregistrement(dossier, e.debut, avecVelo(e.terminer(fin, "APK " + version, g == null ? null : avecFantome(g.resumeJson(fin), fantome)), v));
         if (nom.isEmpty()) return "";
+        velo = null;
+        if (v != null) { try { kickr.arreter(); } catch (Exception ignored) {} }
         fantome = null;
         new File(dossier, FANTOME).delete();
         enr = null;
