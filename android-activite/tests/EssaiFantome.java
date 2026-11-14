@@ -18,6 +18,11 @@ public class EssaiFantome {
             if (!premier) sb.append(',');
             premier = false;
             if (x[0].equals("P")) sb.append(Json.texte(Fantome.phrase(Double.parseDouble(x[1]), Double.parseDouble(x[2]))));
+            else if (x[0].equals("Q")) sb.append(Json.texte(Fantome.phrasePrev(Double.parseDouble(x[1]), Double.parseDouble(x[2]))));
+            else if (x[0].equals("V") && f != null) {   // « V sec maDist sec0 dist0 » : la prévision
+                double[] v = f.prevision(Double.parseDouble(x[1]), Double.parseDouble(x[2]), Double.parseDouble(x[3]), Double.parseDouble(x[4]));
+                sb.append(v == null ? "null" : "[" + Math.round(v[0]) + "," + Math.round(v[1]) + "," + Math.round(v[2]) + "," + Math.round(v[3]) + "]");
+            } else if (x[0].equals("T") && f != null) sb.append(f.etatJson(Double.parseDouble(x[1]), Double.parseDouble(x[2]), null, Double.parseDouble(x[3]), Double.parseDouble(x[4])));
             else sb.append(f == null ? "null" : f.etatJson(Double.parseDouble(x[1]), Double.parseDouble(x[2])));
         }
         sb.append("]}");

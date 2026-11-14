@@ -35,5 +35,20 @@ test("fichier vide, abîmé ou trop court : pas de fantôme, pas de plantage", (
   for (const t of ["", "{}", "n'importe quoi", '{"ref":1,"prof":[0,1]}', '{"ref":1,"pas":5,"duree":20,"dist":10,"prof":[0,5,10,10]}', '{"ref":1,"prof":[0,a,3]}']) assert.strictEqual(java(t, ["E 10 10"]).lu, false, t);
   const mini = java('{"ref":7,"nom":"Sans \\"rien\\"","prof":[0,100,200,300,400,500,600,700]}', ["E 10 250"]); assert.strictEqual(mini.lu, true); assert.strictEqual(mini.reponses[0].total, 700); assert.strictEqual(mini.reponses[0].m, 50); });
 
+test("1.13 : prévision d'arrivée (Java et page donnent le même calcul ; la montée du fantôme est comptée)", () => {
+  /* fantôme : 4 km de plat à 4:30 /km (1 080 s) puis 2 km de montée à 6:15 /km (750 s) : 6 km en 30:30 */
+  const tG = (x) => x <= 4000 ? x * 0.27 : 1080 + (x - 4000) * 0.375, dG = (t) => t <= 1080 ? t / 0.27 : Math.min(6000, 4000 + (t - 1080) / 0.375);
+  const p = []; for (let s = 0; s <= 1830; s += 5) p.push(Math.round(dG(s))); const G = { ref: 2, nom: "Côte", premier: 0, duree: 1830, dist: 6000, pas: 5, prof: p };
+  /* moi : 4 % plus vite partout ; au km 3 (sur le plat), la prévision doit déjà compter la montée : 0,96 × 30:30 = 29:17 */
+  const moi = (x) => 0.96 * tG(x), sec = moi(3000), d0 = dG((sec - 30) / 0.96);
+  const N = require("../noyau.js"), r = java(G, ["V " + sec + " 3000 " + (sec - 30) + " " + d0, "V 300 900 270 800", "V 1800 6000 1770 5900", "Q 1781 11", "Q 1890 -60", "T 900 3000 0 500"]), e = r.reponses;
+  assert.ok(Math.abs(e[0][0] - 1757) <= 2, "arrivée prévue " + e[0][0]); assert.ok(Math.abs(e[0][1] - 73) <= 2, "écart prévu " + e[0][1]);
+  assert.ok(Math.abs(e[0][2] - 279) <= 2, "à tenir maintenant " + e[0][2]); assert.ok(Math.abs(e[0][3] - 351) <= 2, "moyenne sur le restant " + e[0][3]);
+  assert.strictEqual(e[1], null, "avant le 1er km : calcul en cours"); assert.strictEqual(e[2], null, "à la distance du fantôme : plus de prévision");
+  assert.strictEqual(e[3], "Arrivée prévue 29 minutes 41, 11 secondes d'avance."); assert.strictEqual(e[4], "Arrivée prévue 31 minutes 30, 1 minute de retard.");
+  assert.ok(Math.abs(e[5].tour - 135) <= 1, "le fantôme a mis 135 s sur les 500 derniers mètres : " + e[5].tour); assert.strictEqual(e[5].prev, null);
+  const js = N.prevFantome(G, sec, 3000, sec - 30, d0); assert.ok(Math.abs(js.t - e[0][0]) <= 1 && Math.abs(js.e - e[0][1]) <= 1 && Math.abs(js.tenir - e[0][2]) <= 1 && Math.abs(js.moy - e[0][3]) <= 1, JSON.stringify(js));
+  /* fantôme hors d'atteinte : « à tenir » = -1 */ const loin = java(G, ["V 1850 5000 1820 4920"]).reponses[0]; assert.strictEqual(loin[2], -1); assert.ok(loin[1] < 0); });
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("\n" + n + " tests réussis.");

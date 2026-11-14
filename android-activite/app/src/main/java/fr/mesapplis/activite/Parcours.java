@@ -268,6 +268,8 @@ final class Parcours {
     /** Vrai si une position utilisable est arrivée depuis moins de 6 secondes. */
     synchronized boolean frais(long horloge) { return dernierOk >= 0 && horloge - debut - dernierOk < 6000; }
     synchronized boolean aPosition() { return aPos; }
+    /** Distance depuis le dernier appui sur « Tour » (0 sans tour). */
+    synchronized double tourDist() { return tours.isEmpty() ? 0 : dist - tours.get(tours.size() - 1)[1]; }
     synchronized double allure(long horloge) { return vitesse(horloge - debut); }
 
     /** État pour l'écran et la notification. */

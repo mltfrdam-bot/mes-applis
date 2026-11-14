@@ -348,13 +348,22 @@ function gpsTempsA(G, m) { if (m <= 0) return Math.max(0, G.premier); if (m >= G
 const secTxt = (s) => s < 60 ? s + " s" : chrono(s);
 const ecartTxt = (m, s) => Math.abs(m) < 5 ? "à égalité" : Math.round(Math.abs(m)) + " m " + (m > 0 ? "d'avance" : "de retard") + (Math.abs(s) >= 1 ? " (" + secTxt(Math.round(Math.abs(s))) + ")" : "");
 /* Bilan contre le fantôme : l'écart à la fin, et à chaque kilomètre (moi, lui, écart en secondes, positif = avance). */
+/* Prévision d'arrivée contre le fantôme (1.13) : mêmes règles que Fantome.prevision côté Android.
+   On compare ses 30 dernières secondes (de sec0, dist0 à sec, d) au fantôme sur la même portion, et on garde ce rapport jusqu'au bout.
+   Rend {t: arrivée prévue (s), e: écart prévu (s, positif = plus vite que le fantôme), tenir: allure à tenir maintenant (s/km), moy: moyenne sur le restant (s/km)} ;
+   tenir et moy = -1 si le fantôme ne peut plus être battu ; null avant le 1er km, au-delà de sa distance ou sans mouvement. */
+const PREV_FENETRE = 30;
+function prevFantome(F, sec, d, sec0, dist0) { const total = F.dist, T = fantTemps(F); if (d < 1000 || d >= total || sec - sec0 < PREV_FENETRE * 0.6 || d - dist0 < 20) return null;
+  const lui = fantTempsA(F, d) - fantTempsA(F, dist0); if (lui < 5) return null; const r = Math.max(0.5, Math.min(2, (sec - sec0) / lui)), resteLui = T - fantTempsA(F, d); if (resteLui <= 0) return null;
+  const t = sec + r * resteLui, budget = T - sec, a = Math.max(0, d - 50), b = Math.min(total, d + 50), allureLui = (fantTempsA(F, b) - fantTempsA(F, a)) / Math.max(1, b - a) * 1000;
+  return { t, e: T - t, tenir: budget > 0 ? allureLui * budget / resteLui : -1, moy: budget > 0 ? budget / ((total - d) / 1000) : -1 }; }
 function fantBilan(R) { const G = R && R.gps, F = G && G.fantome; if (!F || !gpsUtile(R) || !Array.isArray(F.prof) || F.prof.length < 3) return null; const total = fantTotal(F), tF = fantTemps(F), depart = Math.max(0, G.premier), temps = Math.max(0, G.duree - depart);
   const plusLoin = G.dist >= total, moiAuBout = plusLoin ? gpsTempsA(G, total) - depart : temps;       // on compare sur la plus courte des deux distances
   const b = { nom: F.nom || "", ref: F.ref, total, temps: tF, complet: plusLoin, recalcule: !!F.recalcule, s: plusLoin ? tF - moiAuBout : fantTempsA(F, G.dist) - temps, m: !plusLoin ? G.dist - fantDistA(F, temps) : moiAuBout <= tF ? total - fantDistA(F, moiAuBout) : gpsDistA(G, tF + depart) - total, kms: [] };   // en mètres : où était l'autre quand le premier des deux est arrivé
-  (G.km || []).forEach((sec, i) => { const d = (i + 1) * 1000, moi = sec - depart; if (d <= total) { const lui = fantTempsA(F, d); b.kms.push({ n: i + 1, moi, lui: Math.round(lui), ecart: Math.round(lui - moi) }); } });
+  (G.km || []).forEach((sec, i) => { const d = (i + 1) * 1000, moi = sec - depart; if (d <= total) { const lui = fantTempsA(F, d), p = d < total ? prevFantome(F, moi, d, moi - PREV_FENETRE, gpsDistA(G, sec - PREV_FENETRE)) : null; b.kms.push({ n: i + 1, moi, lui: Math.round(lui), ecart: Math.round(lui - moi), prev: p ? Math.round(p.t) : null }); } });
   b.texte = (b.complet ? "Sur la distance du fantôme (" + kmTxt(total) + ") : " : "À ton arrêt (" + kmTxt(G.dist) + " sur les " + kmTxt(total) + " du fantôme) : ") + ecartTxt(b.m, b.s) + "."; return b; }
 function lignesFantome(T, f) { T.push("", "👻 Fantôme : " + f.nom + " — " + kmTxt(f.total) + " en " + chrono(f.temps) + (f.recalcule ? "" : " (distance d'origine, tracé complet absent)"), f.texte);
-  if (f.kms.length) { T.push("Km | Moi | Fantôme | Écart"); let moiAvant = 0, luiAvant = 0; f.kms.forEach(k => { T.push([k.n, chrono(k.moi - moiAvant), chrono(k.lui - luiAvant), (k.ecart > 0 ? "+" : k.ecart < 0 ? "−" : "") + secTxt(Math.abs(k.ecart)) + (k.ecart > 0 ? " d'avance" : k.ecart < 0 ? " de retard" : "")].join(" | ")); moiAvant = k.moi; luiAvant = k.lui; }); } }
+  if (f.kms.length) { const avecPrev = f.kms.some(k => k.prev != null); T.push("Km | Moi | Fantôme | Écart" + (avecPrev ? " | Arrivée prévue" : "")); let moiAvant = 0, luiAvant = 0; f.kms.forEach(k => { T.push([k.n, chrono(k.moi - moiAvant), chrono(k.lui - luiAvant), (k.ecart > 0 ? "+" : k.ecart < 0 ? "−" : "") + secTxt(Math.abs(k.ecart)) + (k.ecart > 0 ? " d'avance" : k.ecart < 0 ? " de retard" : "")].concat(avecPrev ? [k.prev != null ? chrono(k.prev) + " (fantôme " + chrono(f.temps) + ")" : "–"] : []).join(" | ")); moiAvant = k.moi; luiAvant = k.lui; }); } }
 
 /* ===== 👻 Fantôme des pompes et des exercices (version 1.11) =====
    On refait une séance passée : le fantôme est la liste de ses séries (répétitions de chaque série, repos après chacune).
@@ -637,7 +646,7 @@ const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, l
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impPour, impTexte, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
-  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, fitLire, fitEnregistrement, fitImporter };
+  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, prevFantome, PREV_FENETRE, fitLire, fitEnregistrement, fitImporter };
 g.Noyau = N;
 if (typeof module !== "undefined" && module.exports) module.exports = N;
 })(typeof window !== "undefined" ? window : globalThis);

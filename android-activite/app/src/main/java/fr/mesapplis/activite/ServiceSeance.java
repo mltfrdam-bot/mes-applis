@@ -51,6 +51,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     static final String ACTION_DEMARRER = "fr.mesapplis.activite.DEMARRER";
     static final String ACTION_REPRENDRE = "fr.mesapplis.activite.REPRENDRE";
     static final String ACTION_TOUR = "fr.mesapplis.activite.TOUR";
+    static final String ACTION_VOIX = "fr.mesapplis.activite.VOIX";
     static final String EXTRA_ACT = "act";
     static final String EXTRA_GPS = "gps";
     static final String FANTOME = "fantome-en-cours.json";
@@ -79,6 +80,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
     private TextToSpeech voix;
     private boolean voixPrete = false, fantomeArriveDit = false;
     private String aDire = null, rythme = "m500";
+    private volatile boolean voixOn = true, prevOn = true;   // 1.13 : voix et prévision, coupables pendant la course
     private long annonceRang = -1;
     private File dossier;
     private PowerManager.WakeLock verrou;
@@ -161,6 +163,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         Enregistreur e = enr;
         if (e != null) { try { gps = Parcours.reprendre(Parcours.fichierDe(dossierEnregistrements(dossier), e.debut), System.currentTimeMillis()); } catch (Exception x) { gps = null; } }
         rythme = p.getString("fantomeRythme", "m500");
+        voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
         if (gps != null) chargerFantome();
     }
 
@@ -170,6 +173,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         boolean avecGps = ACTION_DEMARRER.equals(action) && enr == null && intent.getBooleanExtra(EXTRA_GPS, false);
         // bouton « Tour » de la notification : le service tourne déjà, il n'y a rien d'autre à faire
         if (ACTION_TOUR.equals(action) && premierPlan && enr != null) { tour(); return START_STICKY; }
+        if (ACTION_VOIX.equals(action) && premierPlan) { basculerVoix(); return START_STICKY; }
         if (!mettreAuPremierPlan(avecGps || gps != null)) { stopSelf(); return START_NOT_STICKY; }
         if (ACTION_DEMARRER.equals(action) && enr == null) {
             try {
@@ -181,6 +185,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
                     gpsKm = p.getBoolean("gpsKm", true);
                     try { gps = Parcours.nouveau(Parcours.fichierDe(dossierEnregistrements(dossier), debut), debut, "velo".equals(act) ? 28 : 12, p.getString("gpsSource", "sat")); } catch (Exception x) { gps = null; }
                     rythme = p.getString("fantomeRythme", "m500");
+                    voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
                     if (gps != null) chargerFantome();
                 }
             } catch (Exception e) {
@@ -415,7 +420,24 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         }
     }
 
+    /** Bouton 🔊 / 🔇 (écran 2 et notification) : coupe ou remet toutes les annonces. */
+    boolean basculerVoix() {
+        voixOn = !voixOn;
+        getSharedPreferences("reglages", MODE_PRIVATE).edit().putBoolean("voixOn", voixOn).apply();
+        if (!voixOn) { aDire = null; try { if (voix != null) voix.stop(); } catch (Exception ignored) {} }
+        majNotification(true);
+        return voixOn;
+    }
+
+    /** Bouton 🧮 : montre ou cache la prévision (le calcul continue pour le bilan). */
+    boolean basculerPrev() {
+        prevOn = !prevOn;
+        getSharedPreferences("reglages", MODE_PRIVATE).edit().putBoolean("prevOn", prevOn).apply();
+        return prevOn;
+    }
+
     private void dire(String texte) {
+        if (!voixOn) return;
         try {
             if (voixPrete && voix != null) voix.speak(texte, TextToSpeech.QUEUE_ADD, null, "fantome");
             else aDire = texte;
@@ -438,6 +460,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         Fantome f = fantome;
         if (g == null || f == null || enr == null || !g.aPosition()) return;
         double sec = (maintenant - g.debut) / 1000.0 - g.premier(), d = g.distance();
+        f.noter(sec, d);
         if (f.fini(sec) && !fantomeArriveDit) {
             fantomeArriveDit = true;
             if (annonceRang >= 0 && !"non".equals(rythme)) dire("Le fantôme est arrivé. " + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)));
@@ -448,7 +471,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         if (annonceRang < 0) { annonceRang = r; return; }   // départ ou reprise : pas d'annonce tout de suite
         if (r > annonceRang) {
             annonceRang = r;
-            if (!"non".equals(rythme)) dire(("km1".equals(rythme) ? "Kilomètre " + r + ". " : "") + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)));
+            double[] pv = prevOn ? f.prevision(sec, d) : null;
+            if (!"non".equals(rythme)) dire(("km1".equals(rythme) ? "Kilomètre " + r + ". " : "") + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)) + (pv != null ? " " + Fantome.phrasePrev(pv[0], pv[1]) : ""));
         }
     }
 
@@ -513,6 +537,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         if (e != null && g != null) {
             PendingIntent pt = PendingIntent.getService(this, 1, new Intent(this, ServiceSeance.class).setAction(ACTION_TOUR), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             b.addAction(new Notification.Action.Builder(null, "🚩 Tour", pt).build());
+            if (fantome != null) {
+                PendingIntent pv = PendingIntent.getService(this, 2, new Intent(this, ServiceSeance.class).setAction(ACTION_VOIX), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                b.addAction(new Notification.Action.Builder(null, voixOn ? "🔇 Couper la voix" : "🔊 Remettre la voix", pv).build());
+            }
         }
         if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
         return b.build();
@@ -633,7 +661,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute {
         else {
             Fantome f = fantome;
             sb.append("{\"etat\":").append(etatGps).append(",\"texte\":").append(Json.texte(texteGps(etatGps))).append(",\"p\":").append(g.etatJson(maintenant))
-              .append(",\"f\":").append(f == null || !g.aPosition() ? "null" : f.etatJson((maintenant - g.debut) / 1000.0 - g.premier(), g.distance())).append('}');
+              .append(",\"voix\":").append(voixOn).append(",\"prevOn\":").append(prevOn);
+            if (f == null || !g.aPosition()) sb.append(",\"f\":null}");
+            else { double sec = (maintenant - g.debut) / 1000.0 - g.premier(), d = g.distance(), td = g.tourDist();
+                sb.append(",\"f\":").append(f.etatJson(sec, d, f.prevision(sec, d), td > 0 ? 0 : -1, td)).append('}'); }
         }
         sb.append(",\"enr\":").append(e == null ? "null" : e.etatJson(maintenant)).append('}');
         return sb.toString();

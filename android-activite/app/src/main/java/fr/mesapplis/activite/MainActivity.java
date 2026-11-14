@@ -496,6 +496,20 @@ public class MainActivity extends Activity {
             if (s != null) s.reglerFantome(rythme);
         }
 
+        /** 1.13 : coupe ou remet la voix (renvoie true si la voix parle). */
+        @JavascriptInterface public boolean voixBasculer() {
+            ServiceSeance s = ServiceSeance.actif;
+            if (s != null) return s.basculerVoix();
+            SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); boolean v = !p.getBoolean("voixOn", true); p.edit().putBoolean("voixOn", v).apply(); return v;
+        }
+
+        /** 1.13 : montre ou cache la prévision d'arrivée (renvoie true si elle est montrée). */
+        @JavascriptInterface public boolean prevBasculer() {
+            ServiceSeance s = ServiceSeance.actif;
+            if (s != null) return s.basculerPrev();
+            SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); boolean v = !p.getBoolean("prevOn", true); p.edit().putBoolean("prevOn", v).apply(); return v;
+        }
+
         /** Démarre l'enregistrement d'une séance avec le GPS (la ceinture reste utilisée si le Bluetooth est autorisé). */
         @JavascriptInterface public boolean seanceDemarrerGps(String act) { return lancerService(ServiceSeance.ACTION_DEMARRER, act == null ? "" : act, true); }
 

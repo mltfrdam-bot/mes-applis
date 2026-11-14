@@ -104,6 +104,53 @@ final class Fantome {
     /** Le fantôme a-t-il fini sa course après « sec » secondes ? */
     boolean fini(double sec) { return sec >= temps(); }
 
+    // ---------- Prévision d'arrivée (version 1.13) ----------
+    // On compare ses FENETRE dernières secondes au fantôme sur la même portion du parcours (la montée est donc comptée),
+    // et on suppose qu'on garde ce rapport jusqu'au bout. Le même calcul existe dans noyau.js (prevFantome) pour le bilan.
+    static final int FENETRE = 30;
+    private final double[] histS = new double[64], histD = new double[64];
+    private int nHist = 0;
+
+    /** Une fois par seconde : où on en est (pour la fenêtre de 30 s). */
+    void noter(double sec, double maDist) {
+        if (nHist > 0 && sec <= histS[(nHist - 1) % 64]) return;
+        histS[nHist % 64] = sec; histD[nHist % 64] = maDist; nHist++;
+    }
+
+    /** Prévision avec les points notés : null tant qu'elle n'est pas fiable. */
+    double[] prevision(double sec, double maDist) {
+        for (int k = nHist - 1; k >= Math.max(0, nHist - 64); k--) {
+            int i = k % 64;
+            if (histS[i] <= sec - FENETRE) return prevision(sec, maDist, histS[i], histD[i]);
+        }
+        return null;
+    }
+
+    /** {arrivée prévue (s), écart prévu (s, positif = plus vite que le fantôme), à tenir maintenant (s/km), moyenne sur le restant (s/km)}.
+        À tenir et moyenne : -1 si le fantôme ne peut plus être battu. Null avant le 1er km, après la distance du fantôme ou sans mouvement. */
+    double[] prevision(double sec, double maDist, double sec0, double dist0) {
+        if (maDist < 1000 || maDist >= dist || sec - sec0 < FENETRE * 0.6 || maDist - dist0 < 20) return null;
+        double lui = tempsA(maDist) - tempsA(dist0);
+        if (lui < 5) return null;
+        double r = Math.max(0.5, Math.min(2.0, (sec - sec0) / lui)), resteLui = temps() - tempsA(maDist);
+        if (resteLui <= 0) return null;
+        double prevu = sec + r * resteLui, budget = temps() - sec;
+        double a = Math.max(0, maDist - 50), b = Math.min(dist, maDist + 50), allureLui = (tempsA(b) - tempsA(a)) / Math.max(1, b - a) * 1000;
+        double tenir = budget > 0 ? allureLui * budget / resteLui : -1, moy = budget > 0 ? budget / ((dist - maDist) / 1000.0) : -1;
+        return new double[] { prevu, temps() - prevu, tenir, moy };
+    }
+
+    /** Temps du fantôme sur la portion [maDist - tourD, maDist] : pour comparer le tour en cours. */
+    double tempsPortion(double maDist, double tourD) { return tempsA(Math.min(dist, maDist)) - tempsA(Math.max(0, Math.min(dist, maDist - tourD))); }
+
+    /** « Arrivée prévue 29 minutes 41, 11 secondes d'avance. » */
+    static String phrasePrev(double prevu, double ecart) {
+        long t = Math.round(prevu), e = Math.round(Math.abs(ecart));
+        String quand = (t / 60) + (t / 60 > 1 ? " minutes" : " minute") + (t % 60 > 0 ? " " + (t % 60) : "");
+        String ec = e < 1 ? "à égalité" : (e < 60 ? e + (e > 1 ? " secondes" : " seconde") : (e / 60) + (e / 60 > 1 ? " minutes" : " minute") + (e % 60 > 0 ? " " + (e % 60) : "")) + (ecart > 0 ? " d'avance" : " de retard");
+        return "Arrivée prévue " + quand + ", " + ec + ".";
+    }
+
     /** La phrase dite par la voix. */
     static String phrase(double metres, double secondes) {
         long m = Math.round(Math.abs(metres));
@@ -115,8 +162,13 @@ final class Fantome {
     }
 
     /** État pour l'écran : {"nom", "m", "s", "dist" (où en est le fantôme), "fini"}. */
-    String etatJson(double sec, double maDist) {
+    String etatJson(double sec, double maDist) { return etatJson(sec, maDist, null, -1, 0); }
+
+    /** Avec la prévision ({"t", "e", "tenir", "moy"} ou null) et le temps du fantôme sur le tour en cours ("tour", -1 sans tour). */
+    String etatJson(double sec, double maDist, double[] prev, double tourT, double tourD) {
+        String p = prev == null ? "null" : "{\"t\":" + Math.round(prev[0]) + ",\"e\":" + Math.round(prev[1]) + ",\"tenir\":" + Math.round(prev[2]) + ",\"moy\":" + Math.round(prev[3]) + "}";
         return "{\"nom\":" + Json.texte(nom) + ",\"m\":" + Math.round(ecartM(sec, maDist)) + ",\"s\":" + Math.round(ecartS(sec, maDist))
-                + ",\"dist\":" + Math.round(distA(sec)) + ",\"total\":" + dist + ",\"temps\":" + temps() + ",\"fini\":" + fini(sec) + "}";
+                + ",\"dist\":" + Math.round(distA(sec)) + ",\"total\":" + dist + ",\"temps\":" + temps() + ",\"fini\":" + fini(sec)
+                + ",\"prev\":" + p + ",\"tour\":" + (tourT >= 0 && tourD > 0 ? Math.round(tempsPortion(maDist, tourD)) : -1) + "}";
     }
 }
