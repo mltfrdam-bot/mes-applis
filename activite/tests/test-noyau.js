@@ -243,6 +243,44 @@ test("fantôme de course : choisir une course, fabriquer le fantôme, bilan à l
   /* la course de référence supprimée : plus de fantôme */
   N.supprimerLigne(b, N.lignesHistorique(b).find(l => l.t === ref.debut).id, Date.now()); assert.strictEqual(N.fantPour(b, "footing"), null); });
 
+test("fantôme des pompes : refaire une séance passée, série par série (cible, repos, annonces, bilan)", () => {
+  const b = N.baseVide(), T0 = Date.UTC(2026, 10, 10, 2, 0, 0); let t = T0;
+  const serie = (st, n) => { for (let i = 0; i < n; i++) { t += 1500; N.repsAppui(st, t, 120); } t += 500; N.repsFinSerie(st, t, 130); N.repsDiff(st, 2); }, repos = (sec) => { t += sec * 1000 - 2000; };
+  /* la séance de référence : 12, 10, 8 pompes, repos d'environ 1 min puis 1 min 30 */
+  const ref = N.repsNouveau(b, "pompes", ["Pompes"], t); assert.strictEqual(ref.blocs[0].fant, null); serie(ref, 12); repos(60); serie(ref, 10); repos(90); serie(ref, 8); N.fusionner(b, { courses: [N.repsSeance(ref, t)], reglages: {} });
+  const ligne = N.lignesHistorique(b).find(l => l.t === T0); assert.deepStrictEqual(N.fantRepsDe(ligne).map(x => x.exo), ["Pompes"]); assert.strictEqual(N.fantRepsPour(b, "Pompes"), null);
+  N.fantRepsChoisir(b, "Pompes", ligne.id); const f = N.fantRepsPour(b, "Pompes"); assert.strictEqual(f.nom, "Pompes du 10/11/2026 06:00"); assert.deepStrictEqual(f.series, [12, 10, 8]); assert.deepStrictEqual(f.repos, [60, 90, null]);
+  assert.deepStrictEqual(JSON.parse(b.reglages["fantome-opt"]).reps, { Pompes: { id: ligne.id } }); assert.strictEqual(N.fantRepsPour(b, "Squats"), null);
+  /* nouvelle séance contre ce fantôme */
+  t = T0 + 86400000; const st = N.repsNouveau(b, "pompes", ["Pompes"], t), bl = st.blocs[0]; assert.deepStrictEqual(bl.fant.series, [12, 10, 8]);
+  let e = N.fantRepsEtat(bl); assert.deepStrictEqual([e.serie, e.cible, e.ecart, e.moi, e.lui, e.series, e.fini, e.reposCible], [1, 12, 0, 0, 30, 3, false, null]); assert.strictEqual(N.fantRepsAnnonce(bl), "");
+  for (let i = 0; i < 5; i++) { t += 1500; N.repsAppui(st, t, 120); } e = N.fantRepsEtat(bl); assert.deepStrictEqual([e.serie, e.cible, e.enCours, e.moi, e.ecart], [1, 12, 5, 5, 0]);
+  for (let i = 0; i < 8; i++) { t += 1500; N.repsAppui(st, t, 120); } t += 500; N.repsFinSerie(st, t, 130); assert.strictEqual(N.fantRepsAnnonce(bl), "13. 1 de plus que le fantôme. Au total, 1 d'avance.");
+  e = N.fantRepsEtat(bl); assert.deepStrictEqual([e.serie, e.cible, e.ecart, e.reposCible], [2, 10, 1, 60]); let r = N.repsRepos(st, t + 20000); assert.deepStrictEqual([r.cible, r.fantome, Math.round(r.reste)], [60, true, 40], "le repos cible est celui du fantôme, pas les 90 s du réglage");
+  assert.strictEqual(N.repsRepos(st, t + 51000).signal, "bientot"); assert.strictEqual(N.repsRepos(st, t + 60500).signal, "reprendre"); N.repsDiff(st, 1); repos(62);
+  serie(st, 9); assert.strictEqual(N.fantRepsAnnonce(bl), "9. 1 de moins que le fantôme. Au total, égalité."); assert.strictEqual(N.repsRepos(st, t + 1000).cible, 90); repos(90);
+  serie(st, 8); assert.strictEqual(N.fantRepsAnnonce(bl), "8. Comme le fantôme. Au total, égalité. Le fantôme a fini."); e = N.fantRepsEtat(bl); assert.deepStrictEqual([e.cible, e.fini, e.reposCible], [null, true, null]);
+  r = N.repsRepos(st, t + 1000); assert.deepStrictEqual([r.cible, r.fantome], [90, false], "après la dernière série du fantôme : le repos du réglage"); repos(60);
+  serie(st, 5); assert.strictEqual(N.fantRepsAnnonce(bl), "5. Série en plus du fantôme. Au total, 5 d'avance.");
+  const s2 = N.repsSeance(st, t), d = s2.notes[0].pompes; assert.deepStrictEqual(d.fantome, { nom: "Pompes du 10/11/2026 06:00", series: [12, 10, 8], repos: [60, 90, null] }); assert.deepStrictEqual(d.series, [13, 9, 8, 5]);
+  const fb = N.fantRepsBilan(d); assert.strictEqual(fb.texte, "35 contre 30 : 5 de plus que le fantôme (4 séries contre 3)"); assert.deepStrictEqual(fb.lignes.map(l => [l.moi, l.lui, l.cumul]), [[13, 12, 1], [9, 10, 0], [8, 8, 0], [5, null, 5]]);
+  const rap = N.rapportReps(s2, "1.11"); assert.ok(rap.resume.includes("👻 Pompes contre le fantôme (Pompes du 10/11/2026 06:00) : 35 contre 30 : 5 de plus que le fantôme"), rap.resume);
+  assert.ok(rap.tout.includes("Série | Moi | Fantôme | Écart | Écart total") && rap.tout.includes("1 | 13 | 12 | +1 | +1") && rap.tout.includes("2 | 9 | 10 | −1 | =") && rap.tout.includes("4 | 5 | – | – | +5"), rap.tout);
+  N.fusionner(b, { courses: [s2], reglages: {} }); assert.ok(N.detailLigne(b, N.lignesHistorique(b).find(l => l.t === s2.debut).id, "1.11").includes("👻 Fantôme : Pompes du 10/11/2026 06:00"));
+  assert.strictEqual(N.fantRepsBilan(N.repsSeance(ref, t).notes[0].pompes), null, "une séance sans fantôme n'a pas de bilan fantôme");
+  /* moins bien que le fantôme, et arrêt avant la fin */
+  const st3 = N.repsNouveau(b, "pompes", ["Pompes"], t + 1e6); t += 1e6; serie(st3, 10); assert.strictEqual(N.fantRepsAnnonce(st3.blocs[0]), "10. 2 de moins que le fantôme. Au total, 2 de retard.");
+  assert.strictEqual(N.fantRepsBilan(N.repsSeance(st3, t).notes[0].pompes).texte, "10 contre 30 : 20 de moins que le fantôme (1 série contre 3)");
+  /* une séance du Carnet et la journée du 30/08/2025 peuvent servir de fantôme ; un exercice de Muscu aussi */
+  const carnet = N.lignesHistorique(b).find(l => l.id === "carnet-0"); N.fantRepsChoisir(b, "Pompes", "carnet-0"); const fc = N.fantRepsPour(b, "Pompes"); assert.ok(fc.series.length >= 2 && fc.series.reduce((a, x) => a + x, 0) === carnet.pompes && fc.nom.startsWith("Pompes du "), JSON.stringify(fc));
+  N.fantRepsChoisir(b, "Pompes", "j3008"); const fj = N.fantRepsPour(b, "Pompes"); assert.strictEqual(fj.series.reduce((a, x) => a + x, 0), 889); assert.ok(fj.repos.every(x => x == null || x <= 600), "les longues pauses de la journée ne deviennent pas un repos cible");
+  const m = N.repsNouveau(b, "muscu", ["Squats", "Biceps barre"], T0 + 3e8); t = T0 + 3e8; serie(m, 15); repos(45); serie(m, 12); N.repsSuivant(m, t, 120, b, null); serie(m, 10); N.fusionner(b, { courses: [N.repsSeance(m, t)], reglages: {} });
+  const lm = N.lignesHistorique(b).find(l => l.t === T0 + 3e8); assert.deepStrictEqual(N.fantRepsDe(lm).map(x => x.exo), ["Squats", "Biceps barre"]); N.fantRepsChoisir(b, "Squats", lm.id);
+  assert.deepStrictEqual(N.fantRepsPour(b, "Squats").series, [15, 12]); assert.deepStrictEqual(N.fantRepsPour(b, "Squats").repos, [45, null]); const m2 = N.repsNouveau(b, "muscu", ["Squats", "Biceps barre"], t + 1e6); assert.deepStrictEqual([!!m2.blocs[0].fant, !!m2.blocs[1].fant], [true, false]);
+  /* retirer, ou supprimer la séance d'origine : plus de fantôme */
+  N.fantRepsChoisir(b, "Pompes", ligne.id); assert.ok(N.fantRepsPour(b, "Pompes")); N.supprimerLigne(b, ligne.id, Date.now()); assert.strictEqual(N.fantRepsPour(b, "Pompes"), null); N.fantRepsChoisir(b, "Squats", null); assert.strictEqual(N.fantRepsPour(b, "Squats"), null);
+  assert.strictEqual(N.signe(3), "+3"); assert.strictEqual(N.signe(-2), "−2"); assert.strictEqual(N.signe(0), "="); });
+
 test("GPS : réglages (activités avec GPS, source, vibration au km) gardés dans la base", () => {
   const b = N.baseVide(); assert.deepStrictEqual(N.gpsLire(b), { acts: ["footing", "marche", "velo"], source: "sat", km: true }); assert.ok(N.gpsPour(b, "footing") && !N.gpsPour(b, "tennis"));
   N.gpsBasculer(b, "tennis"); N.gpsBasculer(b, "velo"); assert.deepStrictEqual(N.gpsLire(b).acts, ["footing", "marche", "tennis"]); const o = N.gpsLire(b); o.source = "mix"; o.km = false; N.gpsEcrire(b, o);

@@ -325,8 +325,8 @@ function traceSvg(G, largeur, hauteur) { if (!G || !Array.isArray(G.trace)) retu
    seconde, annonce l'écart à la voix (Fantome.java) et range le fantôme dans la séance (gps.fantome) pour le bilan.
    Les deux courses sont comparées à partir de leur première position GPS. Écart positif = avance. */
 const RYTHMES = [["m500", "tous les 500 m"], ["km1", "à chaque km"], ["min1", "toutes les minutes"], ["min2", "toutes les 2 minutes"], ["non", "pas de voix"]];
-function fantLire(base) { let o = {}; try { o = JSON.parse(base.reglages["fantome-opt"] || "{}") || {}; } catch (e) { o = {}; } return { refs: o.refs && typeof o.refs === "object" ? o.refs : {}, rythme: RYTHMES.some(r => r[0] === o.rythme) ? o.rythme : "m500" }; }
-function fantEcrire(base, o) { base.reglages["fantome-opt"] = JSON.stringify({ refs: o.refs, rythme: o.rythme }); return fantLire(base); }
+function fantLire(base) { let o = {}; try { o = JSON.parse(base.reglages["fantome-opt"] || "{}") || {}; } catch (e) { o = {}; } return { refs: o.refs && typeof o.refs === "object" ? o.refs : {}, rythme: RYTHMES.some(r => r[0] === o.rythme) ? o.rythme : "m500", reps: o.reps && typeof o.reps === "object" ? o.reps : {} }; }
+function fantEcrire(base, o) { const x = { refs: o.refs, rythme: o.rythme }; if (o.reps && Object.keys(o.reps).length) x.reps = o.reps; base.reglages["fantome-opt"] = JSON.stringify(x); return fantLire(base); }
 function fantChoisir(base, act, debut) { const o = fantLire(base); if (debut) o.refs[act] = debut; else delete o.refs[act]; return fantEcrire(base, o); }
 function fantRythme(base) { const o = fantLire(base), i = RYTHMES.findIndex(r => r[0] === o.rythme); o.rythme = RYTHMES[(i + 1) % RYTHMES.length][0]; return fantEcrire(base, o); }
 const rythmeTxt = (r) => (RYTHMES.find(x => x[0] === r) || RYTHMES[0])[1];
@@ -354,6 +354,38 @@ function fantBilan(R) { const G = R && R.gps, F = G && G.fantome; if (!F || !gps
   b.texte = (b.complet ? "Sur la distance du fantôme (" + kmTxt(total) + ") : " : "À ton arrêt (" + kmTxt(G.dist) + " sur les " + kmTxt(total) + " du fantôme) : ") + ecartTxt(b.m, b.s) + "."; return b; }
 function lignesFantome(T, f) { T.push("", "👻 Fantôme : " + f.nom + " — " + kmTxt(f.total) + " en " + chrono(f.temps) + (f.recalcule ? "" : " (distance d'origine, tracé complet absent)"), f.texte);
   if (f.kms.length) { T.push("Km | Moi | Fantôme | Écart"); let moiAvant = 0, luiAvant = 0; f.kms.forEach(k => { T.push([k.n, chrono(k.moi - moiAvant), chrono(k.lui - luiAvant), (k.ecart > 0 ? "+" : k.ecart < 0 ? "−" : "") + secTxt(Math.abs(k.ecart)) + (k.ecart > 0 ? " d'avance" : k.ecart < 0 ? " de retard" : "")].join(" | ")); moiAvant = k.moi; luiAvant = k.lui; }); } }
+
+/* ===== 👻 Fantôme des pompes et des exercices (version 1.11) =====
+   On refait une séance passée : le fantôme est la liste de ses séries (répétitions de chaque série, repos après chacune).
+   Réglage : « fantome-opt ».reps = {exercice: {id: ligne de l'Historique choisie}}. Au départ, le fantôme est rangé dans le bloc de l'exercice
+   (bloc.fant = {nom, series, repos}) : la cible de chaque série est celle du fantôme, le repos cible est le sien (au plus 10 min),
+   et l'écart se compte en répétitions, série après série. À la fin il est gardé dans la note (fantome) pour le bilan. */
+const REPOS_FANT_MAX = 600;
+const signe = (n) => n > 0 ? "+" + n : n < 0 ? "−" + (-n) : "=";
+function fantRepsFabriquer(nom, e) { if (!e) return null; const sd = seriesDetail(e); let series, repos;
+  if (sd.length) { series = sd.map(x => x.n); repos = sd.map((x, i) => { const r = sd[i + 1] ? Math.round(sd[i + 1].repos) : null; return r != null && r > 0 && r <= REPOS_FANT_MAX ? r : null; }); }
+  else { series = (e.series || []).filter(n => n > 0); repos = series.map((x, i) => i < series.length - 1 && e.reposMoy > 0 && e.reposMoy <= REPOS_FANT_MAX ? e.reposMoy : null); }
+  return series.length ? { nom: String(nom || "").replace(/["\\]/g, ""), series, repos } : null; }
+/* les exercices d'une ligne de l'Historique qui peuvent servir de fantôme, avec leurs données */
+function fantRepsDe(ligne) { const l = []; if (!ligne || !ligne.ref) return l; if (ligne.ref.tl) { l.push({ exo: "Pompes", e: { tl: ligne.ref.tl } }); return l; }
+  (ligne.ref.notes || []).forEach(n => { const exo = n.pompes || n.pjour ? "Pompes" : n.reps ? n.reps.exo : null, e = n.pompes || (n.pjour && n.pjour.tl ? { tl: n.pjour.tl } : null) || n.reps; if (exo && e && !l.some(x => x.exo === exo)) l.push({ exo, e }); }); return l; }
+function fantRepsChoisir(base, exo, idLigne) { const o = fantLire(base); if (idLigne) o.reps[exo] = { id: idLigne }; else delete o.reps[exo]; return fantEcrire(base, o); }
+/* le fantôme choisi pour cet exercice, prêt à servir (null si aucun, ou si la séance a été supprimée) */
+function fantRepsPour(base, exo) { const c = fantLire(base).reps[exo]; if (!c || !c.id) return null; const x = lignesHistorique(base).find(l => l.id === c.id), d = fantRepsDe(x).find(y => y.exo === exo);
+  return d ? fantRepsFabriquer(exo + " du " + dateHeure(x.t), d.e) : null; }
+const fantRepsTotal = (f, n) => f.series.slice(0, n == null ? f.series.length : n).reduce((a, x) => a + x, 0);
+/* où on en est contre le fantôme. ecart = mes séries finies contre autant de séries du fantôme (positif = avance). */
+function fantRepsEtat(b) { const f = b && b.fant; if (!f) return null; const k = b.series.length, enCours = b.phase === "serie" && b.cur ? b.cur.tl.length : 0, fini = b.series.reduce((a, x) => a + x.tl.length, 0);
+  return { nom: f.nom, serie: k + 1, cible: f.series[k] == null ? null : f.series[k], enCours, ecart: fini - fantRepsTotal(f, Math.min(k, f.series.length)), moi: fini + enCours, lui: fantRepsTotal(f), series: f.series.length, fini: k >= f.series.length, reposCible: k > 0 ? (f.repos[k - 1] || null) : null }; }
+/* la phrase dite à la fin d'une série */
+function fantRepsAnnonce(b) { const f = b && b.fant, k = b ? b.series.length : 0; if (!f || !k) return ""; const n = b.series[k - 1].tl.length, lui = f.series[k - 1], e = fantRepsEtat(b).ecart;
+  if (lui == null) return n + ". Série en plus du fantôme. Au total, " + Math.abs(e) + (e >= 0 ? " d'avance." : " de retard.");
+  return n + ". " + (n === lui ? "Comme le fantôme" : Math.abs(n - lui) + " de " + (n > lui ? "plus" : "moins") + " que le fantôme") + ". Au total, " + (e === 0 ? "égalité." : Math.abs(e) + (e > 0 ? " d'avance." : " de retard.")) + (k === f.series.length ? " Le fantôme a fini." : ""); }
+/* bilan d'un exercice fait contre un fantôme : série par série, et le total */
+function fantRepsBilan(e) { const f = e && e.fantome; if (!f || !Array.isArray(f.series) || !f.series.length) return null; const moi = e.series || [], n = Math.max(moi.length, f.series.length), lignes = []; let cumul = 0;
+  for (let i = 0; i < n; i++) { const a = moi[i] == null ? null : moi[i], l = f.series[i] == null ? null : f.series[i]; cumul += (a || 0) - (l || 0); lignes.push({ n: i + 1, moi: a, lui: l, cumul }); }
+  const tm = moi.reduce((a, x) => a + x, 0), tl = fantRepsTotal(f), d = tm - tl;
+  return { nom: f.nom || "", moi: tm, lui: tl, ecart: d, lignes, texte: tm + " contre " + tl + " : " + (d === 0 ? "égalité" : Math.abs(d) + " de " + (d > 0 ? "plus" : "moins") + " que le fantôme") + " (" + pl(moi.length, "série") + " contre " + f.series.length + ")" }; }
 
 /* ===== Réglage des impacts (repris de la v31) =====
    impact-reglage = {seuil, rearme, bip} en millièmes de g ; impact-essais = journal de chaque réglage et de chaque essai. */
@@ -422,8 +454,8 @@ function recordSerie(base, nom) { let r = 0; const vu = (n) => { if (n > r) r = 
   paires(base.courses).forEach(({ n }) => { if (nom === "Pompes") { if (n.pompes && n.pompes.series) n.pompes.series.forEach(vu); if (n.pjour && n.pjour.tl) seriesDe(n.pjour.tl).forEach(vu); } else if (n.reps && n.reps.exo === nom && n.reps.series) n.reps.series.forEach(vu); }); return r; }
 
 const r1 = (x) => Math.round(x * 10) / 10;
-function repsBloc(e, record) { return { exo: e.nom, obj: e.obj || 0, charge: e.charge || 0, repos: e.repos || 0, t0: null, series: [], cur: null, phase: "attente", debutRepos: 0, signal: 0, objAnnonce: false, record: record || 0, recordBattu: false, attendDiff: false }; }
-function repsNouveau(base, act, noms, maintenant) { const ex = exosLire(base); return { v: 1, debut: maintenant, maj: maintenant, act, index: 0, dernierAppui: 0, blocs: noms.map(n => repsBloc(ex.find(x => x.nom === n) || { nom: n, obj: 0, charge: 0, repos: 90 }, recordSerie(base, n))) }; }
+function repsBloc(e, record, fant) { return { fant: fant || null, exo: e.nom, obj: e.obj || 0, charge: e.charge || 0, repos: e.repos || 0, t0: null, series: [], cur: null, phase: "attente", debutRepos: 0, signal: 0, objAnnonce: false, record: record || 0, recordBattu: false, attendDiff: false }; }
+function repsNouveau(base, act, noms, maintenant) { const ex = exosLire(base); return { v: 1, debut: maintenant, maj: maintenant, act, index: 0, dernierAppui: 0, blocs: noms.map(n => repsBloc(ex.find(x => x.nom === n) || { nom: n, obj: 0, charge: 0, repos: 90 }, recordSerie(base, n), fantRepsPour(base, n))) }; }
 const repsCourant = (st) => st.blocs[st.index];
 const repsT = (b, maintenant) => b.t0 == null ? 0 : (maintenant - b.t0) / 1000;
 const repsTotal = (b) => b.series.reduce((a, x) => a + x.tl.length, 0) + (b.cur ? b.cur.tl.length : 0);
@@ -446,18 +478,18 @@ function repsFinSerie(st, maintenant, fc) { const b = repsCourant(st); if (!b ||
 function repsDiff(st, d) { const b = repsCourant(st); if (!b || !b.series.length) return; b.series[b.series.length - 1].diff = d; b.attendDiff = false; }
 function repsCharge(st, v) { const b = repsCourant(st); if (!b) return; b.charge = Math.min(500, Math.max(0, Math.round(v * 2) / 2)); if (b.cur && !b.cur.tl.length) b.cur.charge = b.charge; }
 /* repos : temps écoulé, temps restant, et le signal à donner une seule fois ("bientot" à 10 s, "reprendre" à 0) */
-function repsRepos(st, maintenant) { const b = repsCourant(st); if (!b || b.phase !== "repos") return null; const ecoule = repsT(b, maintenant) - b.debutRepos, r = { ecoule, reste: b.repos ? b.repos - ecoule : null, signal: null };
-  if (b.repos) { if (r.reste <= 0 && b.signal < 2) { b.signal = 2; r.signal = "reprendre"; } else if (r.reste > 0 && r.reste <= 10 && b.signal === 0) { b.signal = 1; r.signal = "bientot"; } } return r; }
+function repsRepos(st, maintenant) { const b = repsCourant(st); if (!b || b.phase !== "repos") return null; const ecoule = repsT(b, maintenant) - b.debutRepos, fr = b.fant && b.series.length ? b.fant.repos[b.series.length - 1] : null, cible = fr || b.repos, r = { ecoule, cible, fantome: !!fr, reste: cible ? cible - ecoule : null, signal: null };   // avec un fantôme : son repos après la même série
+  if (cible) { if (r.reste <= 0 && b.signal < 2) { b.signal = 2; r.signal = "reprendre"; } else if (r.reste > 0 && r.reste <= 10 && b.signal === 0) { b.signal = 1; r.signal = "bientot"; } } return r; }
 /* exercice suivant : ferme la série en cours et passe au suivant (ajouté à la suite s'il n'était pas prévu) */
 function repsSuivant(st, maintenant, fc, base, nomSuivant) { repsFinSerie(st, maintenant, fc); const b = repsCourant(st); if (b) { b.attendDiff = false; b.fini = true; }
-  if (nomSuivant) { const ex = exosLire(base); st.blocs.splice(st.index + 1, 0, repsBloc(ex.find(x => x.nom === nomSuivant) || { nom: nomSuivant, obj: 0, charge: 0, repos: 90 }, recordSerie(base, nomSuivant))); }
+  if (nomSuivant) { const ex = exosLire(base); st.blocs.splice(st.index + 1, 0, repsBloc(ex.find(x => x.nom === nomSuivant) || { nom: nomSuivant, obj: 0, charge: 0, repos: 90 }, recordSerie(base, nomSuivant), fantRepsPour(base, nomSuivant))); }
   if (st.index + 1 >= st.blocs.length) return false; st.index++; st.maj = maintenant; return true; }
 function repsBilanBloc(b) { const sers = b.series.concat(b.cur && b.cur.tl.length ? [b.cur] : []), tl = [].concat(...sers.map(x => x.tl)).sort((x, y) => x - y), n = tl.length; if (!n) return null;
   const repos = sers.slice(1).map((x, i) => Math.round(x.tl[0] - sers[i].tl[sers[i].tl.length - 1])), fcs = sers.map(x => [x.fcDepart || null, x.fcMax || null, x.fcFin || null]), charges = sers.map(x => x.charge || 0);
   const temps = Math.round(tl[n - 1]), pompes = b.exo === "Pompes", mot = pompes ? (n > 1 ? "pompes" : "pompe") : (n > 1 ? "répétitions" : "répétition");
   const d = { obj: b.obj, total: n, temps, series: sers.map(x => x.tl.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff == null ? null : x.diff) : null, reposMoy: repos.length ? Math.round(repos.reduce((a, x) => a + x, 0) / repos.length) : 0, tl,
     fcs: fcs.some(x => x[1]) ? fcs : null, res: nb(n) + " " + mot + " en " + gm(temps) + ", " + pl(sers.length, "série") };
-  if (charges.some(x => x > 0)) { d.charges = charges; d.res += ", " + chargeTxt(d, "charge ", ""); } const man = sers.reduce((a, x) => a + (x.man || 0), 0); if (man) d.manuels = man; d.repos = repos;
+  if (charges.some(x => x > 0)) { d.charges = charges; d.res += ", " + chargeTxt(d, "charge ", ""); } const man = sers.reduce((a, x) => a + (x.man || 0), 0); if (man) d.manuels = man; d.repos = repos; if (b.fant) d.fantome = { nom: b.fant.nom, series: b.fant.series.slice(), repos: b.fant.repos.slice() };
   return { exo: b.exo, fin: b.t0 + Math.round(tl[n - 1] * 1000), donnees: d }; }
 /* fin de séance → la séance à ranger dans la base (null si aucune répétition). Les pompes gardent la forme de la v31 (note « pompes »). */
 function repsSeance(st, maintenant) { const notes = []; st.blocs.forEach(b => { const r = repsBilanBloc(b); if (!r) return; const d = r.donnees, repos = d.repos; delete d.repos; let t = r.fin; while (notes.some(n => n.t === t)) t++;
@@ -469,9 +501,11 @@ function seriesDetail(e) { const tl = (e.tl || []).slice().sort((x, y) => x - y)
   return sers.filter(x => x.length).map((x, k) => ({ n: x.length, duree: x[x.length - 1] - x[0], repos: k ? x[0] - sers[k - 1][sers[k - 1].length - 1] : null })); }
 function tableSeries(D, nom, e) { D.push("", nom + " — série | répétitions | durée | repos avant | charge | difficulté | FC départ/max/fin");
   seriesDetail(e).forEach((x, i) => D.push((i + 1) + " | " + x.n + " | " + Math.round(x.duree) + " s | " + (x.repos == null ? "–" : gm(x.repos)) + " | " + (e.charges && e.charges[i] ? kg(e.charges[i]) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(v => v || "–").join("/") : "–")));
-  if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1"); }
+  if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1");
+  const f = fantRepsBilan(e); if (f) { D.push("", "👻 Fantôme : " + f.nom + " — " + f.texte, "Série | Moi | Fantôme | Écart | Écart total"); f.lignes.forEach(l => D.push([l.n, l.moi == null ? "–" : l.moi, l.lui == null ? "–" : l.lui, l.moi == null || l.lui == null ? "–" : signe(l.moi - l.lui), signe(l.cumul)].join(" | "))); } }
 function rapportReps(seance, version) { const T = ["SÉANCE — " + actInfo(seance.act).nom + " — " + dateHeure(seance.debut) + (version ? " (APK " + version + ")" : "")], D = [];
   seance.notes.forEach(n => { const e = n.reps || n.pompes, nom = n.reps ? n.reps.exo : "Pompes"; if (!e) return;
+    const fb = fantRepsBilan(e); if (fb) T.push("👻 " + nom + " contre le fantôme (" + fb.nom + ") : " + fb.texte);
     T.push(nom + " : " + e.res + (e.obj ? " (objectif " + e.obj + (e.total >= e.obj ? " atteint" : " : il manque " + (e.obj - e.total)) + ")" : "") + (e.reposMoy ? ", repos moyen " + gm(e.reposMoy) : "")); tableSeries(D, nom, e); });
   const resume = T.join("\n"); return { resume, tout: resume + "\n" + D.join("\n") }; }
 
@@ -550,6 +584,7 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
   DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
+  fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
   RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
