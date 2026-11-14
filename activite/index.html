@@ -110,7 +110,7 @@
 <div id="voile" class="cache"><div id="boite" role="dialog" aria-modal="true"></div></div>
 <div id="toast" class="cache" role="status"></div>
 <div id="annuler" class="cache" role="status"><span id="annulerTxt"></span><button class="main" id="bAnnuler">Annuler</button></div>
-<input type="file" id="fichierNav" class="cache" accept=".json,application/json">
+<input type="file" id="fichierNav" class="cache" accept=".json,application/json,.fit">
 
 <script src="donnees-integrees.js"></script>
 <script src="noyau.js"></script>
@@ -268,6 +268,7 @@ function vueHistorique() { const tous = N.lignesHistorique(BASE), tt = N.totaux(
   const val = (x) => H.tri === "act" ? N.actInfo(x.act).nom : x[H.tri];
   l.sort((x, y) => { const a = val(x), b = val(y); return (a < b ? -1 : a > b ? 1 : y.t - x.t) * (a === b ? 1 : H.sens); });
   let h = '<div class="chips"><button class="chip" data-do="filtre" data-a="" aria-pressed="' + !H.filtre + '">Tout</button>' + acts.map(a => '<button class="chip" data-do="filtre" data-a="' + esc(a) + '" aria-pressed="' + (H.filtre === a) + '">' + esc(N.actNom(a)) + '</button>').join("") + '</div>';
+  h += '<div class="ligne" style="margin:6px 0 8px"><button class="sec petit" data-do="importerFit">📥 Importer une sortie de montre (.fit)</button></div>';
   h += '<table class="histo"><thead><tr>' + COLS.map(c => '<th' + (H.tri === c[0] ? ' aria-sort="' + (H.sens > 0 ? "ascending" : "descending") + '"' : "") + '><button data-do="tri" data-c="' + c[0] + '">' + c[1] + (H.tri === c[0] ? (H.sens > 0 ? " ▲" : " ▼") : "") + '</button></th>').join("") + '</tr></thead><tbody>';
   h += l.map(x => { const o = H.ouverts.has(x.id);
     return '<tr class="ligneH' + (x.journee ? " special" : "") + '" data-do="ouvrir" data-id="' + esc(x.id) + '"><td class="date">' + esc(N.jourCourt(x.t)) + '<br>' + N.heure(x.t) + '</td><td class="act">' + esc(N.actNom(x.act)) + (x.journee ? "<br>journée" : "") + '</td><td class="date">' + N.dureeTxt(x) + '</td><td>' + esc(x.resultat) +
@@ -361,8 +362,15 @@ function traiterFichier(objet, nom) { const copie = JSON.parse(JSON.stringify(BA
 /* la partie Android a fini de lire le fichier choisi (ou a échoué) */
 window.surFichier = function (ok, message) { fermerFenetre(); if (!ok) { if (message) info("Fichier refusé", "<p>" + esc(message) + "</p><p class='aide' style='margin-top:8px'>Rien n'a été changé dans l'appli.</p>"); return; }
   let o; try { o = JSON.parse(Pont.lire("import.json")); } catch (e) { info("Fichier refusé", "<p>Ce fichier est illisible.</p>"); return; } traiterFichier(o, message || ""); };
+/* 📥 sortie de montre (.fit) : la partie Android l'a copiée en base64 dans import-fit.txt */
+function traiterFit(octets, nom) { const copie = JSON.parse(JSON.stringify(BASE)); let r;
+  try { r = N.fitImporter(copie, octets, nom); } catch (e) { info("Fichier refusé", "<p>" + esc(e && e.message || e) + "</p><p class='aide' style='margin-top:8px'>Rien n'a été changé dans l'appli.</p>"); return; }
+  if (!r.ajoute) { info("Déjà dans l'Historique", "<p>" + esc(r.resume) + "</p><p class='aide' style='margin-top:8px'>Cette sortie était déjà là (ou dans la 🗑 Corbeille) : rien n'a été ajouté.</p>"); return; }
+  BASE = copie; if (!sauver()) { info("⚠️ Import non enregistré", "<p>Le téléphone a refusé l'écriture. Tes données d'avant sont intactes.</p>"); return; }
+  if (ECRAN.nom === "historique") vueHistorique(); info("✅ Sortie importée", "<p>" + esc(r.resume) + "</p><p class='aide' style='margin-top:8px'>Elle est dans l'Historique avec ⌚. Ouvre-la et touche « 👻 Courir contre cette course » pour en faire ton fantôme.</p>"); }
+window.surFit = function (ok, nom) { fermerFenetre(); let oct; try { const b = atob(Pont.lire("import-fit.txt")); oct = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) oct[i] = b.charCodeAt(i); } catch (e) { info("Fichier refusé", "<p>Ce fichier .fit est illisible.</p>"); return; } traiterFit(oct, nom || ""); };
 window.surLecture = function () { fenetre('<div class="t">⏳ Lecture du fichier…</div><p>La sauvegarde du Hub est grosse : compte quelques secondes.</p>'); };
-$("#fichierNav").onchange = async () => { const fi = $("#fichierNav").files[0]; if (!fi) return; let o; try { o = JSON.parse(await fi.text()); } catch (e) { info("Fichier refusé", "<p>Ce fichier est illisible.</p>"); return; } $("#fichierNav").value = ""; traiterFichier(o, fi.name); };
+$("#fichierNav").onchange = async () => { const fi = $("#fichierNav").files[0]; if (!fi) return; if (/\.fit$/i.test(fi.name)) { const oct = new Uint8Array(await fi.arrayBuffer()); $("#fichierNav").value = ""; traiterFit(oct, fi.name); return; } let o; try { o = JSON.parse(await fi.text()); } catch (e) { info("Fichier refusé", "<p>Ce fichier est illisible.</p>"); return; } $("#fichierNav").value = ""; traiterFichier(o, fi.name); };
 function fusionAuto(nom) { let o; try { o = JSON.parse(Pont.lire("sauvegardes/" + nom)); } catch (e) { info("Sauvegarde illisible", "<p>Cette sauvegarde automatique est abîmée.</p>"); return; } traiterFichier(o, "sauvegarde automatique " + nom); }
 function vueDescriptif() { const d = DESC; if (!d) { aller("reglages"); return; }
   titre(d.rien ? "Rien à ajouter" : "✅ Import terminé", d.rien ? "tout était déjà là" : "rien n'a été écrasé");
@@ -622,6 +630,7 @@ const ACTIONS = {
   tri: (b) => { const c = b.dataset.c; if (H.tri === c) H.sens = -H.sens; else { H.tri = c; H.sens = c === "act" ? 1 : -1; } vueHistorique(); },
   ouvrir: (b) => { const id = b.dataset.id; if (H.ouverts.has(id)) H.ouverts.delete(id); else H.ouverts.add(id); const y = $("#vue").scrollTop; vueHistorique(); $("#vue").scrollTop = y; },
   copierHisto: () => copie(N.rapportHistorique(BASE, Pont.version()), "Historique"),
+  importerFit: () => Pont.choisirFichier(),
   copierDetail: (b) => { const t = N.detailLigne(BASE, b.dataset.id, Pont.version()); if (t) copie(t, "Détail de la séance"); },
   supprimer: (b) => supprimerSeance(b.dataset.id), remettre: (b) => remettreSeance(Number(b.dataset.t), b.dataset.id),
   fiche: (b) => aller("fiche", b.dataset.f), onglet: (b) => { PRECEDENT = null; aller(b.dataset.o); },

@@ -287,4 +287,28 @@ test("GPS : réglages (activités avec GPS, source, vibration au km) gardés dan
   assert.deepStrictEqual(JSON.parse(b.reglages["gps-opt"]), { acts: ["footing", "marche", "tennis"], source: "mix", km: false }); b.reglages["gps-opt"] = "abîmé"; assert.deepStrictEqual(N.gpsLire(b).acts, ["footing", "marche", "velo"]);
   assert.strictEqual(N.kmTxt(3652), "3,65 km"); assert.strictEqual(N.allureTxt(1000, 452), "7:32 /km"); assert.strictEqual(N.allureTxt(5, 60), "–"); assert.strictEqual(N.allureVit(3.2), "5:13 /km"); assert.strictEqual(N.allureVit(0.1), "–"); assert.strictEqual(N.allureVit(null), "–"); });
 
+test("Import d'une sortie de montre (.fit) : km par km, cardio, fantôme, pas de doublon", () => {
+  /* petit fichier .fit fabriqué ici (aucune donnée de Frédéric dans le dépôt) : 10 min plein nord à 3,5 m/s, cardio 140 → 160 */
+  const oct = [], u8 = (x) => oct.push(x & 255), u16 = (x) => { u8(x); u8(x >> 8); }, u32 = (x) => { u16(x & 0xFFFF); u16(x >>> 16); };
+  const T = 1719923763 - 631065600, LA = -20.926 / 180 * 2147483648, LO = 55.527 / 180 * 2147483648;
+  u8(0x40); u8(0); u8(0); u16(0); u8(2); [[1, 2, 0x84], [4, 4, 0x86]].forEach(c => c.forEach(u8)); u8(0); u16(294); u32(T);                         // file_id : COROS
+  u8(0x41); u8(0); u8(0); u16(20); u8(5); [[253, 4, 0x86], [0, 4, 0x85], [1, 4, 0x85], [5, 4, 0x86], [3, 1, 0x02]].forEach(c => c.forEach(u8));     // record (heure complète)
+  u8(0x42); u8(0); u8(0); u16(20); u8(4); [[0, 4, 0x85], [1, 4, 0x85], [5, 4, 0x86], [3, 1, 0x02]].forEach(c => c.forEach(u8));                  // record (heure compressée)
+  for (let s = 0; s <= 600; s++) { const la = Math.round(LA + (s * 3.5 / 111195) / 180 * 2147483648);
+    if (s % 2) { u8(0x80 | (2 << 5) | ((T + s) & 0x1F)); } else { u8(0x01); u32(T + s); } u32(la >>> 0); u32(Math.round(LO) >>> 0); u32(Math.round(s * 350)); u8(140 + Math.floor(s / 30)); }
+  u8(0x43); u8(0); u8(0); u16(18); u8(1); [5, 1, 0x00].forEach(u8); u8(0x03); u8(1);                                                               // session : course
+  const corps = Uint8Array.from(oct), f = new Uint8Array(14 + corps.length + 2); f.set([14, 0x20, 0, 0], 0); new DataView(f.buffer).setUint32(4, corps.length, true); f.set([46, 70, 73, 84], 8); f.set(corps, 14);
+  const fit = N.fitLire(f); assert.strictEqual(fit.pts.length, 601); assert.strictEqual(fit.montre, "COROS"); assert.strictEqual(fit.sport, 1); assert.strictEqual(fit.pts[1].t, 1719923764);
+  const b = N.baseVide(), r = N.fitImporter(b, f, "essai.fit"); assert.ok(r.ajoute); const R = r.R, g = N.gpsBilan(R);
+  assert.strictEqual(R.act, "footing"); assert.strictEqual(R.debut, 1719923763000); assert.strictEqual(R.gps.dist, 2100); assert.ok(Math.abs(R.gps.distP - 2100) < 5, "distance par les positions : " + R.gps.distP);
+  assert.deepStrictEqual(R.gps.km, [286, 572]); assert.deepStrictEqual(g.kms.map(k => k.allure), ["4:46 /km", "4:46 /km", "4:40 /km"]); assert.strictEqual(R.res.fcMax, 160); assert.strictEqual(g.source, "montre COROS");
+  const ligne = N.lignesHistorique(b).find(l => l.t === R.debut); assert.ok(/2,10 km/.test(ligne.resultat) && /⌚ COROS/.test(ligne.resultat) && !/impact/.test(ligne.resultat), ligne.resultat);
+  assert.ok(/^SORTIE IMPORTÉE \(COROS, essai\.fit\)/.test(N.rapportEnregistrement(R, null, "1.12").tout));
+  /* le même fichier une deuxième fois : rien n'est ajouté */
+  assert.strictEqual(N.fitImporter(b, f, "essai.fit").ajoute, false); assert.strictEqual(N.lignesHistorique(b).filter(l => l.t === R.debut).length, 1);
+  /* elle peut servir de fantôme : 1 000 m au bout de 286 s */
+  N.fantChoisir(b, "footing", R.debut); const F = N.fantFabriquer(N.fantPour(b, "footing"), null); assert.strictEqual(F.dist, 2100); assert.ok(Math.abs(N.fantTempsA(F, 1000) - 286) <= 1);
+  /* un fichier qui n'est pas un .fit est refusé sans rien changer */
+  assert.throws(() => N.fitLire(new TextEncoder().encode('{"format":"x"}')), /pas un fichier \.fit/); });
+
 console.log("\n" + n + " tests réussis.");

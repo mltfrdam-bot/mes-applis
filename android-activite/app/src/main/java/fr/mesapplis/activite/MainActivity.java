@@ -639,6 +639,28 @@ public class MainActivity extends Activity {
 
     // ---------- Retours d'Android ----------
 
+    /** Le fichier choisi en entier s'il commence comme un fichier .fit de montre (« .FIT » aux octets 8 à 11), sinon null. 20 Mo au plus. */
+    private byte[] lireFit(Uri u) throws IOException {
+        try (InputStream in = getContentResolver().openInputStream(u)) {
+            if (in == null) throw new IOException("Impossible d'ouvrir ce fichier.");
+            ByteArrayOutputStream tout = new ByteArrayOutputStream();
+            byte[] b = new byte[16384];
+            int n;
+            boolean vu = false;
+            while ((n = in.read(b)) > 0) {
+                tout.write(b, 0, n);
+                if (!vu && tout.size() >= 12) {
+                    byte[] t = tout.toByteArray();
+                    if (t[8] != '.' || t[9] != 'F' || t[10] != 'I' || t[11] != 'T') return null;
+                    vu = true;
+                }
+                if (tout.size() > 20 * 1024 * 1024) throw new IOException("Fichier .fit trop gros (plus de 20 Mo).");
+            }
+            byte[] t = tout.toByteArray();
+            return t.length >= 12 && t[8] == '.' && t[9] == 'F' && t[10] == 'I' && t[11] == 'T' ? t : null;
+        }
+    }
+
     private String nomDuFichier(Uri u) {
         try (Cursor c = getContentResolver().query(u, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (c != null && c.moveToFirst()) {
@@ -657,6 +679,12 @@ public class MainActivity extends Activity {
             js("window.surLecture && window.surLecture()");
             new Thread(() -> {
                 try {
+                    byte[] fit = lireFit(u);                                    // sortie de montre (.fit) : la page la lit elle-même
+                    if (fit != null) {
+                        if (!ecrireFichier(new File(dossier, "import-fit.txt"), android.util.Base64.encodeToString(fit, android.util.Base64.NO_WRAP))) throw new IOException("Le téléphone a refusé d'écrire le fichier.");
+                        js("window.surFit && window.surFit(true, " + JSONObject.quote(nomDuFichier(u)) + ")");
+                        return;
+                    }
                     LecteurHub.preparer(() -> getContentResolver().openInputStream(u), new File(dossier, "import.json"));
                     js("window.surFichier && window.surFichier(true, " + JSONObject.quote(nomDuFichier(u)) + ")");
                 } catch (Throwable e) {
