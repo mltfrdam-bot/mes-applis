@@ -49,6 +49,8 @@
   .panneau{position:fixed;inset:0;background:rgba(20,25,35,.45);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
   .boite{background:#fff;border-radius:16px;padding:18px;width:min(560px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px}
   .boite h2{margin:0;font-size:24px}
+  .entete{position:sticky;top:-18px;margin:-18px -18px 0;padding:14px 18px;background:#fff;border-bottom:1px solid #e3e6ec;display:flex;justify-content:space-between;align-items:center;gap:10px;z-index:1}
+  .fermer-haut{font-size:18px;font-weight:600;padding:12px 18px;border-radius:12px;border:1px solid #c9ced8;background:#f7f8fa;flex-shrink:0}
   .boite .ligne{display:flex;gap:10px;flex-wrap:wrap}
   .gros{font-size:20px;font-weight:600;padding:16px 20px;border-radius:12px;border:1px solid #c9ced8;background:#fff;flex:1}
   .bleu{background:#1d5fbf;color:#fff;border-color:#1d5fbf}
@@ -127,7 +129,7 @@
 <!-- ===== Panneau : code de déverrouillage ===== -->
 <div id="panneau-code" class="panneau" hidden>
   <div class="boite">
-    <h2>🔓 Réveiller et déverrouiller</h2>
+    <div class="entete"><h2>🔓 Réveiller et déverrouiller</h2><button class="fermer-haut" data-fermer="panneau-code">✖ Fermer</button></div>
     <div id="code-affiche">—</div>
     <div class="pave">
       <button data-chiffre="1">1</button><button data-chiffre="2">2</button><button data-chiffre="3">3</button>
@@ -143,7 +145,7 @@
 <!-- ===== Panneau : clavier ===== -->
 <div id="panneau-clavier" class="panneau" hidden>
   <div class="boite">
-    <h2>⌨️ Écrire sur le téléphone</h2>
+    <div class="entete"><h2>⌨️ Écrire sur le téléphone</h2><button class="fermer-haut" data-fermer="panneau-clavier">✖ Fermer</button></div>
     <p style="margin:0">Touche d'abord la zone de texte sur l'image du téléphone, puis tape ici : chaque lettre part directement.</p>
     <input id="saisie" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tape ici…">
     <div class="ligne">
@@ -157,7 +159,7 @@
 <!-- ===== Panneau : fichiers ===== -->
 <div id="panneau-fichiers" class="panneau" hidden>
   <div class="boite" style="width:min(820px,100%)">
-    <h2>📁 Fichiers du téléphone</h2>
+    <div class="entete"><h2>📁 Fichiers du téléphone</h2><button class="fermer-haut" data-fermer="panneau-fichiers">✖ Fermer</button></div>
     <div id="raccourcis"></div>
     <div id="chemin"></div>
     <div class="ligne">
@@ -174,7 +176,7 @@
 <!-- ===== Panneau : réglages ===== -->
 <div id="panneau-reglages" class="panneau" hidden>
   <div class="boite">
-    <h2>⚙️ Réglages</h2>
+    <div class="entete"><h2>⚙️ Réglages</h2><button class="fermer-haut" data-fermer="panneau-reglages">✖ Fermer</button></div>
     <label>Qualité de l'image
       <select id="r-qualite">
         <option value="economie">Économie (batterie, image moins fine)</option>

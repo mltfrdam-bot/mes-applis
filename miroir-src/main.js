@@ -18,7 +18,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.1";
+const VERSION = "1.2";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -92,7 +92,7 @@ function traduireErreur(e) {
   const t = String((e && (e.message || e.name)) || e);
   if (e instanceof AdbDaemonWebUsbDevice.DeviceBusyError || /busy|claim|in use/i.test(t))
     return "Le téléphone est déjà utilisé par une autre page (Tango ou un autre onglet). Ferme-la, débranche et rebranche le câble, puis réessaie.";
-  if (/NotFoundError|No device selected/i.test(t)) return "Aucun téléphone choisi.";
+  if (/NotFoundError|No device selected/i.test(t)) return "Aucun téléphone trouvé. Si la tablette affiche ⚡, débranche le câble et rebranche-le en inversant les deux bouts.";
   if (/SecurityError|Access denied/i.test(t)) return "Chrome n'a pas le droit d'accéder au téléphone. Débranche, rebranche, puis réessaie.";
   if (/NetworkError|transfer|disconnected|closed/i.test(t)) return "La liaison avec le téléphone a été coupée (câble débranché ?).";
   if (/VideoDecoder|codec/i.test(t)) return "La tablette n'arrive pas à décoder la vidéo du téléphone.";
@@ -106,6 +106,7 @@ function afficherAccueil() {
   relacherVerrou();
 }
 function afficherMiroir() {
+  if (!history.state?.miroir) history.pushState({ miroir: 1 }, "");
   $("accueil").hidden = true;
   $("miroir").hidden = false;
   prendreVerrou();
@@ -144,7 +145,7 @@ async function connecter(choisirNouveau = false) {
     if (!tel) {
       message("Choisis ton téléphone dans la liste qui s'ouvre, puis appuie sur « Connexion ».");
       tel = await manager.requestDevice();
-      if (!tel) { message("Aucun téléphone choisi. Vérifie le câble et que le débogage USB est activé.", "erreur"); return; }
+      if (!tel) { message("Aucun téléphone trouvé. Si la tablette affiche ⚡ (elle se recharge), le téléphone a pris la main sur le câble : débranche le câble et rebranche-le en inversant les deux bouts. Vérifie aussi que le débogage USB est toujours activé.", "erreur"); return; }
     }
     message("Connexion au téléphone…");
     const liaison = await tel.connect();
@@ -486,6 +487,17 @@ $("saisie").addEventListener("input", async (e) => {
 $("saisie").addEventListener("keydown", async (e) => {
   if (e.key === "Enter") { e.preventDefault(); await touche(TOUCHE.entree); }
   else if (e.key === "Backspace" && !e.target.value) { e.preventDefault(); await touche(TOUCHE.effacer); }
+});
+
+// ---------- Geste « Retour » de la tablette ----------
+// Pendant le pilotage, il ferme d'abord la fenêtre ouverte, sinon il fait « Retour » sur le téléphone.
+// Il ne fait plus quitter Miroir.
+window.addEventListener("popstate", () => {
+  if (!client) return;
+  const ouvert = [...document.querySelectorAll(".panneau")].find((p) => !p.hidden);
+  if (ouvert) ouvert.hidden = true;
+  else touche(TOUCHE.retour);
+  history.pushState({ miroir: 1 }, "");
 });
 
 // ---------- Panneaux ----------
