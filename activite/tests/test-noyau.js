@@ -357,4 +357,16 @@ test("Fiche d'un exercice et ressenti (1.16) : comptage total, côté par côté
   /* une sauvegarde avec le ressenti se réimporte sans doublon */
   const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); assert.strictEqual(N.noteRessenti(N.lignesHistorique(b2).find(l => l.id === id)).ressenti.effort, 3); });
 
+test("Supprimer (1.17) : exercice, activité créée, activité changée en exercice, annuler, fusion d'une vieille sauvegarde", () => {
+  const b = N.baseVide(); b.reglages["acts-perso"] = JSON.stringify(["Corde à sauter"]); b.reglages["act-courante"] = "Corde à sauter"; const vieille = JSON.parse(JSON.stringify(N.sauvegarde(b, "t")));
+  assert.ok(N.actPerso(b, "Corde à sauter") && !N.actPerso(b, "tennis")); assert.strictEqual(N.actSupprimer(b, "tennis"), false, "les activités de départ se masquent seulement");
+  const photo = N.photoReglages(b), e = N.actVersExo(b, "Corde à sauter"); assert.strictEqual(e.nom, "Corde à sauter");
+  assert.ok(!N.toutesActs(b).includes("Corde à sauter") && N.exosLire(b).some(x => x.nom === "Corde à sauter") && N.programmeLire(b).includes("Corde à sauter")); assert.notStrictEqual(b.reglages["act-courante"], "Corde à sauter");
+  N.importer(b, vieille, {}); assert.ok(!N.toutesActs(b).includes("Corde à sauter"), "une vieille sauvegarde ne la fait pas revenir");
+  const b2 = N.baseVide(); Object.assign(b2.reglages, JSON.parse(JSON.stringify(b.reglages))); N.remettreReglages(b2, photo); assert.ok(N.toutesActs(b2).includes("Corde à sauter") && !N.exosLire(b2).some(x => x.nom === "Corde à sauter"), "Annuler remet tout");
+  assert.ok(N.exoSupprimer(b, "Corde à sauter")); assert.ok(!N.exosLire(b).some(x => x.nom === "Corde à sauter") && !N.programmeLire(b).includes("Corde à sauter")); assert.strictEqual(N.exoSupprimer(b, "Pompes"), false);
+  N.exoSupprimer(b, "Squats"); assert.ok(!N.exosLire(b).some(x => x.nom === "Squats"), "un exercice de départ aussi");
+  N.actRecreer(b, "Corde à sauter"); b.reglages["acts-perso"] = JSON.stringify(["Corde à sauter"]); assert.ok(N.toutesActs(b).includes("Corde à sauter"), "recréée sous le même nom");
+  b.reglages["exos"] = JSON.stringify([{ nom: "Fentes", obj: 10 }, { nom: "Fentes", obj: 99 }]); assert.strictEqual(N.exosLire(b).filter(x => x.nom === "Fentes").length, 1, "un seul exercice par nom"); });
+
 console.log("\n" + n + " tests réussis.");

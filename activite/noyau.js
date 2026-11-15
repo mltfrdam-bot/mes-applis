@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["acts-perso", "acts-masquees", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -19,7 +19,24 @@ function actInfo(a) { const x = ACTS.find(y => y[0] === a); if (x) return { id: 
   if (a === "chantier") return { id: a, icone: "🏗️", nom: "Chantier" }; return { id: a, icone: "✳️", nom: String(a || "Activité") }; }
 function actNom(a) { const i = actInfo(a); return i.icone + " " + i.nom; }
 function lireListe(v) { try { const l = JSON.parse(v || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
-function toutesActs(base) { const l = ACTS.map(x => x[0]); lireListe(base.reglages["acts-perso"]).forEach(a => { if (typeof a === "string" && a && !l.includes(a)) l.push(a); }); return l; }
+function toutesActs(base) { const l = ACTS.map(x => x[0]), sup = lireListe(base.reglages["acts-supprimees"]); lireListe(base.reglages["acts-perso"]).forEach(a => { if (typeof a === "string" && a && !l.includes(a) && !sup.includes(a)) l.push(a); }); return l; }
+/* 🗑 (1.17) une activité créée par Frédéric : retirée de la liste. Ses séances restent dans l'Historique.
+   Elle est aussi notée dans « acts-supprimees » pour qu'une vieille sauvegarde fusionnée ne la fasse pas revenir. */
+const actPerso = (base, a) => !ACTS.some(x => x[0] === a) && toutesActs(base).includes(a);
+function actSupprimer(base, a) { if (!actPerso(base, a)) return false; const R = base.reglages;
+  R["acts-perso"] = JSON.stringify(lireListe(R["acts-perso"]).filter(x => x !== a)); R["acts-masquees"] = JSON.stringify(lireListe(R["acts-masquees"]).filter(x => x !== a));
+  const sup = lireListe(R["acts-supprimees"]); if (!sup.includes(a)) sup.push(a); R["acts-supprimees"] = JSON.stringify(sup);
+  if (R["act-courante"] === a) R["act-courante"] = actsVisibles(base)[0] || "tennis"; return true; }
+function actRecreer(base, a) { const R = base.reglages; R["acts-supprimees"] = JSON.stringify(lireListe(R["acts-supprimees"]).filter(x => x !== a)); }
+/* ➜ une activité devient un exercice de Muscu (fiche créée, ajouté à l'enchaînement) */
+function actVersExo(base, a) { if (!actSupprimer(base, a)) return null; const e = exoAjouter(base, a); if (!e) return null; const p = programmeLire(base); if (!p.includes(e.nom)) { p.push(e.nom); programmeEcrire(base, p); } return e; }
+/* 🗑 un exercice (sauf les pompes) : retiré de la liste et de l'enchaînement. Ses séances restent dans l'Historique. */
+function exoSupprimer(base, nom) { if (nom === "Pompes") return false; const l = exosLire(base), i = l.findIndex(x => x.nom === nom); if (i < 0) return false; l.splice(i, 1); exosEcrire(base, l);
+  programmeEcrire(base, lireListe(base.reglages["muscu-programme"]).filter(x => x !== nom)); return true; }
+const CLES_SUPPR = ["exos", "pompes-opt", "muscu-programme", "acts-perso", "acts-masquees", "acts-supprimees", "act-courante"];
+/* photo des réglages touchés, pour « Annuler » pendant 10 s */
+function photoReglages(base) { const o = {}; CLES_SUPPR.forEach(k => { o[k] = base.reglages[k]; }); return o; }
+function remettreReglages(base, o) { CLES_SUPPR.forEach(k => { if (o[k] === undefined) delete base.reglages[k]; else base.reglages[k] = o[k]; }); }
 function actsVisibles(base) { const m = lireListe(base.reglages["acts-masquees"]); return toutesActs(base).filter(a => !m.includes(a)); }
 
 /* ===== Dates et durées : toujours à l'heure de La Réunion ===== */
@@ -459,7 +476,7 @@ function exoComplet(x, e) { e.icone = typeof x.icone === "string" && x.icone && 
   e.comptage = EXO_COMPTAGES[x.comptage] ? x.comptage : "toucher"; e.chargeType = x.chargeType === "elastique" ? "elastique" : "kg"; e.cote = EXO_COTES[x.cote] ? x.cote : "deux";
   e.series = Number(x.series) > 0 ? Math.min(20, Math.round(x.series)) : 0; return e; }
 function exoResume(e) { return [e.series ? pl(e.series, "série") : "séries libres", "objectif " + (e.obj || "libre"), e.charge ? chargeVal(e.charge, e.chargeType) : "sans charge", "repos " + (e.repos ? gm(e.repos) : "libre"), e.comptage === "total" ? "total en fin de série" : "", e.cote === "alterne" ? "un côté à la fois" : ""].filter(Boolean).join(" · "); }
-function exosLire(base) { let l = lireListe(base.reglages["exos"]).filter(x => x && typeof x.nom === "string" && x.nom); if (!l.length) l = JSON.parse(JSON.stringify(EXOS_DEPART));
+function exosLire(base) { const vus = new Set(); let l = lireListe(base.reglages["exos"]).filter(x => x && typeof x.nom === "string" && x.nom && !vus.has(x.nom) && vus.add(x.nom)); if (!l.length) l = JSON.parse(JSON.stringify(EXOS_DEPART));
   let po = {}; try { po = JSON.parse(base.reglages["pompes-opt"] || "{}") || {}; } catch (e) {}
   if (!l.some(x => x.nom === "Pompes")) l.unshift(Object.assign({}, EXOS_DEPART[0]));
   return l.map(x => { const e = exoComplet(x, { nom: x.nom, obj: Number(x.obj) > 0 ? Math.round(x.obj) : 0, charge: Number(x.charge) > 0 ? Number(x.charge) : 0, repos: Number(x.repos) >= 0 ? Math.round(x.repos) : 90 });
@@ -720,7 +737,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
-  DIFF, kg, chargeTxt, chargeVal, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
+  DIFF, kg, chargeTxt, chargeVal, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
   RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,
