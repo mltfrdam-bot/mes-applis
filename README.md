@@ -11,3 +11,8 @@
 ## Miroir (version 1, page web)
 - `miroir/` : afficher et piloter le téléphone depuis la tablette par câble USB, dans Chrome. Adresse : https://mltfrdam-bot.github.io/mes-applis/miroir/
 - `miroir-src/` : le code source (refabriquer avec `npm run build`).
+
+## Miroir version 2 (sans fil)
+- `miroir-android/` : appli Android **Miroir** pour la tablette (page Miroir + relais Wi-Fi vers le téléphone).
+- `.github/workflows/miroir.yml` : fabrique et signe `Miroir.apk`, publié dans **Releases** (tag `miroir`, toujours la dernière version).
+- Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk

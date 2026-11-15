@@ -78,6 +78,9 @@
   td.droite{text-align:right;white-space:nowrap;font-size:14px}
   #progression{font-size:16px;padding:10px;background:#eef4ff;border-radius:10px}
   select{font-size:18px;padding:10px;border-radius:10px;border:1px solid #c9ced8;width:100%}
+  .mode-appli .seulement-chrome,.mode-chrome .seulement-appli{display:none!important}
+  #adresse-tel{font-size:18px;padding:12px;border:1px solid #c9ced8;border-radius:12px;width:260px}
+  #btn-adresse-ok{font-size:17px;padding:12px 20px;border:1px solid #c9ced8;border-radius:12px;background:#fff}
   #bulle{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:12px 20px;border-radius:24px;font-size:17px;z-index:20;max-width:90%}
 </style>
 </head>
@@ -90,12 +93,26 @@
   <button id="btn-connecter">🔌 Connecter</button>
   <div id="message" class="message" hidden></div>
   <div id="etat-cle" class="pied" style="font-size:16px;color:#1d7a3a" hidden></div>
+  <div class="ligne-accueil seulement-appli">
+    <input id="adresse-tel" type="text" inputmode="decimal" placeholder="Adresse du téléphone">
+    <button id="btn-adresse-ok">OK</button>
+  </div>
   <div class="ligne-accueil">
-    <button id="btn-cle">🔑 Utiliser la clé de l'ordinateur</button>
-    <button id="btn-autre">Choisir un autre téléphone</button>
+    <button id="btn-cle">🔑 Utiliser une clé enregistrée</button>
+    <button id="btn-autre" class="seulement-chrome">Choisir un autre téléphone</button>
   </div>
   <input type="file" id="cle-choix" hidden>
-  <details class="aide">
+  <details class="aide seulement-appli">
+    <summary>❓ Comment se connecter sans fil</summary>
+    <ol>
+      <li>Sur le téléphone : active le <b>point d'accès</b>.</li>
+      <li>Sur la tablette : connecte le Wi-Fi au point d'accès du téléphone.</li>
+      <li>Après chaque redémarrage du téléphone : branche le câble une fois, ouvre Miroir dans <b>Chrome</b>, connecte, puis appuie sur <b>📶 Sans fil</b>.</li>
+      <li>Ici, appuie sur <b>📶 Connecter sans fil</b>.</li>
+    </ol>
+    <p>L'adresse du téléphone est trouvée toute seule. Ne la tape que si la connexion échoue (elle est affichée par Miroir dans Chrome, fenêtre « Sans fil »).</p>
+  </details>
+  <details class="aide seulement-chrome">
     <summary>❓ Avant la première connexion</summary>
     <ol>
       <li>Sur le téléphone : <b>Débogage USB</b> activé (Options de développement).</li>
@@ -125,6 +142,7 @@
     <button id="b-notif"><b>🔔</b><span>Notifications</span></button>
     <button id="b-volmoins"><b>🔉</b><span>Vol −</span></button>
     <button id="b-volplus"><b>🔊</b><span>Vol +</span></button>
+    <button id="b-sansfil" class="seulement-chrome"><b>📶</b><span>Sans fil</span></button>
     <button id="b-plein"><b>⛶</b><span>Plein écran</span></button>
     <button id="b-reglages"><b>⚙️</b><span>Réglages</span></button>
     <button id="b-deconnecter" class="rouge"><b>✖</b><span>Déconnecter</span></button>
@@ -187,6 +205,23 @@
     <button class="gros" id="r-oublier-code">Oublier le code de déverrouillage mémorisé</button>
     <button class="gros" id="r-oublier-cle">Oublier la clé de l'ordinateur</button>
     <div class="ligne"><button class="gros bleu" data-fermer="panneau-reglages">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ===== Panneau : passer en sans fil ===== -->
+<div id="panneau-sansfil" class="panneau" hidden>
+  <div class="boite">
+    <div class="entete"><h2>📶 Passer en sans fil</h2><button class="fermer-haut" data-fermer="panneau-sansfil">✖ Fermer</button></div>
+    <ol style="margin:0;padding-left:22px;font-size:17px;line-height:1.5">
+      <li>Une seule fois : <b>enregistre la clé</b> pour l'appli (bouton ci-dessous), puis <a id="sf-lien-apk" href="#" target="_blank">télécharge et installe l'appli Miroir</a>.</li>
+      <li>Appuie sur <b>Activer le sans fil</b>.</li>
+      <li>Débranche le câble. Connecte la tablette au point d'accès du téléphone.</li>
+      <li>Ouvre l'appli <b>Miroir</b> et appuie sur <b>📶 Connecter sans fil</b>.</li>
+    </ol>
+    <button class="gros" id="sf-cle">🔑 Enregistrer la clé pour l'appli</button>
+    <div id="sf-adresses" style="font-size:16px;color:#5a6272"></div>
+    <div id="sf-etat" class="message"></div>
+    <button class="gros bleu" id="sf-lancer">📶 Activer le sans fil</button>
   </div>
 </div>
 

@@ -1,6 +1,7 @@
 // Miroir — afficher et piloter le téléphone depuis la tablette (câble USB).
 // Construit avec les briques libres de Tango (ya-webadb, licence MIT) et le serveur scrcpy (Apache 2.0).
-import { Adb, AdbDaemonTransport } from "@yume-chan/adb";
+import { Adb, AdbDaemonTransport, AdbPacket, AdbPacketSerializeStream } from "@yume-chan/adb";
+import { MaybeConsumable, StructDeserializeStream, pipeFrom, ReadableStream as RS } from "@yume-chan/stream-extra";
 import { AdbDaemonWebUsbDeviceManager, AdbDaemonWebUsbDevice } from "@yume-chan/adb-daemon-webusb";
 import AdbWebCredentialStore from "@yume-chan/adb-credential-web";
 import { AdbScrcpyClient, AdbScrcpyOptionsLatest } from "@yume-chan/adb-scrcpy";
@@ -18,12 +19,15 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.6";
+const VERSION = "2.0";
+// Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
+const APPLI = typeof window.MiroirApp !== "undefined";
+const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Réglages gardés sur la tablette ----------
-const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "normale", memoCode: false, code: "", autoConnexion: true };
+const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "normale", memoCode: false, code: "", autoConnexion: true, adresseTel: "" };
 let reglages = { ...REGLAGES_DEFAUT };
 try { reglages = { ...REGLAGES_DEFAUT, ...JSON.parse(localStorage.getItem("miroir-reglages") || "{}") }; } catch {}
 function sauverReglages() { try { localStorage.setItem("miroir-reglages", JSON.stringify(reglages)); } catch {} }
@@ -59,14 +63,14 @@ async function importerCleOrdi(fichier) {
     const der = pemVersPkcs8(await fichier.text());
     localStorage.setItem("miroir-cle-ordi", btoa(String.fromCharCode(...der)));
     majCleOrdi();
-    message("✔ Clé de l'ordinateur enregistrée. Branche le téléphone et appuie sur Connecter : il n'y aura rien à autoriser sur le téléphone.", "info");
+    message("✔ Clé enregistrée. Appuie sur Connecter : il n'y aura rien à autoriser sur le téléphone.", "info");
   } catch {
-    message("Ce fichier n'est pas la bonne clé. Choisis le fichier « adbkey » (sans « .pub » à la fin).", "erreur");
+    message("Ce fichier n'est pas une clé. Choisis « miroir-cle.adbkey » (dans Téléchargements) ou le fichier « adbkey » de l'ordinateur (sans « .pub »).", "erreur");
   }
 }
 function majCleOrdi() {
   const ok = !!lireCleOrdi();
-  $("etat-cle").textContent = ok ? "🔑 Clé de l'ordinateur : enregistrée ✔" : "";
+  $("etat-cle").textContent = ok ? "🔑 Clé enregistrée ✔" : "";
   $("etat-cle").hidden = !ok;
 }
 let adb = null, client = null, decodeur = null, toile = null;
@@ -95,6 +99,9 @@ function traduireErreur(e) {
   if (/NotFoundError|No device selected/i.test(t)) return "Aucun téléphone trouvé. Si la tablette affiche ⚡, débranche le câble et rebranche-le en inversant les deux bouts.";
   if (/SecurityError|Access denied/i.test(t)) return "Chrome n'a pas le droit d'accéder au téléphone. Débranche, rebranche, puis réessaie.";
   if (/NetworkError|transfer|disconnected|closed/i.test(t)) return "La liaison avec le téléphone a été coupée (câble débranché ?).";
+  if (/sansfil-injoignable|delai/i.test(t) && APPLI)
+    return "Le téléphone ne répond pas en sans fil. Vérifie : 1) la tablette est connectée au point d'accès du téléphone ; 2) depuis le dernier redémarrage du téléphone, tu as bien appuyé sur « 📶 Sans fil » dans Miroir par câble (Chrome).";
+  if (/sansfil-coupe/i.test(t)) return "La liaison sans fil a été coupée.";
   if (/VideoDecoder|codec/i.test(t)) return "La tablette n'arrive pas à décoder la vidéo du téléphone.";
   return "Erreur : " + t;
 }
@@ -120,13 +127,62 @@ function relacherVerrou() { try { verrouEcran?.release(); } catch {} verrouEcran
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && client) prendreVerrou(); });
 
 // ---------- Connexion ----------
+// ---------- Sans fil : liaison ADB par le relais de l'appli Android ----------
+function adresseTelephone() {
+  if (reglages.adresseTel) return reglages.adresseTel.trim();
+  try { return window.MiroirApp.passerelle() || ""; } catch { return ""; }
+}
+function appareilSansFil(ip) {
+  let ws = null;
+  return {
+    serial: ip + ":5555",
+    name: "téléphone (sans fil)",
+    raw: { close: async () => { try { ws?.close(); } catch {} } },
+    async connect() {
+      const url = window.MiroirApp.relais() + "?h=" + encodeURIComponent(ip) + "&p=5555";
+      ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
+      await new Promise((ok, ko) => {
+        ws.onopen = ok;
+        ws.onerror = () => ko(new Error("sansfil-injoignable"));
+        ws.onclose = () => ko(new Error("sansfil-injoignable"));
+      });
+      const s = ws;
+      const lecture = new RS({
+        start(c) {
+          s.onmessage = (e) => c.enqueue(new Uint8Array(e.data));
+          s.onclose = () => { try { c.close(); } catch {} };
+          s.onerror = () => { try { c.error(new Error("sansfil-coupe")); } catch {} };
+        },
+        cancel() { try { s.close(); } catch {} },
+      });
+      return {
+        readable: lecture.pipeThrough(new StructDeserializeStream(AdbPacket)),
+        writable: pipeFrom(new MaybeConsumable.WritableStream({
+          write(morceau) { if (s.readyState !== 1) throw new Error("sansfil-coupe"); s.send(morceau); },
+          close() { try { s.close(); } catch {} },
+          abort() { try { s.close(); } catch {} },
+        }), new AdbPacketSerializeStream()),
+      };
+    },
+  };
+}
+
 async function telephoneConnu() {
+  if (APPLI) { const ip = adresseTelephone(); return ip ? appareilSansFil(ip) : null; }
   if (!manager) return null;
   const liste = await manager.getDevices();
   return liste[0] || null;
 }
 
 async function majBoutonAccueil() {
+  if (APPLI) {
+    const ip = adresseTelephone();
+    $("btn-connecter").textContent = "📶 Connecter sans fil";
+    $("adresse-tel").value = reglages.adresseTel || "";
+    $("adresse-tel").placeholder = ip ? "automatique : " + ip : "ex. 192.168.43.1";
+    return;
+  }
   if (!manager) {
     $("btn-connecter").disabled = true;
     message("Ce navigateur ne sait pas parler au téléphone par câble. Ouvre cette page dans Chrome sur la tablette (pas Firefox, pas Safari).", "erreur");
@@ -164,6 +220,10 @@ async function connecter(choisirNouveau = false, manuel = true) {
   try {
     let tel = choisirNouveau ? null : await telephoneConnu();
     let nouveau = false;
+    if (!tel && APPLI) {
+      if (manuel) message("Je ne trouve pas le téléphone. Connecte d'abord la tablette au point d'accès Wi-Fi du téléphone, ou tape l'adresse du téléphone ci-dessous.", "erreur");
+      return;
+    }
     if (!tel) {
       if (!manuel) return;
       message("Choisis ton téléphone dans la liste qui s'ouvre, puis appuie sur « Connexion ».");
@@ -271,7 +331,14 @@ async function quandDeconnecte() {
   deconnexionTraitee = true;
   await nettoyer();
   afficherAccueil();
-  message("Téléphone déconnecté. Rebranche le câble : la reconnexion se fera toute seule.", "info");
+  if (passageSansFil) {
+    message("✔ Le téléphone est passé en sans fil. Tu peux débrancher le câble et ouvrir l'appli Miroir.", "info");
+  } else if (APPLI) {
+    message("Liaison sans fil perdue. Nouvelle tentative…", "info");
+    if (reglages.autoConnexion) setTimeout(() => { if (!client && !connexionEnCours) connecter(false, false); }, 2000);
+  } else {
+    message("Téléphone déconnecté. Rebranche le câble puis appuie sur « Reconnecter ».", "info");
+  }
   majBoutonAccueil();
 }
 
@@ -439,7 +506,18 @@ function horodatage() {
   const d = new Date(), p = (n) => String(n).padStart(2, "0");
   return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "_" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
 }
-function telechargerBlob(blob, nom) {
+async function telechargerBlob(blob, nom) {
+  if (APPLI) {
+    const id = window.MiroirApp.fichierDebut(nom, blob.type || "application/octet-stream");
+    const PAS = 512 * 1024;
+    for (let i = 0; i < blob.size; i += PAS) {
+      const octets = new Uint8Array(await blob.slice(i, i + PAS).arrayBuffer());
+      let bin = ""; for (let j = 0; j < octets.length; j += 8192) bin += String.fromCharCode(...octets.subarray(j, j + 8192));
+      window.MiroirApp.fichierMorceau(id, btoa(bin));
+    }
+    window.MiroirApp.fichierFin(id);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
@@ -596,7 +674,9 @@ function fermer(id) { $(id).hidden = true; }
 document.querySelectorAll("[data-fermer]").forEach((b) => (b.onclick = () => fermer(b.dataset.fermer)));
 
 // ---------- Plein écran ----------
+let pleinEcranAppli = true;
 async function basculerPleinEcran() {
+  if (APPLI) { pleinEcranAppli = !pleinEcranAppli; window.MiroirApp.pleinEcran(pleinEcranAppli); $("b-plein").querySelector("span").textContent = pleinEcranAppli ? "Quitter plein écran" : "Plein écran"; return; }
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await document.documentElement.requestFullscreen({ navigationUI: "hide" });
@@ -639,8 +719,12 @@ const actions = {
   "k-effacer": effacerUn,
   "k-entree": () => { validerLigne(); $("saisie").focus(); },
   "f-envoyer": () => $("f-choix").click(),
+  "b-sansfil": ouvrirSansFil,
+  "sf-lancer": lancerSansFil,
+  "sf-cle": exporterCle,
+  "btn-adresse-ok": () => { reglages.adresseTel = $("adresse-tel").value.trim(); sauverReglages(); majBoutonAccueil(); bulle(reglages.adresseTel ? "Adresse enregistrée" : "Adresse automatique"); },
   "btn-cle": () => $("cle-choix").click(),
-  "r-oublier-cle": () => { localStorage.removeItem("miroir-cle-ordi"); majCleOrdi(); bulle("Clé de l'ordinateur oubliée"); },
+  "r-oublier-cle": () => { localStorage.removeItem("miroir-cle-ordi"); majCleOrdi(); bulle("Clé oubliée"); },
 };
 for (const [id, fn] of Object.entries(actions)) { const el = $(id); if (el) el.addEventListener("click", () => { Promise.resolve(fn()).catch((e) => { console.error(e); bulle(traduireErreur(e)); }); }); }
 document.querySelectorAll("[data-chiffre]").forEach((b) => (b.onclick = () => { if (codeSaisi.length < 16) { codeSaisi += b.dataset.chiffre; majCode(); } }));
@@ -648,10 +732,59 @@ $("cle-choix").onchange = (e) => { const f = e.target.files[0]; e.target.value =
 $("f-choix").onchange = (e) => { envoyerFichiers([...e.target.files]); e.target.value = ""; };
 
 // ---------- Démarrage ----------
-$("version").textContent = VERSION;
+$("version").textContent = VERSION + (APPLI ? " (appli sans fil)" : "");
+document.body.classList.add(APPLI ? "mode-appli" : "mode-chrome");
+$("sf-lien-apk").href = LIEN_APK;
+if (APPLI) {
+  // Clavier : on sort du plein écran le temps de taper, pour que l'image reste au-dessus du clavier
+  new MutationObserver(() => { window.MiroirApp.pleinEcran($("panneau-clavier").hidden ? pleinEcranAppli : false); setTimeout(ajuster, 300); })
+    .observe($("panneau-clavier"), { attributes: true, attributeFilter: ["hidden"] });
+  $("b-plein").querySelector("span").textContent = "Quitter plein écran";
+}
 majCleOrdi();
 majBoutonAccueil().then(async () => {
   // Reconnexion directe si le téléphone déjà autorisé est branché
   if (reglages.autoConnexion && (await telephoneConnu())) connecter(false, false);
 });
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+if (!APPLI && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
+// ---------- Passer en sans fil (depuis Chrome, par câble) ----------
+let passageSansFil = false;
+async function adressesTelephone() {
+  try {
+    const sortie = await adb.subprocess.noneProtocol.spawnWaitText(["ip", "-4", "-o", "addr", "show"]);
+    return sortie.split("\n").map((l) => l.match(/^\d+:\s+(\S+)\s+inet\s+([\d.]+)/)).filter(Boolean)
+      .filter((m) => m[1] !== "lo" && !/^rmnet|^ccmni|^dummy/.test(m[1])).map((m) => ({ nom: m[1], ip: m[2] }));
+  } catch { return []; }
+}
+async function exporterCle() {
+  // La clé de Miroir (déjà acceptée par le téléphone) est enregistrée en fichier pour l'appli sans fil.
+  let cle = null;
+  for await (const k of clesWeb.iterateKeys()) { cle = k; break; }
+  if (!cle) { bulle("Aucune clé à enregistrer"); return; }
+  let bin = ""; for (const o of cle.buffer) bin += String.fromCharCode(o);
+  const pem = "-----BEGIN PRIVATE KEY-----\n" + btoa(bin).match(/.{1,64}/g).join("\n") + "\n-----END PRIVATE KEY-----\n";
+  await telechargerBlob(new Blob([pem], { type: "application/octet-stream" }), "miroir-cle.adbkey");
+  bulle("🔑 Clé enregistrée dans Téléchargements : miroir-cle.adbkey");
+}
+async function ouvrirSansFil() {
+  ouvrir("panneau-sansfil");
+  $("sf-etat").textContent = "Le téléphone va passer en mode sans fil. L'image va se couper : c'est normal.";
+  $("sf-lancer").hidden = false;
+  const ips = await adressesTelephone();
+  $("sf-adresses").textContent = ips.length ? "Adresse(s) du téléphone : " + ips.map((x) => x.ip).join(" ou ") : "";
+}
+async function lancerSansFil() {
+  if (!adb) return;
+  $("sf-lancer").hidden = true;
+  $("sf-etat").textContent = "Activation du sans fil…";
+  passageSansFil = true;
+  try {
+    await adb.tcpip.setPort(5555);
+    $("sf-etat").textContent = "✔ C'est fait. Tu peux débrancher le câble, puis ouvrir l'appli Miroir sur la tablette (connectée au point d'accès du téléphone).";
+  } catch (e) {
+    // le téléphone redémarre sa liaison : une coupure ici est normale
+    $("sf-etat").textContent = "✔ C'est fait (la liaison câble s'est coupée, c'est normal). Débranche le câble et ouvre l'appli Miroir.";
+  }
+  setTimeout(() => (passageSansFil = false), 8000);
+}

@@ -1,0 +1,47 @@
+# Fabrique l'appli « Miroir » (sans fil, à installer sur la TABLETTE) et la met en téléchargement dans « Releases ».
+# Se lance toute seule à chaque modification de Miroir, ou à la main (onglet Actions).
+name: Fabrication APK Miroir
+
+on:
+  push:
+    branches: [main]
+    paths: ["miroir/**", "miroir-src/**", "miroir-android/**", ".github/workflows/miroir.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  miroir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Copier la page Miroir dans l'APK
+        run: |
+          mkdir -p miroir-android/app/src/main/assets/www
+          cp -r miroir/* miroir-android/app/src/main/assets/www/
+          rm -f miroir-android/app/src/main/assets/www/sw.js
+      - name: Fabriquer et signer
+        working-directory: miroir-android
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }}
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
+          gradle --no-daemon assembleRelease -PnumVersion=${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../Miroir.apk
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: miroir
+          name: "Miroir (sans fil) — dernière version"
+          body: "À installer sur la **tablette** : télécharge **Miroir.apk** ci-dessous et ouvre-le (une mise à jour garde tes réglages). Version de fabrication n° ${{ github.run_number }}."
+          files: Miroir.apk
+          make_latest: false
