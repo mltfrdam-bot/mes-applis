@@ -41,8 +41,8 @@
   #barre button.rouge{color:#b3261e}
   @media (orientation:portrait){
     #miroir{flex-direction:column}
-    #barre{display:flex;flex-direction:row;width:auto;border-left:0;border-top:1px solid #d8dce3;overflow-x:auto;overflow-y:hidden}
-    #barre button{min-width:84px}
+    #barre{grid-template-columns:repeat(8,1fr);grid-auto-rows:72px;width:auto;border-left:0;border-top:1px solid #d8dce3;overflow:visible}
+    #barre button span{font-size:11px}
   }
 
   /* Panneaux */
