@@ -18,7 +18,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.3";
+const VERSION = "1.4";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -266,6 +266,7 @@ function ajuster() {
   toile.style.height = Math.floor(hauteurVideo * echelle) + "px";
 }
 window.addEventListener("resize", ajuster);
+new ResizeObserver(() => ajuster()).observe(document.getElementById("cadre"));
 document.addEventListener("fullscreenchange", () => { setTimeout(ajuster, 100); majPleinEcran(); });
 
 // ---------- Toucher ----------
@@ -479,15 +480,38 @@ async function envoyerFichiers(fichiers) {
 }
 
 // ---------- Clavier ----------
-function ouvrirClavier() { ouvrir("panneau-clavier"); setTimeout(() => $("saisie").focus(), 100); }
-$("saisie").addEventListener("input", async (e) => {
-  const v = e.target.value; e.target.value = "";
-  if (v && client) await client.controller.injectText(v);
+// Le texte reste visible dans la zone de saisie ; seules les différences partent vers le téléphone
+// (lettres ajoutées, effacements, mots remplacés par les suggestions du clavier).
+let texteEnvoye = "";
+function ouvrirClavier() { texteEnvoye = ""; $("saisie").value = ""; ouvrir("panneau-clavier"); setTimeout(() => { $("saisie").focus(); ajuster(); }, 100); }
+let fileClavier = Promise.resolve();
+function synchroniserTexte() {
+  fileClavier = fileClavier.then(async () => {
+    const nouveau = $("saisie").value, ancien = texteEnvoye;
+    if (nouveau === ancien || !client) return;
+    let commun = 0;
+    while (commun < ancien.length && commun < nouveau.length && ancien[commun] === nouveau[commun]) commun++;
+    const aEffacer = [...ancien.slice(commun)].length;
+    for (let i = 0; i < aEffacer; i++) await touche(TOUCHE.effacer);
+    const ajout = nouveau.slice(commun);
+    if (ajout) await client.controller.injectText(ajout);
+    texteEnvoye = nouveau;
+  }).catch(() => {});
+}
+$("saisie").addEventListener("input", synchroniserTexte);
+$("saisie").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); validerLigne(); }
+  else if (e.key === "Backspace" && !e.target.value) { e.preventDefault(); touche(TOUCHE.effacer); }
 });
-$("saisie").addEventListener("keydown", async (e) => {
-  if (e.key === "Enter") { e.preventDefault(); await touche(TOUCHE.entree); }
-  else if (e.key === "Backspace" && !e.target.value) { e.preventDefault(); await touche(TOUCHE.effacer); }
-});
+function validerLigne() {
+  fileClavier = fileClavier.then(async () => { await touche(TOUCHE.entree); $("saisie").value = ""; texteEnvoye = ""; });
+}
+function effacerUn() {
+  const c = $("saisie");
+  if (c.value) { c.value = [...c.value].slice(0, -1).join(""); synchroniserTexte(); }
+  else touche(TOUCHE.effacer);
+  c.focus();
+}
 
 // ---------- Geste « Retour » de la tablette ----------
 // Pendant le pilotage, il ferme d'abord la fenêtre ouverte, sinon il fait « Retour » sur le téléphone.
@@ -546,8 +570,8 @@ const actions = {
   "b-deconnecter": deconnecter,
   "c-valider": deverrouiller,
   "c-effacer": () => { codeSaisi = codeSaisi.slice(0, -1); majCode(); },
-  "k-effacer": () => touche(TOUCHE.effacer),
-  "k-entree": () => touche(TOUCHE.entree),
+  "k-effacer": effacerUn,
+  "k-entree": () => { validerLigne(); $("saisie").focus(); },
   "f-envoyer": () => $("f-choix").click(),
   "btn-cle": () => $("cle-choix").click(),
   "r-oublier-cle": () => { localStorage.removeItem("miroir-cle-ordi"); majCleOrdi(); bulle("Clé de l'ordinateur oubliée"); },
