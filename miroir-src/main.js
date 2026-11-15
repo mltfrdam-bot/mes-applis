@@ -18,7 +18,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.4";
+const VERSION = "1.5";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -136,38 +136,84 @@ async function majBoutonAccueil() {
   $("btn-connecter").textContent = tel ? "▶ Reconnecter « " + tel.name + " »" : "🔌 Connecter";
 }
 
-async function connecter(choisirNouveau = false) {
-  if (connexionEnCours) return;
+// Limite de temps : si le téléphone ne répond pas, on abandonne l'essai au lieu de rester bloqué.
+function avecDelai(promesse, ms) {
+  let t;
+  return Promise.race([promesse, new Promise((_, rej) => (t = setTimeout(() => rej(new Error("delai")), ms)))]).finally(() => clearTimeout(t));
+}
+let telEnCours = null;   // téléphone de l'essai en cours (pour pouvoir l'annuler)
+let numeroEssai = 0;
+async function annulerEssai() {
+  numeroEssai++;
+  const t = telEnCours; telEnCours = null;
+  await nettoyer();
+  try { await avecDelai(t?.raw.close(), 2000); } catch {}
+  connexionEnCours = false;
+}
+
+// manuel = appui sur le bouton ; sinon reconnexion automatique (câble rebranché, ouverture de la page)
+async function connecter(choisirNouveau = false, manuel = true) {
+  if (connexionEnCours) {
+    if (!manuel) return;
+    await annulerEssai();   // le bouton relance toujours une connexion propre
+  }
   connexionEnCours = true;
-  $("btn-connecter").disabled = true;
+  const essai = ++numeroEssai;
+  $("btn-connecter").disabled = false;
+  const maxEssais = manuel ? 2 : 5;
   try {
     let tel = choisirNouveau ? null : await telephoneConnu();
+    let nouveau = false;
     if (!tel) {
+      if (!manuel) return;
       message("Choisis ton téléphone dans la liste qui s'ouvre, puis appuie sur « Connexion ».");
       tel = await manager.requestDevice();
-      if (!tel) { message("Aucun téléphone trouvé. Si la tablette affiche ⚡ (elle se recharge), le téléphone a pris la main sur le câble : débranche le câble et rebranche-le en inversant les deux bouts. Vérifie aussi que le débogage USB est toujours activé.", "erreur"); return; }
+      if (!tel) { message("Aucun téléphone trouvé. Vérifie le câble, que Tango est bien fermé et que le débogage USB est toujours activé.", "erreur"); return; }
+      nouveau = true;
     }
-    message("Connexion au téléphone…");
-    const liaison = await tel.connect();
-    const minuterie = setTimeout(() => message(lireCleOrdi()
-      ? "Le téléphone n'accepte pas la clé de l'ordinateur. Vérifie que scrcpy marche toujours sur l'ordinateur avec ce téléphone, puis réessaie."
-      : "👉 Sur le téléphone : coche « Toujours autoriser », puis appuie sur « Autoriser ». Si l'écran du téléphone est illisible, utilise le bouton « 🔑 Utiliser la clé de l'ordinateur » ci-dessous."), 2500);
-    let transport;
-    try {
-      transport = await AdbDaemonTransport.authenticate({ serial: tel.serial, connection: liaison, credentialStore: cles });
-    } finally { clearTimeout(minuterie); }
-    adb = new Adb(transport);
-    adb.disconnected.then(() => quandDeconnecte()).catch(() => quandDeconnecte());
-    await lancerMiroir();
-  } catch (e) {
-    console.error(e);
-    message(traduireErreur(e), "erreur");
-    await nettoyer();
+    for (let n = 1; n <= maxEssais; n++) {
+      if (essai !== numeroEssai) return;
+      try {
+        await uneConnexion(tel, nouveau, essai);
+        return;
+      } catch (e) {
+        console.error(e);
+        if (essai !== numeroEssai) return;
+        await nettoyer();
+        try { await avecDelai(tel.raw.close(), 2000); } catch {}
+        if (n === maxEssais || e instanceof AdbDaemonWebUsbDevice.DeviceBusyError) { message(traduireErreur(e), "erreur"); return; }
+        message(`Le téléphone n'est pas encore prêt… nouvel essai (${n + 1}/${maxEssais})`);
+        await attendre(2000);
+        // le téléphone a pu changer d'identité USB après le rebranchement : on le cherche à nouveau
+        tel = (await telephoneConnu()) || tel;
+      }
+    }
   } finally {
-    connexionEnCours = false;
-    $("btn-connecter").disabled = false;
-    majBoutonAccueil();
+    if (essai === numeroEssai) {
+      connexionEnCours = false;
+      telEnCours = null;
+      $("btn-connecter").disabled = false;
+      majBoutonAccueil();
+    }
   }
+}
+
+async function uneConnexion(tel, nouveau, essai) {
+  telEnCours = tel;
+  message("Connexion au téléphone…");
+  const liaison = await avecDelai(tel.connect(), 8000);
+  const minuterie = setTimeout(() => message(lireCleOrdi()
+    ? "Le téléphone n'accepte pas la clé de l'ordinateur. Vérifie que scrcpy marche toujours sur l'ordinateur avec ce téléphone, puis réessaie."
+    : "👉 Sur le téléphone : coche « Toujours autoriser », puis appuie sur « Autoriser ». Si l'écran du téléphone est illisible, utilise le bouton « 🔑 Utiliser la clé de l'ordinateur » ci-dessous."), 2500);
+  let transport;
+  try {
+    // 90 s la première fois (le temps d'appuyer sur « Autoriser »), 12 s pour un téléphone déjà autorisé
+    transport = await avecDelai(AdbDaemonTransport.authenticate({ serial: tel.serial, connection: liaison, credentialStore: cles }), nouveau ? 90000 : 12000);
+  } finally { clearTimeout(minuterie); }
+  if (essai !== numeroEssai) { try { await transport.close(); } catch {} throw new Error("annule"); }
+  adb = new Adb(transport);
+  adb.disconnected.then(() => quandDeconnecte()).catch(() => quandDeconnecte());
+  await avecDelai(lancerMiroir(), 25000);
 }
 
 async function lancerMiroir() {
@@ -232,9 +278,9 @@ async function quandDeconnecte() {
 async function nettoyer() {
   const c = client, a = adb, d = decodeur;
   client = null; adb = null; decodeur = null;
-  try { await c?.close(); } catch {}
+  try { await avecDelai(c?.close(), 2000); } catch {}
   try { d?.dispose(); } catch {}
-  try { await a?.close(); } catch {}
+  try { await avecDelai(a?.close(), 2000); } catch {}
   setTimeout(() => (deconnexionTraitee = false), 500);
 }
 
@@ -251,10 +297,15 @@ async function deconnecter() {
 if (manager && navigator.usb) {
   navigator.usb.addEventListener("connect", async () => {
     if (!reglages.autoConnexion || client || connexionEnCours) return;
-    await attendre(1200);
-    connecter(false);
+    message("Téléphone branché, connexion dans un instant…");
+    await attendre(2500);   // laisser au téléphone le temps de se préparer
+    if (!client) connecter(false, false);
   });
-  navigator.usb.addEventListener("disconnect", () => { if (!client) majBoutonAccueil(); });
+  navigator.usb.addEventListener("disconnect", (e) => {
+    // câble débranché : on libère tout de suite, sans attendre
+    if (client || connexionEnCours) { if (telEnCours && e.device !== telEnCours.raw && client) return; numeroEssai++; connexionEnCours = false; quandDeconnecte(); }
+    else majBoutonAccueil();
+  });
 }
 
 // ---------- Affichage : adapter l'image à la tablette ----------
@@ -551,8 +602,8 @@ $("r-oublier-code").onclick = () => { reglages.memoCode = false; reglages.code =
 
 // ---------- Boutons ----------
 const actions = {
-  "btn-connecter": () => connecter(false),
-  "btn-autre": () => connecter(true),
+  "btn-connecter": () => connecter(false, true),
+  "btn-autre": () => connecter(true, true),
   "b-retour": () => touche(TOUCHE.retour),
   "b-accueil": () => touche(TOUCHE.accueil),
   "b-recents": () => touche(TOUCHE.recents),
@@ -586,6 +637,6 @@ $("version").textContent = VERSION;
 majCleOrdi();
 majBoutonAccueil().then(async () => {
   // Reconnexion directe si le téléphone déjà autorisé est branché
-  if (reglages.autoConnexion && (await telephoneConnu())) connecter(false);
+  if (reglages.autoConnexion && (await telephoneConnu())) connecter(false, false);
 });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
