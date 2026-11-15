@@ -24,6 +24,10 @@
   .vert { background:var(--vert); } .rouge { background:var(--rouge); } .bleu { background:var(--bleu); }
   #hp { padding:10px 14px; background:#eef2f7; color:#111; font-size:16px; }
   #hp.on { background:#dbeafe; color:var(--bleu); font-weight:700; }
+  #sonBt { padding:10px 14px; background:#eef2f7; font-size:18px; }
+  #sonBt.on { background:#dbeafe; }
+  body.sonne #bandeau { background:#e8f7ec; animation:clignote 1s infinite; }
+  @keyframes clignote { 50% { background:#c9efd5; } }
 
   /* Onglets */
   #onglets { display:flex; gap:6px; padding:10px 10px 0; background:var(--fond); }
@@ -67,6 +71,7 @@
   <button id="btDecrocher" class="gros vert cache">Décrocher</button>
   <button id="btRaccrocher" class="gros rouge cache">Raccrocher</button>
   <button id="hp" title="Haut-parleur du téléphone au départ de l'appel">🔊 Haut-parleur</button>
+  <button id="sonBt" title="Sonnerie sur la tablette quand le téléphone sonne">🔔</button>
 </div>
 
 <nav id="onglets">
@@ -127,6 +132,28 @@ let favoris = memoire.lire("favoris", []);
 let modeModif = false;
 let numeroTape = "";
 let dernierEtat = { etat: "libre" };
+let sonnerie = memoire.lire("sonnerie", true);
+let audio = null;
+
+// Sonnerie de la tablette (le navigateur l'autorise après un premier appui sur l'écran)
+function preparerSon() {
+  try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {}
+}
+function bip() {
+  try {
+    preparerSon(); if (!audio) return;
+    const t = audio.currentTime;
+    [[0, 880], [0.28, 660], [0.56, 880]].forEach(([d, f]) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.5, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.24);
+      o.start(t + d); o.stop(t + d + 0.26);
+    });
+  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); } catch (e) {}
+}
 
 // ---------- Liaison avec le téléphone ----------
 async function api(chemin, corps) {
@@ -138,7 +165,7 @@ async function api(chemin, corps) {
   try {
     const r = await fetch(chemin, opt);
     const j = await r.json().catch(() => ({ ok: false, message: "Réponse illisible" }));
-    if (r.status === 401) { demanderCode(); throw new Error("Code incorrect"); }
+    if (r.status === 401) { code = ""; demanderCode(); throw new Error("Code incorrect"); }
     liaison(true);
     return j;
   } catch (e) {
@@ -210,6 +237,8 @@ function afficherEtat() {
   $("#btDecrocher").classList.toggle("cache", e.etat !== "sonne");
   $("#btRaccrocher").classList.toggle("cache", e.etat === "libre");
   $("#btRaccrocher").textContent = e.etat === "sonne" ? "Refuser" : "Raccrocher";
+  document.body.classList.toggle("sonne", e.etat === "sonne");
+  document.title = e.etat === "sonne" ? "📲 " + qui : e.etat === "libre" ? "Appels" : "📞 " + qui;
   if (e.etat === "libre") info.innerHTML = "Prêt";
   else if (e.etat === "sonne") info.innerHTML = "📲 Ça sonne : " + esc(qui) + (e.numero && qui !== e.numero ? "<small>" + esc(e.numero) + "</small>" : "");
   else if (e.etat === "compose") info.innerHTML = "📞 Appel de " + esc(qui) + "…";
@@ -377,6 +406,10 @@ function afficherHp() {
   b.textContent = hautParleur ? "🔊 Haut-parleur" : "🔈 Écouteur";
 }
 
+function afficherSon() {
+  const b = $("#sonBt"); b.classList.toggle("on", sonnerie); b.textContent = sonnerie ? "🔔" : "🔕";
+}
+
 function chargerTout() { chargerFavoris(); chargerContacts(); suivreEtat(); }
 
 document.querySelectorAll("#onglets button").forEach(b => b.onclick = () => onglet(b.dataset.o));
@@ -388,15 +421,19 @@ $("#btRaccrocher").onclick = raccrocher;
 $("#btDecrocher").onclick = decrocher;
 $("#hp").onclick = () => { hautParleur = !hautParleur; memoire.ecrire("hautParleur", hautParleur); afficherHp(); };
 $("#btCode").onclick = validerCode;
+$("#sonBt").onclick = () => { sonnerie = !sonnerie; memoire.ecrire("sonnerie", sonnerie); afficherSon(); if (sonnerie) bip(); };
+document.addEventListener("pointerdown", preparerSon, { once: true });
 $("#champCode").onkeydown = e => { if (e.key === "Enter") validerCode(); };
 
 construirePave();
 afficherHp();
+afficherSon();
 afficherEntreprise();
 afficherContacts();
 onglet(memoire.lire("onglet", "entreprise"));
 if (!code) demanderCode(); else chargerTout();
 setInterval(suivreEtat, 1500);
+setInterval(() => { if (sonnerie && dernierEtat.etat === "sonne") bip(); }, 2000);
 setInterval(() => { if (dernierEtat.etat === "en_appel") afficherEtat(); }, 1000);
 </script>
 </body>

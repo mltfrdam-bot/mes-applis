@@ -181,16 +181,23 @@ public class RelaisService extends Service {
     }
 
     private JSONObject etatJson() throws Exception {
-        // Recalage : si le téléphone dit qu'il n'y a plus d'appel, on repasse à « libre »
+        // On demande directement au téléphone son état (sonne / en appel / libre) à chaque fois
+        long maintenant = System.currentTimeMillis();
+        int cs = -1;
         try {
-            if (permis(Manifest.permission.READ_PHONE_STATE)) {
-                TelecomManager tm = (TelecomManager) getSystemService(TELECOM_SERVICE);
-                if (!tm.isInCall() && !"compose".equals(etat)) { etat = "libre"; numero = ""; depuis = 0; }
-                if ("compose".equals(etat) && System.currentTimeMillis() - depuis > 8000 && !tm.isInCall()) {
-                    etat = "libre"; numero = ""; depuis = 0;
-                }
-            }
+            if (permis(Manifest.permission.READ_PHONE_STATE)) cs = etatTelephone();
         } catch (Exception ignored) {}
+        if (cs == TelephonyManager.CALL_STATE_RINGING) {
+            if (!"sonne".equals(etat)) { etat = "sonne"; depuis = maintenant; }
+        } else if (cs == TelephonyManager.CALL_STATE_OFFHOOK) {
+            if (!"en_appel".equals(etat)) {
+                if (!"compose".equals(etat)) depuis = maintenant;
+                etat = "en_appel";
+            }
+        } else if (cs == TelephonyManager.CALL_STATE_IDLE) {
+            // Juste après un ordre d'appel, le téléphone peut mettre quelques secondes à composer
+            if (!"compose".equals(etat) || maintenant - depuis > 8000) { etat = "libre"; numero = ""; depuis = 0; }
+        }
         JSONObject o = new JSONObject();
         o.put("etat", etat);
         o.put("numero", numero);
@@ -198,6 +205,12 @@ public class RelaisService extends Service {
         o.put("depuis", depuis);
         o.put("maintenant", System.currentTimeMillis());
         return o;
+    }
+
+    @SuppressWarnings("deprecation")
+    private int etatTelephone() {
+        TelephonyManager t = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+        return t.getCallState();
     }
 
     private String nomDe(String num) {
