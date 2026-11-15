@@ -151,7 +151,7 @@ const paires = (courses) => [].concat(...courses.map(c => (c.notes || []).map(n 
 function seriesDe(tl) { const l = []; let c = null; (tl || []).forEach((t, i) => { if (!c || t - tl[i - 1] > 5) { c = []; l.push(c); } c.push(t); }); return l.map(x => x.length); }
 function detailNote(n) { return heure(n.t) + " — " + libelle(n) + (n.fc ? " ❤️" + n.fc : ""); }
 function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R), total = tr.reduce((a, x) => a + x.duree, 0), g = gpsBilan(R), avecH10 = (R.l || []).length > 0 && !R.importe;
-  const V = R.velo, res = V ? veloResume(V) : g ? (g.ok ? [kmTxt(g.dist), g.allure] : ["GPS : aucune position"]) : ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax); if (g && avecH10) res.push(pl(r.pics || 0, "impact")); if (R.importe) res.push("⌚ " + R.importe.montre);
+  const V = R.velo, res = V ? veloResume(V) : g ? (g.ok ? [kmTxt(g.dist), g.allure] : ["GPS : aucune position"]) : ["H10", pl(r.pics || 0, "impact")]; if (r.fcMoy) res.push("❤️ " + r.fcMoy + " / " + r.fcMax); if (g && avecH10) res.push(pl(r.pics || 0, "impact")); if (R.importe) res.push("⌚ " + R.importe.montre); { const c = chargeR(R); if (c != null) res.push("📈 " + chargeEntTxt(c)); }
   const alerte = tr.length ? "⚠️ " + pl(tr.length, "trou") + " (" + Math.round(total / 60) + " min)" : (R.coupe ? "⚠️ enregistrement coupé" : "");
   const det = [detailNote(n)]; tr.forEach(x => det.push("⚠️ trou de " + v1(x.duree / 60) + " min à " + heure((R.debut || n.t) + x.a * 1000)));
   (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
@@ -173,7 +173,7 @@ function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || 
   else if (G.length) { duree = G.reduce((a, n) => a + (n.ghost.temps || 0), 0); res = "👻 " + G[0].ghost.res; }
   else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
   return { id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }; }
-function lignesHistorique(base) { const l = [];
+function lignesHistorique(base) { fcProfil(base); const l = [];
   base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(ligneH10(c, n)); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
   Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
     l.push({ id: "carnet-" + i, t: m ? reunion(2026, Number(m[2]), Number(m[1]), Number(m[3]), Number(m[4])) : 0, act: "pompes", duree: x.tl[x.tl.length - 1], pompes: x.tl.length,
@@ -242,10 +242,11 @@ function ajouterEnregistrement(base, R) { if (!enregistrementValide(R)) throw ne
 function enregistrementsManquants(base, noms) { const vus = new Set(base.courses.map(idSeance)); (base.corbeille || []).forEach(e => { if (e.notes.some(n => n.h10rec)) vus.add(idSeance(e.seance)); }); return (noms || []).filter(n => { const m = /^rec-(\d+)\.json$/.exec(n); return m && !vus.has(m[1]); }); }
 function bilanEnregistrement(R) { const L = R.l || [], r = R.res || {}, ecoule = Math.max(L.length, Math.round(((R.fin || R.debut) - R.debut) / 1000)), tr = trousH10(R), de = R.deconnexions || [];
   return { ecoule, enregistre: L.length, perdu: Math.max(0, ecoule - L.length), actif: r.actif || 0, impacts: r.pics || 0, fcMoy: r.fcMoy, fcMax: r.fcMax, trous: tr, deconnexions: de, tempsDeconnecte: de.reduce((a, x) => a + x[1], 0),
-    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R), fantome: fantBilan(R) }; }
+    reprises: R.coupures || 0, mouvements: (R.pics || []).length, mouvementsComptes: (R.pics || []).filter(x => x[2]).length, sansMouvement: L.length > 0 && L.every(x => !x[2] && !x[3]), sansCeinture: L.length === 0, gps: gpsBilan(R), fantome: fantBilan(R), charge: chargeR(R), profil: Object.assign({}, FC_PROFIL) }; }
 function rapportEnregistrement(R, imp, version) { const b = bilanEnregistrement(R), T = [], g = b.gps;
   T.push((R.importe ? "SORTIE IMPORTÉE (" + R.importe.montre + (R.importe.fichier ? ", " + R.importe.fichier : "") + ")" : "ENREGISTREMENT " + (g ? (b.sansCeinture ? "GPS" : "GPS + H10") : "H10")) + " — " + actInfo(R.act).nom + " — " + dateHeure(R.debut) + (version ? " (APK " + version + ")" : ""));
   if (g) lignesGps(T, g); if (R.velo) lignesVelo(R).forEach(x => T.push(x));
+  if (b.charge != null) T.push("Charge d'entraînement (méthode COROS) : " + b.charge + " (FC repos " + b.profil.repos + ", FC max " + b.profil.max + ")");
   T.push(b.sansCeinture && g ? "Durée : " + chrono(b.ecoule) + " · sans ceinture (pas de cardio ni de mouvement)" : "Durée : " + hm(b.ecoule) + " · enregistré " + hm(b.enregistre) + " · perdu " + dureeCourte(b.perdu));
   T.push("FC : moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–"));
   T.push(b.sansCeinture && g ? "Mouvement : pas de ceinture" : b.sansMouvement ? "Mouvement : aucune mesure reçue (capteur de mouvement non actif)" : "Impacts : " + b.impacts + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · mouvements nets : " + b.mouvements + " (comptés " + b.mouvementsComptes + ") · actif " + hm(b.actif));
@@ -528,6 +529,7 @@ function manquesH10(R) { const L = R.l || [], fin = R.fin ? Math.round((R.fin - 
   L.forEach(x => { vu(x[0]); prec = x[0]; }); vu(fin); return { trous, petits, fin }; }
 function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R), m = manquesH10(R), h = (sec) => heureS(R.debut + sec * 1000), g = b.gps, G = g && g.ok ? R.gps : null;
   if (g) lignesGps(T, g); if (R.velo) lignesVelo(R).forEach(x => T.push(x));
+  if (b.charge != null) T.push("Charge d'entraînement (méthode COROS) : " + b.charge + " (FC repos " + b.profil.repos + ", FC max " + b.profil.max + ")");
   if (b.sansCeinture && g) T.push("Sans ceinture : pas de cardio ni de mouvement.");
   else { T.push("Enregistré " + hm(b.enregistre) + " sur " + hm(b.ecoule) + " · FC moy " + (b.fcMoy || "–") + " / max " + (b.fcMax || "–") + " · " + (b.sansMouvement ? "pas de mesure de mouvement" : pl(b.impacts, "impact") + (impTexte(R, imp) ? " (réglage " + impTexte(R, imp) + ")" : "") + " · actif " + hm(b.actif)));
     T.push("", m.trous.length ? "Trous (plus de 5 s sans mesure) : " + m.trous.length : "Trous (plus de 5 s sans mesure) : aucun"); m.trous.forEach(x => T.push("- de " + h(x.a) + " à " + h(x.a + x.duree) + " (" + (x.duree < 60 ? x.duree + " s" : gm(x.duree)) + ")"));
@@ -591,6 +593,21 @@ function importer(base, fichier, meta) { meta = meta || {}; let paquet, source;
   const d = descriptif(base, paquet, bilan, { source, version: meta.version });
   base.imports.push({ t: d.t, source, resume: d.resume }); base.imports.sort((x, y) => x.t - y.t);
   return d; }
+
+/* ===== ❤️ Charge d'entraînement (1.15) : même méthode que COROS (TRIMP), sur le cardio à la seconde =====
+   chaque seconde compte (durée en min) × B × 0,2445 × e^(3,411 × B), avec B = (FC − FC repos) ÷ (FC max − FC repos).
+   Vérifié sur ses séances COROS (FC repos 50, FC max 185) : tennis 15/11 = 173 (COROS 171), course 13/11 = 28 (COROS 27). */
+const FC_PROFIL_DEFAUT = { repos: 50, max: 185 };
+let FC_PROFIL = Object.assign({}, FC_PROFIL_DEFAUT);
+function fcProfil(base) { const o = (base && base.reglages && base.reglages["fc-profil"]) || {}, repos = Number(o.repos), max = Number(o.max);
+  FC_PROFIL = { repos: repos >= 30 && repos <= 100 ? repos : FC_PROFIL_DEFAUT.repos, max: max >= 120 && max <= 230 ? max : FC_PROFIL_DEFAUT.max }; if (FC_PROFIL.max <= FC_PROFIL.repos + 20) FC_PROFIL = Object.assign({}, FC_PROFIL_DEFAUT); return FC_PROFIL; }
+function fcProfilEcrire(base, repos, max) { base.reglages["fc-profil"] = { repos: Math.round(Number(repos)), max: Math.round(Number(max)) }; return fcProfil(base); }
+/* L = [[seconde, FC, …]] ; un trou de plus de 10 s ne compte pas (la ceinture ne mesurait rien) */
+function chargeTrimp(L, profil) { const P = profil || FC_PROFIL, R = P.repos, M = P.max; let t = 0, prec = null;
+  (L || []).forEach(x => { const fc = x[1]; if (prec != null && fc > 0) { const dt = x[0] - prec; if (dt > 0 && dt <= 10) { const B = Math.max(0, (fc - R) / (M - R)); t += dt / 60 * B * 0.2445 * Math.exp(3.411 * B); } } prec = x[0]; });
+  return Math.round(t); }
+function chargeR(R) { return R && (R.l || []).length > 1 ? chargeTrimp(R.l) : null; }
+function chargeEntTxt(c) { return c == null ? "" : "charge " + c; }
 
 /* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
 const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
@@ -659,7 +676,7 @@ const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, l
   gpsLire, gpsEcrire, gpsPour, gpsBasculer, gpsBilan, gpsUtile, gpsDistA, kmTxt, allureTxt, allureVit, traceSvg,
   seanceDepuisEnregistrement, ajouterEnregistrement, enregistrementsManquants, bilanEnregistrement, rapportEnregistrement, resumeEnregistrements, dureeCourte, gg, chrono,
   impLire, impPour, impTexte, impRegler, impBip, calPics, essaiEnDirect, impEssai, rapportReglages, essaisLire,
-  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, veloResume, veloTranches, lignesVelo, prevFantome, PREV_FENETRE, fitLire, fitEnregistrement, fitImporter };
+  baseVide, baseValide, normaliser, stable, extraireHub, paquetDepuisHub, fusionner, inventaire, lignesHistorique, totaux, derniereParAct, dureeTxt, descriptif, rapportHistorique, sauvegarde, nomSauvegarde, importer, fcProfil, fcProfilEcrire, chargeTrimp, chargeR, FC_PROFIL_DEFAUT, veloResume, veloTranches, lignesVelo, prevFantome, PREV_FENETRE, fitLire, fitEnregistrement, fitImporter };
 g.Noyau = N;
 if (typeof module !== "undefined" && module.exports) module.exports = N;
 })(typeof window !== "undefined" ? window : globalThis);

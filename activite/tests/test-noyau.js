@@ -185,7 +185,7 @@ function courseGps(opt) { opt = opt || {}; const debut = Date.UTC(2026, 10, 14, 
 
 test("GPS : une course devient une ligne avec distance et allure ; kilomètres et tours calculés", () => {
   const b = N.baseVide(), R = courseGps(); assert.ok(N.ajouterEnregistrement(b, R)); const x = N.lignesHistorique(b).find(l => l.t === R.debut);
-  assert.strictEqual(x.act, "footing"); assert.strictEqual(x.duree, 1650); assert.strictEqual(x.dist, 3650); assert.strictEqual(x.resultat, "3,65 km · 7:30 /km · ❤️ 133 / 147 · 825 impacts"); assert.strictEqual(x.alerte, "");
+  assert.strictEqual(x.act, "footing"); assert.strictEqual(x.duree, 1650); assert.strictEqual(x.dist, 3650); assert.strictEqual(x.resultat, "3,65 km · 7:30 /km · ❤️ 133 / 147 · 825 impacts · 📈 charge 35"); assert.strictEqual(x.alerte, "");
   assert.strictEqual(N.totaux(b).dist, 3650); assert.ok(x.detail[0].startsWith("05:57 — 🛰 3,65 km en 27:22 (7:30 /km) — 📡 H10 : 27 min"), x.detail[0]);
   assert.ok(x.detail.some(d => d.startsWith("Par km : 7:30 · 7:30 · 7:30 · reste 650 m en 4:52")), x.detail.join(" / ")); assert.ok(x.detail.some(d => d.startsWith("Mes tours : 1) 0,65 km en 4:52 · 2) 1,33 km en 10:00 · 3) 1,67 km en 12:30")), x.detail.join(" / "));
   const g = N.gpsBilan(R); assert.strictEqual(g.kms.length, 4); assert.deepStrictEqual(g.kms.map(k => k.t), [450, 450, 450, 292]); assert.strictEqual(g.kms[3].partiel, true); assert.strictEqual(g.kms[0].fcMoy, 123); assert.strictEqual(g.kms[0].impacts, 225);
@@ -318,5 +318,17 @@ test("Home-trainer (1.14) : ligne d'Historique, bilan par tranches de 5 min, act
   assert.ok(/153 W moy · max 210/.test(ligne.resultat) && /7,50 km/.test(ligne.resultat) && !/impact/.test(ligne.resultat), ligne.resultat); assert.strictEqual(N.actInfo("ht").nom, "Home-trainer");
   const T = N.veloTranches(R); assert.deepStrictEqual(T.map(t => [t.w, t.mode]), [[100, "libre"], [150, "ERG 150 W"], [210, "pente 6 %"]]);
   const txt = N.rapportEnregistrement(R, null, "1.14").tout; assert.ok(/HOME-TRAINER : ⚡ 153 W moy/.test(txt) && /5:00 \| 150 \/ 150 \| 85 \| 30 km\/h/.test(txt), txt.slice(0, 600)); });
+
+test("Charge d'entraînement (1.15) : méthode COROS, profil réglable, affichée dans l'Historique et le détail", () => {
+  /* 30 min à 140 puis 10 min à 165 (FC repos 50, max 185) */
+  const l = []; for (let s = 0; s < 2400; s++) l.push([s, s < 1800 ? 140 : 165, 0, 0, 0]);
+  const B1 = (140 - 50) / 135, B2 = (165 - 50) / 135, attendu = Math.round(29.9833 * B1 * 0.2445 * Math.exp(3.411 * B1) + 10 * B2 * 0.2445 * Math.exp(3.411 * B2));
+  const b = N.baseVide(); assert.deepStrictEqual(N.fcProfil(b), { repos: 50, max: 185 }); assert.strictEqual(N.chargeTrimp(l), attendu);
+  const L2 = l.filter(x => x[0] < 600 || x[0] > 660); assert.ok(N.chargeTrimp(L2) < attendu, "un trou de plus de 10 s ne compte pas");
+  const R = { debut: 1794800000000, fin: 1794802400000, act: "tennis", res: { duree: 2400, actif: 1200, pics: 100, fcMoy: 146, fcMax: 165 }, l, coupures: 0, pics: [], deconnexions: [], source: "APK 1.15" };
+  N.ajouterEnregistrement(b, R); let ligne = N.lignesHistorique(b).find(x => x.t === R.debut); assert.ok(ligne.resultat.includes("📈 charge " + attendu), ligne.resultat);
+  assert.ok(N.rapportEnregistrement(R, null, "1.15").tout.includes("Charge d'entraînement (méthode COROS) : " + attendu + " (FC repos 50, FC max 185)"));
+  N.fcProfilEcrire(b, 55, 190); ligne = N.lignesHistorique(b).find(x => x.t === R.debut); assert.ok(!ligne.resultat.includes("charge " + attendu) && /charge \d+/.test(ligne.resultat), "recalculée avec le nouveau profil");
+  N.fcProfilEcrire(b, 50, 185); assert.strictEqual(N.chargeTrimp([]), 0); assert.strictEqual(N.chargeR({ l: [] }), null); });
 
 console.log("\n" + n + " tests réussis.");
