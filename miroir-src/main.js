@@ -18,7 +18,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.5";
+const VERSION = "1.6";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -307,6 +307,21 @@ if (manager && navigator.usb) {
     else majBoutonAccueil();
   });
 }
+
+// Vérification toutes les 3 s : si le téléphone autorisé vient d'apparaître, on se connecte tout seul
+// (au cas où Chrome n'a pas signalé le branchement).
+let presentAvant = false;
+setInterval(async () => {
+  if (!manager || client) { presentAvant = !!client; return; }
+  let present = false;
+  try { present = !!(await telephoneConnu()); } catch {}
+  if (present && !presentAvant && reglages.autoConnexion && !connexionEnCours) {
+    message("Téléphone détecté, connexion…");
+    connecter(false, false);
+  }
+  if (present !== presentAvant) majBoutonAccueil();
+  presentAvant = present;
+}, 3000);
 
 // ---------- Affichage : adapter l'image à la tablette ----------
 function ajuster() {
