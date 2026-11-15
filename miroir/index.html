@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f5f7">
+<title>Miroir</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icone.svg">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#f4f5f7;color:#1d2330;-webkit-tap-highlight-color:transparent}
+  button{font:inherit;cursor:pointer}
+  [hidden]{display:none!important}
+
+  /* Accueil */
+  #accueil{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:18px;text-align:center}
+  #accueil h1{margin:0;font-size:40px}
+  #accueil p.sous{margin:0;color:#5a6272;font-size:18px}
+  #btn-connecter{font-size:30px;font-weight:700;padding:28px 48px;border:0;border-radius:18px;background:#1d5fbf;color:#fff;min-width:320px;box-shadow:0 4px 14px rgba(29,95,191,.3)}
+  #btn-connecter:disabled{background:#9aa7bb}
+  #btn-autre{font-size:17px;padding:12px 20px;border:1px solid #c9ced8;border-radius:12px;background:#fff;color:#1d2330}
+  .message{max-width:640px;font-size:20px;padding:14px 18px;border-radius:12px;background:#fff;border:1px solid #d8dce3}
+  .message.erreur{background:#fdecec;border-color:#f0b4b4;color:#8a1c1c}
+  .aide{max-width:640px;text-align:left;background:#fff;border:1px solid #d8dce3;border-radius:12px;padding:6px 18px;font-size:16px}
+  .aide summary{font-weight:700;padding:10px 0;cursor:pointer}
+  .pied{font-size:13px;color:#7a8292}
+  .pied a{color:#1d5fbf}
+
+  /* Miroir */
+  #miroir{position:fixed;inset:0;display:flex;background:#e9ebef}
+  #cadre{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-width:0;min-height:0;background:#111}
+  #cadre canvas{display:block}
+  #barre{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(64px,1fr);align-content:start;gap:6px;padding:6px;overflow-y:auto;background:#f4f5f7;border-left:1px solid #d8dce3;width:200px}
+  #barre button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:64px;min-width:0;border:1px solid #d1d6df;border-radius:12px;background:#fff;color:#1d2330;padding:6px 4px;flex-shrink:0}
+  #barre button b{font-size:26px;line-height:1}
+  #barre button span{font-size:12px;line-height:1.15}
+  #barre button.actif{background:#fff4d6;border-color:#e2b53c}
+  #barre button.rouge{color:#b3261e}
+  @media (orientation:portrait){
+    #miroir{flex-direction:column}
+    #barre{display:flex;flex-direction:row;width:auto;border-left:0;border-top:1px solid #d8dce3;overflow-x:auto;overflow-y:hidden}
+    #barre button{min-width:84px}
+  }
+
+  /* Panneaux */
+  .panneau{position:fixed;inset:0;background:rgba(20,25,35,.45);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+  .boite{background:#fff;border-radius:16px;padding:18px;width:min(560px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column;gap:12px}
+  .boite h2{margin:0;font-size:24px}
+  .boite .ligne{display:flex;gap:10px;flex-wrap:wrap}
+  .gros{font-size:20px;font-weight:600;padding:16px 20px;border-radius:12px;border:1px solid #c9ced8;background:#fff;flex:1}
+  .bleu{background:#1d5fbf;color:#fff;border-color:#1d5fbf}
+  #code-affiche{font-size:40px;letter-spacing:8px;text-align:center;padding:8px;border:1px solid #d8dce3;border-radius:12px;min-height:66px}
+  .pave{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pave button{font-size:32px;font-weight:600;padding:16px 0;border-radius:12px;border:1px solid #c9ced8;background:#f7f8fa}
+  .pave button.bleu{background:#1d5fbf;color:#fff;border-color:#1d5fbf}
+  label.case{display:flex;gap:10px;align-items:center;font-size:17px}
+  label.case input{width:26px;height:26px}
+  #saisie{font-size:24px;padding:14px;border:2px solid #1d5fbf;border-radius:12px;width:100%}
+  #raccourcis{display:flex;gap:8px;flex-wrap:wrap}
+  #raccourcis button{font-size:15px;padding:10px 12px;border-radius:10px;border:1px solid #c9ced8;background:#f7f8fa}
+  #chemin{font-weight:700;font-size:16px;word-break:break-all}
+  table{width:100%;border-collapse:collapse;font-size:16px}
+  td{border:1px solid #d8dce3;padding:10px 8px;vertical-align:middle}
+  tr:nth-child(even) td{background:#f7f8fa}
+  tbody tr{cursor:pointer}
+  td:first-child{width:40px;text-align:center;font-size:20px}
+  td.nom{word-break:break-all}
+  td.droite{text-align:right;white-space:nowrap;font-size:14px}
+  #progression{font-size:16px;padding:10px;background:#eef4ff;border-radius:10px}
+  select{font-size:18px;padding:10px;border-radius:10px;border:1px solid #c9ced8;width:100%}
+  #bulle{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:12px 20px;border-radius:24px;font-size:17px;z-index:20;max-width:90%}
+</style>
+</head>
+<body>
+
+<!-- ===== Accueil ===== -->
+<section id="accueil">
+  <h1>📱 Miroir</h1>
+  <p class="sous">Afficher et piloter ton téléphone depuis la tablette</p>
+  <button id="btn-connecter">🔌 Connecter</button>
+  <div id="message" class="message" hidden></div>
+  <button id="btn-autre">Choisir un autre téléphone</button>
+  <details class="aide">
+    <summary>❓ Avant la première connexion</summary>
+    <ol>
+      <li>Sur le téléphone : <b>Débogage USB</b> activé (Options de développement).</li>
+      <li>Ferme Tango s'il est ouvert dans un autre onglet.</li>
+      <li>Branche le câble USB-C entre la tablette et le téléphone.</li>
+      <li>Appuie sur <b>Connecter</b>, choisis le téléphone dans la liste, puis <b>Connexion</b>.</li>
+      <li>Sur le téléphone, coche <b>« Toujours autoriser »</b> puis <b>Autoriser</b> (une seule fois : Miroir a sa propre clé, différente de Tango).</li>
+    </ol>
+    <p>Astuce : menu ⋮ de Chrome → <b>Ajouter à l'écran d'accueil</b>. Miroir s'ouvrira alors en plein écran, comme une vraie appli.</p>
+  </details>
+  <div class="pied">Miroir v<span id="version"></span> — construit avec les briques libres de <a href="https://github.com/yume-chan/ya-webadb" target="_blank">Tango</a> (licence MIT) et <a href="https://github.com/Genymobile/scrcpy" target="_blank">scrcpy</a> (licence Apache 2.0). <a href="LICENCES.txt" target="_blank">Licences</a></div>
+</section>
+
+<!-- ===== Miroir ===== -->
+<section id="miroir" hidden>
+  <div id="cadre"></div>
+  <nav id="barre">
+    <button id="b-retour"><b>◀</b><span>Retour</span></button>
+    <button id="b-accueil"><b>◯</b><span>Accueil</span></button>
+    <button id="b-recents"><b>▮▮▮</b><span>Applis récentes</span></button>
+    <button id="b-deverrouiller"><b>🔓</b><span>Réveiller / déverrouiller</span></button>
+    <button id="b-marche"><b>⏻</b><span>Marche / veille</span></button>
+    <button id="b-ecran-tel"><b>🌙</b><span>Écran tél. : allumé</span></button>
+    <button id="b-capture"><b>📷</b><span>Capture</span></button>
+    <button id="b-fichiers"><b>📁</b><span>Fichiers</span></button>
+    <button id="b-clavier"><b>⌨️</b><span>Clavier</span></button>
+    <button id="b-notif"><b>🔔</b><span>Notifications</span></button>
+    <button id="b-volmoins"><b>🔉</b><span>Vol −</span></button>
+    <button id="b-volplus"><b>🔊</b><span>Vol +</span></button>
+    <button id="b-plein"><b>⛶</b><span>Plein écran</span></button>
+    <button id="b-reglages"><b>⚙️</b><span>Réglages</span></button>
+    <button id="b-deconnecter" class="rouge"><b>✖</b><span>Déconnecter</span></button>
+  </nav>
+</section>
+
+<!-- ===== Panneau : code de déverrouillage ===== -->
+<div id="panneau-code" class="panneau" hidden>
+  <div class="boite">
+    <h2>🔓 Réveiller et déverrouiller</h2>
+    <div id="code-affiche">—</div>
+    <div class="pave">
+      <button data-chiffre="1">1</button><button data-chiffre="2">2</button><button data-chiffre="3">3</button>
+      <button data-chiffre="4">4</button><button data-chiffre="5">5</button><button data-chiffre="6">6</button>
+      <button data-chiffre="7">7</button><button data-chiffre="8">8</button><button data-chiffre="9">9</button>
+      <button id="c-effacer">⌫</button><button data-chiffre="0">0</button><button id="c-valider" class="bleu">OK</button>
+    </div>
+    <label class="case"><input type="checkbox" id="memo-code"> Mémoriser le code sur cette tablette (seulement si personne d'autre ne l'utilise)</label>
+    <div class="ligne"><button class="gros" data-fermer="panneau-code">Annuler</button></div>
+  </div>
+</div>
+
+<!-- ===== Panneau : clavier ===== -->
+<div id="panneau-clavier" class="panneau" hidden>
+  <div class="boite">
+    <h2>⌨️ Écrire sur le téléphone</h2>
+    <p style="margin:0">Touche d'abord la zone de texte sur l'image du téléphone, puis tape ici : chaque lettre part directement.</p>
+    <input id="saisie" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tape ici…">
+    <div class="ligne">
+      <button class="gros" id="k-effacer">⌫ Effacer</button>
+      <button class="gros" id="k-entree">↵ Entrée</button>
+    </div>
+    <div class="ligne"><button class="gros bleu" data-fermer="panneau-clavier">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ===== Panneau : fichiers ===== -->
+<div id="panneau-fichiers" class="panneau" hidden>
+  <div class="boite" style="width:min(820px,100%)">
+    <h2>📁 Fichiers du téléphone</h2>
+    <div id="raccourcis"></div>
+    <div id="chemin"></div>
+    <div class="ligne">
+      <button class="gros bleu" id="f-envoyer">⬆️ Envoyer des fichiers de la tablette ici</button>
+      <input type="file" id="f-choix" multiple hidden>
+    </div>
+    <div id="progression" hidden></div>
+    <p style="margin:0;font-size:15px;color:#5a6272">Touche un fichier pour le copier sur la tablette (dossier Téléchargements).</p>
+    <table><tbody id="liste-fichiers"></tbody></table>
+    <div class="ligne"><button class="gros" data-fermer="panneau-fichiers">Fermer</button></div>
+  </div>
+</div>
+
+<!-- ===== Panneau : réglages ===== -->
+<div id="panneau-reglages" class="panneau" hidden>
+  <div class="boite">
+    <h2>⚙️ Réglages</h2>
+    <label>Qualité de l'image
+      <select id="r-qualite">
+        <option value="economie">Économie (batterie, image moins fine)</option>
+        <option value="normale">Normale (conseillée)</option>
+        <option value="haute">Haute (image très fine)</option>
+      </select>
+    </label>
+    <label class="case"><input type="checkbox" id="r-auto"> Se connecter tout seul dès que le câble est branché</label>
+    <button class="gros" id="r-oublier-code">Oublier le code de déverrouillage mémorisé</button>
+    <div class="ligne"><button class="gros bleu" data-fermer="panneau-reglages">Fermer</button></div>
+  </div>
+</div>
+
+<div id="bulle" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

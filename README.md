@@ -7,3 +7,7 @@
 ## Relais Appels (téléphone ↔ tablette)
 - `relais/android/` : appli du **téléphone**. Elle passe, décroche et raccroche les appels sur ordre de la tablette, par le wifi ou le point d'accès (réseau local, sans internet). Elle sert aussi la page de la tablette (`assets/tablette.html`) : sur la tablette, ouvrir dans Chrome l'adresse affichée par l'appli.
 - `.github/workflows/relais.yml` : fabrique et signe `RelaisAppels.apk`, puis le publie dans **Releases** (tag `relais-vN`).
+
+## Miroir (version 1, page web)
+- `miroir/` : afficher et piloter le téléphone depuis la tablette par câble USB, dans Chrome. Adresse : https://mltfrdam-bot.github.io/mes-applis/miroir/
+- `miroir-src/` : le code source (refabriquer avec `npm run build`).

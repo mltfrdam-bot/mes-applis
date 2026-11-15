@@ -1,0 +1,17 @@
+{
+  "name": "miroir",
+  "private": true,
+  "scripts": {
+    "build": "esbuild main.js --bundle --format=esm --target=chrome110 --minify --legal-comments=eof --outfile=../miroir/app.js"
+  },
+  "dependencies": {
+    "@yume-chan/adb": "^2.6.4",
+    "@yume-chan/adb-credential-web": "^2.1.0",
+    "@yume-chan/adb-daemon-webusb": "^2.3.2",
+    "@yume-chan/adb-scrcpy": "^2.3.2",
+    "@yume-chan/scrcpy": "^2.3.0",
+    "@yume-chan/scrcpy-decoder-webcodecs": "^2.5.3",
+    "@yume-chan/stream-extra": "^2.6.1",
+    "esbuild": "^0.28.2"
+  }
+}
