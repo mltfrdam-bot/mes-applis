@@ -1,0 +1,30 @@
+plugins { id "com.android.application" }
+
+// Numéro de version donné par la fabrication (GitHub)
+def numVersion = (project.findProperty("numVersion") ?: "1") as int
+
+android {
+    namespace "fr.mesapplis.relais"
+    compileSdk 34
+    defaultConfig {
+        applicationId "fr.mesapplis.relais"
+        minSdk 26
+        targetSdk 34
+        versionCode numVersion
+        versionName "1." + numVersion
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("CLE_FICHIER") ?: "../../../signature/mes-applis.keystore")
+            storePassword System.getenv("CLE_MOT_DE_PASSE")
+            keyAlias "mesapplis"
+            keyPassword System.getenv("CLE_MOT_DE_PASSE")
+            storeType "pkcs12"
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.release }
+    }
+    lint { checkReleaseBuilds false; abortOnError false }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

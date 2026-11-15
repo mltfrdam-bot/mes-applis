@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Appels</title>
+<style>
+  :root { --bleu:#0b5cad; --vert:#14853b; --rouge:#c62828; --gris:#6b7280; --fond:#f4f6f8; --ligne:#d9dee5; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; background:var(--fond); color:#111; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; font-size:18px; }
+  button { font:inherit; border:0; border-radius:12px; cursor:pointer; }
+  input { font:inherit; }
+  .cache { display:none !important; }
+
+  /* Bandeau d'état de l'appel */
+  #bandeau { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--ligne); padding:10px 14px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  #liaison { font-size:14px; color:var(--gris); }
+  #liaison.ok::before { content:"● "; color:var(--vert); }
+  #liaison.ko::before { content:"● "; color:var(--rouge); }
+  #infoAppel { flex:1; min-width:200px; font-size:20px; font-weight:600; }
+  #infoAppel small { display:block; font-size:15px; font-weight:400; color:var(--gris); }
+  .gros { padding:14px 22px; font-size:20px; font-weight:700; color:#fff; }
+  .vert { background:var(--vert); } .rouge { background:var(--rouge); } .bleu { background:var(--bleu); }
+  #hp { padding:10px 14px; background:#eef2f7; color:#111; font-size:16px; }
+  #hp.on { background:#dbeafe; color:var(--bleu); font-weight:700; }
+
+  /* Onglets */
+  #onglets { display:flex; gap:6px; padding:10px 10px 0; background:var(--fond); }
+  #onglets button { flex:1; padding:14px 6px; background:#e5e9ef; color:#333; font-size:17px; font-weight:600; border-radius:12px 12px 0 0; }
+  #onglets button.actif { background:#fff; color:var(--bleu); }
+  main { background:#fff; margin:0 10px 30px; border-radius:0 0 12px 12px; padding:10px; min-height:60vh; }
+
+  /* Listes */
+  .ligne { display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--ligne); }
+  .ligne:last-child { border-bottom:0; }
+  .appel { flex:1; display:flex; justify-content:space-between; align-items:center; gap:10px; background:none; text-align:left; padding:16px 8px; color:#111; border-radius:8px; }
+  .appel:active { background:#e8f0fb; }
+  .nom { font-size:20px; font-weight:600; }
+  .num { font-size:16px; color:var(--gris); white-space:nowrap; }
+  .ico { width:52px; height:52px; font-size:24px; background:#f1f3f6; color:#555; flex:none; }
+  .ico.etoile-on { color:#d4a000; background:#fff7d6; }
+  .vide { color:var(--gris); padding:24px 8px; text-align:center; }
+  .barre { display:flex; gap:8px; margin-bottom:8px; }
+  .barre input { flex:1; padding:14px; border:1px solid var(--ligne); border-radius:12px; font-size:19px; }
+  .petit { padding:12px 16px; background:#eef2f7; color:#111; font-size:16px; }
+  .type { font-size:15px; width:28px; text-align:center; }
+
+  /* Clavier */
+  #affNum { font-size:34px; text-align:center; letter-spacing:2px; min-height:52px; padding:6px; font-variant-numeric:tabular-nums; }
+  #pave { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:420px; margin:0 auto; }
+  #pave button { padding:18px 0; font-size:30px; background:#eef2f7; color:#111; }
+  #pave .act { font-size:20px; }
+
+  /* Fenêtre du code */
+  #fenCode { position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:20; }
+  #fenCode .boite { background:#fff; border-radius:16px; padding:22px; width:min(420px,92vw); }
+  #fenCode input { width:100%; font-size:34px; text-align:center; letter-spacing:8px; padding:12px; border:2px solid var(--ligne); border-radius:12px; margin:14px 0; }
+  #message { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222; color:#fff; padding:12px 18px; border-radius:12px; z-index:30; max-width:90vw; }
+</style>
+</head>
+<body>
+
+<div id="bandeau">
+  <span id="liaison" class="ko">Recherche du téléphone…</span>
+  <div id="infoAppel">Prêt</div>
+  <button id="btDecrocher" class="gros vert cache">Décrocher</button>
+  <button id="btRaccrocher" class="gros rouge cache">Raccrocher</button>
+  <button id="hp" title="Haut-parleur du téléphone au départ de l'appel">🔊 Haut-parleur</button>
+</div>
+
+<nav id="onglets">
+  <button data-o="entreprise" class="actif">⭐ Entreprise</button>
+  <button data-o="contacts">👤 Contacts</button>
+  <button data-o="clavier">🔢 Clavier</button>
+  <button data-o="historique">🕘 Historique</button>
+</nav>
+
+<main>
+  <section id="o-entreprise">
+    <div class="barre"><button id="btModif" class="petit">✏️ Modifier la fiche</button></div>
+    <div id="listeEntreprise"></div>
+  </section>
+
+  <section id="o-contacts" class="cache">
+    <div class="barre">
+      <input id="recherche" type="search" placeholder="Rechercher un nom ou un numéro" autocomplete="off">
+      <button id="btRecharger" class="petit">↻</button>
+    </div>
+    <div id="listeContacts"></div>
+  </section>
+
+  <section id="o-clavier" class="cache">
+    <div id="affNum"></div>
+    <div id="pave"></div>
+  </section>
+
+  <section id="o-historique" class="cache">
+    <div class="barre"><button id="btHisto" class="petit">↻ Actualiser</button></div>
+    <div id="listeHisto"></div>
+  </section>
+</main>
+
+<div id="fenCode" class="cache">
+  <div class="boite">
+    <div style="font-size:22px;font-weight:700">Code du téléphone</div>
+    <div style="color:#555;margin-top:6px">Tape le code à 6 chiffres affiché dans l'appli « Relais Appels » du téléphone.</div>
+    <input id="champCode" inputmode="numeric" maxlength="6" autocomplete="off">
+    <button id="btCode" class="gros bleu" style="width:100%">Valider</button>
+  </div>
+</div>
+
+<div id="message" class="cache"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const memoire = {
+  lire(k, d) { try { const v = localStorage.getItem("relais." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  ecrire(k, v) { try { localStorage.setItem("relais." + k, JSON.stringify(v)); } catch (e) {} }
+};
+
+let code = memoire.lire("code", "");
+let hautParleur = memoire.lire("hautParleur", true);
+let contacts = memoire.lire("contacts", []);   // copie locale : la liste s'affiche tout de suite
+let favoris = memoire.lire("favoris", []);
+let modeModif = false;
+let numeroTape = "";
+let dernierEtat = { etat: "libre" };
+
+// ---------- Liaison avec le téléphone ----------
+async function api(chemin, corps) {
+  const opt = { method: corps === undefined ? "GET" : "POST", headers: { "X-Code": code }, cache: "no-store" };
+  if (corps !== undefined) { opt.body = JSON.stringify(corps); opt.headers["Content-Type"] = "application/json"; }
+  const ctrl = new AbortController();
+  const minuteur = setTimeout(() => ctrl.abort(), 6000);
+  opt.signal = ctrl.signal;
+  try {
+    const r = await fetch(chemin, opt);
+    const j = await r.json().catch(() => ({ ok: false, message: "Réponse illisible" }));
+    if (r.status === 401) { demanderCode(); throw new Error("Code incorrect"); }
+    liaison(true);
+    return j;
+  } catch (e) {
+    if (e.message !== "Code incorrect") liaison(false);
+    throw e;
+  } finally { clearTimeout(minuteur); }
+}
+
+function liaison(ok) {
+  const l = $("#liaison");
+  l.className = ok ? "ok" : "ko";
+  l.textContent = ok ? "Téléphone relié" : "Téléphone injoignable (wifi ou point d'accès ?)";
+}
+
+function message(t, duree) {
+  const m = $("#message");
+  m.textContent = t; m.classList.remove("cache");
+  clearTimeout(message.t); message.t = setTimeout(() => m.classList.add("cache"), duree || 3000);
+}
+
+function demanderCode() {
+  $("#fenCode").classList.remove("cache");
+  const c = $("#champCode"); c.value = ""; setTimeout(() => c.focus(), 50);
+}
+
+async function validerCode() {
+  const v = $("#champCode").value.replace(/\D/g, "");
+  if (v.length !== 6) { message("Il faut 6 chiffres"); return; }
+  code = v;
+  try {
+    await api("/api/etat");
+    memoire.ecrire("code", code);
+    $("#fenCode").classList.add("cache");
+    message("C'est relié ✅");
+    chargerTout();
+  } catch (e) { if (e.message !== "Code incorrect") message("Téléphone injoignable"); }
+}
+
+// ---------- Appels ----------
+async function appeler(numero, nom) {
+  if (!numero) return;
+  if (dernierEtat.etat !== "libre") { message("Un appel est déjà en cours"); return; }
+  message("📞 Appel de " + (nom || numero) + "…");
+  try {
+    const r = await api("/api/appeler", { numero, hautParleur });
+    if (!r.ok) message("⚠️ " + (r.message || "Appel impossible"), 5000);
+    else { dernierEtat = { etat: "compose", numero, nom: nom || "" }; afficherEtat(); }
+  } catch (e) { message("⚠️ Téléphone injoignable", 4000); }
+}
+
+async function raccrocher() {
+  try { const r = await api("/api/raccrocher", {}); if (!r.ok) message("⚠️ " + (r.message || "Impossible de raccrocher"), 5000); }
+  catch (e) { message("⚠️ Téléphone injoignable"); }
+}
+async function decrocher() {
+  try { const r = await api("/api/decrocher", {}); if (!r.ok) message("⚠️ " + (r.message || "Impossible de décrocher"), 5000); }
+  catch (e) { message("⚠️ Téléphone injoignable"); }
+}
+
+function duree(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+let ecartHorloge = 0;
+function afficherEtat() {
+  const e = dernierEtat, info = $("#infoAppel");
+  const qui = e.nom || nomConnu(e.numero) || e.numero || "Numéro masqué";
+  $("#btDecrocher").classList.toggle("cache", e.etat !== "sonne");
+  $("#btRaccrocher").classList.toggle("cache", e.etat === "libre");
+  $("#btRaccrocher").textContent = e.etat === "sonne" ? "Refuser" : "Raccrocher";
+  if (e.etat === "libre") info.innerHTML = "Prêt";
+  else if (e.etat === "sonne") info.innerHTML = "📲 Ça sonne : " + esc(qui) + (e.numero && qui !== e.numero ? "<small>" + esc(e.numero) + "</small>" : "");
+  else if (e.etat === "compose") info.innerHTML = "📞 Appel de " + esc(qui) + "…";
+  else {
+    const t = e.depuis ? duree(Date.now() + ecartHorloge - e.depuis) : "";
+    info.innerHTML = "🟢 En appel" + (e.numero ? " avec " + esc(qui) : "") + "<small>" + t + " — le son est sur le téléphone</small>";
+  }
+}
+
+async function suivreEtat() {
+  if (!code) return;
+  try {
+    const r = await api("/api/etat");
+    if (r.ok) {
+      if (r.maintenant) ecartHorloge = r.maintenant - Date.now();
+      const avant = dernierEtat.etat;
+      dernierEtat = r;
+      afficherEtat();
+      if (r.etat === "libre" && avant !== "libre" && $("#o-historique").offsetParent) chargerHisto();
+    }
+  } catch (e) {}
+}
+
+// ---------- Contacts ----------
+function esc(t) { return String(t || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function cle(n) { return String(n || "").replace(/[^\d+]/g, "").replace(/^\+262/, "0").replace(/^\+33/, "0").replace(/^0033/, "0"); }
+function nomConnu(n) {
+  if (!n) return "";
+  const k = cle(n);
+  for (const f of favoris) if (cle(f.numero) === k) return f.nom;
+  for (const c of contacts) for (const x of c.numeros) if (cle(x) === k) return c.nom;
+  return "";
+}
+function estFavori(n) { const k = cle(n); return favoris.some(f => cle(f.numero) === k); }
+
+function ligneAppel(nom, numero, boutonDroite) {
+  const d = document.createElement("div"); d.className = "ligne";
+  const b = document.createElement("button"); b.className = "appel";
+  b.innerHTML = '<span class="nom">' + esc(nom) + '</span><span class="num">' + esc(numero) + "</span>";
+  b.onclick = () => appeler(numero, nom);
+  d.appendChild(b);
+  if (boutonDroite) d.appendChild(boutonDroite);
+  return d;
+}
+
+function afficherEntreprise() {
+  const l = $("#listeEntreprise"); l.innerHTML = "";
+  $("#btModif").textContent = modeModif ? "✔ Terminer" : "✏️ Modifier la fiche";
+  if (!favoris.length) {
+    l.innerHTML = '<div class="vide">Ta fiche Entreprise est vide.<br>Va dans <b>👤 Contacts</b> et touche ☆ à côté de tes chauffeurs, fournisseurs et collègues.</div>';
+    return;
+  }
+  favoris.forEach((f, i) => {
+    let droite = null;
+    if (modeModif) {
+      droite = document.createElement("span"); droite.style.display = "flex"; droite.style.gap = "6px";
+      const haut = document.createElement("button"); haut.className = "ico"; haut.textContent = "▲";
+      haut.disabled = i === 0; haut.style.opacity = i === 0 ? .3 : 1;
+      haut.onclick = () => { [favoris[i - 1], favoris[i]] = [favoris[i], favoris[i - 1]]; enregistrerFavoris(); };
+      const suppr = document.createElement("button"); suppr.className = "ico"; suppr.textContent = "✕"; suppr.style.color = "var(--rouge)";
+      suppr.onclick = () => { favoris.splice(i, 1); enregistrerFavoris(); };
+      droite.append(haut, suppr);
+    }
+    const ligne = ligneAppel(f.nom, f.numero, droite);
+    if (modeModif) ligne.querySelector(".appel").onclick = null;
+    l.appendChild(ligne);
+  });
+}
+
+async function enregistrerFavoris() {
+  memoire.ecrire("favoris", favoris);
+  afficherEntreprise(); afficherContacts();
+  try { const r = await api("/api/favoris", favoris); if (r.ok) favoris = r.favoris; memoire.ecrire("favoris", favoris); }
+  catch (e) { message("⚠️ Fiche non enregistrée sur le téléphone (injoignable)"); }
+}
+
+function basculerFavori(nom, numero) {
+  const k = cle(numero), i = favoris.findIndex(f => cle(f.numero) === k);
+  if (i >= 0) favoris.splice(i, 1); else favoris.push({ nom, numero });
+  enregistrerFavoris();
+}
+
+function afficherContacts() {
+  const l = $("#listeContacts"), q = $("#recherche").value.trim().toLowerCase(), qn = cle(q);
+  const frag = document.createDocumentFragment();
+  let n = 0;
+  for (const c of contacts) {
+    for (const numero of c.numeros) {
+      if (q && !c.nom.toLowerCase().includes(q) && !(qn.length > 2 && cle(numero).includes(qn))) continue;
+      const et = document.createElement("button");
+      const fav = estFavori(numero);
+      et.className = "ico" + (fav ? " etoile-on" : ""); et.textContent = fav ? "★" : "☆";
+      et.title = fav ? "Retirer de la fiche Entreprise" : "Ajouter à la fiche Entreprise";
+      et.onclick = () => basculerFavori(c.nom, numero);
+      frag.appendChild(ligneAppel(c.nom, numero, et));
+      if (++n >= 400) break;
+    }
+    if (n >= 400) break;
+  }
+  l.innerHTML = "";
+  if (!n) l.innerHTML = '<div class="vide">' + (contacts.length ? "Aucun résultat" : "Contacts pas encore chargés") + "</div>";
+  l.appendChild(frag);
+}
+
+async function chargerContacts() {
+  try {
+    const r = await api("/api/contacts");
+    if (!r.ok) { message("⚠️ " + r.message, 5000); return; }
+    contacts = r.contacts; memoire.ecrire("contacts", contacts); afficherContacts();
+  } catch (e) {}
+}
+async function chargerFavoris() {
+  try { const r = await api("/api/favoris"); if (r.ok) { favoris = r.favoris; memoire.ecrire("favoris", favoris); afficherEntreprise(); afficherContacts(); } }
+  catch (e) {}
+}
+
+// ---------- Historique ----------
+const TYPES = { recu: "↙️", emis: "↗️", manque: "❌", refuse: "⛔", autre: "•" };
+async function chargerHisto() {
+  const l = $("#listeHisto");
+  try {
+    const r = await api("/api/historique");
+    if (!r.ok) { l.innerHTML = '<div class="vide">' + esc(r.message) + "</div>"; return; }
+    l.innerHTML = "";
+    if (!r.appels.length) l.innerHTML = '<div class="vide">Aucun appel</div>';
+    for (const a of r.appels) {
+      const quand = new Date(a.date);
+      const auj = new Date().toDateString() === quand.toDateString();
+      const h = (auj ? "" : quand.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + " ") + quand.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      const nom = a.nom || nomConnu(a.numero) || a.numero;
+      const ligne = ligneAppel(nom, h, null);
+      ligne.querySelector(".appel").onclick = () => appeler(a.numero, nom);
+      const t = document.createElement("span"); t.className = "type"; t.textContent = TYPES[a.type] || "•";
+      ligne.prepend(t);
+      l.appendChild(ligne);
+    }
+  } catch (e) { l.innerHTML = '<div class="vide">Téléphone injoignable</div>'; }
+}
+
+// ---------- Clavier ----------
+function construirePave() {
+  const p = $("#pave");
+  for (const t of ["1","2","3","4","5","6","7","8","9","+","0","⌫"]) {
+    const b = document.createElement("button"); b.textContent = t;
+    b.onclick = () => { numeroTape = t === "⌫" ? numeroTape.slice(0, -1) : (numeroTape + t).slice(0, 20); $("#affNum").textContent = numeroTape; };
+    p.appendChild(b);
+  }
+  const app = document.createElement("button"); app.className = "act gros vert"; app.textContent = "📞 Appeler";
+  app.style.gridColumn = "1 / -1";
+  app.onclick = () => appeler(numeroTape, nomConnu(numeroTape));
+  p.appendChild(app);
+}
+
+// ---------- Interface ----------
+function onglet(nom) {
+  document.querySelectorAll("#onglets button").forEach(b => b.classList.toggle("actif", b.dataset.o === nom));
+  document.querySelectorAll("main section").forEach(s => s.classList.toggle("cache", s.id !== "o-" + nom));
+  memoire.ecrire("onglet", nom);
+  if (nom === "historique") chargerHisto();
+}
+
+function afficherHp() {
+  const b = $("#hp");
+  b.classList.toggle("on", hautParleur);
+  b.textContent = hautParleur ? "🔊 Haut-parleur" : "🔈 Écouteur";
+}
+
+function chargerTout() { chargerFavoris(); chargerContacts(); suivreEtat(); }
+
+document.querySelectorAll("#onglets button").forEach(b => b.onclick = () => onglet(b.dataset.o));
+$("#btModif").onclick = () => { modeModif = !modeModif; afficherEntreprise(); };
+$("#recherche").oninput = afficherContacts;
+$("#btRecharger").onclick = () => { chargerContacts(); message("Contacts rechargés"); };
+$("#btHisto").onclick = chargerHisto;
+$("#btRaccrocher").onclick = raccrocher;
+$("#btDecrocher").onclick = decrocher;
+$("#hp").onclick = () => { hautParleur = !hautParleur; memoire.ecrire("hautParleur", hautParleur); afficherHp(); };
+$("#btCode").onclick = validerCode;
+$("#champCode").onkeydown = e => { if (e.key === "Enter") validerCode(); };
+
+construirePave();
+afficherHp();
+afficherEntreprise();
+afficherContacts();
+onglet(memoire.lire("onglet", "entreprise"));
+if (!code) demanderCode(); else chargerTout();
+setInterval(suivreEtat, 1500);
+setInterval(() => { if (dernierEtat.etat === "en_appel") afficherEtat(); }, 1000);
+</script>
+</body>
+</html>

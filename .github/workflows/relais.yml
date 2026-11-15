@@ -1,0 +1,42 @@
+# Fabrique l'appli « Relais Appels » (téléphone) et la met en téléchargement dans « Releases ».
+# Se lance toute seule à chaque modification du dossier relais/, ou à la main (onglet Actions).
+name: Fabrication APK Relais Appels
+
+on:
+  push:
+    branches: [main]
+    paths: ["relais/**", ".github/workflows/relais.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  relais:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Fabriquer et signer
+        working-directory: relais/android
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }}
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
+          gradle --no-daemon assembleRelease -PnumVersion=${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../../RelaisAppels.apk
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: relais-v${{ github.run_number }}
+          name: "Relais Appels — version 1.${{ github.run_number }}"
+          body: "À installer sur le **téléphone** : télécharge **RelaisAppels.apk** ci-dessous et ouvre-le. Ensuite, sur la tablette, ouvre dans Chrome l'adresse affichée par l'appli."
+          files: RelaisAppels.apk
+          make_latest: false
