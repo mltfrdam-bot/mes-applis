@@ -331,4 +331,30 @@ test("Charge d'entraînement (1.15) : méthode COROS, profil réglable, affiché
   N.fcProfilEcrire(b, 55, 190); ligne = N.lignesHistorique(b).find(x => x.t === R.debut); assert.ok(!ligne.resultat.includes("charge " + attendu) && /charge \d+/.test(ligne.resultat), "recalculée avec le nouveau profil");
   N.fcProfilEcrire(b, 50, 185); assert.strictEqual(N.chargeTrimp([]), 0); assert.strictEqual(N.chargeR({ l: [] }), null); });
 
+test("Fiche d'un exercice et ressenti (1.16) : comptage total, côté par côté, élastique, séries prévues, 5 questions", () => {
+  const b = N.baseVide(); assert.strictEqual(N.exosLire(b)[0].comptage, "toucher"); assert.strictEqual(N.exosLire(b)[0].icone, "💪");
+  N.exoAjouter(b, "Fentes"); const e = N.exoRegler(b, "Fentes", { comptage: "total", cote: "alterne", chargeType: "elastique", series: 4, icone: "🦵", obj: 40, repos: 60 });
+  assert.deepStrictEqual([e.comptage, e.cote, e.chargeType, e.charge, e.series, e.icone], ["total", "alterne", "elastique", 1, 4, "🦵"]);
+  N.exoRegler(b, "Fentes", { comptage: "nimporte", icone: "x" }); assert.strictEqual(N.exosLire(b).find(x => x.nom === "Fentes").comptage, "total", "valeur inconnue refusée");
+  assert.strictEqual(N.exoResume(N.exosLire(b).find(x => x.nom === "Fentes")), "4 séries · objectif 40 · élastique 1 · repos 1:00 · total en fin de série · un côté à la fois");
+  /* séance : série 1 ouverte d'un appui puis 10 déclarées, série 2 donnée sans appui de départ */
+  const T = 1795000000000, st = N.repsNouveau(b, "muscu", ["Fentes"], T), bl = N.repsCourant(st);
+  assert.strictEqual(N.repsCoteSuivant(bl), "G"); assert.ok(N.repsDebutSerie(st, T + 1000, 100));
+  let ev = N.repsDeclarer(st, T + 31000, 140, 10); assert.strictEqual(bl.phase, "repos"); assert.strictEqual(bl.series[0].tl.length, 10); assert.strictEqual(bl.series[0].tl[0], 0); assert.strictEqual(bl.series[0].tl[9], 30); assert.strictEqual(bl.series[0].cote, "G");
+  assert.strictEqual(N.repsCoteSuivant(bl), "D"); ev = N.repsDeclarer(st, T + 121000, 150, 12); assert.deepStrictEqual(ev.map(x => x[0]), ["record"]); assert.strictEqual(bl.series[1].cote, "D"); assert.strictEqual(bl.series[1].tl[0], 84, "début estimé : 3 s par répétition");
+  N.repsCharge(st, 3); N.repsDeclarer(st, T + 200000, 150, 9); N.repsDeclarer(st, T + 260000, 150, 9); assert.strictEqual(bl.series.length, 4);
+  const s = N.repsSeance(st, T + 270000), d = s.notes[0].reps; assert.strictEqual(d.total, 40); assert.deepStrictEqual(d.cotes, ["G", "D", "G", "D"]); assert.strictEqual(N.seriesTxt(d), "10G-12D-9G-9D");
+  assert.deepStrictEqual(d.reglage, { comptage: "total", cote: "alterne", series: 4, obj: 40, repos: 60, chargeType: "elastique" }); assert.strictEqual(N.chargeTxt(d, "", ""), "élastiques 1 à 3");
+  const txt = N.rapportReps(s, "1.16").tout; assert.ok(txt.includes("Réglages utilisés : 4 séries prévues · objectif 40 · repos 1:00 · total donné en fin de série · un côté à la fois") && txt.includes("2 (droite) ✋ | 12 |") && txt.includes("| élastique 3 |"), txt);
+  /* ressenti : 5 questions, sous-questions, effacement, charge ressentie */
+  N.fusionner(b, { courses: [s], reglages: {} }); const id = "s" + s.id; let x = N.lignesHistorique(b).find(l => l.id === id), n = N.noteRessenti(x);
+  N.ressentiRegler(n, "effort", 3); N.ressentiRegler(n, "douleur", 1); N.ressentiRegler(n, "zones", "Genou"); N.ressentiRegler(n, "zones", "Dos"); N.ressentiRegler(n, "zones", "Dos"); N.ressentiRegler(n, "prevu", 1); N.ressentiRegler(n, "pourquoi", "Météo");
+  assert.deepStrictEqual(n.ressenti, { effort: 3, douleur: 1, zones: ["Genou"], prevu: 1 }, "« pourquoi » seulement si plus ou moins que prévu");
+  N.ressentiRegler(n, "douleur", 0); assert.ok(!n.ressenti.zones, "plus de douleur : la zone part"); N.ressentiRegler(n, "sommeil", 0); N.ressentiRegler(n, "forme", 2); N.ressentiRegler(n, "forme", 2); assert.ok(n.ressenti.forme == null, "toucher deux fois enlève");
+  assert.strictEqual(N.ressentiRegler(n, "effort", 9), null); assert.strictEqual(N.ressentiTxt(n.ressenti), "Effort ressenti : dur · Douleur : aucune · Par rapport au prévu : comme prévu · Sommeil de la nuit : bon");
+  x = N.lignesHistorique(b).find(l => l.id === id); assert.ok(x.resultat.endsWith("· 💬 dur"), x.resultat); assert.strictEqual(N.chargeRessentie(n.ressenti, 2400), 280);
+  assert.ok(N.detailLigne(b, id, "1.16").includes("Ressenti : Effort ressenti : dur"), "dans le détail copié");
+  /* une sauvegarde avec le ressenti se réimporte sans doublon */
+  const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); assert.strictEqual(N.noteRessenti(N.lignesHistorique(b2).find(l => l.id === id)).ressenti.effort, 3); });
+
 console.log("\n" + n + " tests réussis.");

@@ -157,13 +157,17 @@ function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R),
   (R.deconnexions || []).forEach(x => det.push("ceinture perdue " + dureeCourte(x[1]) + " à " + heure((R.debut || n.t) + x[0] * 1000)));
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
   if (g && g.ok) { if (g.kms.length) det.push("Par km : " + g.kms.map(k => (k.partiel ? "reste " + k.d + " m en " : "") + chrono(k.t)).join(" · ")); if (g.tours.length) det.push("Mes tours : " + g.tours.map(k => k.n + ") " + kmTxt(k.d) + " en " + chrono(k.t)).join(" · ")); }
-  return { id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: g ? Math.max(g.duree, r.duree || 0) : (r.duree || (R.l || []).length), pompes: 0, dist: g && g.ok ? g.dist : 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }; }
+  return avecRessenti({ id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: g ? Math.max(g.duree, r.duree || 0) : (r.duree || (R.l || []).length), pompes: 0, dist: g && g.ok ? g.dist : 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }, n); }
+/* la note qui porte le ressenti d'une ligne : la note H10, sinon la première note d'exercice, sinon la première note */
+const noteRessenti = (x) => { const r = x.ref || {}; return r.n || (r.notes ? (r.notes.find(n => n.ressenti) || r.notes.find(n => n.reps || n.pompes) || r.notes[0]) : null); };
+function avecRessenti(x, n) { const rs = n && n.ressenti; if (!rs) return x; x.ressenti = rs; const Q = RESSENTI[0]; if (rs.effort != null) x.resultat += " · 💬 " + ressentiMot(Q, rs.effort).toLowerCase();
+  const ch = chargeRessentie(rs, x.duree); x.detail.push("💬 " + ressentiTxt(rs) + (ch != null ? " · charge ressentie " + ch : "")); return x; }
 function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || notes[0].t; let duree = Math.max(0, (notes[notes.length - 1].t - t) / 1000), pompes = 0, res;
   const P = notes.filter(n => n.pompes), J = notes.filter(n => n.pjour), G = notes.filter(n => n.ghost), X = notes.filter(n => n.reps);
   if (X.length) { /* séance de plusieurs exercices (enchaînement) : un résumé par exercice, dans l'ordre */
     const E = notes.filter(n => n.reps || n.pompes).map(n => n.reps || Object.assign({ exo: "Pompes" }, n.pompes)); pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0);
     const fin = notes[notes.length - 1].t, fcs = [].concat(...E.map(e => (e.fcs || []).map(x => x[1]).filter(Boolean)));
-    return { id: "s" + idSeance(c), t, act, duree: Math.max(0, (fin - t) / 1000), pompes, resultat: E.map(e => e.exo + " " + nb(e.total) + chargeTxt(e, " (", ")")).join(" · ") + (fcs.length ? " · ❤️ max " + Math.max(...fcs) : ""), alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }; }
+    return avecRessenti({ id: "s" + idSeance(c), t, act, duree: Math.max(0, (fin - t) / 1000), pompes, resultat: E.map(e => e.exo + " " + nb(e.total) + chargeTxt(e, " (", ")")).join(" · ") + (fcs.length ? " · ❤️ max " + Math.max(...fcs) : ""), alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }, notes.find(n => n.ressenti)); }
   if (J.length) { const j = J[0].pjour; pompes = J.reduce((a, n) => a + (n.pjour.total || 0), 0) + P.reduce((a, n) => a + (n.pompes.total || 0), 0);
     duree = (j.tl && j.tl.length) ? j.tl[j.tl.length - 1] : duree; res = nb(pompes) + " · " + pl((j.seances || j.offs || []).length, "séance") + " (journée)"; }
   else if (P.length) { pompes = P.reduce((a, n) => a + (n.pompes.total || 0), 0); duree = P.reduce((a, n) => a + (n.pompes.temps || 0), 0);
@@ -172,7 +176,7 @@ function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || 
     if (fcs.length) m.push("❤️ max " + Math.max(...fcs)); res = m.join(" · "); }
   else if (G.length) { duree = G.reduce((a, n) => a + (n.ghost.temps || 0), 0); res = "👻 " + G[0].ghost.res; }
   else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
-  return { id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }; }
+  return avecRessenti({ id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }, notes.find(n => n.ressenti)); }
 function lignesHistorique(base) { fcProfil(base); const l = [];
   base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(ligneH10(c, n)); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
   Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
@@ -445,18 +449,30 @@ const chrono = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s /
    la séance est écrite à chaque appui, donc elle reprend telle quelle si l'appli est fermée. */
 const EXOS_DEPART = [{ nom: "Pompes", obj: 100, charge: 0, repos: 90 }, { nom: "Squats", obj: 50, charge: 0, repos: 90 }, { nom: "Développé couché", obj: 30, charge: 0, repos: 120 }, { nom: "Biceps barre", obj: 30, charge: 0, repos: 90 }];
 const kg = (v) => String(Math.round(v * 10) / 10).replace(".", ",") + " kg";
-function chargeTxt(e, avant, apres) { const l = (e.charges || []).filter(x => x > 0); if (!l.length) return ""; const mn = Math.min(...l), mx = Math.max(...l); return avant + (mn === mx ? kg(mx) : kg(mn) + " à " + kg(mx)) + apres; }
+const chargeVal = (v, type) => type === "elastique" ? "élastique " + String(v).replace(".", ",") : kg(v);
+function chargeTxt(e, avant, apres) { const l = (e.charges || []).filter(x => x > 0); if (!l.length) return ""; const mn = Math.min(...l), mx = Math.max(...l), t = e.chargeType, el = t === "elastique"; return avant + (mn === mx ? chargeVal(mx, t) : el ? "élastiques " + mn + " à " + mx : kg(mn) + " à " + kg(mx)) + apres; }
+/* ===== Fiche d'un exercice (1.16) : comment on compte, la charge, le côté, les séries ===== */
+const EXO_ICONES = ["💪", "🏋️", "🦵", "🤸", "🧘", "🥊", "🔥", "🏃", "🪢", "⛹️"];
+const EXO_COMPTAGES = { toucher: "👆 Un appui par répétition", total: "✋ Le total en fin de série" };
+const EXO_COTES = { deux: "Les deux côtés ensemble", alterne: "Un côté à la fois (G puis D)" };
+function exoComplet(x, e) { e.icone = typeof x.icone === "string" && x.icone && x.icone.length <= 8 ? x.icone : (e.nom === "Pompes" ? "💪" : "🏋️");
+  e.comptage = EXO_COMPTAGES[x.comptage] ? x.comptage : "toucher"; e.chargeType = x.chargeType === "elastique" ? "elastique" : "kg"; e.cote = EXO_COTES[x.cote] ? x.cote : "deux";
+  e.series = Number(x.series) > 0 ? Math.min(20, Math.round(x.series)) : 0; return e; }
+function exoResume(e) { return [e.series ? pl(e.series, "série") : "séries libres", "objectif " + (e.obj || "libre"), e.charge ? chargeVal(e.charge, e.chargeType) : "sans charge", "repos " + (e.repos ? gm(e.repos) : "libre"), e.comptage === "total" ? "total en fin de série" : "", e.cote === "alterne" ? "un côté à la fois" : ""].filter(Boolean).join(" · "); }
 function exosLire(base) { let l = lireListe(base.reglages["exos"]).filter(x => x && typeof x.nom === "string" && x.nom); if (!l.length) l = JSON.parse(JSON.stringify(EXOS_DEPART));
   let po = {}; try { po = JSON.parse(base.reglages["pompes-opt"] || "{}") || {}; } catch (e) {}
   if (!l.some(x => x.nom === "Pompes")) l.unshift(Object.assign({}, EXOS_DEPART[0]));
-  return l.map(x => { const e = { nom: x.nom, obj: Number(x.obj) > 0 ? Math.round(x.obj) : 0, charge: Number(x.charge) > 0 ? Number(x.charge) : 0, repos: Number(x.repos) >= 0 ? Math.round(x.repos) : 90 };
+  return l.map(x => { const e = exoComplet(x, { nom: x.nom, obj: Number(x.obj) > 0 ? Math.round(x.obj) : 0, charge: Number(x.charge) > 0 ? Number(x.charge) : 0, repos: Number(x.repos) >= 0 ? Math.round(x.repos) : 90 });
     if (e.nom === "Pompes") { if (Number(po.obj) > 0) e.obj = Math.round(po.obj); if (po.repos != null && Number(po.repos) >= 0) e.repos = Math.round(po.repos); if (Number(po.charge) >= 0) e.charge = Number(po.charge); } return e; }); }
 /* les réglages des pompes restent aussi dans « pompes-opt », la clé de la v31 */
 function exosEcrire(base, l) { base.reglages["exos"] = JSON.stringify(l); const p = l.find(x => x.nom === "Pompes"); if (p) { let po = {}; try { po = JSON.parse(base.reglages["pompes-opt"] || "{}") || {}; } catch (e) {} po.obj = p.obj; po.repos = p.repos; po.charge = p.charge; base.reglages["pompes-opt"] = JSON.stringify(po); } }
-function exoRegler(base, nom, champs) { const l = exosLire(base); let e = l.find(x => x.nom === nom); if (!e) { e = { nom, obj: 30, charge: 0, repos: 90 }; l.push(e); }
+function exoRegler(base, nom, champs) { const l = exosLire(base); let e = l.find(x => x.nom === nom); if (!e) { e = exoComplet({}, { nom, obj: 30, charge: 0, repos: 90 }); l.push(e); }
+  if (champs.icone != null && EXO_ICONES.includes(champs.icone)) e.icone = champs.icone; if (champs.comptage != null && EXO_COMPTAGES[champs.comptage]) e.comptage = champs.comptage; if (champs.cote != null && EXO_COTES[champs.cote]) e.cote = champs.cote;
+  if (champs.chargeType != null && (champs.chargeType === "kg" || champs.chargeType === "elastique")) { if (e.chargeType !== champs.chargeType) e.charge = champs.chargeType === "elastique" ? 1 : 0; e.chargeType = champs.chargeType; }
+  if (champs.series != null) e.series = Math.min(20, Math.max(0, Math.round(champs.series)));
   if (champs.obj != null) e.obj = Math.min(2000, Math.max(0, Math.round(champs.obj))); if (champs.charge != null) e.charge = Math.min(500, Math.max(0, Math.round(champs.charge * 2) / 2)); if (champs.repos != null) e.repos = Math.min(900, Math.max(0, Math.round(champs.repos)));
   exosEcrire(base, l); return e; }
-function exoAjouter(base, nom) { nom = String(nom || "").trim().slice(0, 30); if (!nom) return null; const l = exosLire(base), deja = l.find(x => x.nom.toLowerCase() === nom.toLowerCase()); if (deja) return deja; const e = { nom, obj: 30, charge: 0, repos: 90 }; l.push(e); exosEcrire(base, l); return e; }
+function exoAjouter(base, nom) { nom = String(nom || "").trim().slice(0, 30); if (!nom) return null; const l = exosLire(base), deja = l.find(x => x.nom.toLowerCase() === nom.toLowerCase()); if (deja) return deja; const e = exoComplet({}, { nom, obj: 30, charge: 0, repos: 90 }); l.push(e); exosEcrire(base, l); return e; }
 /* l'enchaînement de la tuile Muscu : la liste ordonnée des exercices */
 function programmeLire(base) { const ex = exosLire(base).map(x => x.nom); return lireListe(base.reglages["muscu-programme"]).filter(n => ex.includes(n)); }
 function programmeEcrire(base, l) { base.reglages["muscu-programme"] = JSON.stringify(l); }
@@ -466,17 +482,29 @@ function recordSerie(base, nom) { let r = 0; const vu = (n) => { if (n > r) r = 
   paires(base.courses).forEach(({ n }) => { if (nom === "Pompes") { if (n.pompes && n.pompes.series) n.pompes.series.forEach(vu); if (n.pjour && n.pjour.tl) seriesDe(n.pjour.tl).forEach(vu); } else if (n.reps && n.reps.exo === nom && n.reps.series) n.reps.series.forEach(vu); }); return r; }
 
 const r1 = (x) => Math.round(x * 10) / 10;
-function repsBloc(e, record, fant) { return { fant: fant || null, exo: e.nom, obj: e.obj || 0, charge: e.charge || 0, repos: e.repos || 0, t0: null, series: [], cur: null, phase: "attente", debutRepos: 0, signal: 0, objAnnonce: false, record: record || 0, recordBattu: false, attendDiff: false }; }
+function repsBloc(e, record, fant) { e = exoComplet(e, Object.assign({}, e)); return { fant: fant || null, exo: e.nom, icone: e.icone, comptage: e.comptage, chargeType: e.chargeType, cote: e.cote, seriesPrevues: e.series, obj: e.obj || 0, charge: e.charge || 0, repos: e.repos || 0, t0: null, series: [], cur: null, phase: "attente", debutRepos: 0, signal: 0, objAnnonce: false, record: record || 0, recordBattu: false, attendDiff: false }; }
 function repsNouveau(base, act, noms, maintenant) { const ex = exosLire(base); return { v: 1, debut: maintenant, maj: maintenant, act, index: 0, dernierAppui: 0, blocs: noms.map(n => repsBloc(ex.find(x => x.nom === n) || { nom: n, obj: 0, charge: 0, repos: 90 }, recordSerie(base, n), fantRepsPour(base, n))) }; }
 const repsCourant = (st) => st.blocs[st.index];
 const repsT = (b, maintenant) => b.t0 == null ? 0 : (maintenant - b.t0) / 1000;
 const repsTotal = (b) => b.series.reduce((a, x) => a + x.tl.length, 0) + (b.cur ? b.cur.tl.length : 0);
 /* un appui sur l'écran = une répétition. Renvoie les annonces à faire : ["record", n] ou ["objectif", n]. */
 function repsAppui(st, maintenant, fc) { const b = repsCourant(st), ev = []; if (!b || maintenant - st.dernierAppui < 350) return ev;
-  if (b.phase !== "serie") { if (b.t0 == null) b.t0 = maintenant; b.phase = "serie"; b.attendDiff = false; b.cur = { tl: [], man: 0, charge: b.charge, fcDepart: fc || null, fcMax: fc || null, fcFin: null, diff: null }; }
+  if (b.phase !== "serie") repsOuvrirSerie(b, maintenant, fc);
   st.dernierAppui = maintenant; st.maj = maintenant; b.cur.tl.push(r1(repsT(b, maintenant)));
   if (b.record && !b.recordBattu && b.cur.tl.length > b.record) { b.recordBattu = true; ev.push(["record", b.cur.tl.length]); }
   if (b.obj && !b.objAnnonce && repsTotal(b) >= b.obj) { b.objAnnonce = true; ev.push(["objectif", b.obj]); } return ev; }
+function repsOuvrirSerie(b, maintenant, fc) { if (b.t0 == null) b.t0 = maintenant; b.phase = "serie"; b.attendDiff = false; b.cur = { tl: [], man: 0, charge: b.charge, fcDepart: fc || null, fcMax: fc || null, fcFin: null, diff: null, deb: r1(repsT(b, maintenant)) };
+  if (b.cote === "alterne") b.cur.cote = b.series.length % 2 ? "D" : "G"; }
+const repsCoteSuivant = (b) => b.cote !== "alterne" ? "" : (b.phase === "serie" && b.cur ? b.cur.cote : b.series.length % 2 ? "D" : "G");
+/* mode « total en fin de série » : un appui ouvre la série (facultatif), puis on donne le nombre fait.
+   Les répétitions sont réparties régulièrement entre le début et la fin de la série. */
+function repsDebutSerie(st, maintenant, fc) { const b = repsCourant(st); if (!b || b.phase === "serie") return false; repsOuvrirSerie(b, maintenant, fc); st.dernierAppui = maintenant; st.maj = maintenant; return true; }
+function repsDeclarer(st, maintenant, fc, n) { const b = repsCourant(st), ev = []; n = Math.round(Number(n)); if (!b || !(n > 0) || n > 1000) return ev;
+  if (b.phase !== "serie") { const T = b.t0 == null ? 0 : repsT(b, maintenant), debut = b.t0 == null ? 0 : Math.max(b.phase === "repos" ? b.debutRepos : 0, T - n * 3);   // série non ouverte : on estime 3 s par répétition
+    if (b.t0 == null) b.t0 = maintenant - n * 3000; repsOuvrirSerie(b, maintenant, fc); b.cur.deb = r1(debut); }
+  const a = b.cur.deb != null ? b.cur.deb : (b.cur.tl[0] || 0), z = r1(repsT(b, maintenant)); b.cur.tl = Array.from({ length: n }, (_, i) => r1(n === 1 ? z : a + (z - a) * i / (n - 1))); b.cur.declare = true; b.cur.man = 0;
+  const avant = b.series.length ? Math.max(...b.series.map(x => x.tl.length)) : 0; if (b.record && !b.recordBattu && n > b.record && n > avant) ev.push(["record", n]);
+  repsFinSerie(st, maintenant, fc); if (b.obj && !b.objAnnonce && repsTotal(b) >= b.obj) { b.objAnnonce = true; ev.push(["objectif", b.obj]); } return ev; }
 /* +1 : une répétition faite mais pas prise par l'écran (en série : maintenant ; au repos : ajoutée à la série finie) */
 function repsPlus(st, maintenant) { const b = repsCourant(st); if (!b) return false; let sr = null, t = 0;
   if (b.phase === "serie" && b.cur && b.cur.tl.length) { sr = b.cur; t = r1(repsT(b, maintenant)); st.dernierAppui = maintenant; }
@@ -501,6 +529,8 @@ function repsBilanBloc(b) { const sers = b.series.concat(b.cur && b.cur.tl.lengt
   const temps = Math.round(tl[n - 1]), pompes = b.exo === "Pompes", mot = pompes ? (n > 1 ? "pompes" : "pompe") : (n > 1 ? "répétitions" : "répétition");
   const d = { obj: b.obj, total: n, temps, series: sers.map(x => x.tl.length), diffs: sers.some(x => x.diff != null) ? sers.map(x => x.diff == null ? null : x.diff) : null, reposMoy: repos.length ? Math.round(repos.reduce((a, x) => a + x, 0) / repos.length) : 0, tl,
     fcs: fcs.some(x => x[1]) ? fcs : null, res: nb(n) + " " + mot + " en " + gm(temps) + ", " + pl(sers.length, "série") };
+  if (b.chargeType === "elastique") d.chargeType = "elastique"; if (sers.some(x => x.cote)) d.cotes = sers.map(x => x.cote || ""); if (sers.some(x => x.declare)) d.declares = sers.map(x => !!x.declare);
+  d.reglage = { comptage: b.comptage || "toucher", cote: b.cote || "deux", series: b.seriesPrevues || 0, obj: b.obj || 0, repos: b.repos || 0, chargeType: b.chargeType || "kg" };
   if (charges.some(x => x > 0)) { d.charges = charges; d.res += ", " + chargeTxt(d, "charge ", ""); } const man = sers.reduce((a, x) => a + (x.man || 0), 0); if (man) d.manuels = man; d.repos = repos; if (b.fant) d.fantome = { nom: b.fant.nom, series: b.fant.series.slice(), repos: b.fant.repos.slice() };
   return { exo: b.exo, fin: b.t0 + Math.round(tl[n - 1] * 1000), donnees: d }; }
 /* fin de séance → la séance à ranger dans la base (null si aucune répétition). Les pompes gardent la forme de la v31 (note « pompes »). */
@@ -511,9 +541,11 @@ function repsSeance(st, maintenant) { const notes = []; st.blocs.forEach(b => { 
 function seriesDetail(e) { const tl = (e.tl || []).slice().sort((x, y) => x - y), cs = e.series || [], sers = []; let i = 0;
   if (cs.length && cs.reduce((a, x) => a + x, 0) === tl.length) cs.forEach(k => { sers.push(tl.slice(i, i + k)); i += k; }); else { let c = null; tl.forEach((t, k) => { if (!c || t - tl[k - 1] > 5) { c = []; sers.push(c); } c.push(t); }); }
   return sers.filter(x => x.length).map((x, k) => ({ n: x.length, duree: x[x.length - 1] - x[0], repos: k ? x[0] - sers[k - 1][sers[k - 1].length - 1] : null })); }
+const seriesTxt = (e) => (e.series || []).map((n, i) => n + (e.cotes && e.cotes[i] ? e.cotes[i] : "")).join("-");
 function tableSeries(D, nom, e) { D.push("", nom + " — série | répétitions | durée | repos avant | charge | difficulté | FC départ/max/fin");
-  seriesDetail(e).forEach((x, i) => D.push((i + 1) + " | " + x.n + " | " + Math.round(x.duree) + " s | " + (x.repos == null ? "–" : gm(x.repos)) + " | " + (e.charges && e.charges[i] ? kg(e.charges[i]) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(v => v || "–").join("/") : "–")));
-  if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1");
+  if (e.reglage) D.push("Réglages utilisés : " + [e.reglage.series ? pl(e.reglage.series, "série") + " prévues" : "séries libres", "objectif " + (e.reglage.obj || "libre"), "repos " + (e.reglage.repos ? gm(e.reglage.repos) : "libre"), e.reglage.comptage === "total" ? "total donné en fin de série" : "un appui par répétition", e.reglage.cote === "alterne" ? "un côté à la fois" : ""].filter(Boolean).join(" · "));
+  seriesDetail(e).forEach((x, i) => D.push((i + 1) + (e.cotes && e.cotes[i] ? " (" + (e.cotes[i] === "G" ? "gauche" : "droite") + ")" : "") + (e.declares && e.declares[i] ? " ✋" : "") + " | " + x.n + " | " + Math.round(x.duree) + " s | " + (x.repos == null ? "–" : gm(x.repos)) + " | " + (e.charges && e.charges[i] ? chargeVal(e.charges[i], e.chargeType) : "–") + " | " + (e.diffs && e.diffs[i] != null && DIFF[e.diffs[i]] ? DIFF[e.diffs[i]] : "–") + " | " + (e.fcs && e.fcs[i] ? e.fcs[i].map(v => v || "–").join("/") : "–")));
+  if (e.manuels) D.push(pl(e.manuels, "répétition ajoutée", "répétitions ajoutées") + " avec +1"); if (e.declares && e.declares.some(Boolean)) D.push("✋ = total donné en fin de série (heure de chaque répétition estimée)");
   const f = fantRepsBilan(e); if (f) { D.push("", "👻 Fantôme : " + f.nom + " — " + f.texte, "Série | Moi | Fantôme | Écart | Écart total"); f.lignes.forEach(l => D.push([l.n, l.moi == null ? "–" : l.moi, l.lui == null ? "–" : l.lui, l.moi == null || l.lui == null ? "–" : signe(l.moi - l.lui), signe(l.cumul)].join(" | "))); } }
 function rapportReps(seance, version) { const T = ["SÉANCE — " + actInfo(seance.act).nom + " — " + dateHeure(seance.debut) + (version ? " (APK " + version + ")" : "")], D = [];
   seance.notes.forEach(n => { const e = n.reps || n.pompes, nom = n.reps ? n.reps.exo : "Pompes"; if (!e) return;
@@ -547,6 +579,7 @@ function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R),
       (v.length ? (v.reduce((a, x) => a + x[2], 0) / v.length / 1000).toFixed(2).replace(".", ",") : "–") + " | " + (v.length ? ((1000 + Math.max(...v.map(x => x[3]))) / 1000).toFixed(1).replace(".", ",") : "–") + " | " + v.length); }); }
 function detailLigne(base, idLigne, version) { const x = lignesHistorique(base).find(l => l.id === idLigne); if (!x) return ""; const r = x.ref || {};
   const T = ["DÉTAIL — " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " — " + dateHeure(x.t) + (version ? " (APK " + version + ")" : ""), "Durée " + dureeTxt(x) + " · " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " · " + x.alerte : "")];
+  if (x.ressenti) { const ch = chargeRessentie(x.ressenti, x.duree); T.push("Ressenti : " + ressentiTxt(x.ressenti) + (ch != null ? " · charge ressentie " + ch + " (effort × minutes)" : "")); }
   if (r.n && r.n.h10rec) detailH10(T, r.n.h10rec, impLire(base));
   else if (r.tl) tableSeries(T, "Pompes", { tl: r.tl });
   else { const autres = []; (r.notes || []).forEach(n => { const e = n.reps || n.pompes || n.pjour; if (e && e.tl && e.tl.length) tableSeries(T, n.reps ? n.reps.exo : n.pjour ? "Pompes (journée)" : "Pompes", e); else autres.push(detailNote(n)); });
@@ -608,6 +641,24 @@ function chargeTrimp(L, profil) { const P = profil || FC_PROFIL, R = P.repos, M 
   return Math.round(t); }
 function chargeR(R) { return R && (R.l || []).length > 1 ? chargeTrimp(R.l) : null; }
 function chargeEntTxt(c) { return c == null ? "" : "charge " + c; }
+/* ===== Ressenti après la séance (1.16) : 5 questions, une touche chacune =====
+   Gardé dans la note de la séance (n.ressenti). Effort × durée = charge ressentie (méthode sRPE, échelle de 0 à 10). */
+const RESSENTI = [
+  { k: "effort", q: "Effort ressenti", r: ["😌 Très facile", "🙂 Facile", "😐 Moyen", "😤 Dur", "🥵 À fond"] },
+  { k: "forme", q: "Ta forme avant", r: ["🔋 En forme", "🙂 Normal", "🥱 Fatigué", "🪫 Épuisé"] },
+  { k: "douleur", q: "Douleur", r: ["✅ Aucune", "🤏 Légère gêne", "🤕 Douleur"], sous: { k: "zones", si: [1, 2], q: "Où ?", r: ["Épaule", "Genou", "Dos", "Poignet", "Cheville", "Autre"] } },
+  { k: "prevu", q: "Par rapport au prévu", r: ["⬆️ Plus", "🎯 Comme prévu", "⬇️ Moins"], sous: { k: "pourquoi", si: [0, 2], q: "Pourquoi ?", r: ["Forme", "Fatigue", "Douleur", "Temps", "Météo", "Motivation"] } },
+  { k: "sommeil", q: "Sommeil de la nuit", r: ["😴 Bon", "😐 Moyen", "😵 Mauvais"] }];
+const EFFORT_CR10 = [2, 3, 5, 7, 9];
+function ressentiRegler(n, k, v) { if (!n) return null; const rs = Object.assign({}, n.ressenti || {}), Q = RESSENTI.find(x => x.k === k), S = RESSENTI.find(x => x.sous && x.sous.k === k);
+  if (Q) { v = Math.round(Number(v)); if (!(v >= 0 && v < Q.r.length)) return null; if (rs[k] === v) delete rs[k]; else rs[k] = v; if (Q.sous && !Q.sous.si.includes(rs[k])) delete rs[Q.sous.k]; }
+  else if (S) { const l = Array.isArray(rs[k]) ? rs[k].slice() : [], i = l.indexOf(v); if (!S.sous.r.includes(v) || !S.sous.si.includes(rs[S.k])) return null; if (i >= 0) l.splice(i, 1); else l.push(v); if (l.length) rs[k] = l; else delete rs[k]; }
+  else return null;
+  if (Object.keys(rs).length) n.ressenti = rs; else delete n.ressenti; return rs; }
+const ressentiMot = (Q, v) => Q.r[v].replace(/^\S+\s/, "");
+function ressentiTxt(rs) { if (!rs) return ""; const t = []; RESSENTI.forEach(Q => { if (rs[Q.k] == null || !Q.r[rs[Q.k]]) return; let m = Q.q + " : " + ressentiMot(Q, rs[Q.k]).toLowerCase();
+    if (Q.sous && Array.isArray(rs[Q.sous.k]) && rs[Q.sous.k].length) m += " (" + rs[Q.sous.k].join(", ").toLowerCase() + ")"; t.push(m); }); return t.join(" · "); }
+function chargeRessentie(rs, dureeSec) { return rs && rs.effort != null && EFFORT_CR10[rs.effort] && dureeSec > 0 ? Math.round(EFFORT_CR10[rs.effort] * dureeSec / 60) : null; }
 
 /* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
 const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
@@ -669,7 +720,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
-  DIFF, kg, chargeTxt, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
+  DIFF, kg, chargeTxt, chargeVal, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
   RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,
