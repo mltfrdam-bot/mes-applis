@@ -19,6 +19,8 @@
   #accueil p.sous{margin:0;color:#5a6272;font-size:18px}
   #btn-connecter{font-size:30px;font-weight:700;padding:28px 48px;border:0;border-radius:18px;background:#1d5fbf;color:#fff;min-width:320px;box-shadow:0 4px 14px rgba(29,95,191,.3)}
   #btn-connecter:disabled{background:#9aa7bb}
+  .ligne-accueil{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  #btn-cle{font-size:17px;padding:12px 20px;border:1px solid #c9ced8;border-radius:12px;background:#fff;color:#1d2330}
   #btn-autre{font-size:17px;padding:12px 20px;border:1px solid #c9ced8;border-radius:12px;background:#fff;color:#1d2330}
   .message{max-width:640px;font-size:20px;padding:14px 18px;border-radius:12px;background:#fff;border:1px solid #d8dce3}
   .message.erreur{background:#fdecec;border-color:#f0b4b4;color:#8a1c1c}
@@ -80,7 +82,12 @@
   <p class="sous">Afficher et piloter ton téléphone depuis la tablette</p>
   <button id="btn-connecter">🔌 Connecter</button>
   <div id="message" class="message" hidden></div>
-  <button id="btn-autre">Choisir un autre téléphone</button>
+  <div id="etat-cle" class="pied" style="font-size:16px;color:#1d7a3a" hidden></div>
+  <div class="ligne-accueil">
+    <button id="btn-cle">🔑 Utiliser la clé de l'ordinateur</button>
+    <button id="btn-autre">Choisir un autre téléphone</button>
+  </div>
+  <input type="file" id="cle-choix" hidden>
   <details class="aide">
     <summary>❓ Avant la première connexion</summary>
     <ol>
@@ -177,6 +184,7 @@
     </label>
     <label class="case"><input type="checkbox" id="r-auto"> Se connecter tout seul dès que le câble est branché</label>
     <button class="gros" id="r-oublier-code">Oublier le code de déverrouillage mémorisé</button>
+    <button class="gros" id="r-oublier-cle">Oublier la clé de l'ordinateur</button>
     <div class="ligne"><button class="gros bleu" data-fermer="panneau-reglages">Fermer</button></div>
   </div>
 </div>

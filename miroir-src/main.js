@@ -18,7 +18,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "1.0";
+const VERSION = "1.1";
 const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,7 +30,45 @@ function sauverReglages() { try { localStorage.setItem("miroir-reglages", JSON.s
 
 // ---------- État ----------
 const manager = AdbDaemonWebUsbDeviceManager.BROWSER;
-const cles = new AdbWebCredentialStore("Miroir");
+const clesWeb = new AdbWebCredentialStore("Miroir");
+
+// Clé de l'ordinateur (fichier « adbkey ») : le téléphone l'a déjà acceptée,
+// donc plus besoin d'appuyer sur « Autoriser » sur le téléphone.
+function lireCleOrdi() { try { const b = localStorage.getItem("miroir-cle-ordi"); return b ? Uint8Array.from(atob(b), (c) => c.charCodeAt(0)) : null; } catch { return null; } }
+const cles = {
+  generateKey: () => clesWeb.generateKey(),
+  async *iterateKeys() {
+    const ordi = lireCleOrdi();
+    if (ordi) yield { buffer: ordi, name: "ordinateur" };
+    for await (const k of clesWeb.iterateKeys()) yield k;
+  },
+};
+function longueurDer(n) { if (n < 128) return [n]; const o = []; while (n > 0) { o.unshift(n & 255); n >>= 8; } return [0x80 | o.length, ...o]; }
+function derBloc(tag, contenu) { return Uint8Array.from([tag, ...longueurDer(contenu.length), ...contenu]); }
+function pemVersPkcs8(texte) {
+  const m = texte.match(/-----BEGIN (RSA )?PRIVATE KEY-----([\s\S]+?)-----END/);
+  if (!m) throw new Error("cle-invalide");
+  const der = Uint8Array.from(atob(m[2].replace(/\s+/g, "")), (c) => c.charCodeAt(0));
+  if (!m[1]) return der; // déjà au bon format (PKCS#8)
+  // PKCS#1 → PKCS#8
+  const algo = Uint8Array.from([0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]);
+  return derBloc(0x30, [0x02, 0x01, 0x00, ...algo, ...derBloc(0x04, der)]);
+}
+async function importerCleOrdi(fichier) {
+  try {
+    const der = pemVersPkcs8(await fichier.text());
+    localStorage.setItem("miroir-cle-ordi", btoa(String.fromCharCode(...der)));
+    majCleOrdi();
+    message("✔ Clé de l'ordinateur enregistrée. Branche le téléphone et appuie sur Connecter : il n'y aura rien à autoriser sur le téléphone.", "info");
+  } catch {
+    message("Ce fichier n'est pas la bonne clé. Choisis le fichier « adbkey » (sans « .pub » à la fin).", "erreur");
+  }
+}
+function majCleOrdi() {
+  const ok = !!lireCleOrdi();
+  $("etat-cle").textContent = ok ? "🔑 Clé de l'ordinateur : enregistrée ✔" : "";
+  $("etat-cle").hidden = !ok;
+}
 let adb = null, client = null, decodeur = null, toile = null;
 let largeurVideo = 0, hauteurVideo = 0;
 let connexionEnCours = false;
@@ -110,7 +148,9 @@ async function connecter(choisirNouveau = false) {
     }
     message("Connexion au téléphone…");
     const liaison = await tel.connect();
-    const minuterie = setTimeout(() => message("👉 Regarde l'écran du téléphone : appuie sur « Autoriser » (coche d'abord « Toujours autoriser cet ordinateur »)."), 1500);
+    const minuterie = setTimeout(() => message(lireCleOrdi()
+      ? "Le téléphone n'accepte pas la clé de l'ordinateur. Vérifie que scrcpy marche toujours sur l'ordinateur avec ce téléphone, puis réessaie."
+      : "👉 Sur le téléphone : coche « Toujours autoriser », puis appuie sur « Autoriser ». Si l'écran du téléphone est illisible, utilise le bouton « 🔑 Utiliser la clé de l'ordinateur » ci-dessous."), 2500);
     let transport;
     try {
       transport = await AdbDaemonTransport.authenticate({ serial: tel.serial, connection: liaison, credentialStore: cles });
@@ -497,13 +537,17 @@ const actions = {
   "k-effacer": () => touche(TOUCHE.effacer),
   "k-entree": () => touche(TOUCHE.entree),
   "f-envoyer": () => $("f-choix").click(),
+  "btn-cle": () => $("cle-choix").click(),
+  "r-oublier-cle": () => { localStorage.removeItem("miroir-cle-ordi"); majCleOrdi(); bulle("Clé de l'ordinateur oubliée"); },
 };
 for (const [id, fn] of Object.entries(actions)) { const el = $(id); if (el) el.addEventListener("click", () => { Promise.resolve(fn()).catch((e) => { console.error(e); bulle(traduireErreur(e)); }); }); }
 document.querySelectorAll("[data-chiffre]").forEach((b) => (b.onclick = () => { if (codeSaisi.length < 16) { codeSaisi += b.dataset.chiffre; majCode(); } }));
+$("cle-choix").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importerCleOrdi(f); };
 $("f-choix").onchange = (e) => { envoyerFichiers([...e.target.files]); e.target.value = ""; };
 
 // ---------- Démarrage ----------
 $("version").textContent = VERSION;
+majCleOrdi();
 majBoutonAccueil().then(async () => {
   // Reconnexion directe si le téléphone déjà autorisé est branché
   if (reglages.autoConnexion && (await telephoneConnu())) connecter(false);
