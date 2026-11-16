@@ -24,6 +24,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Fraunces:ital,opsz,wght@1,9..144,400;1,9..144,500&family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="polices.css">
 <style>
 /* Layout: one narrow column. Three tabs (renforcement, activités, santé). Each tab = 3 figures, a collapsible add form, then dated entries, newest first. */
 :root {
@@ -5089,9 +5090,12 @@ table.pa td.ac { color: var(--accent); }
       var f = fi.files && fi.files[0]; if (!f) return;
       if (!db) { msgB.textContent = "Les données ne sont pas chargées."; return; }
       try {
-        var j = JSON.parse(await f.text());
+        var txt = "", etape = "lecture"; try { txt = await f.text(); } catch (e0) { msgB.textContent = "Fichier illisible (" + (f.name || "?") + ", " + (e0 && e0.message || e0) + ")."; return; }
+        var j; try { j = JSON.parse(txt); } catch (e1) { msgB.textContent = "Ce fichier n'est pas une sauvegarde du carnet : « " + (f.name || "?") + " » (" + Math.round((f.size || txt.length) / 1024) + " Ko lus) n'est pas un fichier JSON."; return; }
+        if (j && j.app && String(j.app).indexOf("Carnet") !== 0 && !(j.app === "Assistant terrain" && j.carnet)) { msgB.textContent = "Ce fichier n'est pas une sauvegarde du carnet : « " + (f.name || "?") + " » vient de « " + j.app + " »."; return; }
         if (j && j.app === "Assistant terrain" && j.carnet) { msgB.textContent = "Import en cours…"; await fuAssistant(j.carnet); msgB.textContent = ""; return; }
-        if (!j || !j.data || String(j.app || "").indexOf("Carnet") !== 0) throw 0;
+        if (!j || !j.data || String(j.app || "").indexOf("Carnet") !== 0) { msgB.textContent = "Ce fichier n'est pas une sauvegarde du carnet : « " + (f.name || "?") + " » ne contient pas les données du carnet."; return; }
+        etape = "fusion";
         msgB.textContent = "Import en cours…";
         if (mode !== "replace") { await fuFusionner(j, j.images || {}); msgB.textContent = ""; return; }
         var add = 0, skip = 0, upd = 0, imgs = j.images || {};
@@ -5108,7 +5112,7 @@ table.pa td.ac { color: var(--accent); }
         if (j.reglages_affichage) Object.keys(j.reglages_affichage).forEach(function (k) { if (BK_LS.indexOf(k) >= 0) { try { if (mode === "replace" || localStorage.getItem(k) == null) localStorage.setItem(k, j.reglages_affichage[k]); } catch (e) {} } });
         msgB.textContent = mode === "replace" ? add + " ajouté(s), " + upd + " remplacé(s) par la sauvegarde." : add + " ajouté(s), " + skip + " déjà présent(s). Rien n'est écrasé.";
         renderAnalyse(); if (typeof renderRenfView === "function") renderRenfView();
-      } catch (e) { msgB.textContent = "Ce fichier n'est pas une sauvegarde du carnet."; }
+      } catch (e) { msgB.textContent = typeof etape !== "undefined" && etape === "fusion" ? "Erreur pendant la fusion : " + (e && (e.message || e.name) || e) + ". Rien n'a été effacé." : "Ce fichier n'est pas une sauvegarde du carnet."; }
     });
   }
 
