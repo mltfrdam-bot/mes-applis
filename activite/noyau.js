@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -188,6 +188,47 @@ function echauffementPour(liste, R) { if (!R || !R.debut) return null; const l =
 function echauffementTxt(e) { if (!e) return ""; const fc = e.fc || [], s = Math.round((e.fin - e.debut) / 1000);
   return "Échauffement avant la séance : " + gm(s) + (fc.length ? " · ❤️ moy " + Math.round(fc.reduce((a, v) => a + v, 0) / fc.length) + " / max " + Math.max(...fc) : "") + (e.impacts ? " · " + pl(e.impacts, "impact") : "") + " (pas compté dans la séance)"; }
 function avecEchauffement(x, e) { if (!e) return x; x.echauf = e; x.resultat += " · 🔥 échauffement " + gm(Math.round((e.fin - e.debut) / 1000)); x.detail.unshift("🔥 " + echauffementTxt(e)); return x; }
+/* ===== 🧰 Suivi du matériel (1.19) : cordage, balles, baskets, home-trainer… =====
+   Réglage « materiel » : [{ id, nom, icone, acts, seuilH (heures, 0 = aucun), seuilKm, debut, enService, plusTop, histo, alerte }].
+   Les compteurs se recalculent à partir de l'Historique : séances des activités reliées depuis « debut ».
+   « materiel-usage » (liste fusionnée) : au démarrage d'une séance, le matériel en service ce jour-là { t, act, ids }. */
+const MAT_MODELES = { cordage: { nom: "Cordage raquette", icone: "🎾", acts: ["tennis"], seuilH: 30, seuilKm: 0 }, balles: { nom: "Balles", icone: "🟡", acts: ["tennis"], seuilH: 0, seuilKm: 0 },
+  baskets: { nom: "Baskets", icone: "👟", acts: ["footing", "marche"], seuilH: 0, seuilKm: 600 }, ht: { nom: "Home-trainer", icone: "🚲", acts: ["ht"], seuilH: 0, seuilKm: 0 }, autre: { nom: "Matériel", icone: "🧰", acts: [], seuilH: 0, seuilKm: 0 } };
+const MAT_ICONES = ["🎾", "🟡", "👟", "🚲", "🏸", "🧢", "🩳", "🎒", "⌚", "🧰"];
+const matCompte = (x) => ({ t: Math.round(Number(x.t) || 0), sec: Math.round(Number(x.sec) || 0), imp: Math.round(Number(x.imp) || 0), m: Math.round(Number(x.m) || 0) });
+function matLire(base) { return lireListe(base.reglages["materiel"]).filter(x => x && x.id && x.nom).map(x => ({ id: String(x.id), nom: String(x.nom).slice(0, 40), icone: typeof x.icone === "string" && x.icone.length <= 8 ? x.icone : "🧰",
+    acts: Array.isArray(x.acts) ? x.acts.filter(a => typeof a === "string") : [], seuilH: Math.max(0, Number(x.seuilH) || 0), seuilKm: Math.max(0, Number(x.seuilKm) || 0), debut: Number(x.debut) || 0, enService: x.enService !== false,
+    plusTop: x.plusTop ? matCompte(x.plusTop) : null, histo: Array.isArray(x.histo) ? x.histo.map(h => ({ debut: Number(h.debut) || 0, fin: Number(h.fin) || 0, sec: Math.round(h.sec || 0), imp: Math.round(h.imp || 0), m: Math.round(h.m || 0), n: Math.round(h.n || 0), plusTop: h.plusTop ? matCompte(h.plusTop) : null })) : [], alerte: Number(x.alerte) || 0 })); }
+const matEcrire = (base, l) => { base.reglages["materiel"] = JSON.stringify(l); };
+function matAjouter(base, modele, nom, debut) { const M = MAT_MODELES[modele] || MAT_MODELES.autre, l = matLire(base), id = "m" + Date.now().toString(36) + l.length;
+  const e = { id, nom: String(nom || M.nom).trim().slice(0, 40) || M.nom, icone: M.icone, acts: M.acts.slice(), seuilH: M.seuilH, seuilKm: M.seuilKm, debut: Number(debut) || Date.now(), enService: true, plusTop: null, histo: [], alerte: 0 };
+  l.push(e); matEcrire(base, l); return e; }
+function matRegler(base, id, ch) { const l = matLire(base), e = l.find(x => x.id === id); if (!e) return null;
+  if (ch.nom != null && String(ch.nom).trim()) e.nom = String(ch.nom).trim().slice(0, 40); if (ch.icone != null && MAT_ICONES.includes(ch.icone)) e.icone = ch.icone;
+  if (ch.act != null) { const i = e.acts.indexOf(ch.act); if (i >= 0) e.acts.splice(i, 1); else e.acts.push(ch.act); }
+  if (ch.seuilH != null) e.seuilH = Math.min(2000, Math.max(0, Math.round(Number(ch.seuilH) * 2) / 2)); if (ch.seuilKm != null) e.seuilKm = Math.min(20000, Math.max(0, Math.round(Number(ch.seuilKm))));
+  if (ch.debut != null && Number(ch.debut) > 0) { e.debut = Number(ch.debut); e.alerte = 0; } if (ch.enService != null) e.enService = !!ch.enService;
+  if (ch.seuilH != null || ch.seuilKm != null) e.alerte = 0; matEcrire(base, l); return e; }
+function matSupprimer(base, id) { const l = matLire(base), i = l.findIndex(x => x.id === id); if (i < 0) return false; l.splice(i, 1); matEcrire(base, l); return true; }
+function matUsageNoter(base, act, t) { const ids = matLire(base).filter(x => x.enService && x.acts.includes(act)).map(x => x.id); const l = lireListe(base.reglages["materiel-usage"]); l.push({ t: Math.round(t), act, ids }); base.reglages["materiel-usage"] = JSON.stringify(l.slice(-600)); }
+/* une ligne d'Historique compte-t-elle pour ce matériel ? (activité reliée, depuis sa date, et en service ce jour-là si on le sait) */
+function matCompteLigne(e, x, usages, fin) { if (!x.t || x.t < e.debut || (fin && x.t >= fin) || !e.acts.includes(x.act) || x.journee) return false;
+  const deb = x.ref && x.ref.n && x.ref.n.h10rec ? x.ref.n.h10rec.debut : x.t, u = usages.find(v => v.act === x.act && Math.abs(deb - v.t) <= 180000); return u ? (u.ids || []).includes(e.id) : true; }
+function matCompteur(base, e, lignes, fin) { const L = lignes || lignesHistorique(base), U = lireListe(base.reglages["materiel-usage"]), c = { sec: 0, imp: 0, m: 0, n: 0 };
+  L.forEach(x => { if (!matCompteLigne(e, x, U, fin)) return; c.n++; c.sec += x.duree || 0; c.m += x.dist || 0; c.imp += x.ref && x.ref.n && x.ref.n.h10rec ? ((x.ref.n.h10rec.res || {}).pics || 0) : 0; }); c.sec = Math.round(c.sec); c.m = Math.round(c.m); return c; }
+const matDepasse = (e, c) => (e.seuilH > 0 && c.sec >= e.seuilH * 3600) || (e.seuilKm > 0 && c.m >= e.seuilKm * 1000);
+function matUsageTxt(e, c) { return [hm(c.sec) + (e.seuilH ? " / " + String(e.seuilH).replace(".", ",") + " h" : ""), c.imp ? nb(c.imp) + " impacts" : "", c.m || e.seuilKm ? kmTxt(c.m) + (e.seuilKm ? " / " + e.seuilKm + " km" : "") : "", pl(c.n, "séance")].filter(Boolean).join(" · "); }
+function matNeuf(base, id, maintenant) { const l = matLire(base), e = l.find(x => x.id === id); if (!e) return null; const c = matCompteur(base, e, null, maintenant);
+  e.histo.push({ debut: e.debut, fin: maintenant, sec: c.sec, imp: c.imp, m: c.m, n: c.n, plusTop: e.plusTop }); e.debut = maintenant; e.plusTop = null; e.alerte = 0; matEcrire(base, l); return e; }
+function matPlusTop(base, id, maintenant) { const l = matLire(base), e = l.find(x => x.id === id); if (!e) return null; const c = matCompteur(base, e); e.plusTop = { t: maintenant, sec: c.sec, imp: c.imp, m: c.m }; matEcrire(base, l); return e; }
+/* seuil proposé : moyenne des moments « plus au top » (au moins 2), arrondie à la demi-heure en dessous */
+function matSuggestion(e) { const l = e.histo.map(h => h.plusTop).concat(e.plusTop ? [e.plusTop] : []).filter(p => p && p.sec > 0); if (l.length < 2) return null;
+  const moy = l.reduce((a, p) => a + p.sec, 0) / l.length; return { n: l.length, moy, seuilH: Math.max(0.5, Math.floor(moy / 1800) / 2) }; }
+/* alertes à envoyer : seuil dépassé pour la première fois sur ce cycle (« alerte » = début du cycle déjà prévenu) */
+function matAlertesNouvelles(base) { const l = matLire(base), L = lignesHistorique(base), r = []; l.forEach(e => { const c = matCompteur(base, e, L); if (matDepasse(e, c) && e.alerte !== e.debut) { e.alerte = e.debut; r.push({ e, c }); } });
+  if (r.length) matEcrire(base, l); return r; }
+function matBilan(base, R) { const L = lignesHistorique(base), x = L.find(y => y.ref && y.ref.n && y.ref.n.h10rec && y.ref.n.h10rec.debut === R.debut); if (!x) return [];
+  const U = lireListe(base.reglages["materiel-usage"]); return matLire(base).filter(e => matCompteLigne(e, x, U)).map(e => { const c = matCompteur(base, e, L); return { e, c, depasse: matDepasse(e, c) }; }); }
 /* la note qui porte le ressenti d'une ligne : la note H10, sinon la première note d'exercice, sinon la première note */
 const noteRessenti = (x) => { const r = x.ref || {}; return r.n || (r.notes ? (r.notes.find(n => n.ressenti) || r.notes.find(n => n.reps || n.pompes) || r.notes[0]) : null); };
 function avecRessenti(x, n) { const rs = n && n.ressenti; if (!rs) return x; x.ressenti = rs; const Q = RESSENTI[0]; if (rs.effort != null) x.resultat += " · 💬 " + ressentiMot(Q, rs.effort).toLowerCase();
@@ -752,7 +793,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
-  DIFF, kg, chargeTxt, chargeVal, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
+  DIFF, kg, chargeTxt, chargeVal, MAT_MODELES, MAT_ICONES, matLire, matAjouter, matRegler, matSupprimer, matUsageNoter, matCompteur, matDepasse, matUsageTxt, matNeuf, matPlusTop, matSuggestion, matAlertesNouvelles, matBilan, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
   RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,

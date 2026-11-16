@@ -15,5 +15,5 @@ function aPlat(r) { const l = []; r.blocs.forEach(b => { const n = b.mesures.len
 module.exports = { lire, aPlat };
 if (require.main === module) { const fs = require("fs"); const r = lire(fs.readFileSync(process.argv[2])), l = aPlat(r), duree = l.length ? (l[l.length - 1][0] - l[0][0]) / 1000 : 0;
   console.log("Début : " + new Date(r.debut).toLocaleString("fr-FR", { timeZone: "Indian/Reunion" }) + " (La Réunion)"); console.log(r.blocs.length + " blocs, " + r.mesures + " mesures sur " + Math.round(duree) + " s (" + (duree ? (r.mesures / duree).toFixed(1) : "–") + " par seconde)" + (r.abimes ? ", " + r.abimes + " bloc abîmé sauté" : ""));
-  if (l.length) console.log("Force max : " + (Math.max(...l.map(x => x[4])) / 1000).toFixed(2) + " g");
+  if (l.length) console.log("Force max : " + (l.reduce((a, x) => Math.max(a, x[4]), 0) / 1000).toFixed(2) + " g");
   if (process.argv[3]) { fs.writeFileSync(process.argv[3], "ms;x;y;z;force\n" + l.map(x => x.join(";")).join("\n") + "\n"); console.log("Écrit : " + process.argv[3]); } }

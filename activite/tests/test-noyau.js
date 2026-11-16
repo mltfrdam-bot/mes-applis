@@ -382,4 +382,24 @@ test("Sas de départ (1.18) : démarrage direct par activité, échauffement gar
   const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {});
   assert.strictEqual(JSON.parse(b2.reglages["echauffements"]).length, 2, "fusion sans doublon"); });
 
+test("Suivi du matériel (1.19) : compteurs depuis la date, seuil, alerte une seule fois, plus au top, neuf, matériel en service", () => {
+  const b = N.baseVide(); N.importer(b, hubFictif(), {}); N.lignesHistorique(b).find(l => l.act === "tennis").ref.n.h10rec.res.duree = 3600;
+  const t = N.lignesHistorique(b).find(l => l.act === "tennis"), deb = t.ref.n.h10rec.debut; assert.strictEqual(t.duree, 3600);
+  const c1 = N.matAjouter(b, "cordage", "", deb - 86400e3), c2 = N.matAjouter(b, "cordage", "Raquette 2", deb - 86400e3), bal = N.matAjouter(b, "balles", "", deb + 1000), bk = N.matAjouter(b, "baskets", "", 1);
+  assert.deepStrictEqual([c1.nom, c1.seuilH, bk.seuilKm, bk.acts], ["Cordage raquette", 30, 600, ["footing", "marche"]]);
+  let c = N.matCompteur(b, N.matLire(b)[0]); assert.deepStrictEqual([c.n, c.sec, c.imp], [1, t.duree, 4]); assert.strictEqual(N.matCompteur(b, N.matLire(b)[2]).n, 0, "balles achetées après la séance");
+  assert.strictEqual(N.matUsageTxt(N.matLire(b)[0], c), "1 h 00 / 30 h · 4 impacts · 1 séance");
+  /* ce jour-là, seule la raquette 2 était en service */
+  N.matRegler(b, c1.id, { enService: false }); N.matUsageNoter(b, "tennis", deb + 60000); N.matRegler(b, c1.id, { enService: true });
+  assert.strictEqual(N.matCompteur(b, N.matLire(b)[0]).n, 0); assert.strictEqual(N.matCompteur(b, N.matLire(b)[1]).n, 1);
+  assert.strictEqual(N.matAlertesNouvelles(b).length, 0); N.matRegler(b, c2.id, { seuilH: 0.001 }); assert.strictEqual(N.matLire(b)[1].seuilH, 0, "demi-heure au plus près");
+  N.matRegler(b, c2.id, { seuilH: 0.5 }); const al = N.matAlertesNouvelles(b); assert.deepStrictEqual(al.map(x => x.e.nom), ["Raquette 2"]); assert.strictEqual(N.matAlertesNouvelles(b).length, 0, "une seule alerte par cycle");
+  N.matRegler(b, c2.id, { act: "footing" }); assert.deepStrictEqual(N.matLire(b)[1].acts, ["tennis", "footing"]);
+  /* plus au top, neuf, suggestion */
+  N.matPlusTop(b, c2.id, deb + 2e7); N.matNeuf(b, c2.id, deb + 3e7); let e = N.matLire(b)[1]; assert.strictEqual(e.histo.length, 1); assert.strictEqual(e.histo[0].plusTop.sec, t.duree); assert.strictEqual(e.debut, deb + 3e7); assert.strictEqual(N.matCompteur(b, e).n, 0);
+  assert.strictEqual(N.matSuggestion(e), null); e.histo.push({ debut: 1, fin: 2, sec: 7200, plusTop: { t: 2, sec: 7200 } }); const sg = N.matSuggestion(e); assert.strictEqual(sg.n, 2);
+  assert.ok(N.matSupprimer(b, bk.id) && N.matLire(b).length === 3);
+  /* fusion : le réglage matériel garde la version du téléphone, l'usage se fusionne */
+  const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); assert.strictEqual(N.matLire(b2).length, 3); assert.strictEqual(JSON.parse(b2.reglages["materiel-usage"]).length, 1); });
+
 console.log("\n" + n + " tests réussis.");

@@ -1,7 +1,10 @@
 package fr.mesapplis.activite;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -638,6 +641,31 @@ public class MainActivity extends Activity {
                     else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 } catch (Exception ignored) {}
             });
+        }
+
+        /** 1.19 : une notification simple (alerte du suivi du matériel). Touchée, elle ouvre l'appli. */
+        @JavascriptInterface public boolean notifier(String titre, String texte, int numero) {
+            try {
+                NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm == null || !nm.areNotificationsEnabled()) return false;
+                NotificationChannel c = new NotificationChannel("materiel", "Suivi du matériel", NotificationManager.IMPORTANCE_DEFAULT);
+                c.setDescription("Prévient quand un matériel (cordage, balles, baskets…) dépasse son seuil.");
+                nm.createNotificationChannel(c);
+                Intent ouvrir = new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                PendingIntent pi = PendingIntent.getActivity(MainActivity.this, 10, ouvrir, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                Notification n = new Notification.Builder(MainActivity.this, "materiel")
+                        .setSmallIcon(R.drawable.ic_seance)
+                        .setContentTitle(titre == null ? "" : titre)
+                        .setContentText(texte == null ? "" : texte)
+                        .setStyle(new Notification.BigTextStyle().bigText(texte == null ? "" : texte))
+                        .setContentIntent(pi)
+                        .setAutoCancel(true)
+                        .build();
+                nm.notify(1000 + Math.max(0, Math.min(899, numero)), n);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
         }
 
         @JavascriptInterface public void parler(String t) {
