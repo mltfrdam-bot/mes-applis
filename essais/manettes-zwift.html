@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essai manettes Zwift Click V2</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f6f7f9; color: #1b1f23; margin: 0; padding: 12px; }
+  h1 { font-size: 22px; margin: 4px 0 10px; } h2 { font-size: 17px; margin: 16px 0 6px; }
+  button { font-size: 18px; min-height: 52px; border-radius: 12px; border: 1px solid #c9ced6; background: #fff; padding: 0 14px; }
+  button.main { background: #b5451b; color: #fff; border: none; font-weight: 700; }
+  .ligne { display: flex; gap: 8px; margin: 8px 0; } .ligne button { flex: 1; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 15px; }
+  td, th { border: 1px solid #d5d9df; padding: 6px; text-align: left; } th { background: #eef0f3; } td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .etat { font-size: 16px; padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #d5d9df; }
+  #gros { background: #fff; border: 3px solid #c9ced6; border-radius: 16px; text-align: center; padding: 14px; font-size: 54px; font-weight: 900; min-height: 70px; }
+  .aide { font-size: 15px; color: #444; } .mono { font-family: monospace; font-size: 12px; color: #555; }
+</style>
+</head>
+<body>
+<h1>🎮 Essai des manettes Zwift Click V2</h1>
+<div class="etat" id="etat">Éteins le KICKR, puis touche « 🔍 Chercher une manette ».</div>
+<div class="ligne"><button class="main" id="chercher">🔍 Chercher une manette</button></div>
+<div id="gros">–</div>
+<h2>Manettes</h2>
+<table><thead><tr><th>Manette</th><th>État</th><th>Batterie</th></tr></thead><tbody id="manettes"><tr><td colspan="3" class="aide">Aucune pour l'instant.</td></tr></tbody></table>
+<h2>Boutons appuyés</h2>
+<table><thead><tr><th>Bouton</th><th class="n">Appuis</th></tr></thead><tbody id="compte"></tbody></table>
+<div class="ligne"><button id="copier">📋 Copier le rapport</button><button id="raz">Remettre à zéro</button></div>
+<p class="aide"><b>À essayer, dans l'ordre :</b><br>
+1. Cherche la manette de <b>droite</b> (Y Z A B +), puis appuie sur chaque bouton une fois.<br>
+2. Touche encore « Chercher » pour la manette de <b>gauche</b> (flèches et −), puis appuie sur chaque bouton.<br>
+3. Écran éteint, téléphone à 2-3 m : quelques appuis, puis rallume et regarde le tableau.<br>
+4. Téléphone dans la poche ou le sac, puis 5 minutes sans rien toucher, et réessaie.<br>
+Puis « 📋 Copier le rapport » et colle-le dans la conversation.</p>
+<p class="aide">Pour réveiller une manette : appuie sur un de ses boutons (la petite lumière s'allume). Chrome peut demander l'accès aux « appareils à proximité » : accepte.</p>
+<h2>Journal</h2>
+<table><thead><tr><th>Heure</th><th>Manette</th><th>Ce qui arrive</th></tr></thead><tbody id="journal"></tbody></table>
+
+<script>
+/* Protocole des manettes Zwift (Click V2, Ride) : service 0xFC82 (ou 00000001-19ca-…),
+   caractéristiques 0002 (notifications), 0004 (indications), 0003 (écriture).
+   On écrit « RideOn », puis chaque changement de boutons arrive en message 0x23 :
+   champ 1 = carte des boutons, un bit par bouton, 0 = appuyé. */
+const $ = (id) => document.getElementById(id);
+const SERV = [0xfc82, "00000001-19ca-4651-86e5-fa29dcdd09d1"];
+const C = (n) => "0000000" + n + "-19ca-4651-86e5-fa29dcdd09d1";
+const BOUTONS = [[0x1, "◀ Gauche"], [0x2, "▲ Haut"], [0x4, "▶ Droite"], [0x8, "▼ Bas"], [0x10, "🟢 A"], [0x20, "🟣 B"], [0x40, "🔵 Y"], [0x80, "🔴 Z"],
+  [0x100, "➖ Moins"], [0x200, "➖ Moins (bas)"], [0x1000, "➕ Plus"], [0x2000, "➕ Plus (bas)"], [0x400, "Power gauche"], [0x4000, "Power droite"], [0x800, "Marche gauche"], [0x8000, "Marche droite"]];
+const M = [], compte = {}, J = []; let actx = null, debut = Date.now();
+const heure = (t) => new Date(t).toLocaleTimeString("fr-FR", { timeZone: "Indian/Reunion" });
+const hex = (b) => [...b].map(x => x.toString(16).padStart(2, "0")).join(" ");
+function noter(m, txt) { J.push({ t: Date.now(), m: m ? m.nom : "–", txt }); $("journal").innerHTML = J.slice(-200).reverse().map(x => "<tr><td>" + heure(x.t) + "</td><td>" + x.m + "</td><td>" + x.txt + "</td></tr>").join(""); }
+function bip() { try { if (!actx) actx = new AudioContext(); const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = 880; g.gain.value = 0.2; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.08); } catch (e) {} }
+function majManettes() { $("manettes").innerHTML = M.map(m => "<tr><td>" + m.nom + "</td><td>" + m.etat + "</td><td>" + (m.batt != null ? m.batt + " %" : "–") + "</td></tr>").join("") || '<tr><td colspan="3">Aucune.</td></tr>'; }
+function majCompte() { $("compte").innerHTML = Object.keys(compte).map(k => "<tr><td>" + k + "</td><td class='n'><b>" + compte[k] + "</b></td></tr>").join(""); }
+function varint(b, i) { let v = 0, f = 1, x; do { x = b[i++]; v += (x & 0x7f) * f; f *= 128; } while (x & 0x80 && i < b.length); return [v, i]; }
+/* champ 1 du message (carte des boutons) */
+function carteBoutons(b) { let i = 1; while (i < b.length) { const [cle, j] = varint(b, i); i = j; const champ = Math.floor(cle / 8), type = cle & 7;
+    if (type === 0) { const [v, k] = varint(b, i); i = k; if (champ === 1) return v; } else if (type === 2) { const [l, k] = varint(b, i); i = k + l; } else if (type === 5) i += 4; else if (type === 1) i += 8; else break; } return null; }
+
+function recu(m, quelle, ev) {
+  const b = new Uint8Array(ev.target.value.buffer);
+  if (!b.length) return;
+  if (b[0] === 0x23) { const v = carteBoutons(b); if (v == null) { noter(m, "message boutons illisible <span class='mono'>" + hex(b) + "</span>"); return; }
+    const appuyes = BOUTONS.filter(([k]) => Math.floor(v / k) % 2 === 0).map(x => x[1]);
+    const nouveaux = appuyes.filter(x => !m.avant.includes(x)); m.avant = appuyes;
+    nouveaux.forEach(nom => { compte[nom] = (compte[nom] || 0) + 1; $("gros").textContent = nom; bip(); if (navigator.vibrate) navigator.vibrate(40);
+      noter(m, "<b>" + nom + "</b>" + (document.hidden ? " (écran éteint)" : "")); });
+    if (nouveaux.length) majCompte(); return; }
+  if (b[0] === 0x19 && b.length > 2) { const [v] = varint(b, 2); if (v <= 100) { m.batt = v; majManettes(); } }
+  const debutRideOn = String.fromCharCode(...b.slice(0, 6)) === "RideOn";
+  noter(m, (debutRideOn ? "✅ la manette répond « RideOn »" : "message " + b[0]) + " <span class='mono'>(" + quelle + ") " + hex(b.slice(0, 24)) + (b.length > 24 ? " …" : "") + "</span>");
+  if (debutRideOn) { m.etat = "✅ prête"; majManettes(); $("etat").textContent = "✅ " + m.nom + " prête : appuie sur ses boutons."; }
+}
+
+async function brancher(m) {
+  m.etat = "connexion…"; majManettes();
+  const g = await m.dev.gatt.connect(); let s = null;
+  for (const u of SERV) { try { s = await g.getPrimaryService(u); m.service = typeof u === "number" ? "FC82" : "0001"; break; } catch (e) {} }
+  if (!s) { const l = await g.getPrimaryServices().catch(() => []); m.etat = "🔒 service Zwift caché (verrouillée ?)"; majManettes();
+    noter(m, "🔒 pas de service Zwift. Services vus : " + l.map(x => x.uuid.slice(4, 8)).join(", ") + ". Si c'est la manette de gauche : elle est verrouillée par Zwift."); return; }
+  const a = await s.getCharacteristic(C(2)), tx = await s.getCharacteristic(C(4)), rx = await s.getCharacteristic(C(3));
+  a.addEventListener("characteristicvaluechanged", (e) => recu(m, "async", e)); tx.addEventListener("characteristicvaluechanged", (e) => recu(m, "sync", e));
+  await a.startNotifications(); await tx.startNotifications();
+  const rideOn = new TextEncoder().encode("RideOn");
+  if (rx.writeValueWithoutResponse) await rx.writeValueWithoutResponse(rideOn); else await rx.writeValue(rideOn);
+  m.etat = "connectée (service " + m.service + "), « RideOn » envoyé"; majManettes(); noter(m, "connectée, « RideOn » envoyé");
+  try { const bs = await g.getPrimaryService("battery_service"), c = await bs.getCharacteristic("battery_level"), v = await c.readValue(); m.batt = v.getUint8(0); majManettes(); } catch (e) {}
+}
+
+$("chercher").onclick = async () => {
+  if (!navigator.bluetooth) { $("etat").textContent = "⚠️ Ce navigateur ne sait pas se connecter en Bluetooth. Ouvre cette page avec Chrome."; return; }
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "Zwift" }, { services: [0xfc82] }, { manufacturerData: [{ companyIdentifier: 0x094a }] }], optionalServices: SERV.concat(["battery_service", "device_information"]) });
+    let m = M.find(x => x.dev.id === dev.id); if (!m) { m = { dev, nom: (dev.name || "Manette") + " n°" + (M.length + 1), etat: "", avant: [], batt: null, essais: 0 }; M.push(m);
+      dev.addEventListener("gattserverdisconnected", () => { m.etat = "❌ déconnectée"; majManettes(); noter(m, "❌ déconnectée" + (document.hidden ? " (écran éteint)" : "")); reconnecter(m); }); }
+    await brancher(m);
+  } catch (e) { $("etat").textContent = "⚠️ " + (e.name === "NotFoundError" ? "Aucune manette choisie. Appuie sur un bouton de la manette pour la réveiller, puis recommence." : e.message); noter(null, "⚠️ " + e.name + " : " + e.message); }
+};
+async function reconnecter(m) { for (let i = 1; i <= 5; i++) { await new Promise(r => setTimeout(r, 2000 * i)); try { await brancher(m); noter(m, "🔁 reconnectée (essai " + i + ")"); return; } catch (e) { noter(m, "essai de reconnexion " + i + " raté : " + e.message); } } }
+document.addEventListener("visibilitychange", () => noter(null, document.hidden ? "— écran éteint ou page cachée —" : "— écran rallumé —"));
+
+$("raz").onclick = () => { if (confirm("Remettre les compteurs et le journal à zéro ?")) { Object.keys(compte).forEach(k => delete compte[k]); J.length = 0; debut = Date.now(); majCompte(); noter(null, "remis à zéro"); } };
+$("copier").onclick = () => {
+  const t = ["ESSAI MANETTES ZWIFT CLICK V2 — " + new Date().toLocaleString("fr-FR", { timeZone: "Indian/Reunion" }), "Navigateur : " + navigator.userAgent, "",
+    "Manettes : " + (M.map(m => m.nom + " = " + m.etat + (m.batt != null ? " (batterie " + m.batt + " %)" : "")).join(" · ") || "aucune"),
+    "Boutons : " + (Object.keys(compte).map(k => k + " ×" + compte[k]).join(" · ") || "aucun"), "", "Heure | Manette | Ce qui arrive"]
+    .concat(J.map(x => heure(x.t) + " | " + x.m + " | " + x.txt.replace(/<[^>]+>/g, ""))).join("\n");
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => alert("Rapport copié ✅ Colle-le dans la conversation."), () => prompt("Copie ce texte :", t)); };
+</script>
+</body>
+</html>
