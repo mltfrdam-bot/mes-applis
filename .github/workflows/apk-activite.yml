@@ -37,6 +37,7 @@ jobs:
         run: |
           mkdir -p android-activite/app/src/main/assets/www
           cp activite/index.html activite/noyau.js activite/donnees-integrees.js android-activite/app/src/main/assets/www/
+          if [ -d activite/carnet ]; then mkdir -p android-activite/app/src/main/assets/www/carnet && cp activite/carnet/* android-activite/app/src/main/assets/www/carnet/; fi
       - name: Fabriquer et signer
         working-directory: android-activite
         env:

@@ -1,0 +1,63 @@
+# Fabrique l'APK d'ESSAI « Journal ESSAI » (installée à côté de la vraie, données séparées) et la met en téléchargement (pré-version).
+# Se lance tout seul à chaque modification sur la branche de travail apk-activite, ou à la main (onglet Actions).
+# La fabrication des squats (apk.yml, dossier android/) n'est pas touchée.
+name: Fabrication APK Journal ESSAI
+
+on:
+  push:
+    branches: [apk-activite-test]
+    paths: ["activite/**", "android-activite/**", ".github/workflows/apk-activite-test.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  activite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Tester le cœur de l'appli (import, fusion, totaux)
+        run: node activite/tests/test-noyau.js
+      - name: Tester la lecture d'une grosse sauvegarde du Hub (partie Android)
+        run: node activite/tests/test-lecteur.js
+      - name: Tester l'enregistreur de séance contre le code de la v31 (partie Android)
+        run: node activite/tests/test-enregistreur.js
+      - name: Tester le calcul du parcours GPS sur de faux parcours de distance connue (partie Android)
+        run: node activite/tests/test-parcours.js
+      - name: Tester le fantôme de course (partie Android)
+        run: node activite/tests/test-fantome.js
+      - name: Tests du home-trainer
+        run: node activite/tests/test-ftms.js
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Copier l'appli dans l'APK
+        run: |
+          mkdir -p android-activite/app/src/main/assets/www
+          cp activite/index.html activite/noyau.js activite/donnees-integrees.js android-activite/app/src/main/assets/www/
+          if [ -d activite/carnet ]; then mkdir -p android-activite/app/src/main/assets/www/carnet && cp activite/carnet/* android-activite/app/src/main/assets/www/carnet/; fi
+          sed -i "s/<string name=\"app_name\">[^<]*</<string name=\"app_name\">Journal ESSAI</" android-activite/app/src/main/res/values/strings.xml
+      - name: Fabriquer et signer
+        working-directory: android-activite
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }} -Pessai=1
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
+          gradle --no-daemon assembleRelease -PnumVersion=${{ github.run_number }} -Pessai=1
+          cp app/build/outputs/apk/release/app-release.apk ../JournalEssai.apk
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: activite-essai-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: "Journal ESSAI — essai n° ${{ github.run_number }}"
+          body: "APK d'essai : **JournalEssai.apk** s'installe à côté de « Journal d'activité » sans la toucher (données séparées)."
+          prerelease: true
+          files: JournalEssai.apk
+          make_latest: false

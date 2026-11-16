@@ -8,7 +8,8 @@ android {
     namespace "fr.mesapplis.activite"
     compileSdk 34
     defaultConfig {
-        applicationId "fr.mesapplis.activite"
+        // APK d'essai (« Journal ESSAI ») : installée à côté de la vraie, avec ses propres données
+        applicationId project.findProperty("essai") ? "fr.mesapplis.activite.essai" : "fr.mesapplis.activite"
         minSdk 31
         targetSdk 34
         versionCode numVersion

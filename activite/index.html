@@ -226,7 +226,7 @@ function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereP
   titre("Journal d'activité", N.jourCourt(Date.now()));
   $("#vue").innerHTML = '<div class="tuiles">' + N.actsVisibles(BASE).map(a => { const i = N.actInfo(a);
     return '<button class="tuile" data-do="act" data-a="' + esc(a) + '" aria-pressed="' + (a === cur) + '"><span class="ic">' + i.icone + '</span><span class="nom">' + esc(i.nom) + '</span><span class="sous">' + (der[a] ? "dernière : " + N.jourCourt(der[a]) : "aucune séance") + '</span></button>'; }).join("") +
-    '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>' + (S.enr || REPS ? "" : htmlFantome(cur)) + htmlMaterielAccueil();
+    '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>' + (S.enr || REPS ? "" : htmlFantome(cur)) + htmlMaterielAccueil() + '<div class="ligne"><button class="sec" data-do="carnet">📒 Carnet (alimentation, santé, recettes…)</button></div>';
   majDemarrer(); }
 /* ===== 🧰 Suivi du matériel (1.19) ===== */
 function htmlMaterielAccueil() { const l = N.matLire(BASE); if (!l.length) return '<div class="ligne"><button class="sec" data-do="materiel">🧰 Suivi du matériel (cordage, balles, baskets…)</button></div>';
@@ -815,7 +815,7 @@ function remettreSeance(t, id) { if (N.restaurer(BASE, t, id)) { sauver(); toast
 
 /* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
 const ACTIONS = {
-  fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct, creerExoFiche, materiel: () => { fermerFenetre(); aller("materiel"); }, matOuvrir: (b) => matOuvrir(b.dataset.id), matR, matAjouter: (b) => matAjouter(b.dataset.m),
+  fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct, creerExoFiche, carnet: () => { location.href = "carnet/index.html"; }, materiel: () => { fermerFenetre(); aller("materiel"); }, matOuvrir: (b) => matOuvrir(b.dataset.id), matR, matAjouter: (b) => matAjouter(b.dataset.m),
   matPlusTop: (b) => matPlusTop(b.dataset.id), matNeufDemande: (b) => matNeufDemande(b.dataset.id), matNeuf: (b) => { N.matNeuf(BASE, b.dataset.id, Date.now()); sauver(); toast("🔄 Compteur remis à zéro."); matOuvrir(b.dataset.id); }, matSuppr: (b) => matSuppr(b.dataset.id),
   matNom: (b) => { N.matRegler(BASE, b.dataset.id, { nom: ($("#matNom") || {}).value }); sauver(); matOuvrir(b.dataset.id); },
   matDebut: (b) => { const v = ($("#matDebut") || {}).value; if (!v) return; N.matRegler(BASE, b.dataset.id, { debut: new Date(v + "T00:00:00+04:00").getTime() }); sauver(); toast("Compté depuis le " + v.split("-").reverse().join("/") + "."); matOuvrir(b.dataset.id); }, apresVerifs, sasGo, sasAnnuler, sasBascule: (b) => { N.sasDirectRegler(BASE, b.dataset.a, !N.sasDirect(BASE, b.dataset.a)); sauver(); dessiner(); }, sasSansGps: () => { DEPART.sansGps = true; vueSas(); toast("Cette séance se fera sans GPS."); },

@@ -29,6 +29,8 @@ import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -68,6 +70,9 @@ import java.util.regex.Pattern;
  */
 public class MainActivity extends Activity {
     private static final int CHOIX_FICHIER = 41;
+    private static final int CHOIX_CARNET = 42;
+    /** 1.20 : le carnet intégré utilise un champ « fichier » classique (import de sauvegarde) : Android le sert ici. */
+    private ValueCallback<Uri[]> choixCarnet;
     private static final int DEMANDE_NOTIF = 42;
     private static final int DEMANDE_BLUETOOTH = 43;
     private static final int DEMANDE_GPS = 44;
@@ -110,6 +115,31 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 return chargeur.shouldInterceptRequest(r.getUrl());
+            }
+            /** Les liens vers l'extérieur (WhatsApp, SMS, sites) s'ouvrent dans l'appli qui convient, pas dans l'APK. */
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                Uri u = r.getUrl();
+                if ("appassets.androidplatform.net".equals(u.getHost())) return false;
+                try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { Toast.makeText(MainActivity.this, "Aucune appli pour ouvrir ce lien.", Toast.LENGTH_SHORT).show(); }
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
+                if (choixCarnet != null) choixCarnet.onReceiveValue(null);
+                choixCarnet = cb;
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(i, CHOIX_CARNET);
+                    return true;
+                } catch (Exception e) {
+                    choixCarnet = null;
+                    return false;
+                }
             }
         });
         web.addJavascriptInterface(new Pont(), "AndroidApp");
@@ -271,9 +301,21 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** 1.20 : un fichier quelconque (PDF du carnet…) donné en base64, rangé dans « Téléchargements » avec un petit message. */
+        @JavascriptInterface public String enregistrerB64(String nom, String b64, String type) {
+            String r;
+            try { r = enregistrerOctets(nom, android.util.Base64.decode(b64, android.util.Base64.DEFAULT), type); } catch (Exception e) { r = ""; }
+            final String m = r.isEmpty() ? "⚠️ Le fichier n'a pas pu être enregistré." : "✅ Enregistré dans " + r;
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, m, Toast.LENGTH_LONG).show());
+            return r;
+        }
+
         /** Enregistre un fichier texte dans « Téléchargements ». Renvoie l'emplacement, ou "" en cas d'échec. */
         @JavascriptInterface public String enregistrer(String nom, String contenu, String type) {
-            byte[] octets = contenu.getBytes(StandardCharsets.UTF_8);
+            return enregistrerOctets(nom, contenu.getBytes(StandardCharsets.UTF_8), type);
+        }
+
+        String enregistrerOctets(String nom, byte[] octets, String type) {
             try {
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues cv = new ContentValues();
@@ -718,6 +760,11 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int code, int res, Intent data) {
+        if (code == CHOIX_CARNET) {
+            ValueCallback<Uri[]> cb = choixCarnet; choixCarnet = null;
+            if (cb != null) cb.onReceiveValue(res == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null);
+            return;
+        }
         if (code == CHOIX_FICHIER) {
             if (res != RESULT_OK || data == null || data.getData() == null) return;      // choix annulé : rien à faire
             final Uri u = data.getData();
