@@ -369,4 +369,17 @@ test("Supprimer (1.17) : exercice, activité créée, activité changée en exer
   N.actRecreer(b, "Corde à sauter"); b.reglages["acts-perso"] = JSON.stringify(["Corde à sauter"]); assert.ok(N.toutesActs(b).includes("Corde à sauter"), "recréée sous le même nom");
   b.reglages["exos"] = JSON.stringify([{ nom: "Fentes", obj: 10 }, { nom: "Fentes", obj: 99 }]); assert.strictEqual(N.exosLire(b).filter(x => x.nom === "Fentes").length, 1, "un seul exercice par nom"); });
 
+test("Sas de départ (1.18) : démarrage direct par activité, échauffement gardé à part et relié à la séance", () => {
+  const b = N.baseVide(); N.importer(b, hubFictif(), {}); assert.ok(!N.sasDirect(b, "tennis")); N.sasDirectRegler(b, "tennis", true); assert.ok(N.sasDirect(b, "tennis")); N.sasDirectRegler(b, "tennis", false); assert.ok(!N.sasDirect(b, "tennis"));
+  const t = N.lignesHistorique(b).find(l => l.act === "tennis"), deb = t.ref.n.h10rec.debut;
+  assert.strictEqual(N.echauffementNoter(b, { act: "tennis", debut: deb - 30000, fin: deb - 25000, fc: [90] }), null, "moins de 20 s : rien");
+  N.echauffementNoter(b, { act: "tennis", debut: deb - 3600e3, fin: deb - 3000e3, fc: [100] });   // trop ancien : pas relié
+  const e = N.echauffementNoter(b, { act: "tennis", debut: deb - 440000, fin: deb - 20000, fc: [100, 110, 0, 120], impacts: 12.4 });
+  assert.deepStrictEqual(e.fc, [100, 110, 120]); assert.strictEqual(e.impacts, 12);
+  const x = N.lignesHistorique(b).find(l => l.act === "tennis"); assert.ok(x.resultat.endsWith("· 🔥 échauffement 7:00"), x.resultat);
+  assert.strictEqual(x.detail[0], "🔥 Échauffement avant la séance : 7:00 · ❤️ moy 110 / max 120 · 12 impacts (pas compté dans la séance)");
+  assert.ok(N.detailLigne(b, x.id, "1.18").includes("Échauffement avant la séance : 7:00"));
+  const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {});
+  assert.strictEqual(JSON.parse(b2.reglages["echauffements"]).length, 2, "fusion sans doublon"); });
+
 console.log("\n" + n + " tests réussis.");

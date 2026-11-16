@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -175,6 +175,19 @@ function ligneH10(c, n) { const R = n.h10rec, r = R.res || {}, tr = trousH10(R),
   if (R.coupures) det.push(pl(R.coupures, "reprise") + " après fermeture de l'appli");
   if (g && g.ok) { if (g.kms.length) det.push("Par km : " + g.kms.map(k => (k.partiel ? "reste " + k.d + " m en " : "") + chrono(k.t)).join(" · ")); if (g.tours.length) det.push("Mes tours : " + g.tours.map(k => k.n + ") " + kmTxt(k.d) + " en " + chrono(k.t)).join(" · ")); }
   return avecRessenti({ id: "h" + idSeance(c) + "-" + n.t, t: R.debut || n.t, act: R.act || c.act || "footing", duree: g ? Math.max(g.duree, r.duree || 0) : (r.duree || (R.l || []).length), pompes: 0, dist: g && g.ok ? g.dist : 0, resultat: res.join(" · "), alerte, source: "", detail: det, trous: tr, ref: { c, n } }, n); }
+/* ===== ⏳ Sas de départ (1.18) : préparation avant la séance, échauffement gardé à part =====
+   « sas-direct » : activités qui démarrent sans préparation. « echauffements » : un résumé par échauffement
+   { act, debut, fin, fc: [une valeur toutes les 5 s], impacts }, relié à la séance qui commence dans les 15 min. */
+const sasDirect = (base, act) => lireListe(base.reglages["sas-direct"]).includes(act);
+function sasDirectRegler(base, act, oui) { const l = lireListe(base.reglages["sas-direct"]).filter(x => x !== act); if (oui) l.push(act); base.reglages["sas-direct"] = JSON.stringify(l); }
+function echauffementNoter(base, e) { if (!e || !(e.fin > e.debut) || e.fin - e.debut < 20000) return null;
+  const x = { act: String(e.act || ""), debut: Math.round(e.debut), fin: Math.round(e.fin), fc: (e.fc || []).filter(v => v > 0).slice(-360).map(Math.round), impacts: Math.max(0, Math.round(e.impacts || 0)) };
+  const l = lireListe(base.reglages["echauffements"]); l.push(x); base.reglages["echauffements"] = JSON.stringify(l.slice(-400)); return x; }
+function echauffementPour(liste, R) { if (!R || !R.debut) return null; const l = Array.isArray(liste) ? liste : []; let m = null;
+  l.forEach(e => { const ec = R.debut - e.fin; if (ec >= -5000 && ec <= 15 * 60000 && (!m || e.fin > m.fin)) m = e; }); return m; }
+function echauffementTxt(e) { if (!e) return ""; const fc = e.fc || [], s = Math.round((e.fin - e.debut) / 1000);
+  return "Échauffement avant la séance : " + gm(s) + (fc.length ? " · ❤️ moy " + Math.round(fc.reduce((a, v) => a + v, 0) / fc.length) + " / max " + Math.max(...fc) : "") + (e.impacts ? " · " + pl(e.impacts, "impact") : "") + " (pas compté dans la séance)"; }
+function avecEchauffement(x, e) { if (!e) return x; x.echauf = e; x.resultat += " · 🔥 échauffement " + gm(Math.round((e.fin - e.debut) / 1000)); x.detail.unshift("🔥 " + echauffementTxt(e)); return x; }
 /* la note qui porte le ressenti d'une ligne : la note H10, sinon la première note d'exercice, sinon la première note */
 const noteRessenti = (x) => { const r = x.ref || {}; return r.n || (r.notes ? (r.notes.find(n => n.ressenti) || r.notes.find(n => n.reps || n.pompes) || r.notes[0]) : null); };
 function avecRessenti(x, n) { const rs = n && n.ressenti; if (!rs) return x; x.ressenti = rs; const Q = RESSENTI[0]; if (rs.effort != null) x.resultat += " · 💬 " + ressentiMot(Q, rs.effort).toLowerCase();
@@ -195,7 +208,8 @@ function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || 
   else res = pl(notes.length, "note") + " · " + libelle(notes[0]);
   return avecRessenti({ id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }, notes.find(n => n.ressenti)); }
 function lignesHistorique(base) { fcProfil(base); const l = [];
-  base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(ligneH10(c, n)); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
+  const ech = lireListe(base.reglages["echauffements"]);
+  base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(avecEchauffement(ligneH10(c, n), echauffementPour(ech, n.h10rec))); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
   Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
     l.push({ id: "carnet-" + i, t: m ? reunion(2026, Number(m[2]), Number(m[1]), Number(m[3]), Number(m[4])) : 0, act: "pompes", duree: x.tl[x.tl.length - 1], pompes: x.tl.length,
       resultat: nb(x.tl.length) + " · " + pl(sr.length, "série"), alerte: "", source: "Carnet", detail: ["Séance reprise du Carnet d'entraînement — séries " + sr.join("-")], ref: { tl: x.tl } }); });
@@ -596,6 +610,7 @@ function detailH10(T, R, imp) { const L = R.l || [], b = bilanEnregistrement(R),
       (v.length ? (v.reduce((a, x) => a + x[2], 0) / v.length / 1000).toFixed(2).replace(".", ",") : "–") + " | " + (v.length ? ((1000 + Math.max(...v.map(x => x[3]))) / 1000).toFixed(1).replace(".", ",") : "–") + " | " + v.length); }); }
 function detailLigne(base, idLigne, version) { const x = lignesHistorique(base).find(l => l.id === idLigne); if (!x) return ""; const r = x.ref || {};
   const T = ["DÉTAIL — " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " — " + dateHeure(x.t) + (version ? " (APK " + version + ")" : ""), "Durée " + dureeTxt(x) + " · " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " · " + x.alerte : "")];
+  if (x.echauf) T.push(echauffementTxt(x.echauf));
   if (x.ressenti) { const ch = chargeRessentie(x.ressenti, x.duree); T.push("Ressenti : " + ressentiTxt(x.ressenti) + (ch != null ? " · charge ressentie " + ch + " (effort × minutes)" : "")); }
   if (r.n && r.n.h10rec) detailH10(T, r.n.h10rec, impLire(base));
   else if (r.tl) tableSeries(T, "Pompes", { tl: r.tl });
@@ -737,7 +752,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
-  DIFF, kg, chargeTxt, chargeVal, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
+  DIFF, kg, chargeTxt, chargeVal, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
   RYTHMES, rythmeTxt, fantLire, fantEcrire, fantChoisir, fantRythme, fantPour, fantFabriquer, fantBilan, fantDistA, fantTempsA, fantTotal, fantTemps, ecartTxt, secTxt, recParDebut, gpsTempsA,
