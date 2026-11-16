@@ -4,6 +4,8 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.util.Base64;
 
 import java.io.BufferedInputStream;
@@ -112,6 +114,7 @@ public class Relais implements Runnable {
                 int e = p.indexOf('=');
                 if (e > 0) params.put(p.substring(0, e), URLDecoder.decode(p.substring(e + 1), "UTF-8"));
             }
+            if ("1".equals(params.get("usb"))) { traiterUsb(client, in, out, entetes.get("sec-websocket-key")); return; }
             String hote = params.get("h");
             int port = 5555;
             try { port = Integer.parseInt(params.get("p")); } catch (Exception ignored) {}
@@ -181,6 +184,65 @@ public class Relais implements Runnable {
         } finally {
             fermer(client);
             fermer(tel);
+        }
+    }
+
+    /** Même relais, mais vers le téléphone branché par câble (affichage par câble dans l'appli). */
+    private void traiterUsb(Socket client, DataInputStream in, OutputStream out, String cle) {
+        UsbAdb lien = null;
+        try {
+            UsbManager m = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
+            UsbDevice d = UsbAdb.trouverTelephone(m);
+            if (cle == null || d == null || !m.hasPermission(d)) { refuser(out, "502 Bad Gateway"); return; }
+            try { lien = new UsbAdb(m, d); } catch (IOException e) { refuser(out, "409 Conflict"); return; }
+            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            String accepte = Base64.encodeToString(sha1.digest((cle + GUID).getBytes(StandardCharsets.US_ASCII)), Base64.NO_WRAP);
+            out.write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
+                    + accepte + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+
+            final UsbAdb l = lien;
+            final boolean[] fini = { false };
+            Thread retour = new Thread(() -> {
+                byte[] tampon = new byte[256 * 1024];
+                try {
+                    while (!fini[0]) {
+                        int n = l.lireBrut(tampon, 1000);
+                        if (n > 0) { synchronized (out) { envoyerTrame(out, 2, tampon, n); } }
+                        else if (UsbAdb.trouverTelephone(m) == null) break; // câble débranché
+                    }
+                } catch (IOException ignored) {
+                } finally {
+                    try { synchronized (out) { envoyerTrame(out, 8, new byte[0], 0); } } catch (IOException ignored) {}
+                    fermer(client);
+                }
+            }, "relais-usb-retour");
+            retour.start();
+
+            while (true) {
+                int b0 = in.readUnsignedByte();
+                int b1 = in.readUnsignedByte();
+                int code = b0 & 0x0F;
+                boolean masque = (b1 & 0x80) != 0;
+                long longueur = b1 & 0x7F;
+                if (longueur == 126) longueur = in.readUnsignedShort();
+                else if (longueur == 127) longueur = in.readLong();
+                byte[] mq = new byte[4];
+                if (masque) in.readFully(mq);
+                if (longueur > 64L * 1024 * 1024) throw new IOException("trame trop grande");
+                byte[] donnees = new byte[(int) longueur];
+                in.readFully(donnees);
+                if (masque) for (int i = 0; i < donnees.length; i++) donnees[i] ^= mq[i & 3];
+                if (code == 8) break;
+                if (code == 9) { synchronized (out) { envoyerTrame(out, 10, donnees, donnees.length); } continue; }
+                if (code == 10) continue;
+                if (donnees.length > 0) l.ecrire(donnees);   // un message = un envoi USB (en-tête, puis données)
+            }
+            fini[0] = true;
+        } catch (Exception ignored) {
+        } finally {
+            if (lien != null) lien.fermer();
+            fermer(client);
         }
     }
 

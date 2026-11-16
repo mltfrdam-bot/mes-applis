@@ -77,6 +77,12 @@ public class UsbAdb implements AdbProtocole.Transport {
         return res;
     }
 
+    /** Lecture de ce qui arrive (pour le relais) : nombre d'octets, 0 si rien pendant le délai. */
+    public int lireBrut(byte[] dest, int delaiMs) {
+        int r = connexion.bulkTransfer(entree, dest, dest.length, delaiMs);
+        return Math.max(r, 0);
+    }
+
     public void fermer() {
         try { connexion.releaseInterface(interfaceAdb); } catch (Exception ignored) {}
         try { connexion.close(); } catch (Exception ignored) {}

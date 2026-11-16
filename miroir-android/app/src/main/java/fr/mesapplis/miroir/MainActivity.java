@@ -85,7 +85,10 @@ public class MainActivity extends Activity {
             if (ACTION_PERMISSION.equals(a)) {
                 boolean ok = i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
                 List<byte[]> cles = clesEnAttente; clesEnAttente = null;
-                if (ok && cles != null) demarrerSansFil(cles);
+                if (cles == null) {   // demande venue de la page (affichage par câble)
+                    final String js = "window.miroirUsbPermission && miroirUsbPermission(" + ok + ")";
+                    if (web != null) web.post(() -> web.evaluateJavascript(js, null));
+                } else if (ok) demarrerSansFil(cles);
                 else { usbEnCours = false; versPage("erreur", "Miroir n'a pas reçu l'autorisation d'utiliser le câble. Rebranche le câble et appuie sur « OK » (coche « Toujours » si proposé)."); }
             } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(a)) {
                 prevenirPageCable();
@@ -253,6 +256,24 @@ public class MainActivity extends Activity {
 
         /** Un téléphone avec le débogage USB est-il branché par câble ? */
         @JavascriptInterface public boolean usbPresent() { return usb != null && UsbAdb.trouverTelephone(usb) != null; }
+
+        /** Miroir a-t-il le droit d'utiliser le téléphone branché par câble ? */
+        @JavascriptInterface public boolean usbAutorise() {
+            UsbDevice d = usb != null ? UsbAdb.trouverTelephone(usb) : null;
+            return d != null && usb.hasPermission(d);
+        }
+
+        /** Demande l'autorisation (fenêtre Android) ; la réponse arrive dans miroirUsbPermission(oui/non). */
+        @JavascriptInterface public void demanderUsb() {
+            runOnUiThread(() -> {
+                UsbDevice d = usb != null ? UsbAdb.trouverTelephone(usb) : null;
+                if (d == null) { if (web != null) web.evaluateJavascript("window.miroirUsbPermission && miroirUsbPermission(false)", null); return; }
+                clesEnAttente = null;
+                Intent i = new Intent(ACTION_PERMISSION).setPackage(getPackageName());
+                int drapeaux = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+                usb.requestPermission(d, PendingIntent.getBroadcast(MainActivity.this, 1, i, drapeaux | PendingIntent.FLAG_UPDATE_CURRENT));
+            });
+        }
 
         /** Passe le téléphone branché en mode sans fil. cles = liste JSON de clés (PKCS#8 en base64). */
         @JavascriptInterface public void activerSansFil(String clesJson) {
