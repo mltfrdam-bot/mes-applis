@@ -16,6 +16,8 @@
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 💧 rappels d'eau : l'alarme est remise en route après un redémarrage du téléphone -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
@@ -46,6 +48,14 @@
             android:name=".ServiceSeance"
             android:exported="false"
             android:foregroundServiceType="connectedDevice|location" />
+
+        <!-- 💧 Rappels d'eau : vérification toutes les 30 min, boutons de la notification, redémarrage du téléphone -->
+        <receiver android:name=".RappelEau" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Sert au menu « Partager » (envoi de la sauvegarde vers Google Drive) -->
         <provider

@@ -7722,6 +7722,26 @@ table.pa td.ac { color: var(--accent); }
       if (G && G.phase === "fiche" && !G.edit) renderRenfView();
     }, function () {});
   })();
+
+  /* ===== 💧 APK Journal d'activité (essai n° 3) : rappels d'eau =====
+     Le carnet donne à Android l'état de la journée (eau bue, objectif, dernière boisson, lever, coucher).
+     Les boissons notées par les boutons de la notification sont rangées ici, à l'heure où elles ont été notées. */
+  (function apkEau() { var A = window.AndroidApp; if (!A || !A.eauEtat) return;
+    function derniere(d) { var m = -1; (state.alimentation || []).forEach(function (e) { if (e && e.date === d && (num(e.boisson_ml) || 0) > 0) { var x = hmMin(String(e.heure || "").slice(0, 5), -1); if (x > m) m = x; } }); return m; }
+    function publier() { try { if (!db || state.alimentation === null || typeof waterStatus !== "function") return; var d = todayStr(), ws = waterStatus(), cfg = rythmeCfg();
+      A.eauEtat(JSON.stringify({ date: d, ml: ws.ml, goal: ws.goal, pct: ws.pct, gap: ws.gap, lever: cfg.lever, bed: ws.bed, dernier: derniere(d), maj: Date.now() })); } catch (e) {} }
+    var enCours = false;
+    async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
+      try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0;
+          for (var i = 0; i < l.length; i++) { var x = l[i], q = Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
+            var doc = f ? Object.assign({ date: x.date, heure: x.t, repas: repasFor(f, x.t), description: descFor(f, q), fav: f.id, quantite: q, unite: f.unite }, calcFor(f, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
+            doc.saisi = Date.now(); doc.note = "Noté depuis la notification"; await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(doc); n++; }
+          A.eauVider(); if (n) toast("💧 " + n + " boisson" + (n > 1 ? "s" : "") + " de la notification rangée" + (n > 1 ? "s" : "") + " dans le carnet."); } } catch (e) {}
+      enCours = false; setTimeout(publier, 1500); }
+    setInterval(function () { ranger(); publier(); }, 60000);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { ranger(); publier(); } });
+    setTimeout(function () { ranger(); publier(); }, 3000);
+  })();
 })();
 </script>
 

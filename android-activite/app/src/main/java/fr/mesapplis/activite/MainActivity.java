@@ -98,6 +98,7 @@ public class MainActivity extends Activity {
         if (!dossier.exists()) dossier.mkdirs();
         try { sauvegardeDuJour(); } catch (Exception ignored) {}
         reprendreSeance();
+        RappelEau.programmer(this);   // 💧 la vérification de l'eau tourne toutes les 30 min
 
         final WebViewAssetLoader chargeur = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -709,6 +710,15 @@ public class MainActivity extends Activity {
                 return false;
             }
         }
+
+        /* ===== 💧 Rappels d'eau (essai n° 3) : le carnet donne l'état de la journée, Android rappelle ===== */
+        @JavascriptInterface public void eauEtat(String json) { RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); }
+        @JavascriptInterface public String eauEnAttente() { return RappelEau.prefs(MainActivity.this).getString("attente", "[]"); }
+        @JavascriptInterface public void eauVider() { RappelEau.prefs(MainActivity.this).edit().putString("attente", "[]").apply(); }
+        @JavascriptInterface public String eauReglages() { return RappelEau.reglages(MainActivity.this).toString(); }
+        @JavascriptInterface public void eauRegler(String json) { RappelEau.prefs(MainActivity.this).edit().putString("reglages", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); }
+        @JavascriptInterface public String eauTest() { return RappelEau.verifier(MainActivity.this, true); }
+        @JavascriptInterface public String eauVerifier() { return RappelEau.verifier(MainActivity.this, false); }
 
         @JavascriptInterface public void parler(String t) {
             if (voixPrete) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "c");
