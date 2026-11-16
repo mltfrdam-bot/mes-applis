@@ -1,6 +1,15 @@
 package fr.mesapplis.miroir;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -54,10 +63,84 @@ public class MainActivity extends Activity {
     private final Map<Integer, String> nomsFichiers = new HashMap<>();
     private int prochainFichier = 1;
 
+    // ---------- Câble USB : activer le sans fil sur le téléphone ----------
+    private static final String ACTION_PERMISSION = "fr.mesapplis.miroir.PERMISSION_USB";
+    private UsbManager usb;
+    private List<byte[]> clesEnAttente;
+    private volatile boolean usbEnCours = false;
+
+    private void versPage(String type, String texte) {
+        if (web == null) return;
+        final String js = "window.miroirUsbEtat && miroirUsbEtat(" + JSONObject.quote(type) + "," + JSONObject.quote(texte) + ")";
+        web.post(() -> web.evaluateJavascript(js, null));
+    }
+
+    private void prevenirPageCable() {
+        if (web != null) web.post(() -> web.evaluateJavascript("window.miroirCableBranche && miroirCableBranche()", null));
+    }
+
+    private final BroadcastReceiver recepteurUsb = new BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            String a = i.getAction();
+            if (ACTION_PERMISSION.equals(a)) {
+                boolean ok = i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
+                List<byte[]> cles = clesEnAttente; clesEnAttente = null;
+                if (ok && cles != null) demarrerSansFil(cles);
+                else { usbEnCours = false; versPage("erreur", "Miroir n'a pas reçu l'autorisation d'utiliser le câble. Rebranche le câble et appuie sur « OK » (coche « Toujours » si proposé)."); }
+            } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(a)) {
+                prevenirPageCable();
+            }
+        }
+    };
+
+    private void activerSansFil(List<byte[]> cles) {
+        if (usbEnCours) return;
+        UsbDevice d = usb != null ? UsbAdb.trouverTelephone(usb) : null;
+        if (d == null) { versPage("erreur", "Je ne vois pas le téléphone par le câble. Vérifie que le câble est bien branché et que le débogage USB est activé. Si la tablette affiche ⚡ (elle se recharge), le téléphone a pris la main sur le câble : débranche et rebranche."); return; }
+        usbEnCours = true;
+        if (!usb.hasPermission(d)) {
+            clesEnAttente = cles;
+            Intent i = new Intent(ACTION_PERMISSION).setPackage(getPackageName());
+            int drapeaux = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+            usb.requestPermission(d, PendingIntent.getBroadcast(this, 0, i, drapeaux | PendingIntent.FLAG_UPDATE_CURRENT));
+            versPage("info", "👉 Appuie sur « OK » pour autoriser Miroir à utiliser le câble.");
+            return;
+        }
+        demarrerSansFil(cles);
+    }
+
+    private void demarrerSansFil(List<byte[]> cles) {
+        usbEnCours = true;
+        new Thread(() -> {
+            UsbAdb lien = null;
+            try {
+                UsbDevice d = UsbAdb.trouverTelephone(usb);
+                if (d == null) throw new java.io.IOException("absent");
+                versPage("info", "🔌 Câble branché : passage du téléphone en sans fil…");
+                lien = new UsbAdb(usb, d);
+                String rep = new AdbProtocole(lien, cles).passerEnSansFil(5555, texte -> versPage("info", texte));
+                versPage("ok", rep);
+            } catch (Exception e) {
+                String m = String.valueOf(e.getMessage());
+                if (m.contains("occupe")) versPage("erreur", "Le câble est déjà utilisé par une autre appli (Chrome ?). Ferme Miroir dans Chrome, débranche et rebranche le câble.");
+                else if (m.contains("refuse") || m.contains("delai")) versPage("erreur", "Le téléphone n'a pas accepté la connexion. Regarde l'écran du téléphone (« Autoriser » ?), puis débranche et rebranche le câble.");
+                else versPage("erreur", "Le passage en sans fil a échoué (" + m + "). Débranche et rebranche le câble pour réessayer.");
+            } finally {
+                if (lien != null) lien.fermer();
+                usbEnCours = false;
+            }
+        }, "usb-sansfil").start();
+    }
+
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        usb = (UsbManager) getSystemService(Context.USB_SERVICE);
+        IntentFilter f = new IntentFilter(ACTION_PERMISSION);
+        f.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(recepteurUsb, f, Context.RECEIVER_EXPORTED);
+        else registerReceiver(recepteurUsb, f);
 
         try {
             relais = new Relais(this);
@@ -168,6 +251,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String relais() { return relais != null ? relais.adresse() : ""; }
         @JavascriptInterface public String passerelle() { return passerelleWifi(); }
 
+        /** Un téléphone avec le débogage USB est-il branché par câble ? */
+        @JavascriptInterface public boolean usbPresent() { return usb != null && UsbAdb.trouverTelephone(usb) != null; }
+
+        /** Passe le téléphone branché en mode sans fil. cles = liste JSON de clés (PKCS#8 en base64). */
+        @JavascriptInterface public void activerSansFil(String clesJson) {
+            List<byte[]> cles = new ArrayList<>();
+            try {
+                JSONArray a = new JSONArray(clesJson);
+                for (int i = 0; i < a.length(); i++) cles.add(Base64.decode(a.getString(i), Base64.DEFAULT));
+            } catch (Exception ignored) {}
+            runOnUiThread(() -> MainActivity.this.activerSansFil(cles));
+        }
+
         @JavascriptInterface public void pleinEcran(boolean oui) {
             runOnUiThread(() -> { pleinEcran = oui; appliquerPleinEcran(); });
         }
@@ -236,7 +332,13 @@ public class MainActivity extends Activity {
         super.onActivityResult(code, res, data);
     }
 
+    @Override
+    protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        if (i != null && UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(i.getAction())) prevenirPageCable();
+    }
+
     @Override public void onBackPressed() { if (web != null && web.canGoBack()) web.goBack(); else super.onBackPressed(); }
     @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); if (web != null) web.saveState(o); }
-    @Override protected void onDestroy() { if (relais != null) relais.arreter(); if (web != null) web.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() { try { unregisterReceiver(recepteurUsb); } catch (Exception ignored) {} if (relais != null) relais.arreter(); if (web != null) web.destroy(); super.onDestroy(); }
 }

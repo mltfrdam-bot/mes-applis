@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.0";
+const VERSION = "2.1";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -209,6 +209,7 @@ async function annulerEssai() {
 
 // manuel = appui sur le bouton ; sinon reconnexion automatique (câble rebranché, ouverture de la page)
 async function connecter(choisirNouveau = false, manuel = true) {
+  if (!manuel && usbEnCours) return;
   if (connexionEnCours) {
     if (!manuel) return;
     await annulerEssai();   // le bouton relance toujours une connexion propre
@@ -722,6 +723,7 @@ const actions = {
   "b-sansfil": ouvrirSansFil,
   "sf-lancer": lancerSansFil,
   "sf-cle": exporterCle,
+  "btn-usb": activerSansFilParCable,
   "btn-adresse-ok": () => { reglages.adresseTel = $("adresse-tel").value.trim(); sauverReglages(); majBoutonAccueil(); bulle(reglages.adresseTel ? "Adresse enregistrée" : "Adresse automatique"); },
   "btn-cle": () => $("cle-choix").click(),
   "r-oublier-cle": () => { localStorage.removeItem("miroir-cle-ordi"); majCleOrdi(); bulle("Clé oubliée"); },
@@ -743,9 +745,49 @@ if (APPLI) {
 }
 majCleOrdi();
 majBoutonAccueil().then(async () => {
-  // Reconnexion directe si le téléphone déjà autorisé est branché
+  // Appli : si le téléphone est branché par câble, on le passe d'abord en sans fil
+  if (APPLI && usbBranche()) { activerSansFilParCable(); return; }
+  // Reconnexion directe si le téléphone déjà autorisé est disponible
   if (reglages.autoConnexion && (await telephoneConnu())) connecter(false, false);
 });
+
+// ---------- Appli : câble branché → le téléphone passe en sans fil tout seul ----------
+let usbEnCours = false;
+function usbBranche() { try { return !!window.MiroirApp.usbPresent?.(); } catch { return false; } }
+async function clesPourUsb() {
+  // Mêmes clés que pour le sans fil : la clé enregistrée (si importée) puis celle de Miroir
+  const liste = [];
+  const ordi = lireCleOrdi();
+  if (ordi) liste.push(btoa(String.fromCharCode(...ordi)));
+  let web = [];
+  for await (const k of clesWeb.iterateKeys()) web.push(k.buffer);
+  if (!web.length) web.push((await clesWeb.generateKey()).buffer);
+  for (const b of web) { let bin = ""; for (const o of b) bin += String.fromCharCode(o); liste.push(btoa(bin)); }
+  return liste;
+}
+async function activerSansFilParCable() {
+  if (!APPLI || usbEnCours) return;
+  if (client) { bulle("Déjà connecté sans fil : rien à faire avec le câble"); return; }
+  usbEnCours = true;
+  if (connexionEnCours) await annulerEssai();
+  afficherAccueil();
+  message("🔌 Câble branché : passage du téléphone en sans fil…");
+  try { window.MiroirApp.activerSansFil(JSON.stringify(await clesPourUsb())); }
+  catch (e) { usbEnCours = false; message("Erreur : " + e, "erreur"); }
+}
+window.miroirCableBranche = () => { if (APPLI && !client) setTimeout(activerSansFilParCable, 1500); };
+window.miroirUsbEtat = (type, texte) => {
+  if (type === "info") { message(texte); return; }
+  usbEnCours = false;
+  if (type === "erreur") { message(texte, "erreur"); return; }
+  // réussi
+  message("✔ Le téléphone est passé en sans fil. Tu peux débrancher le câble. Connexion sans fil…");
+  setTimeout(() => {
+    if (client || connexionEnCours) return;
+    if (!adresseTelephone()) { message("✔ Le téléphone est en sans fil. Débranche le câble, connecte la tablette au point d'accès du téléphone, puis appuie sur « 📶 Connecter sans fil ».", "info"); return; }
+    connecter(false, false);
+  }, 3000);
+};
 if (!APPLI && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
 // ---------- Passer en sans fil (depuis Chrome, par câble) ----------

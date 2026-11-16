@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Câble USB : la tablette pilote le téléphone branché (pour activer le sans fil) -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -21,6 +23,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Quand on branche le téléphone, Android propose d'ouvrir Miroir -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" android:resource="@xml/filtre_usb" />
         </activity>
     </application>
 </manifest>

@@ -80,6 +80,7 @@
   select{font-size:18px;padding:10px;border-radius:10px;border:1px solid #c9ced8;width:100%}
   .mode-appli .seulement-chrome,.mode-chrome .seulement-appli{display:none!important}
   #adresse-tel{font-size:18px;padding:12px;border:1px solid #c9ced8;border-radius:12px;width:260px}
+  #btn-usb{font-size:19px;font-weight:600;padding:14px 22px;border:2px solid #1d5fbf;border-radius:12px;background:#fff;color:#1d5fbf}
   #btn-adresse-ok{font-size:17px;padding:12px 20px;border:1px solid #c9ced8;border-radius:12px;background:#fff}
   #bulle{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2330;color:#fff;padding:12px 20px;border-radius:24px;font-size:17px;z-index:20;max-width:90%}
 </style>
@@ -93,6 +94,7 @@
   <button id="btn-connecter">🔌 Connecter</button>
   <div id="message" class="message" hidden></div>
   <div id="etat-cle" class="pied" style="font-size:16px;color:#1d7a3a" hidden></div>
+  <button id="btn-usb" class="seulement-appli">🔌 Câble branché : passer en sans fil</button>
   <div class="ligne-accueil seulement-appli">
     <input id="adresse-tel" type="text" inputmode="decimal" placeholder="Adresse du téléphone">
     <button id="btn-adresse-ok">OK</button>
@@ -107,7 +109,7 @@
     <ol>
       <li>Sur le téléphone : active le <b>point d'accès</b>.</li>
       <li>Sur la tablette : connecte le Wi-Fi au point d'accès du téléphone.</li>
-      <li>Après chaque redémarrage du téléphone : branche le câble une fois, ouvre Miroir dans <b>Chrome</b>, connecte, puis appuie sur <b>📶 Sans fil</b>.</li>
+      <li>Après chaque redémarrage du téléphone : branche le câble entre la tablette et le téléphone. Miroir passe le téléphone en sans fil tout seul (ou appuie sur <b>🔌 Câble branché</b>). Débranche quand c'est écrit.</li>
       <li>Ici, appuie sur <b>📶 Connecter sans fil</b>.</li>
     </ol>
     <p>L'adresse du téléphone est trouvée toute seule. Ne la tape que si la connexion échoue (elle est affichée par Miroir dans Chrome, fenêtre « Sans fil »).</p>
