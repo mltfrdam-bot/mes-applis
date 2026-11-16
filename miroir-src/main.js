@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.2";
+const VERSION = "2.3";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -314,7 +314,11 @@ async function lancerMiroir() {
     videoBitRate: debit,
     maxFps: 60,
     stayAwake: true,           // le téléphone ne se met pas en veille tant qu'il est branché
-    powerOffOnClose: false,
+    // Pendant le pilotage (même sans fil), le téléphone ne se met plus en veille au bout de 15 s.
+    // Son réglage habituel est remis tout seul à la fin, même si la liaison est coupée.
+    screenOffTimeout: 24 * 3600 * 1000,
+    // Écran toujours éteint : à la fin du pilotage, le téléphone se met en veille (écran éteint)
+    powerOffOnClose: !!reglages.ecranEteint,
     clipboardAutosync: false,
     control: true,
   });
@@ -345,7 +349,8 @@ async function lancerMiroir() {
   afficherMiroir();
   ajuster();
   majBoutonsReglages();
-  if (reglages.ecranEteint) setTimeout(() => ecranTelephone(false), 800);
+  eteintAuDepart = !!reglages.ecranEteint;
+  if (reglages.ecranEteint) { ecranTelephone(false).catch(() => {}); setTimeout(() => surveillerEcran(), 300); }
   bulle("Connecté ✔");
 }
 
@@ -385,7 +390,9 @@ async function nettoyer() {
 }
 
 async function deconnecter() {
-  if (reglages.ecranEteint && client) { try { await ecranTelephone(true); } catch {} }
+  clearInterval(minuterieEcran);
+  // Écran toujours éteint : le téléphone reste éteint en quittant (un appui sur un de ses boutons le rallume)
+  if (reglages.ecranEteint && client && !eteintAuDepart) { try { await touche(TOUCHE.marche); } catch {} }
   deconnexionTraitee = true;
   await nettoyer();
   afficherAccueil();
@@ -492,6 +499,18 @@ async function touche(code) {
   await ctl.injectKeyCode({ action: AndroidKeyEventAction.Up, keyCode: code, repeat: 0, metaState: 0 });
 }
 
+// Écran toujours éteint : toutes les 1,5 s on redemande « écran éteint » au téléphone,
+// pour qu'un appel ou une notification qui rallume l'écran soit réteint aussitôt.
+let eteintAuDepart = false;
+let minuterieEcran = null;
+function surveillerEcran() {
+  clearInterval(minuterieEcran);
+  if (!reglages.ecranEteint) return;
+  minuterieEcran = setInterval(() => {
+    if (!client || !reglages.ecranEteint) { clearInterval(minuterieEcran); return; }
+    ecranTelephone(false).catch(() => {});
+  }, 1500);
+}
 async function ecranTelephone(allume) {
   const ctl = client?.controller; if (!ctl) return;
   await ctl.setScreenPowerMode(allume ? AndroidScreenPowerMode.Normal : AndroidScreenPowerMode.Off);
@@ -523,7 +542,7 @@ async function deverrouiller() {
     await attendre(200);
     await touche(TOUCHE.entree);
   }
-  if (reglages.ecranEteint) setTimeout(() => ecranTelephone(false), 1200);
+  if (reglages.ecranEteint) { setTimeout(() => ecranTelephone(false).catch(() => {}), 1200); surveillerEcran(); }
 }
 
 // ---------- Capture d'écran ----------
@@ -719,12 +738,20 @@ function majPleinEcran() { $("b-plein").querySelector("span").textContent = docu
 
 // ---------- Réglages ----------
 function majBoutonsReglages() {
-  $("b-ecran-tel").querySelector("span").textContent = reglages.ecranEteint ? "Écran tél. : éteint" : "Écran tél. : allumé";
+  $("b-ecran-tel").querySelector("span").textContent = reglages.ecranEteint ? "Écran tél. : toujours éteint" : "Écran tél. : allumé";
+  $("r-ecran").checked = !!reglages.ecranEteint;
   $("b-ecran-tel").classList.toggle("actif", reglages.ecranEteint);
   $("r-qualite").value = reglages.qualite;
   $("r-auto").checked = reglages.autoConnexion;
 }
 $("r-qualite").onchange = (e) => { reglages.qualite = e.target.value; sauverReglages(); bulle("Prendra effet à la prochaine connexion"); };
+async function basculerEcranEteint(oui) {
+  reglages.ecranEteint = oui; sauverReglages(); majBoutonsReglages();
+  await ecranTelephone(!oui);
+  if (oui) { surveillerEcran(); bulle("🌙 L'écran du téléphone restera éteint"); }
+  else { clearInterval(minuterieEcran); bulle("☀️ L'écran du téléphone se rallume"); }
+}
+$("r-ecran").onchange = (e) => basculerEcranEteint(e.target.checked);
 $("r-auto").onchange = (e) => { reglages.autoConnexion = e.target.checked; sauverReglages(); };
 $("r-oublier-code").onclick = () => { reglages.memoCode = false; reglages.code = ""; sauverReglages(); bulle("Code oublié"); };
 
@@ -737,7 +764,7 @@ const actions = {
   "b-recents": () => touche(TOUCHE.recents),
   "b-marche": () => touche(TOUCHE.marche),
   "b-deverrouiller": ouvrirDeverrouillage,
-  "b-ecran-tel": async () => { reglages.ecranEteint = !reglages.ecranEteint; sauverReglages(); majBoutonsReglages(); await ecranTelephone(!reglages.ecranEteint); },
+  "b-ecran-tel": () => basculerEcranEteint(!reglages.ecranEteint),
   "b-capture": capture,
   "b-fichiers": ouvrirFichiers,
   "b-clavier": ouvrirClavier,
