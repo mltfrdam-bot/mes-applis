@@ -1,6 +1,6 @@
 # Plans DWG (Lecteur DWG chantier)
 
-Appli Android autonome pour ouvrir des plans DWG/DXF sur le téléphone, mesurer (distance, surface, accrochage), et plus tard tracer, créer des calques et exporter des points pour la TS11.
+Appli Android autonome pour ouvrir des plans DWG/DXF sur le téléphone, mesurer (distance, surface, accrochage), placer des points X/Y/Z sur le calque POINTS_EXPORT et les exporter pour la TS11 (DXF R12 + texte « Nom;X;Y;Z »). Plus tard : tracer, créer des calques, enregistrer.
 
 - `www/index.html` : la page complète (un seul fichier, marche sans internet). C'est elle qui va dans l'APK.
 - `source/` : le code source (`app.html`) et l'outil pour refabriquer la page (`construire.sh`).

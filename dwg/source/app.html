@@ -10,15 +10,33 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#fff;color:#1a1a1a;font-family:Arial,Helvetica,sans-serif;font-size:15px;overflow:hidden;-webkit-tap-highlight-color:transparent}
 #barre{position:fixed;left:0;right:0;top:0;height:52px;display:flex;align-items:center;gap:5px;padding:0 5px;background:#f3f3f3;border-bottom:1px solid #c8c8c8;z-index:5}
-.btn{height:40px;min-width:40px;padding:0 10px;border:1px solid #9a9a9a;border-radius:4px;background:#fff;color:#1a1a1a;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap}
+.btn{height:40px;min-width:36px;padding:0 9px;border:1px solid #9a9a9a;border-radius:4px;background:#fff;color:#1a1a1a;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap}
 .btn:active{background:#dde8f5}
 .btn.prim{background:#1f5fa8;border-color:#1f5fa8;color:#fff}
 .btn.prim:active{background:#174a85}
 .btn[disabled]{opacity:.45}
 #barre .btn.actif{background:#ffe7cc;border-color:#e65c00;color:#8a3a00;font-weight:bold}
 #mesure{position:fixed;left:0;right:0;bottom:28px;height:236px;background:#fff;border-top:2px solid #e65c00;z-index:6;display:none;flex-direction:column}
-body.enMesure #mesure{display:flex}
-body.enMesure #zone{bottom:264px}
+body.outil-mesure #mesure{display:flex}
+body.outil-points #ptsPanel{display:flex}
+body.enOutil #zone{bottom:264px}
+#ptsPanel{position:fixed;left:0;right:0;bottom:28px;height:236px;background:#fff;border-top:2px solid #c2185b;z-index:6;display:none;flex-direction:column}
+#ptsPanel .outils{display:flex;gap:6px;padding:6px;background:#f3f3f3;border-bottom:1px solid #c8c8c8;align-items:center}
+#ptsInfo{padding:4px 10px;font-size:13px;color:#444;min-height:24px;line-height:16px;border-bottom:1px solid #e0e0e0}
+#ptsInfo b{color:#c2185b}
+#tabPtsExp input{width:100%;border:0;background:transparent;font-family:Consolas,'Courier New',monospace;font-size:13px;padding:0 2px;height:30px;color:#1a1a1a}
+#tabPtsExp input.num{text-align:right}
+#tabPtsExp input:focus{outline:2px solid #1f5fa8;background:#fff}
+#tabPtsExp input.faux{background:#ffd6d6}
+#tabPtsExp td{padding:0 2px}
+#tabPtsExp tr.sel td{background:#fde4ef}
+#tabPtsExp td.sup{width:34px;text-align:center;font-size:16px;cursor:pointer}
+#exportBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
+#exportBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
+#exportBoite h3{margin:0 0 8px;font-size:17px;color:#c2185b}
+#exportBoite .lig{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#exportBoite input{height:38px;border:1px solid #9a9a9a;border-radius:4px;padding:0 8px;font-size:15px;width:100%}
+#exportResultat{font-size:14px;margin-top:8px;line-height:1.4}
 #mesure .outils{display:flex;gap:6px;padding:6px;background:#f3f3f3;border-bottom:1px solid #c8c8c8;align-items:center}
 .seg{display:inline-flex;border:1px solid #9a9a9a;border-radius:4px;overflow:hidden}
 .seg button{height:40px;padding:0 12px;border:0;background:#fff;font-size:15px;color:#1a1a1a}
@@ -74,17 +92,18 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </head>
 <body>
 <div id="barre">
-  <button class="btn prim" id="bOuvrir">📂 Ouvrir</button>
+  <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
   <button class="btn" id="bCalques" disabled>☰ Calques</button>
-  <button class="btn" id="bMesure" disabled>📏 Mesurer</button>
+  <button class="btn" id="bMesure" disabled>📏 Mesure</button>
+  <button class="btn" id="bPoints" disabled>📍 Points</button>
   <span style="flex:1"></span>
   <button class="btn" id="bMenu" title="Menu">⋮</button>
   <input type="file" id="fichier" style="display:none">
 </div>
 <div id="zone"><canvas id="cv"></canvas></div>
 <div id="accueil">
-  <div class="gros">Appuyez sur <b>📂 Ouvrir</b> pour choisir un plan DWG ou DXF.</div>
+  <div class="gros">Appuyez sur <b>📂</b> pour choisir un plan DWG ou DXF.</div>
   <div>Un doigt : déplacer le plan · Deux doigts : zoomer</div>
 </div>
 <div id="calques">
@@ -107,6 +126,28 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div id="resultat"></div>
   <div id="tabPtsWrap"><table class="xl compact"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z</th><th>Accroché à</th></tr></thead><tbody id="tbPts"></tbody></table></div>
 </div>
+<div id="ptsPanel">
+  <div class="outils">
+    <b style="color:#c2185b;font-size:14px">POINTS_EXPORT</b>
+    <span id="ptsNb" style="font-size:13px;color:#555"></span>
+    <span style="flex:1"></span>
+    <button class="btn" id="bPtsRetour" title="Annuler la dernière action">↶</button>
+    <button class="btn prim" id="bExporter">📤 Exporter</button>
+  </div>
+  <div id="ptsInfo"></div>
+  <div id="tabPtsWrap2" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table class="xl compact" id="tabPtsExp"><thead><tr><th style="width:56px">Nom</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right;width:70px">Z</th><th></th></tr></thead><tbody id="tbPtsExp"></tbody></table></div>
+</div>
+<div id="exportBoite"><div class="boite">
+  <h3>Exporter pour la TS11</h3>
+  <div style="font-size:13px;color:#444;margin-bottom:4px">Nom des fichiers (sans accent ni espace) :</div>
+  <input id="expNom" autocomplete="off">
+  <div class="lig">
+    <button class="btn prim" id="bExpFichiers">💾 Enregistrer DXF + TXT</button>
+    <button class="btn" id="bExpCopier">📋 Copier le texte</button>
+    <button class="btn" id="bExpFermer">Fermer</button>
+  </div>
+  <div id="exportResultat"></div>
+</div></div>
 <div id="menu">
   <div class="tete"><b>Lecteur DWG chantier</b><button class="btn" id="bFermerMenu">✕</button></div>
   <table class="xl"><tbody>
@@ -133,7 +174,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Étape 2 – v2";
+const VERSION = "Points TS11 – v1";
 </script>
 <script>
 "use strict";
@@ -509,7 +550,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene && modeMesure){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -586,10 +627,10 @@ function accrocher(sx,sy){
 }
 
 // ================= Mesure =================
-let modeMesure=false, mesure={mode:'dist',pts:[]}, visee=null, deplace=null;
+let outil=null, mesure={mode:'dist',pts:[]}, visee=null, deplace=null;
 const RAYON_PRISE=26; // px : doigt posé sur un point déjà placé → on le déplace
 function pointVise(){ if(!visee) return null; if(visee.acc) return visee.acc; const [x,y]=versPlan(visee.sx,visee.sy); return {x,y,z:NaN,t:0}; }
-function ptsCalcul(){ const p=mesure.pts.slice(); const v=pointVise(); if(v){ if(deplace!==null) p[deplace]=v; else if(!(mesure.mode==='dist'&&p.length>=2)) p.push(v); } return p; }
+function ptsCalcul(){ const p=mesure.pts.slice(); const v=outil==='mesure'?pointVise():null; if(v){ if(deplace!==null) p[deplace]=v; else if(!(mesure.mode==='dist'&&p.length>=2)) p.push(v); } return p; }
 function pointSousDoigt(sx,sy){ let k=null, dm=RAYON_PRISE; mesure.pts.forEach((q,i)=>{ const [x,y]=versEcran(q.x,q.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
 const zOk=z=>Number.isFinite(z)&&z!==0;
 function calculs(p){
@@ -655,7 +696,7 @@ function majLoupe(){
   if(top<56) top=cy+70;
   left=Math.max(4,Math.min(window.innerWidth-T-4,left));
   loupe.style.left=left+'px'; loupe.style.top=top+'px'; loupe.style.display='block';
-  loupeTxt.textContent = (deplace!==null?'Point '+(deplace+1)+' → ':'') + (visee.acc ? NOMS_ACC[visee.acc.t] : 'Point libre (pas d\'accroche)');
+  loupeTxt.textContent = (deplace!==null?'Point '+(outil==='points'?(pointsExp[deplace]?.nom??''):(deplace+1))+' → ':'') + (visee.acc ? NOMS_ACC[visee.acc.t] : 'Point libre (pas d\'accroche)');
   loupeTxt.style.background = visee.acc ? '#e65c00' : '#777';
   loupeTxt.style.display='block';
   const lw=loupeTxt.offsetWidth;
@@ -682,30 +723,145 @@ function majPanneau(){
 }
 function poserPoint(){
   const v=pointVise(); if(!v) return;
+  if(outil==='points'){ poserPointExport(v); return; }
   if(deplace!==null){ mesure.pts[deplace]={x:v.x,y:v.y,z:v.z,t:v.t}; return; }
   if(mesure.mode==='dist' && mesure.pts.length>=2) mesure.pts=[];
   mesure.pts.push({x:v.x,y:v.y,z:v.z,t:v.t});
 }
-function basculerMesure(){
-  modeMesure=!modeMesure; document.body.classList.toggle('enMesure',modeMesure); $('bMesure').classList.toggle('actif',modeMesure);
-  visee=null; redim(); majPanneau(); demanderDessin(false);
+function choisirOutil(o){
+  outil = (outil===o) ? null : o;
+  document.body.classList.toggle('enOutil',!!outil);
+  document.body.classList.toggle('outil-mesure',outil==='mesure'); document.body.classList.toggle('outil-points',outil==='points');
+  $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points');
+  visee=null; deplace=null; redim(); majPanneau(); if(outil==='points') majTablePoints(); demanderDessin(false);
 }
 function choisirMode(m){ mesure={mode:m,pts:[]}; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); majPanneau(); demanderDessin(false); }
 
+// ================= Points à exporter (calque POINTS_EXPORT, pour la TS11) =================
+// Coordonnées gardées en valeurs RÉELLES du plan (X, Y), Z saisi à la main (ou vide).
+const CALQUE_PTS='POINTS_EXPORT', ROSE='#c2185b';
+let pointsExp=[], historiquePts=[], ptSel=null;
+const cleptsPlan=()=>'points:'+(scene?scene.nom:'');
+async function chargerPointsExport(){ const r=await Memoire.lire(cleptsPlan()); pointsExp=Array.isArray(r)?r:[]; historiquePts=[]; ptSel=null; majCompteCalque(); majTablePoints(); }
+let minuteriePts=null;
+function sauverPoints(){ clearTimeout(minuteriePts); minuteriePts=setTimeout(()=>Memoire.ecrire(cleptsPlan(), pointsExp), 150); }
+function memoriserPourAnnuler(){ historiquePts.push(JSON.stringify(pointsExp)); if(historiquePts.length>60) historiquePts.shift(); }
+function majCompteCalque(){ const c=scene&&scene.calques.get(CALQUE_PTS); if(c) c.nb=pointsExp.length; }
+function calquePtsVisible(){ const c=scene&&scene.calques.get(CALQUE_PTS); return !c||c.visible; }
+function prochainNom(){ let m=0; for(const p of pointsExp){ const n=parseInt(p.nom,10); if(String(n)===String(p.nom).trim() && n>m) m=n; } return String(m+1); }
+function pointExportSousDoigt(sx,sy){ if(!calquePtsVisible()) return null; const o=scene.origine; let k=null, dm=RAYON_PRISE;
+  pointsExp.forEach((q,i)=>{ const [x,y]=versEcran(q.x-o.x,q.y-o.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
+function poserPointExport(v){
+  const o=scene.origine; memoriserPourAnnuler();
+  if(deplace!==null){ const p=pointsExp[deplace]; p.x=v.x+o.x; p.y=v.y+o.y; ptSel=deplace; }
+  else { pointsExp.push({nom:prochainNom(), x:v.x+o.x, y:v.y+o.y, z:null}); ptSel=pointsExp.length-1; }
+  majCompteCalque(); sauverPoints();
+}
+function dessinerPointsExport(c){
+  if(!calquePtsVisible() || !scene) return;
+  const o=scene.origine, enPts=outil==='points';
+  const liste=pointsExp.map((p,i)=>({x:p.x-o.x,y:p.y-o.y,nom:p.nom,i}));
+  if(enPts && visee){ const v=pointVise(); if(v){ if(deplace!==null) liste[deplace]={...liste[deplace],x:v.x,y:v.y,prov:true}; else liste.push({x:v.x,y:v.y,nom:prochainNom(),prov:true}); } }
+  c.save(); c.font='bold 13px Arial'; c.textBaseline='bottom'; c.textAlign='left';
+  for(const p of liste){
+    const [x,y]=versEcran(p.x,p.y); if(x<-40||y<-40||x>W+40||y>H+40) continue;
+    c.globalAlpha=p.prov?0.7:1; c.strokeStyle=ROSE; c.lineWidth=2;
+    c.beginPath(); c.arc(x,y,6,0,DEUXPI); c.fillStyle= p.i===ptSel&&enPts ? '#fde4ef':'rgba(255,255,255,0.85)'; c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(x-9,y); c.lineTo(x+9,y); c.moveTo(x,y-9); c.lineTo(x,y+9); c.lineWidth=1.5; c.stroke();
+    const t=String(p.nom); const w=c.measureText(t).width;
+    c.fillStyle='rgba(255,255,255,0.85)'; c.fillRect(x+7,y-22,w+6,16); c.fillStyle=ROSE; c.fillText(t,x+10,y-7);
+  }
+  c.restore();
+}
+const frN=(v,d)=>Number.isFinite(v)?v.toFixed(d).replace('.',','):'';
+function lireNombre(t){ t=String(t).trim().replace(/\s/g,'').replace(',','.').replace('−','-'); if(t==='') return null; const v=Number(t); return Number.isFinite(v)?v:NaN; }
+function majInfoPoints(){
+  $('ptsNb').textContent=pointsExp.length+' point'+(pointsExp.length>1?'s':'');
+  let h;
+  if(visee){ const v=pointVise(), o=scene.origine;
+    h=(deplace!==null?'Déplacement du point <b>'+pointsExp[deplace].nom+'</b> · ':'Nouveau point <b>'+prochainNom()+'</b> · ')+'X '+frN(v.x+o.x,3)+' · Y '+frN(v.y+o.y,3)+' · '+(v.acc===undefined&&visee.acc?NOMS_ACC[visee.acc.t]:(visee.acc?NOMS_ACC[visee.acc.t]:'point libre')); }
+  else if(!calquePtsVisible()) h='⚠ Le calque POINTS_EXPORT est masqué (☰ Calques).';
+  else h='Touchez le plan pour placer un point (loupe + accrochage). Glissez un point pour le corriger. Z à saisir dans le tableau.';
+  $('ptsInfo').innerHTML=h;
+}
+function majTablePoints(){
+  majInfoPoints();
+  if(!scene) return;
+  const tb=$('tbPtsExp'), frag=document.createDocumentFragment();
+  pointsExp.forEach((p,i)=>{
+    const tr=document.createElement('tr'); if(i===ptSel) tr.className='sel';
+    tr.innerHTML=`<td><input data-c="nom"></td><td><input class="num" data-c="x" inputmode="decimal"></td><td><input class="num" data-c="y" inputmode="decimal"></td><td><input class="num" data-c="z" inputmode="decimal" placeholder="Z ?"></td><td class="sup" title="Supprimer">🗑</td>`;
+    const [iN,iX,iY,iZ]=tr.querySelectorAll('input');
+    iN.value=p.nom; iX.value=frN(p.x,3); iY.value=frN(p.y,3); iZ.value=p.z===null||p.z===undefined?'':frN(p.z,3);
+    const valider=(inp)=>{
+      const c=inp.dataset.c;
+      if(c==='nom'){ const n=inp.value.trim(); if(!n){ inp.classList.add('faux'); return; } if(n!==p.nom){ memoriserPourAnnuler(); p.nom=n; } }
+      else { const v=lireNombre(inp.value); if(Number.isNaN(v) || (v===null && c!=='z')){ inp.classList.add('faux'); return; }
+        if(v!==p[c]){ memoriserPourAnnuler(); p[c]=v; } inp.value = v===null?'':frN(v,3); }
+      inp.classList.remove('faux'); sauverPoints(); demanderDessin(false);
+    };
+    for(const inp of [iN,iX,iY,iZ]){ inp.onchange=()=>valider(inp); inp.onfocus=()=>{ ptSel=i; for(const r of tb.children) r.classList.toggle('sel',r===tr); demanderDessin(false); };
+      inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); valider(inp); const suiv = inp.dataset.c==='z' ? tb.children[i+1]?.querySelector('input[data-c="z"]') : null; if(suiv) suiv.focus(); else inp.blur(); } }; }
+    tr.querySelector('.sup').onclick=()=>{ memoriserPourAnnuler(); pointsExp.splice(i,1); ptSel=null; majCompteCalque(); sauverPoints(); majTablePoints(); remplirCalques(); demanderDessin(false); };
+    frag.appendChild(tr);
+  });
+  tb.replaceChildren(frag);
+  if(!pointsExp.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="5" style="color:#777;text-align:center;height:34px">Aucun point pour l\'instant</td>'; tb.appendChild(tr); }
+  if(ptSel!==null && tb.children[ptSel]) tb.children[ptSel].scrollIntoView({block:'nearest'});
+}
+function annulerPoints(){ const h=historiquePts.pop(); if(!h) return; pointsExp=JSON.parse(h); ptSel=null; majCompteCalque(); sauverPoints(); majTablePoints(); remplirCalques(); demanderDessin(false); }
+
+// ---- Export pour la TS11 ----
+function nomExportDefaut(){ const b=(scene?scene.nom:'PLAN').replace(/\.[^.]*$/,''); return (b.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase().slice(0,20)||'PLAN')+'_PTS'; }
+const f3=v=>(Math.round(v*1000)/1000).toFixed(3);
+function texteTS11(){ return pointsExp.map(p=>[p.nom, f3(p.x), f3(p.y), (p.z===null||p.z===undefined)?'':f3(p.z)].join(';')).join('\r\n')+'\r\n'; }
+function dxfPoints(){
+  // DXF R12 (le plus simple et le plus lu) : un POINT par point sur POINTS_EXPORT, son nom en TEXTE sur POINTS_EXPORT_NOMS
+  const L=[]; const a=(c,v)=>{ L.push(String(c)); L.push(String(v)); };
+  const ascii=t=>String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7e]/g,'_');
+  let mx=Infinity,my=Infinity,Mx=-Infinity,My=-Infinity; for(const p of pointsExp){ mx=Math.min(mx,p.x); my=Math.min(my,p.y); Mx=Math.max(Mx,p.x); My=Math.max(My,p.y); }
+  a(0,'SECTION'); a(2,'HEADER'); a(9,'$ACADVER'); a(1,'AC1009');
+  a(9,'$EXTMIN'); a(10,f3(mx)); a(20,f3(my)); a(30,'0.0'); a(9,'$EXTMAX'); a(10,f3(Mx)); a(20,f3(My)); a(30,'0.0');
+  a(9,'$PDMODE'); a(70,3); a(9,'$PDSIZE'); a(40,'0.3'); a(0,'ENDSEC');
+  a(0,'SECTION'); a(2,'TABLES');
+  a(0,'TABLE'); a(2,'LTYPE'); a(70,1); a(0,'LTYPE'); a(2,'CONTINUOUS'); a(70,0); a(3,'Solid line'); a(72,65); a(73,0); a(40,'0.0'); a(0,'ENDTAB');
+  a(0,'TABLE'); a(2,'LAYER'); a(70,3);
+  for(const [n,col] of [['0',7],[CALQUE_PTS,6],[CALQUE_PTS+'_NOMS',3]]){ a(0,'LAYER'); a(2,n); a(70,0); a(62,col); a(6,'CONTINUOUS'); }
+  a(0,'ENDTAB'); a(0,'ENDSEC');
+  a(0,'SECTION'); a(2,'ENTITIES');
+  for(const p of pointsExp){ const z=(p.z===null||p.z===undefined)?0:p.z;
+    a(0,'POINT'); a(8,CALQUE_PTS); a(10,f3(p.x)); a(20,f3(p.y)); a(30,f3(z));
+    a(0,'TEXT'); a(8,CALQUE_PTS+'_NOMS'); a(10,f3(p.x+0.15)); a(20,f3(p.y+0.15)); a(30,f3(z)); a(40,'0.3'); a(1,ascii(p.nom)); }
+  a(0,'ENDSEC'); a(0,'EOF');
+  return L.join('\r\n')+'\r\n';
+}
+function telecharger(nom,txt,type){ const u=URL.createObjectURL(new Blob([txt],{type})); const l=document.createElement('a'); l.href=u; l.download=nom; document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000); }
+function ouvrirExport(){
+  if(!pointsExp.length){ $('ptsInfo').innerHTML='⚠ Aucun point à exporter : touchez le plan pour en placer.'; return; }
+  $('expNom').value=nomExportDefaut(); $('exportResultat').innerHTML=''; $('exportBoite').style.display='flex';
+}
+function resumeExport(){
+  const sansZ=pointsExp.filter(p=>p.z===null||p.z===undefined).length;
+  const noms=pointsExp.map(p=>p.nom), doublons=[...new Set(noms.filter((n,i)=>noms.indexOf(n)!==i))];
+  let r=pointsExp.length+' point(s).';
+  if(sansZ) r+=' <b style="color:#a11">⚠ '+sansZ+' sans Z</b> (Z vide dans le TXT, 0 dans le DXF).';
+  if(doublons.length) r+=' <b style="color:#a11">⚠ Noms en double : '+doublons.join(', ')+'</b>';
+  return r;
+}
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
-function viser(p){ visee={sx:p.x, sy:p.y, acc:accrocher(p.x,p.y)}; majPanneau(); demanderDessin(false); }
+function viser(p){ visee={sx:p.x, sy:p.y, acc:accrocher(p.x,p.y)}; if(outil==='points') majInfoPoints(); else majPanneau(); demanderDessin(false); }
 cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(ev.pointerId); const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
-  else if(modeMesure && !sequenceMulti && ev.button!==2){ deplace=pointSousDoigt(p.x,p.y); viser(p); }
+  else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? pointExportSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y); viser(p); }
   else debutGeste(); });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(visee && pointeurs.size===1) viser(p); else suiteGeste(); });
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
   if(visee && !sequenceMulti && ev.type==='pointerup'){ poserPoint(); }
-  visee=null; deplace=null; geste=null; enGeste=false; sequenceMulti=false; majPanneau(); demanderDessin(); sauverEtatBientot(); };
+  const etaitVisee=!!visee; visee=null; deplace=null; geste=null; enGeste=false; sequenceMulti=false; majPanneau(); if(outil==='points'){ if(etaitVisee) majTablePoints(); else majInfoPoints(); } demanderDessin(); sauverEtatBientot(); };
 cv.addEventListener('pointerup',finP); cv.addEventListener('pointercancel',finP);
 function etatPointeurs(){ const p=[...pointeurs.values()]; if(p.length===1) return {cx:p[0].x,cy:p[0].y,d:0}; return {cx:(p[0].x+p[1].x)/2, cy:(p[0].y+p[1].y)/2, d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)}; }
 function debutGeste(){ const e=etatPointeurs(); geste={...e, s:vue.s, tx:vue.tx, ty:vue.ty, n:pointeurs.size}; enGeste=true; }
@@ -777,9 +933,12 @@ async function ouvrirOctets(nom, octets, etat){
     mesure={mode:mesure.mode,pts:[]}; visee=null;
     // calques et vue mémorisés
     if(etat && etat.nom===nom && etat.calques) for(const c of scene.calques.values()) if(c.nom in etat.calques) c.visible=!!etat.calques[c.nom];
+    if(!scene.calques.has(CALQUE_PTS)) scene.calques.set(CALQUE_PTS,{nom:CALQUE_PTS,couleur:'#c2185b',visible:true,nb:0,perso:true});
+    if(etat && etat.nom===nom && etat.calques && (CALQUE_PTS in etat.calques)) scene.calques.get(CALQUE_PTS).visible=!!etat.calques[CALQUE_PTS];
     majVisibles();
     $('accueil').style.display='none';
-    for(const id of ['bAjuster','bCalques','bMesure']) $(id).disabled=false;
+    for(const id of ['bAjuster','bCalques','bMesure','bPoints']) $(id).disabled=false;
+    await chargerPointsExport();
     redim();
     if(etat && etat.nom===nom && etat.s>0){ const o=scene.origine; vue.s=etat.s; vue.tx=W/2-(etat.cx-o.x)*vue.s; vue.ty=H/2+(etat.cy-o.y)*vue.s; demanderDessin(); }
     else cadrer(scene.zone, 0.96);
@@ -836,13 +995,13 @@ function calquesChanges(){ remplirCalques(); majVisibles(); demanderDessin(); sa
 function calquesFiltres(){
   if(!scene) return [];
   const q=$('recherche').value.trim().toLowerCase();
-  return [...scene.calques.values()].filter(c=>c.nb>0 && (!q || c.nom.toLowerCase().includes(q)))
+  return [...scene.calques.values()].filter(c=>(c.nb>0||c.perso) && (!q || c.nom.toLowerCase().includes(q)))
     .sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{numeric:true,sensitivity:'base'}));
 }
 function remplirCalques(){
   if(!scene) return;
   const liste=calquesFiltres(), tb=$('tbCalques');
-  const tous=[...scene.calques.values()], utilises=tous.filter(c=>c.nb>0);
+  const tous=[...scene.calques.values()], utilises=tous.filter(c=>c.nb>0||c.perso);
   const vis=utilises.filter(c=>c.visible).length;
   $('titreCalques').textContent=`Calques (${vis}/${utilises.length} affichés)`;
   const q=$('recherche').value.trim();
@@ -862,7 +1021,8 @@ function remplirCalques(){
   tb.replaceChildren(frag);
   if(!liste.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center">Aucun calque trouvé</td>'; tb.appendChild(tr); }
 }
-$('bMesure').onclick=basculerMesure;
+$('bMesure').onclick=()=>choisirOutil('mesure');
+$('bPoints').onclick=()=>choisirOutil('points');
 $('mDist').onclick=()=>choisirMode('dist');
 $('mSurf').onclick=()=>choisirMode('surf');
 $('bRetour').onclick=()=>{ mesure.pts.pop(); majPanneau(); demanderDessin(false); };
@@ -904,6 +1064,28 @@ async function ouvrirFichierAppli(){
   return true;
 }
 window.ouvrirFichierAppli=ouvrirFichierAppli;
+function brancherPoints(){
+$('bExporter').onclick=ouvrirExport;
+$('bPtsRetour').onclick=annulerPoints;
+$('bExpFermer').onclick=()=>{ $('exportBoite').style.display='none'; };
+$('bExpFichiers').onclick=()=>{
+  const nom=($('expNom').value.trim()||nomExportDefaut()).replace(/[^A-Za-z0-9_-]+/g,'_');
+  const dxf=dxfPoints(), txt=texteTS11();
+  let ou;
+  if(APPLI && APPLI.enregistrer){ const a=APPLI.enregistrer(nom+'.dxf',dxf,'application/dxf'), b=APPLI.enregistrer(nom+'.txt',txt,'text/plain');
+    ou = (a&&b) ? 'dans <b>Téléchargements</b>' : null; }
+  else { telecharger(nom+'.dxf',dxf,'application/dxf'); setTimeout(()=>telecharger(nom+'.txt',txt,'text/plain'),400); ou='dans vos <b>Téléchargements</b>'; }
+  $('exportResultat').innerHTML = ou
+    ? `✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> enregistrés ${ou}. ${resumeExport()}<br>Sur la clé USB, mettez-les dans le dossier <b>DATA</b>, puis importez-les dans la TS11.`
+    : '⚠ Échec de l\'enregistrement. Essayez « Copier le texte ».';
+};
+$('bExpCopier').onclick=async()=>{
+  const t=texteTS11(); let ok=false;
+  try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); }
+  $('exportResultat').innerHTML= ok ? '✓ Texte « Nom;X;Y;Z » copié. '+resumeExport() : '⚠ Copie impossible.';
+};
+}
+brancherPoints();
 redim();
 $('etat').textContent='Prêt. '+VERSION;
 (async()=>{ if(!(await ouvrirFichierAppli())) reouvrirDernier(); })();
