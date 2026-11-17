@@ -150,7 +150,7 @@ public class RappelEau extends BroadcastReceiver {
                 .setAutoCancel(true)
                 .setCategory(mode == 1 ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
-                .setSilent(mode == 2)
+                .setOnlyAlertOnce(mode == 2)   // fin de l alarme : on remplace sans resonner
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + cl(ml1), boisson(c, ml1, 72)).build())
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + cl(ml2), boisson(c, ml2, 73)).build())
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "Plus tard", PendingIntent.getBroadcast(c, 74, new Intent(c, RappelEau.class).setAction(ACTION_PLUS_TARD), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
