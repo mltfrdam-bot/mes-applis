@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 💧 rappels d'eau : l'alarme est remise en route après un redémarrage du téléphone -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
@@ -56,6 +57,28 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- 💧 Widget de l'eau sur l'écran d'accueil -->
+        <receiver android:name=".WidgetEau" android:exported="false" android:label="💧 Eau du jour">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_eau_info" />
+        </receiver>
+
+        <!-- 💧 Petite fenêtre « Combien as-tu bu ? » (sans ouvrir l'appli) -->
+        <activity
+            android:name=".SaisieEau"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=".eau"
+            android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar" />
+
+        <!-- 💧 Notification permanente de l'eau (au choix) : garde aussi l'appli active -->
+        <service
+            android:name=".ServiceEau"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Suivi personnel de l'eau bue : total du jour et boutons pour noter une boisson" />
+        </service>
 
         <!-- Sert au menu « Partager » (envoi de la sauvegarde vers Google Drive) -->
         <provider

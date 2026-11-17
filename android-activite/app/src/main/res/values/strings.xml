@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Journal d\'activité</string>
+    <string name="widget_eau_desc">💧 Eau du jour : ajoute ce que tu bois en une touche</string>
 </resources>

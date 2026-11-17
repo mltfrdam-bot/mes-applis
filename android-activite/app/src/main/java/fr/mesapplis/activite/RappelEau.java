@@ -38,9 +38,10 @@ public class RappelEau extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
         String a = i.getAction() == null ? "" : i.getAction();
-        if (ACTION_BOIRE.equals(a)) { boire(c, i.getIntExtra("ml", 250)); return; }
+        if (ACTION_BOIRE.equals(a)) { boire(c, i.getIntExtra("ml", 250), i.getBooleanExtra("discret", false)); return; }
         if (ACTION_PLUS_TARD.equals(a)) { prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).apply(); annuler(c); return; }
-        if (ACTION_VERIFIER.equals(a)) verifier(c, false);
+        if (ACTION_VERIFIER.equals(a)) { verifier(c, false); rafraichir(c); }   // aussi : le widget change de jour à minuit
+        else ServiceEau.lancerSiVoulu(c);   // redémarrage du téléphone / mise à jour : la notification permanente revient
         programmer(c);   // BOOT_COMPLETED, mise à jour de l'appli, ou vérification : la suivante dans 30 min
     }
 
@@ -54,6 +55,9 @@ public class RappelEau extends BroadcastReceiver {
             if (!r.has("intervalle")) r.put("intervalle", 120);
             if (!r.has("ml1")) r.put("ml1", 250);
             if (!r.has("ml2")) r.put("ml2", 500);
+            if (!r.has("q1")) r.put("q1", 100);
+            if (!r.has("q2")) r.put("q2", 150);
+            if (!r.has("q3")) r.put("q3", 200);
         } catch (Exception ignored) {}
         return r;
     }
@@ -140,7 +144,10 @@ public class RappelEau extends BroadcastReceiver {
     }
 
     /** Bouton de la notification : la boisson attend dans « attente » ; le carnet la range à sa prochaine ouverture. */
-    static void boire(Context c, int ml) {
+    static void boire(Context c, int ml) { boire(c, ml, false); }
+
+    /** @param discret vrai depuis le widget ou la notification permanente : pas de notification « ✅ notés » (un petit message suffit). */
+    static void boire(Context c, int ml, boolean discret) {
         try {
             Calendar k = Calendar.getInstance();
             JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
@@ -148,10 +155,27 @@ public class RappelEau extends BroadcastReceiver {
             prefs(c).edit().putString("attente", l.toString()).putLong("dernierRappel", System.currentTimeMillis()).apply();
         } catch (Exception ignored) {}
         annuler(c);
+        rafraichir(c);
+        if (discret) { try { android.widget.Toast.makeText(c, "💧 " + cl(ml) + " notés", android.widget.Toast.LENGTH_SHORT).show(); } catch (Exception ignored) {} return; }
         try {
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(ID_NOTIF + 1, new Notification.Builder(c, CANAL).setSmallIcon(R.drawable.ic_seance).setContentTitle("✅ " + cl(ml) + " d'eau notés").setContentText("Rangé dans ton carnet à sa prochaine ouverture.").setAutoCancel(true).setTimeoutAfter(8000).build());
         } catch (Exception ignored) {}
+    }
+
+    /** Texte du jour pour le widget et la notification permanente : « 1,05 L / 2,5 L · 42 % ». */
+    static String resume(Context c) {
+        int[] j = journee(c, aujourdhui(Calendar.getInstance()));
+        return String.format(Locale.FRANCE, "%.2f L / %.1f L · %d %%", j[0] / 1000.0, j[2] / 1000.0, Math.round(100f * j[0] / Math.max(1, j[2])));
+    }
+
+    static void rafraichir(Context c) {
+        try { WidgetEau.majTous(c); } catch (Exception ignored) {}
+        try { ServiceEau.maj(c); } catch (Exception ignored) {}
+    }
+
+    static PendingIntent boissonDiscrete(Context c, int ml, int code) {
+        return PendingIntent.getBroadcast(c, code, new Intent(c, RappelEau.class).setAction(ACTION_BOIRE).putExtra("ml", ml).putExtra("discret", true), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     static void annuler(Context c) {

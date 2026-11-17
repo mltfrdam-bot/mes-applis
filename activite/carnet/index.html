@@ -7740,6 +7740,7 @@ table.pa td.ac { color: var(--accent); }
       enCours = false; setTimeout(publier, 1500); }
     setInterval(function () { ranger(); publier(); }, 60000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { ranger(); publier(); } });
+    window.addEventListener("apk-visible", function () { ranger(); publier(); });   /* carnet remis à l'écran par l'APK */
     setTimeout(function () { ranger(); publier(); }, 3000);
   })();
 })();

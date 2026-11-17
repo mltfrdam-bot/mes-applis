@@ -27,7 +27,9 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -86,6 +88,12 @@ public class MainActivity extends Activity {
     static volatile boolean visible = false;
 
     private WebView web;
+    /** Essai n° 4 : le carnet a sa propre page, gardée en mémoire à côté du Journal (passage instantané, sans rechargement). */
+    private WebView webCarnet;
+    private FrameLayout cadre;
+    private WebViewAssetLoader chargeurPages;
+    static final String URL_JOURNAL = "https://appassets.androidplatform.net/assets/www/index.html";
+    static final String URL_CARNET = "https://appassets.androidplatform.net/assets/www/carnet/index.html";
     private File dossier;
     private ToneGenerator son;
     private TextToSpeech voix;
@@ -99,34 +107,55 @@ public class MainActivity extends Activity {
         try { sauvegardeDuJour(); } catch (Exception ignored) {}
         reprendreSeance();
         RappelEau.programmer(this);   // 💧 la vérification de l'eau tourne toutes les 30 min
+        ServiceEau.lancerSiVoulu(this);   // 💧 notification permanente (si choisie) : garde aussi l'appli active
 
-        final WebViewAssetLoader chargeur = new WebViewAssetLoader.Builder()
+        chargeurPages = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
+        web = creerVue();
 
-        web = new WebView(this);
-        WebSettings s = web.getSettings();
+        voix = new TextToSpeech(this, st -> {
+            if (st == TextToSpeech.SUCCESS) { voix.setLanguage(Locale.FRANCE); voix.setSpeechRate(1.15f); voixPrete = true; }
+        });
+
+        cadre = new FrameLayout(this);
+        cadre.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(cadre);
+        web.loadUrl(URL_JOURNAL);
+        if ("carnet".equals(getIntent().getStringExtra("page"))) montrerCarnet();
+    }
+
+    /** Une page web de l'appli : réglages, fichiers de l'appli, liens externes, choix de fichier, pont « AndroidApp ». */
+    private WebView creerVue() {
+        WebView v0 = new WebView(this);
+        WebSettings s = v0.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setTextZoom(100);
-        web.setWebViewClient(new WebViewClient() {
+        v0.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                return chargeur.shouldInterceptRequest(r.getUrl());
+                return chargeurPages.shouldInterceptRequest(r.getUrl());
             }
-            /** Les liens vers l'extérieur (WhatsApp, SMS, sites) s'ouvrent dans l'appli qui convient, pas dans l'APK. */
+            /** Journal ↔ Carnet : on montre l'autre page déjà ouverte au lieu de recharger.
+             *  Les liens vers l'extérieur (WhatsApp, SMS, sites) s'ouvrent dans l'appli qui convient. */
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
-                if ("appassets.androidplatform.net".equals(u.getHost())) return false;
+                if ("appassets.androidplatform.net".equals(u.getHost())) {
+                    String chemin = u.getPath() == null ? "" : u.getPath();
+                    if (v == web && chemin.startsWith("/assets/www/carnet/")) { montrerCarnet(); return true; }
+                    if (v == webCarnet && chemin.equals("/assets/www/index.html")) { montrerJournal(); return true; }
+                    return false;
+                }
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) { Toast.makeText(MainActivity.this, "Aucune appli pour ouvrir ce lien.", Toast.LENGTH_SHORT).show(); }
                 return true;
             }
         });
-        web.setWebChromeClient(new WebChromeClient() {
+        v0.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> cb, FileChooserParams p) {
                 if (choixCarnet != null) choixCarnet.onReceiveValue(null);
@@ -143,15 +172,30 @@ public class MainActivity extends Activity {
                 }
             }
         });
-        web.addJavascriptInterface(new Pont(), "AndroidApp");
-
-        voix = new TextToSpeech(this, st -> {
-            if (st == TextToSpeech.SUCCESS) { voix.setLanguage(Locale.FRANCE); voix.setSpeechRate(1.15f); voixPrete = true; }
-        });
-
-        setContentView(web);
-        web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
+        v0.addJavascriptInterface(new Pont(), "AndroidApp");
+        return v0;
     }
+
+    void montrerCarnet() {
+        if (cadre == null) return;
+        if (webCarnet == null) {
+            webCarnet = creerVue();
+            cadre.addView(webCarnet, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+            webCarnet.loadUrl(URL_CARNET);
+        }
+        webCarnet.setVisibility(View.VISIBLE);
+        web.setVisibility(View.GONE);
+        webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null);
+    }
+
+    void montrerJournal() {
+        if (webCarnet != null) webCarnet.setVisibility(View.GONE);
+        web.setVisibility(View.VISIBLE);
+    }
+
+    static String sansMaj(String j) { return j == null ? "" : j.replaceAll("\"maj\":\\d+", ""); }
+
+    boolean carnetVisible() { return webCarnet != null && webCarnet.getVisibility() == View.VISIBLE; }
 
     /** Une séance était en cours quand l'appli a été fermée : on relance le service, qui reprend l'enregistrement. */
     private void reprendreSeance() {
@@ -712,13 +756,18 @@ public class MainActivity extends Activity {
         }
 
         /* ===== 💧 Rappels d'eau (essai n° 3) : le carnet donne l'état de la journée, Android rappelle ===== */
-        @JavascriptInterface public void eauEtat(String json) { RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); }
+        @JavascriptInterface public void eauEtat(String json) {
+            String avant = RappelEau.prefs(MainActivity.this).getString("etat", "");
+            RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this);
+            if (json != null && !sansMaj(json).equals(sansMaj(avant))) RappelEau.rafraichir(MainActivity.this);   // widget et notification permanente
+        }
         @JavascriptInterface public String eauEnAttente() { return RappelEau.prefs(MainActivity.this).getString("attente", "[]"); }
         @JavascriptInterface public void eauVider() { RappelEau.prefs(MainActivity.this).edit().putString("attente", "[]").apply(); }
         @JavascriptInterface public String eauReglages() { return RappelEau.reglages(MainActivity.this).toString(); }
-        @JavascriptInterface public void eauRegler(String json) { RappelEau.prefs(MainActivity.this).edit().putString("reglages", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); }
+        @JavascriptInterface public void eauRegler(String json) { RappelEau.prefs(MainActivity.this).edit().putString("reglages", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); RappelEau.rafraichir(MainActivity.this); }
         @JavascriptInterface public String eauTest() { return RappelEau.verifier(MainActivity.this, true); }
         @JavascriptInterface public String eauVerifier() { return RappelEau.verifier(MainActivity.this, false); }
+        @JavascriptInterface public void eauPermanente(boolean oui) { ServiceEau.choisir(MainActivity.this, oui); }
 
         @JavascriptInterface public void parler(String t) {
             if (voixPrete) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "c");
@@ -822,8 +871,16 @@ public class MainActivity extends Activity {
 
     /** Bouton Retour : la page ferme d'abord ce qui est ouvert ; quand il n'y a plus rien, l'appli passe en arrière-plan. */
     @Override
+    protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        setIntent(i);
+        if ("carnet".equals(i.getStringExtra("page"))) montrerCarnet();
+    }
+
+    @Override
     public void onBackPressed() {
         if (web == null) { super.onBackPressed(); return; }
+        if (carnetVisible()) { montrerJournal(); return; }
         web.evaluateJavascript("(window.surRetour ? window.surRetour() : false)", v -> { if (!"true".equals(v)) moveTaskToBack(true); });
     }
 
