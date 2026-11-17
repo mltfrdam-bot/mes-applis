@@ -417,6 +417,7 @@ function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
   { const R = Pont.eauReglages(); if (R) { const c = (k, v, t) => '<button class="chip" data-do="eauR" data-k="' + k + '" data-v="' + v + '" aria-pressed="' + (R[k] === v) + '">' + t + '</button>';
     h += '<h2>💧 Rappels d\'eau</h2><p class="aide">Selon ce que tu notes dans le 📒 carnet. Jamais avant ton lever + 30 min, ni dans l\'heure avant ton coucher (heures du profil du carnet). Pas de rappel quand l\'objectif est atteint.</p><table class="milieu"><tbody>' +
       '<tr><td>Rappels</td><td><div class="chips">' + c("on", true, "✅ Oui") + c("on", false, "Non") + '</div></td></tr>' +
+      '<tr><td>Son du rappel</td><td><div class="chips">' + c("alarme", false, "🔔 Bip normal") + c("alarme", true, "⏰ Alarme") + '</div><div class="gris" style="font-size:13px;margin-top:4px">Alarme : sonne fort comme un réveil (même en silencieux) pendant ~15 s, ou jusqu\'à ce que tu touches un bouton. Essaie avec « 🔔 Tester ».</div></td></tr>' +
       '<tr><td>Si rien bu depuis</td><td><div class="chips">' + c("intervalle", 90, "1 h 30") + c("intervalle", 120, "2 h") + c("intervalle", 180, "3 h") + '</div></td></tr>' +
       '<tr><td>Rappel : bouton 1</td><td><div class="chips">' + [150, 200, 250].map(v => c("ml1", v, v / 10 + " cl")).join("") + '</div></td></tr>' +
       '<tr><td>Rappel : bouton 2</td><td><div class="chips">' + [330, 500, 750].map(v => c("ml2", v, v / 10 + " cl")).join("") + '</div></td></tr></tbody></table>' +

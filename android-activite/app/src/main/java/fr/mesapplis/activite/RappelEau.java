@@ -32,6 +32,8 @@ public class RappelEau extends BroadcastReceiver {
     static final String ACTION_BOIRE = "fr.mesapplis.activite.EAU_BOIRE";
     static final String ACTION_PLUS_TARD = "fr.mesapplis.activite.EAU_PLUS_TARD";
     static final String CANAL = "eau";
+    static final String CANAL_ALARME = "eau-alarme";
+    static final long DUREE_ALARME = 15000L;
     static final int ID_NOTIF = 2001;
     static final long PERIODE = 30 * 60 * 1000L;
 
@@ -58,6 +60,7 @@ public class RappelEau extends BroadcastReceiver {
             if (!r.has("q1")) r.put("q1", 100);
             if (!r.has("q2")) r.put("q2", 150);
             if (!r.has("q3")) r.put("q3", 200);
+            if (!r.has("alarme")) r.put("alarme", false);
         } catch (Exception ignored) {}
         return r;
     }
@@ -111,30 +114,60 @@ public class RappelEau extends BroadcastReceiver {
         int depuis = dernier >= 0 ? maintenant - dernier : -1;
         String titre = "💧 " + (depuis >= 60 ? "Rien bu depuis " + (depuis / 60) + " h" + (depuis % 60 >= 10 ? String.format(Locale.ROOT, "%02d", depuis % 60) : "") : depuis >= 0 ? "Pense à boire" : "Pas encore d'eau notée aujourd'hui");
         String texte = String.format(Locale.FRANCE, "%.2f L sur %.1f L (%d %%). Une touche pour noter ce que tu bois.", ml / 1000.0, goal / 1000.0, Math.round(100f * ml / Math.max(1, goal))).replace('.', ',');
-        montrer(c, titre, texte, r.optInt("ml1", 250), r.optInt("ml2", 500));
+        montrer(c, titre, texte, r.optInt("ml1", 250), r.optInt("ml2", 500), r.optBoolean("alarme", false) ? 1 : 0);
         prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).apply();
         return "notification envoyée";
     }
 
-    static void montrer(Context c, String titre, String texte, int ml1, int ml2) {
+    /** @param mode 0 = bip normal, 1 = ⏰ alarme (son de réveil qui se répète ~15 s), 2 = la même sans son (fin de l'alarme). */
+    static void montrer(Context c, String titre, String texte, int ml1, int ml2, int mode) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null || !nm.areNotificationsEnabled()) return;
         NotificationChannel canal = new NotificationChannel(CANAL, "Rappels d'eau", NotificationManager.IMPORTANCE_DEFAULT);
         canal.setDescription("Rappelle de boire dans la journée (jamais la nuit ni juste avant le coucher).");
         nm.createNotificationChannel(canal);
+        String id = CANAL;
+        if (mode == 1) {
+            NotificationChannel a = new NotificationChannel(CANAL_ALARME, "Rappels d'eau (alarme)", NotificationManager.IMPORTANCE_HIGH);
+            a.setDescription("Rappel d'eau qui sonne comme un réveil, même en mode silencieux.");
+            android.net.Uri son = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM);
+            if (son == null) son = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION);
+            a.setSound(son, new android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ALARM).setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build());
+            a.enableVibration(true);
+            a.setVibrationPattern(new long[] { 0, 800, 400, 800, 400, 800 });
+            a.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            a.setBypassDnd(true);
+            nm.createNotificationChannel(a);
+            id = CANAL_ALARME;
+        }
         PendingIntent ouvrir = PendingIntent.getActivity(c, 71, new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(c, CANAL)
+        Notification n = new Notification.Builder(c, id)
                 .setSmallIcon(R.drawable.ic_seance)
                 .setContentTitle(titre)
                 .setContentText(texte)
                 .setStyle(new Notification.BigTextStyle().bigText(texte))
                 .setContentIntent(ouvrir)
                 .setAutoCancel(true)
+                .setCategory(mode == 1 ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setSilent(mode == 2)
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + cl(ml1), boisson(c, ml1, 72)).build())
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + cl(ml2), boisson(c, ml2, 73)).build())
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "Plus tard", PendingIntent.getBroadcast(c, 74, new Intent(c, RappelEau.class).setAction(ACTION_PLUS_TARD), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
                 .build();
+        if (mode == 1) n.flags |= Notification.FLAG_INSISTENT;   // le son se répète tant qu'on n'a pas répondu
         nm.notify(ID_NOTIF, n);
+        if (mode == 1) {
+            // Au bout de ~15 s : on remet la même notification, sans son (elle reste affichée avec ses boutons).
+            final long quand = System.currentTimeMillis();
+            prefs(c).edit().putLong("alarmeDepuis", quand).apply();
+            final Context app = c.getApplicationContext();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (prefs(app).getLong("alarmeDepuis", 0) != quand) return;
+                for (android.service.notification.StatusBarNotification sb : nm.getActiveNotifications())
+                    if (sb.getId() == ID_NOTIF) { montrer(app, titre, texte, ml1, ml2, 2); break; }
+            }, DUREE_ALARME);
+        }
     }
 
     static String cl(int ml) { return ml % 10 == 0 ? (ml / 10) + " cl" : ml + " ml"; }

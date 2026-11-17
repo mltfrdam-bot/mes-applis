@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 💧 Notification permanente dessinée comme le widget : total + 4 boutons -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical">
+    <TextView android:id="@+id/neTotal" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:textColor="#1b1f23" android:textSize="14sp" android:textStyle="bold" android:maxLines="2" />
+    <TextView android:id="@+id/neB1" style="@style/BoutonNotif" />
+    <TextView android:id="@+id/neB2" style="@style/BoutonNotif" />
+    <TextView android:id="@+id/neB3" style="@style/BoutonNotif" />
+    <TextView android:id="@+id/neAutre" style="@style/BoutonNotif" android:text="+…" />
+</LinearLayout>

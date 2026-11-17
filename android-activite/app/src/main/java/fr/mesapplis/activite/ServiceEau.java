@@ -54,7 +54,20 @@ public class ServiceEau extends Service {
         JSONObject r = RappelEau.reglages(c);
         int q1 = r.optInt("q1", 100), q2 = r.optInt("q2", 150), q3 = r.optInt("q3", 200);
         PendingIntent autre = PendingIntent.getActivity(c, 90, new Intent(c, SaisieEau.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        android.widget.RemoteViews v = new android.widget.RemoteViews(c.getPackageName(), R.layout.notif_eau);
+        v.setTextViewText(R.id.neTotal, "💧 " + RappelEau.resume(c).replace(" · ", "\n"));
+        v.setTextViewText(R.id.neB1, "+" + q1 / 10);
+        v.setTextViewText(R.id.neB2, "+" + q2 / 10);
+        v.setTextViewText(R.id.neB3, "+" + q3 / 10);
+        v.setOnClickPendingIntent(R.id.neB1, RappelEau.boissonDiscrete(c, q1, 91));
+        v.setOnClickPendingIntent(R.id.neB2, RappelEau.boissonDiscrete(c, q2, 92));
+        v.setOnClickPendingIntent(R.id.neB3, RappelEau.boissonDiscrete(c, q3, 93));
+        v.setOnClickPendingIntent(R.id.neAutre, autre);
+        v.setOnClickPendingIntent(R.id.neTotal, PendingIntent.getActivity(c, 94, new Intent(c, MainActivity.class).putExtra("page", "carnet").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         return new Notification.Builder(c, CANAL)
+                .setCustomContentView(v)
+                .setCustomBigContentView(v)
+                .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setSmallIcon(R.drawable.ic_seance)
                 .setContentTitle("💧 " + RappelEau.resume(c))
                 .setContentText("Touche ici pour une autre quantité")
@@ -63,9 +76,6 @@ public class ServiceEau extends Service {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + RappelEau.cl(q1), RappelEau.boissonDiscrete(c, q1, 91)).build())
-                .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + RappelEau.cl(q2), RappelEau.boissonDiscrete(c, q2, 92)).build())
-                .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + RappelEau.cl(q3), RappelEau.boissonDiscrete(c, q3, 93)).build())
                 .build();
     }
 
