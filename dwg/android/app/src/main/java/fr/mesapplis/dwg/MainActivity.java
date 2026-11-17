@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.webkit.JavascriptInterface;
@@ -22,6 +23,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import androidx.documentfile.provider.DocumentFile;
 import androidx.webkit.WebViewAssetLoader;
 
 import java.io.ByteArrayOutputStream;
@@ -38,6 +40,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class MainActivity extends Activity {
     private static final int CHOIX_FICHIER = 41;
+    private static final int CHOIX_DOSSIER = 42;
     private static final String HOTE = "https://appassets.androidplatform.net";
     private static final String MARQUE = "content=\"lecteur-dwg-chantier\"";
 
@@ -217,6 +220,44 @@ public class MainActivity extends Activity {
             String r = fichierB64; fichierB64 = null; fichierNom = null; return r == null ? "" : r;
         }
 
+        /** Ouvre le sélecteur de dossier d'Android (clé USB, téléphone, tablette…). Réponse : window.dossierChoisi(nom). */
+        @JavascriptInterface public void choisirDossier() {
+            runOnUiThread(() -> {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+                try { startActivityForResult(i, CHOIX_DOSSIER); }
+                catch (Exception e) { repondreDossier(""); }
+            });
+        }
+
+        /** Nom lisible du dossier d'export retenu, ou "" s'il n'y en a pas. */
+        @JavascriptInterface public String nomDossier() { return nomLisibleDossier(); }
+
+        /** Écrit (ou remplace) un fichier texte dans le dossier retenu. "ok", "absent" (pas de dossier / clé débranchée) ou un message d'erreur. */
+        @JavascriptInterface public String ecrireDansDossier(String nom, String contenu) {
+            String u = getSharedPreferences("reglages", MODE_PRIVATE).getString("dossier", null);
+            if (u == null) return "absent";
+            try {
+                DocumentFile d = DocumentFile.fromTreeUri(MainActivity.this, Uri.parse(u));
+                if (d == null || !d.exists() || !d.canWrite()) return "absent";
+                DocumentFile f = d.findFile(nom);
+                if (f == null) f = d.createFile("application/octet-stream", nom);
+                if (f == null) return "création du fichier impossible";
+                OutputStream o;
+                try { o = getContentResolver().openOutputStream(f.getUri(), "wt"); }
+                catch (Exception e) { o = getContentResolver().openOutputStream(f.getUri(), "w"); }
+                if (o == null) return "écriture impossible";
+                try (OutputStream os = o) { os.write(contenu.getBytes(StandardCharsets.UTF_8)); }
+                return "ok";
+            } catch (SecurityException e) {
+                return "absent";
+            } catch (Exception e) {
+                String m = e.getMessage();
+                return (m != null && (m.contains("No such") || m.contains("not found") || m.contains("ENOENT"))) ? "absent" : "erreur : " + m;
+            }
+        }
+
         /** Enregistre un fichier texte dans « Téléchargements » (servira pour l'export TS11). */
         @JavascriptInterface public String enregistrer(String nom, String contenu, String type) {
             byte[] octets = contenu.getBytes(StandardCharsets.UTF_8);
@@ -242,8 +283,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String nomLisibleDossier() {
+        String u = getSharedPreferences("reglages", MODE_PRIVATE).getString("dossier", null);
+        if (u == null) return "";
+        try {
+            String id = DocumentsContract.getTreeDocumentId(Uri.parse(u)); // ex. "primary:Download/TS11" ou "1A2B-3C4D:DATA"
+            int p = id.indexOf(':');
+            String vol = p > 0 ? id.substring(0, p) : id, chemin = p > 0 ? id.substring(p + 1) : "";
+            String app = "primary".equals(vol) ? "Mémoire interne" : "Clé USB / carte";
+            return app + (chemin.isEmpty() ? "" : " › " + chemin.replace("/", " › "));
+        } catch (Exception e) { return "dossier choisi"; }
+    }
+
+    private void repondreDossier(String nom) {
+        String js = "window.dossierChoisi && window.dossierChoisi(" + org.json.JSONObject.quote(nom) + ")";
+        if (web != null) web.evaluateJavascript(js, null);
+    }
+
     @Override
     protected void onActivityResult(int code, int res, Intent data) {
+        if (code == CHOIX_DOSSIER) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                Uri u = data.getData();
+                try { getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); }
+                catch (Exception ignored) {}
+                getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("dossier", u.toString()).apply();
+                repondreDossier(nomLisibleDossier());
+            } else repondreDossier("");
+            return;
+        }
         if (code == CHOIX_FICHIER && rappelFichier != null) {
             Uri[] r = null;
             if (res == RESULT_OK && data != null && data.getData() != null) r = new Uri[]{ data.getData() };

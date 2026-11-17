@@ -16,11 +16,10 @@ html,body{margin:0;height:100%;background:#fff;color:#1a1a1a;font-family:Arial,H
 .btn.prim:active{background:#174a85}
 .btn[disabled]{opacity:.45}
 #barre .btn.actif{background:#ffe7cc;border-color:#e65c00;color:#8a3a00;font-weight:bold}
-#mesure{position:fixed;left:0;right:0;bottom:28px;height:236px;background:#fff;border-top:2px solid #e65c00;z-index:6;display:none;flex-direction:column}
+#mesure{position:fixed;left:0;right:0;bottom:28px;background:#fff;border-top:2px solid #e65c00;z-index:6;display:none;flex-direction:column}
 body.outil-mesure #mesure{display:flex}
 body.outil-points #ptsPanel{display:flex}
-body.enOutil #zone{bottom:264px}
-#ptsPanel{position:fixed;left:0;right:0;bottom:28px;height:236px;background:#fff;border-top:2px solid #c2185b;z-index:6;display:none;flex-direction:column}
+#ptsPanel{position:fixed;left:0;right:0;bottom:28px;background:#fff;border-top:2px solid #c2185b;z-index:6;display:none;flex-direction:column}
 #ptsPanel .outils{display:flex;gap:6px;padding:6px;background:#f3f3f3;border-bottom:1px solid #c8c8c8;align-items:center}
 #ptsInfo{padding:4px 10px;font-size:13px;color:#444;min-height:24px;line-height:16px;border-bottom:1px solid #e0e0e0}
 #ptsInfo b{color:#c2185b}
@@ -31,6 +30,23 @@ body.enOutil #zone{bottom:264px}
 #tabPtsExp td{padding:0 2px}
 #tabPtsExp tr.sel td{background:#fde4ef}
 #tabPtsExp td.sup{width:34px;text-align:center;font-size:16px;cursor:pointer}
+#mesure,#ptsPanel{height:262px}
+body.enOutil #zone{bottom:290px}
+.ligneCalque{display:flex;align-items:center;gap:6px;padding:3px 8px;font-size:13px;border-bottom:1px solid #e0e0e0;background:#fafafa}
+select{height:34px;border:1px solid #9a9a9a;border-radius:4px;background:#fff;font-size:14px;padding:0 4px;max-width:170px}
+.btn.petitb{height:32px;font-size:13px;padding:0 8px}
+#calqueBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:31;padding:16px}
+#calqueBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px}
+#calqueBoite h3{margin:0 0 8px;font-size:17px}
+#calqueBoite input{height:40px;border:1px solid #9a9a9a;border-radius:4px;padding:0 8px;font-size:16px;width:100%}
+#calqueBoite .lig{display:flex;gap:8px;margin-top:12px}
+#ncCouleurs{display:flex;flex-wrap:wrap;gap:8px}
+#ncCouleurs button{width:44px;height:44px;border-radius:6px;border:3px solid #fff;box-shadow:0 0 0 1px #888}
+#ncCouleurs button.on{border-color:#1a1a1a;box-shadow:0 0 0 2px #1a1a1a}
+#expCalques label{display:flex;align-items:center;gap:8px;height:36px;font-size:15px;border-bottom:1px solid #eee}
+#exportBoite #expCalques input{width:24px;height:24px;flex:none;margin:0}
+#expCalques label{justify-content:flex-start}
+table.xl td.sup{cursor:pointer}
 #exportBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
 #exportBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
 #exportBoite h3{margin:0 0 8px;font-size:17px;color:#c2185b}
@@ -113,6 +129,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn" id="bAucun">Tout masquer</button>
     <button class="btn" id="bFermer">✕</button>
     <input id="recherche" type="search" placeholder="Rechercher un calque…" autocomplete="off">
+    <button class="btn prim" id="bNouveauCalque" style="flex:1 1 100%">＋ Nouveau calque</button>
   </div>
   <div id="tabWrap"><table class="xl"><thead><tr><th>Vis.</th><th>Coul.</th><th>Nom du calque</th><th style="text-align:right">Objets</th></tr></thead><tbody id="tbCalques"></tbody></table></div>
   <div class="pied" id="piedCalques"></div>
@@ -121,14 +138,17 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="outils">
     <span class="seg"><button id="mDist" class="on">Distance</button><button id="mSurf">Surface</button></span>
     <button class="btn" id="bRetour" title="Enlever le dernier point">↶</button>
-    <button class="btn" id="bEffacer">🗑 Effacer</button>
+    <button class="btn" id="bEffacer" title="Effacer la mesure en cours">🗑</button>
+    <button class="btn prim" id="bGarder" disabled>📌 Garder</button>
   </div>
   <div id="resultat"></div>
-  <div id="tabPtsWrap"><table class="xl compact"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z</th><th>Accroché à</th></tr></thead><tbody id="tbPts"></tbody></table></div>
+  <div class="ligneCalque"><span>Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
+  <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z</th><th>Accroché à</th></tr></thead><tbody id="tbPts"></tbody></table>
+    <table class="xl compact" id="tabGardees" style="display:none"><thead><tr><th>Mesure</th><th style="text-align:right">Valeur</th><th>Calque</th><th></th></tr></thead><tbody id="tbGardees"></tbody></table></div>
 </div>
 <div id="ptsPanel">
   <div class="outils">
-    <b style="color:#c2185b;font-size:14px">POINTS_EXPORT</b>
+    <select id="selCalquePts" title="Calque des nouveaux points"></select>
     <span id="ptsNb" style="font-size:13px;color:#555"></span>
     <span style="flex:1"></span>
     <button class="btn" id="bPtsRetour" title="Annuler la dernière action">↶</button>
@@ -137,10 +157,21 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div id="ptsInfo"></div>
   <div id="tabPtsWrap2" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table class="xl compact" id="tabPtsExp"><thead><tr><th style="width:56px">Nom</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right;width:70px">Z</th><th></th></tr></thead><tbody id="tbPtsExp"></tbody></table></div>
 </div>
+<div id="calqueBoite"><div class="boite">
+  <h3 style="color:#1f5fa8">Nouveau calque</h3>
+  <input id="ncNom" placeholder="Nom (ex. BORDURES)" autocomplete="off" autocapitalize="characters">
+  <div id="ncApercu" style="font-size:12px;color:#666;margin:4px 0 8px"></div>
+  <div id="ncCouleurs"></div>
+  <div class="lig"><button class="btn prim" id="bNcCreer">Créer</button><button class="btn" id="bNcAnnuler">Annuler</button></div>
+  <div id="ncErreur" style="color:#a11;font-size:13px;margin-top:6px"></div>
+</div></div>
 <div id="exportBoite"><div class="boite">
   <h3>Exporter pour la TS11</h3>
   <div style="font-size:13px;color:#444;margin-bottom:4px">Nom des fichiers (sans accent ni espace) :</div>
   <input id="expNom" autocomplete="off">
+  <div style="font-size:13px;color:#444;margin:10px 0 4px">Calques à exporter :</div>
+  <div id="expCalques"></div>
+  <div id="expDossierLigne" style="font-size:13px;color:#444;margin-top:10px;display:none">Dossier : <b id="expDossier">—</b> <button class="btn petitb" id="bChangerDossier">📁 Changer</button></div>
   <div class="lig">
     <button class="btn prim" id="bExpFichiers">💾 Enregistrer DXF + TXT</button>
     <button class="btn" id="bExpCopier">📋 Copier le texte</button>
@@ -174,7 +205,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Points TS11 – v1";
+const VERSION = "Calques et export – v1";
 </script>
 <script>
 "use strict";
@@ -550,7 +581,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerMesuresGardees(ctx); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -715,6 +746,7 @@ function majPanneau(){
     else h='<span class="petit">Posez les coins un par un (3 au minimum). La surface se ferme toute seule.</span>';
   }
   $('resultat').innerHTML=h;
+  if(typeof mesuresGardees!=='undefined'){ $('bGarder').disabled=!mesureGardable(); majListeGardees(); }
   const tb=$('tbPts'); const frag=document.createDocumentFragment();
   p.forEach((q,i)=>{ const tr=document.createElement('tr'); const prov = visee && (deplace!==null ? i===deplace : (i===p.length-1 && i>=mesure.pts.length));
     tr.innerHTML=`<td>${i+1}${prov?' …':''}</td><td class="num">${fr(q.x+o.x,3)}</td><td class="num">${fr(q.y+o.y,3)}</td><td class="num">${zOk(q.z)?fr(q.z,3):'—'}</td><td>${NOMS_ACC[q.t]}</td>`;
@@ -737,50 +769,169 @@ function choisirOutil(o){
 }
 function choisirMode(m){ mesure={mode:m,pts:[]}; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); majPanneau(); demanderDessin(false); }
 
-// ================= Points à exporter (calque POINTS_EXPORT, pour la TS11) =================
+// ================= Calques perso (créés dans l'appli) =================
+const CALQUE_PTS='POINTS_EXPORT', CALQUE_MES='MESURES', ROSE='#c2185b';
+const COULEURS_PERSO=[['#e53935',1],['#e65c00',30],['#c9a000',2],['#2e7d32',3],['#00838f',4],['#1f5fa8',5],['#6a1b9a',6],['#c2185b',221],['#6d4c41',34],['#000000',7]];
+const CALQUES_BASE=[{nom:CALQUE_PTS,couleur:'#c2185b',aci:221,base:true},{nom:CALQUE_MES,couleur:'#e65c00',aci:30,base:true}];
+let calquesPerso=[], calqueActifPts=CALQUE_PTS, calqueActifMes=CALQUE_MES;
+async function chargerCalquesPerso(){
+  const r=await Memoire.lire('calquesPerso'); calquesPerso=Array.isArray(r)?r:[];
+  const a=await Memoire.lire('calquesActifs'); if(a){ calqueActifPts=a.pts||CALQUE_PTS; calqueActifMes=a.mes||CALQUE_MES; }
+}
+function sauverCalquesPerso(){ Memoire.ecrire('calquesPerso',calquesPerso); Memoire.ecrire('calquesActifs',{pts:calqueActifPts,mes:calqueActifMes}); }
+const tousCalquesPerso=()=>[...CALQUES_BASE,...calquesPerso];
+function installerCalquesPerso(etat){
+  for(const d of tousCalquesPerso()){
+    let c=scene.calques.get(d.nom);
+    if(!c){ c={nom:d.nom,couleur:d.couleur,visible:true,nb:0}; scene.calques.set(d.nom,c); }
+    c.perso=true; c.base=!!d.base; c.aci=d.aci; c.nbPerso=0;
+    if(etat && etat.nom===scene.nom && etat.calques && (d.nom in etat.calques)) c.visible=!!etat.calques[d.nom];
+  }
+  if(!scene.calques.has(calqueActifPts)) calqueActifPts=CALQUE_PTS;
+  if(!scene.calques.has(calqueActifMes)) calqueActifMes=CALQUE_MES;
+  remplirSelectsCalques();
+}
+const couleurCalque=n=>(scene&&scene.calques.get(n)?.couleur)||ROSE;
+const calqueVisible=n=>{ const c=scene&&scene.calques.get(n); return !c||c.visible; };
+function aciCalque(n){ const d=tousCalquesPerso().find(x=>x.nom===n); return d?d.aci:7; }
+function majComptesPerso(){
+  if(!scene) return;
+  for(const c of scene.calques.values()) if(c.perso) c.nbPerso=0;
+  const plus=n=>{ const c=scene.calques.get(n); if(c) c.nbPerso=(c.nbPerso||0)+1; };
+  for(const p of pointsExp) plus(p.calque||CALQUE_PTS);
+  for(const m of mesuresGardees) plus(m.calque||CALQUE_MES);
+}
+function remplirSelectsCalques(){
+  for(const [id,actif] of [['selCalquePts',calqueActifPts],['selCalqueMes',calqueActifMes]]){
+    const s=$(id); s.replaceChildren();
+    for(const d of tousCalquesPerso()){ const o=document.createElement('option'); o.value=d.nom; o.textContent='■ '+d.nom; o.style.color=d.couleur; if(d.nom===actif) o.selected=true; s.appendChild(o); }
+    s.style.color=couleurCalque(actif); s.style.fontWeight='bold';
+  }
+}
+function nomCalqueNormalise(t){ return String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,'_').replace(/[^A-Z0-9_\-]/g,'').replace(/_+/g,'_').slice(0,31); }
+let couleurChoisie=null, pourOutil=null;
+function ouvrirNouveauCalque(outilCible){
+  pourOutil=outilCible||null;
+  const prises=new Set(tousCalquesPerso().map(d=>d.couleur));
+  couleurChoisie=(COULEURS_PERSO.find(c=>!prises.has(c[0]))||COULEURS_PERSO[0]);
+  $('ncNom').value=''; $('ncErreur').textContent=''; $('ncApercu').textContent='';
+  const z=$('ncCouleurs'); z.replaceChildren();
+  for(const c of COULEURS_PERSO){ const b=document.createElement('button'); b.style.background=c[0]; if(c===couleurChoisie) b.className='on';
+    b.onclick=()=>{ couleurChoisie=c; for(const x of z.children) x.classList.toggle('on',x===b); }; z.appendChild(b); }
+  $('calqueBoite').style.display='flex'; setTimeout(()=>$('ncNom').focus(),50);
+}
+function creerCalque(){
+  const n=nomCalqueNormalise($('ncNom').value);
+  if(!n){ $('ncErreur').textContent='Donnez un nom.'; return; }
+  if([...scene.calques.keys()].some(k=>k.toUpperCase()===n)){ $('ncErreur').textContent='Ce calque existe déjà.'; return; }
+  calquesPerso.push({nom:n,couleur:couleurChoisie[0],aci:couleurChoisie[1]});
+  if(pourOutil==='points' || (!pourOutil && outil==='points')) calqueActifPts=n;
+  if(pourOutil==='mesure' || (!pourOutil && outil==='mesure')) calqueActifMes=n;
+  sauverCalquesPerso(); installerCalquesPerso(null); majComptesPerso(); majVisibles(); remplirCalques();
+  $('calqueBoite').style.display='none'; majTablePoints(); majPanneau(); demanderDessin(false); sauverEtatBientot();
+}
+function supprimerCalquePerso(n){
+  const c=scene.calques.get(n); if(!c||c.base||(c.nbPerso||0)>0) return;
+  calquesPerso=calquesPerso.filter(d=>d.nom!==n);
+  if(!c.nb) scene.calques.delete(n); else { c.perso=false; }
+  if(calqueActifPts===n) calqueActifPts=CALQUE_PTS; if(calqueActifMes===n) calqueActifMes=CALQUE_MES;
+  sauverCalquesPerso(); remplirSelectsCalques(); majVisibles(); remplirCalques(); demanderDessin(false);
+}
+
+// ================= Mesures gardées sur le plan =================
+let mesuresGardees=[], voirGardees=false;
+const cleMesPlan=()=>'mesures:'+(scene?scene.nom:'');
+async function chargerMesuresGardees(){ const r=await Memoire.lire(cleMesPlan()); mesuresGardees=Array.isArray(r)?r:[]; }
+function sauverMesuresGardees(){ Memoire.ecrire(cleMesPlan(), mesuresGardees); }
+function mesureGardable(){ const p=mesure.pts; return mesure.mode==='dist' ? p.length>=2 : p.length>=3; }
+function garderMesure(){
+  if(!mesureGardable()) return;
+  const o=scene.origine, r=calculs(mesure.pts);
+  const m={type:mesure.mode, calque:calqueActifMes, pts:mesure.pts.map(q=>({x:q.x+o.x,y:q.y+o.y,z:Number.isFinite(q.z)?q.z:null})), date:Date.now()};
+  if(m.type==='dist'){ m.valeur=r.dist; if(r.dz!==undefined){ m.dz=r.dz; m.pente=r.pente; } } else { m.valeur=r.aire; m.perim=r.perim; }
+  mesuresGardees.push(m); sauverMesuresGardees(); majComptesPerso();
+  mesure.pts=[]; majPanneau(); remplirCalques(); demanderDessin(false);
+}
+function texteMesure(m){ return m.type==='dist' ? fr(m.valeur,2)+' m'+(m.pente!==undefined?' · '+(m.pente>=0?'+':'')+fr(m.pente,1)+' %':'') : fr(m.valeur,2)+' m²'; }
+function dessinerMesuresGardees(c){
+  if(!scene||!mesuresGardees.length) return;
+  const o=scene.origine;
+  c.save();
+  for(const m of mesuresGardees){
+    const cal=m.calque||CALQUE_MES; if(!calqueVisible(cal)) continue;
+    const col=couleurCalque(cal), E=m.pts.map(q=>versEcran(q.x-o.x,q.y-o.y));
+    c.beginPath(); c.moveTo(E[0][0],E[0][1]); for(let i=1;i<E.length;i++) c.lineTo(E[i][0],E[i][1]);
+    if(m.type==='surf'){ c.closePath(); c.globalAlpha=0.12; c.fillStyle=col; c.fill(); c.globalAlpha=1; }
+    c.strokeStyle=col; c.lineWidth=2; c.stroke();
+    for(const e of E){ c.beginPath(); c.arc(e[0],e[1],3,0,DEUXPI); c.fillStyle=col; c.fill(); }
+    let pos; if(m.type==='dist') pos=[(E[0][0]+E[1][0])/2,(E[0][1]+E[1][1])/2]; else { let gx=0,gy=0; for(const e of E){gx+=e[0];gy+=e[1];} pos=[gx/E.length,gy/E.length]; }
+    if(pos[0]<-100||pos[1]<-50||pos[0]>W+100||pos[1]>H+50) continue;
+    const t=texteMesure(m); c.font='bold 13px Arial'; const w=c.measureText(t).width+10;
+    c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(pos[0]-w/2,pos[1]-21,w,18); c.strokeStyle=col; c.lineWidth=1; c.strokeRect(pos[0]-w/2,pos[1]-21,w,18);
+    c.fillStyle=col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,pos[0],pos[1]-12);
+  }
+  c.restore();
+}
+function majListeGardees(){
+  $('bVoirGardees').textContent = voirGardees ? '✎ Mesure en cours' : '📋 Gardées ('+mesuresGardees.length+')';
+  $('tabMesCour').style.display=voirGardees?'none':''; $('tabGardees').style.display=voirGardees?'':'none';
+  if(!voirGardees) return;
+  const tb=$('tbGardees'), frag=document.createDocumentFragment();
+  mesuresGardees.forEach((m,i)=>{ const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${m.type==='dist'?'Distance':'Surface'}</td><td class="num">${texteMesure(m)}</td><td style="color:${couleurCalque(m.calque||CALQUE_MES)};font-weight:bold;font-size:12px"></td><td class="sup" title="Supprimer">🗑</td>`;
+    tr.children[2].textContent=m.calque||CALQUE_MES;
+    tr.querySelector('.sup').onclick=()=>{ mesuresGardees.splice(i,1); sauverMesuresGardees(); majComptesPerso(); majListeGardees(); remplirCalques(); demanderDessin(false); };
+    frag.appendChild(tr); });
+  tb.replaceChildren(frag);
+  if(!mesuresGardees.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center;height:34px">Aucune mesure gardée</td>'; tb.appendChild(tr); }
+}
+
+// ================= Points à exporter (pour la TS11) =================
 // Coordonnées gardées en valeurs RÉELLES du plan (X, Y), Z saisi à la main (ou vide).
-const CALQUE_PTS='POINTS_EXPORT', ROSE='#c2185b';
 let pointsExp=[], historiquePts=[], ptSel=null;
 const cleptsPlan=()=>'points:'+(scene?scene.nom:'');
-async function chargerPointsExport(){ const r=await Memoire.lire(cleptsPlan()); pointsExp=Array.isArray(r)?r:[]; historiquePts=[]; ptSel=null; majCompteCalque(); majTablePoints(); }
+const calqueDe=p=>p.calque||CALQUE_PTS;
+async function chargerPointsExport(){ const r=await Memoire.lire(cleptsPlan()); pointsExp=Array.isArray(r)?r:[]; historiquePts=[]; ptSel=null; }
 let minuteriePts=null;
 function sauverPoints(){ clearTimeout(minuteriePts); minuteriePts=setTimeout(()=>Memoire.ecrire(cleptsPlan(), pointsExp), 150); }
 function memoriserPourAnnuler(){ historiquePts.push(JSON.stringify(pointsExp)); if(historiquePts.length>60) historiquePts.shift(); }
-function majCompteCalque(){ const c=scene&&scene.calques.get(CALQUE_PTS); if(c) c.nb=pointsExp.length; }
-function calquePtsVisible(){ const c=scene&&scene.calques.get(CALQUE_PTS); return !c||c.visible; }
+function majCompteCalque(){ majComptesPerso(); }
+function calquePtsVisible(){ return calqueVisible(calqueActifPts); }
 function prochainNom(){ let m=0; for(const p of pointsExp){ const n=parseInt(p.nom,10); if(String(n)===String(p.nom).trim() && n>m) m=n; } return String(m+1); }
-function pointExportSousDoigt(sx,sy){ if(!calquePtsVisible()) return null; const o=scene.origine; let k=null, dm=RAYON_PRISE;
-  pointsExp.forEach((q,i)=>{ const [x,y]=versEcran(q.x-o.x,q.y-o.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
+function pointExportSousDoigt(sx,sy){ const o=scene.origine; let k=null, dm=RAYON_PRISE;
+  pointsExp.forEach((q,i)=>{ if(!calqueVisible(calqueDe(q))) return; const [x,y]=versEcran(q.x-o.x,q.y-o.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
 function poserPointExport(v){
   const o=scene.origine; memoriserPourAnnuler();
   if(deplace!==null){ const p=pointsExp[deplace]; p.x=v.x+o.x; p.y=v.y+o.y; ptSel=deplace; }
-  else { pointsExp.push({nom:prochainNom(), x:v.x+o.x, y:v.y+o.y, z:null}); ptSel=pointsExp.length-1; }
+  else { pointsExp.push({nom:prochainNom(), x:v.x+o.x, y:v.y+o.y, z:null, calque:calqueActifPts}); ptSel=pointsExp.length-1; }
   majCompteCalque(); sauverPoints();
 }
 function dessinerPointsExport(c){
-  if(!calquePtsVisible() || !scene) return;
+  if(!scene) return;
   const o=scene.origine, enPts=outil==='points';
-  const liste=pointsExp.map((p,i)=>({x:p.x-o.x,y:p.y-o.y,nom:p.nom,i}));
-  if(enPts && visee){ const v=pointVise(); if(v){ if(deplace!==null) liste[deplace]={...liste[deplace],x:v.x,y:v.y,prov:true}; else liste.push({x:v.x,y:v.y,nom:prochainNom(),prov:true}); } }
+  const liste=pointsExp.map((p,i)=>({x:p.x-o.x,y:p.y-o.y,nom:p.nom,i,cal:calqueDe(p)}));
+  if(enPts && visee){ const v=pointVise(); if(v){ if(deplace!==null) liste[deplace]={...liste[deplace],x:v.x,y:v.y,prov:true}; else liste.push({x:v.x,y:v.y,nom:prochainNom(),prov:true,cal:calqueActifPts}); } }
   c.save(); c.font='bold 13px Arial'; c.textBaseline='bottom'; c.textAlign='left';
   for(const p of liste){
+    if(!calqueVisible(p.cal)) continue;
     const [x,y]=versEcran(p.x,p.y); if(x<-40||y<-40||x>W+40||y>H+40) continue;
-    c.globalAlpha=p.prov?0.7:1; c.strokeStyle=ROSE; c.lineWidth=2;
+    const col=couleurCalque(p.cal);
+    c.globalAlpha=p.prov?0.7:1; c.strokeStyle=col; c.lineWidth=2;
     c.beginPath(); c.arc(x,y,6,0,DEUXPI); c.fillStyle= p.i===ptSel&&enPts ? '#fde4ef':'rgba(255,255,255,0.85)'; c.fill(); c.stroke();
     c.beginPath(); c.moveTo(x-9,y); c.lineTo(x+9,y); c.moveTo(x,y-9); c.lineTo(x,y+9); c.lineWidth=1.5; c.stroke();
     const t=String(p.nom); const w=c.measureText(t).width;
-    c.fillStyle='rgba(255,255,255,0.85)'; c.fillRect(x+7,y-22,w+6,16); c.fillStyle=ROSE; c.fillText(t,x+10,y-7);
+    c.fillStyle='rgba(255,255,255,0.85)'; c.fillRect(x+7,y-22,w+6,16); c.fillStyle=col; c.fillText(t,x+10,y-7);
   }
   c.restore();
 }
 const frN=(v,d)=>Number.isFinite(v)?v.toFixed(d).replace('.',','):'';
 function lireNombre(t){ t=String(t).trim().replace(/\s/g,'').replace(',','.').replace('−','-'); if(t==='') return null; const v=Number(t); return Number.isFinite(v)?v:NaN; }
 function majInfoPoints(){
-  $('ptsNb').textContent=pointsExp.length+' point'+(pointsExp.length>1?'s':'');
+  $('ptsNb').textContent=pointsExp.length+' pt'+(pointsExp.length>1?'s':'');
   let h;
   if(visee){ const v=pointVise(), o=scene.origine;
-    h=(deplace!==null?'Déplacement du point <b>'+pointsExp[deplace].nom+'</b> · ':'Nouveau point <b>'+prochainNom()+'</b> · ')+'X '+frN(v.x+o.x,3)+' · Y '+frN(v.y+o.y,3)+' · '+(v.acc===undefined&&visee.acc?NOMS_ACC[visee.acc.t]:(visee.acc?NOMS_ACC[visee.acc.t]:'point libre')); }
-  else if(!calquePtsVisible()) h='⚠ Le calque POINTS_EXPORT est masqué (☰ Calques).';
+    h=(deplace!==null?'Déplacement du point <b>'+pointsExp[deplace].nom+'</b> · ':'Nouveau point <b>'+prochainNom()+'</b> · ')+'X '+frN(v.x+o.x,3)+' · Y '+frN(v.y+o.y,3)+' · '+(visee.acc?NOMS_ACC[visee.acc.t]:'point libre'); }
+  else if(!calquePtsVisible()) h='⚠ Le calque '+calqueActifPts+' est masqué (☰ Calques).';
   else h='Touchez le plan pour placer un point (loupe + accrochage). Glissez un point pour le corriger. Z à saisir dans le tableau.';
   $('ptsInfo').innerHTML=h;
 }
@@ -791,6 +942,7 @@ function majTablePoints(){
   pointsExp.forEach((p,i)=>{
     const tr=document.createElement('tr'); if(i===ptSel) tr.className='sel';
     tr.innerHTML=`<td><input data-c="nom"></td><td><input class="num" data-c="x" inputmode="decimal"></td><td><input class="num" data-c="y" inputmode="decimal"></td><td><input class="num" data-c="z" inputmode="decimal" placeholder="Z ?"></td><td class="sup" title="Supprimer">🗑</td>`;
+    tr.children[0].style.borderLeft='5px solid '+couleurCalque(calqueDe(p)); tr.children[0].title=calqueDe(p);
     const [iN,iX,iY,iZ]=tr.querySelectorAll('input');
     iN.value=p.nom; iX.value=frN(p.x,3); iY.value=frN(p.y,3); iZ.value=p.z===null||p.z===undefined?'':frN(p.z,3);
     const valider=(inp)=>{
@@ -814,40 +966,88 @@ function annulerPoints(){ const h=historiquePts.pop(); if(!h) return; pointsExp=
 // ---- Export pour la TS11 ----
 function nomExportDefaut(){ const b=(scene?scene.nom:'PLAN').replace(/\.[^.]*$/,''); return (b.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase().slice(0,20)||'PLAN')+'_PTS'; }
 const f3=v=>(Math.round(v*1000)/1000).toFixed(3);
-function texteTS11(){ return pointsExp.map(p=>[p.nom, f3(p.x), f3(p.y), (p.z===null||p.z===undefined)?'':f3(p.z)].join(';')).join('\r\n')+'\r\n'; }
-function dxfPoints(){
-  // DXF R12 (le plus simple et le plus lu) : un POINT par point sur POINTS_EXPORT, son nom en TEXTE sur POINTS_EXPORT_NOMS
+let calquesExport=null;
+const pointsAExporter=()=>pointsExp.filter(p=>!calquesExport || calquesExport.has(calqueDe(p)));
+function texteTS11(pts){ pts=pts||pointsAExporter(); return pts.map(p=>[p.nom, f3(p.x), f3(p.y), (p.z===null||p.z===undefined)?'':f3(p.z)].join(';')).join('\r\n')+'\r\n'; }
+function dxfPoints(pts){
+  // DXF R12 (le plus simple et le plus lu) : un POINT par point sur son calque, son nom en TEXTE sur <calque>_NOMS
+  pts=pts||pointsAExporter();
   const L=[]; const a=(c,v)=>{ L.push(String(c)); L.push(String(v)); };
   const ascii=t=>String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7e]/g,'_');
-  let mx=Infinity,my=Infinity,Mx=-Infinity,My=-Infinity; for(const p of pointsExp){ mx=Math.min(mx,p.x); my=Math.min(my,p.y); Mx=Math.max(Mx,p.x); My=Math.max(My,p.y); }
+  const nomCal=n=>nomCalqueNormalise(n)||'POINTS';
+  let mx=Infinity,my=Infinity,Mx=-Infinity,My=-Infinity; for(const p of pts){ mx=Math.min(mx,p.x); my=Math.min(my,p.y); Mx=Math.max(Mx,p.x); My=Math.max(My,p.y); }
+  const cals=[...new Set(pts.map(calqueDe))];
   a(0,'SECTION'); a(2,'HEADER'); a(9,'$ACADVER'); a(1,'AC1009');
   a(9,'$EXTMIN'); a(10,f3(mx)); a(20,f3(my)); a(30,'0.0'); a(9,'$EXTMAX'); a(10,f3(Mx)); a(20,f3(My)); a(30,'0.0');
   a(9,'$PDMODE'); a(70,3); a(9,'$PDSIZE'); a(40,'0.3'); a(0,'ENDSEC');
   a(0,'SECTION'); a(2,'TABLES');
   a(0,'TABLE'); a(2,'LTYPE'); a(70,1); a(0,'LTYPE'); a(2,'CONTINUOUS'); a(70,0); a(3,'Solid line'); a(72,65); a(73,0); a(40,'0.0'); a(0,'ENDTAB');
-  a(0,'TABLE'); a(2,'LAYER'); a(70,3);
-  for(const [n,col] of [['0',7],[CALQUE_PTS,6],[CALQUE_PTS+'_NOMS',3]]){ a(0,'LAYER'); a(2,n); a(70,0); a(62,col); a(6,'CONTINUOUS'); }
+  const couches=[['0',7]]; for(const n of cals){ couches.push([nomCal(n),aciCalque(n)]); couches.push([nomCal(n)+'_NOMS',aciCalque(n)]); }
+  a(0,'TABLE'); a(2,'LAYER'); a(70,couches.length);
+  for(const [n,col] of couches){ a(0,'LAYER'); a(2,n); a(70,0); a(62,col); a(6,'CONTINUOUS'); }
   a(0,'ENDTAB'); a(0,'ENDSEC');
   a(0,'SECTION'); a(2,'ENTITIES');
-  for(const p of pointsExp){ const z=(p.z===null||p.z===undefined)?0:p.z;
-    a(0,'POINT'); a(8,CALQUE_PTS); a(10,f3(p.x)); a(20,f3(p.y)); a(30,f3(z));
-    a(0,'TEXT'); a(8,CALQUE_PTS+'_NOMS'); a(10,f3(p.x+0.15)); a(20,f3(p.y+0.15)); a(30,f3(z)); a(40,'0.3'); a(1,ascii(p.nom)); }
+  for(const p of pts){ const z=(p.z===null||p.z===undefined)?0:p.z, n=nomCal(calqueDe(p));
+    a(0,'POINT'); a(8,n); a(10,f3(p.x)); a(20,f3(p.y)); a(30,f3(z));
+    a(0,'TEXT'); a(8,n+'_NOMS'); a(10,f3(p.x+0.15)); a(20,f3(p.y+0.15)); a(30,f3(z)); a(40,'0.3'); a(1,ascii(p.nom)); }
   a(0,'ENDSEC'); a(0,'EOF');
   return L.join('\r\n')+'\r\n';
 }
 function telecharger(nom,txt,type){ const u=URL.createObjectURL(new Blob([txt],{type})); const l=document.createElement('a'); l.href=u; l.download=nom; document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000); }
+function majDossierExport(){
+  const peut = APPLI && APPLI.ecrireDansDossier;
+  $('expDossierLigne').style.display = peut ? '' : 'none';
+  if(peut){ const d=APPLI.nomDossier(); $('expDossier').textContent = d || 'à choisir au 1er enregistrement'; }
+}
 function ouvrirExport(){
   if(!pointsExp.length){ $('ptsInfo').innerHTML='⚠ Aucun point à exporter : touchez le plan pour en placer.'; return; }
-  $('expNom').value=nomExportDefaut(); $('exportResultat').innerHTML=''; $('exportBoite').style.display='flex';
+  $('expNom').value=nomExportDefaut(); $('exportResultat').innerHTML='';
+  const cals=[...new Set(pointsExp.map(calqueDe))];
+  if(!calquesExport) calquesExport=new Set(cals);
+  const z=$('expCalques'); z.replaceChildren();
+  for(const n of cals){ const nb=pointsExp.filter(p=>calqueDe(p)===n).length;
+    const l=document.createElement('label'); l.innerHTML=`<input type="checkbox"><span style="color:${couleurCalque(n)};font-weight:bold"></span><span style="color:#666">(${nb} pt${nb>1?'s':''})</span>`;
+    l.children[1].textContent=n; const cb=l.children[0]; cb.checked=calquesExport.has(n);
+    cb.onchange=()=>{ if(cb.checked) calquesExport.add(n); else calquesExport.delete(n); }; z.appendChild(l); }
+  majDossierExport();
+  $('exportBoite').style.display='flex';
 }
-function resumeExport(){
-  const sansZ=pointsExp.filter(p=>p.z===null||p.z===undefined).length;
-  const noms=pointsExp.map(p=>p.nom), doublons=[...new Set(noms.filter((n,i)=>noms.indexOf(n)!==i))];
-  let r=pointsExp.length+' point(s).';
+function resumeExport(pts){
+  const sansZ=pts.filter(p=>p.z===null||p.z===undefined).length;
+  const noms=pts.map(p=>p.nom), doublons=[...new Set(noms.filter((n,i)=>noms.indexOf(n)!==i))];
+  let r=pts.length+' point(s).';
   if(sansZ) r+=' <b style="color:#a11">⚠ '+sansZ+' sans Z</b> (Z vide dans le TXT, 0 dans le DXF).';
   if(doublons.length) r+=' <b style="color:#a11">⚠ Noms en double : '+doublons.join(', ')+'</b>';
   return r;
 }
+let exportEnAttente=null;
+function enregistrerExport(){
+  const pts=pointsAExporter();
+  if(!pts.length){ $('exportResultat').innerHTML='⚠ Aucun calque coché.'; return; }
+  const nom=($('expNom').value.trim()||nomExportDefaut()).replace(/[^A-Za-z0-9_-]+/g,'_');
+  const dxf=dxfPoints(pts), txt=texteTS11(pts);
+  if(APPLI && APPLI.ecrireDansDossier){
+    const r1=APPLI.ecrireDansDossier(nom+'.dxf',dxf);
+    if(r1==='absent'){ exportEnAttente=true; $('exportResultat').innerHTML='📁 Choisissez le dossier (clé USB ou dossier du téléphone / de la tablette)…'; APPLI.choisirDossier(); return; }
+    const r2 = r1==='ok' ? APPLI.ecrireDansDossier(nom+'.txt',txt) : r1;
+    $('exportResultat').innerHTML = (r1==='ok'&&r2==='ok')
+      ? `✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> enregistrés dans <b>${APPLI.nomDossier()}</b>. ${resumeExport(pts)}<br>Sur la clé USB, ils doivent être dans le dossier <b>DATA</b>.`
+      : '⚠ Échec de l\'enregistrement : '+(r1!=='ok'?r1:r2)+'. Essayez « 📁 Changer » de dossier.';
+    return;
+  }
+  if(APPLI && APPLI.enregistrer){ const a=APPLI.enregistrer(nom+'.dxf',dxf,'application/dxf'), b=APPLI.enregistrer(nom+'.txt',txt,'text/plain');
+    $('exportResultat').innerHTML=(a&&b)?`✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> enregistrés dans <b>Téléchargements</b>. ${resumeExport(pts)}`:'⚠ Échec de l\'enregistrement.'; return; }
+  telecharger(nom+'.dxf',dxf,'application/dxf'); setTimeout(()=>telecharger(nom+'.txt',txt,'text/plain'),400);
+  $('exportResultat').innerHTML=`✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> téléchargés. ${resumeExport(pts)}<br>Sur la clé USB, mettez-les dans le dossier <b>DATA</b>.`;
+}
+// Appelé par l'appli Android après le choix du dossier
+window.dossierChoisi=function(nomD){
+  majDossierExport();
+  if(!nomD){ $('exportResultat').innerHTML='Aucun dossier choisi.'; exportEnAttente=null; return; }
+  if(exportEnAttente){ exportEnAttente=null; enregistrerExport(); }
+  else $('exportResultat').innerHTML='📁 Dossier choisi : <b>'+nomD+'</b>';
+};
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -933,12 +1133,11 @@ async function ouvrirOctets(nom, octets, etat){
     mesure={mode:mesure.mode,pts:[]}; visee=null;
     // calques et vue mémorisés
     if(etat && etat.nom===nom && etat.calques) for(const c of scene.calques.values()) if(c.nom in etat.calques) c.visible=!!etat.calques[c.nom];
-    if(!scene.calques.has(CALQUE_PTS)) scene.calques.set(CALQUE_PTS,{nom:CALQUE_PTS,couleur:'#c2185b',visible:true,nb:0,perso:true});
-    if(etat && etat.nom===nom && etat.calques && (CALQUE_PTS in etat.calques)) scene.calques.get(CALQUE_PTS).visible=!!etat.calques[CALQUE_PTS];
+    await chargerCalquesPerso(); installerCalquesPerso(etat);
     majVisibles();
     $('accueil').style.display='none';
     for(const id of ['bAjuster','bCalques','bMesure','bPoints']) $(id).disabled=false;
-    await chargerPointsExport();
+    await chargerPointsExport(); await chargerMesuresGardees(); majComptesPerso();
     redim();
     if(etat && etat.nom===nom && etat.s>0){ const o=scene.origine; vue.s=etat.s; vue.tx=W/2-(etat.cx-o.x)*vue.s; vue.ty=H/2+(etat.cy-o.y)*vue.s; demanderDessin(); }
     else cadrer(scene.zone, 0.96);
@@ -1012,8 +1211,10 @@ function remplirCalques(){
   const frag=document.createDocumentFragment();
   for(const c of liste){
     const tr=document.createElement('tr'); if(!c.visible) tr.className='masque';
-    tr.innerHTML=`<td class="c"><span class="coche"></span></td><td class="c"><span class="pastille" style="background:${c.couleur}"></span></td><td class="nom"></td><td class="n">${c.nb}</td>`;
-    tr.children[2].textContent=c.nom;
+    const nbTot=(c.nb||0)+(c.nbPerso||0), suppr=c.perso&&!c.base&&!c.nbPerso;
+    tr.innerHTML=`<td class="c"><span class="coche"></span></td><td class="c"><span class="pastille" style="background:${c.couleur}"></span></td><td class="nom"></td><td class="n">${suppr?'<span class="supCalque" title="Supprimer ce calque vide" style="font-size:17px">🗑</span>':nbTot}</td>`;
+    tr.children[2].textContent=c.nom; if(c.perso){ const m=document.createElement('span'); m.textContent=' ✎ perso'; m.style.cssText='font-size:11px;color:#1f5fa8'; tr.children[2].appendChild(m); }
+    const sc=tr.querySelector('.supCalque'); if(sc) sc.onclick=ev=>{ ev.stopPropagation(); supprimerCalquePerso(c.nom); };
     tr.onclick=()=>{ c.visible=!c.visible; tr.classList.toggle('masque',!c.visible);
       const v=utilises.filter(x=>x.visible).length; $('titreCalques').textContent=`Calques (${v}/${utilises.length} affichés)`; majVisibles(); demanderDessin(); sauverEtatBientot(); };
     frag.appendChild(tr);
@@ -1068,22 +1269,22 @@ function brancherPoints(){
 $('bExporter').onclick=ouvrirExport;
 $('bPtsRetour').onclick=annulerPoints;
 $('bExpFermer').onclick=()=>{ $('exportBoite').style.display='none'; };
-$('bExpFichiers').onclick=()=>{
-  const nom=($('expNom').value.trim()||nomExportDefaut()).replace(/[^A-Za-z0-9_-]+/g,'_');
-  const dxf=dxfPoints(), txt=texteTS11();
-  let ou;
-  if(APPLI && APPLI.enregistrer){ const a=APPLI.enregistrer(nom+'.dxf',dxf,'application/dxf'), b=APPLI.enregistrer(nom+'.txt',txt,'text/plain');
-    ou = (a&&b) ? 'dans <b>Téléchargements</b>' : null; }
-  else { telecharger(nom+'.dxf',dxf,'application/dxf'); setTimeout(()=>telecharger(nom+'.txt',txt,'text/plain'),400); ou='dans vos <b>Téléchargements</b>'; }
-  $('exportResultat').innerHTML = ou
-    ? `✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> enregistrés ${ou}. ${resumeExport()}<br>Sur la clé USB, mettez-les dans le dossier <b>DATA</b>, puis importez-les dans la TS11.`
-    : '⚠ Échec de l\'enregistrement. Essayez « Copier le texte ».';
-};
+$('bExpFichiers').onclick=enregistrerExport;
+$('bChangerDossier').onclick=()=>{ if(APPLI&&APPLI.choisirDossier){ exportEnAttente=null; APPLI.choisirDossier(); } };
 $('bExpCopier').onclick=async()=>{
-  const t=texteTS11(); let ok=false;
+  const pts=pointsAExporter(), t=texteTS11(pts); let ok=false;
   try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); }
-  $('exportResultat').innerHTML= ok ? '✓ Texte « Nom;X;Y;Z » copié. '+resumeExport() : '⚠ Copie impossible.';
+  $('exportResultat').innerHTML= ok ? '✓ Texte « Nom;X;Y;Z » copié. '+resumeExport(pts) : '⚠ Copie impossible.';
 };
+$('bGarder').onclick=garderMesure;
+$('bVoirGardees').onclick=()=>{ voirGardees=!voirGardees; majListeGardees(); };
+$('selCalquePts').onchange=e=>{ calqueActifPts=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); majInfoPoints(); };
+$('selCalqueMes').onchange=e=>{ calqueActifMes=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); };
+$('bNouveauCalque').onclick=()=>ouvrirNouveauCalque(null);
+$('ncNom').oninput=()=>{ const n=nomCalqueNormalise($('ncNom').value); $('ncApercu').textContent= n ? 'Nom dans le fichier : '+n : ''; $('ncErreur').textContent=''; };
+$('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque(); } };
+$('bNcCreer').onclick=creerCalque;
+$('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
 brancherPoints();
 redim();
