@@ -16,3 +16,8 @@
 - `miroir-android/` : appli Android **Miroir** pour la tablette (page Miroir + relais Wi-Fi vers le téléphone).
 - `.github/workflows/miroir.yml` : fabrique et signe `Miroir.apk`, publié dans **Releases** (tag `miroir`, toujours la dernière version).
 - Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk
+
+## Plans DWG (Lecteur DWG chantier)
+- `dwg/` : appli Android **Plans DWG** pour ouvrir les plans DWG/DXF sur le téléphone et mesurer (voir `dwg/LISEZMOI.md`).
+- `.github/workflows/dwg.yml` : fabrique et signe `PlansDWG.apk`, publié dans **Releases** (tag `plans-dwg`, toujours la dernière version).
+- Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/plans-dwg/PlansDWG.apk

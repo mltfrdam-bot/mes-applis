@@ -1,0 +1,51 @@
+# Fabrique l'appli « Plans DWG » (Lecteur DWG chantier) et la met en téléchargement dans « Releases ».
+# Se lance toute seule à chaque modification du dossier dwg/, ou à la main (onglet Actions).
+name: Fabrication APK Plans DWG
+
+on:
+  push:
+    branches: [main]
+    paths: ["dwg/**", ".github/workflows/dwg.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dwg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Copier la page dans l'APK
+        run: |
+          mkdir -p dwg/android/app/src/main/assets/www
+          cp dwg/www/index.html dwg/android/app/src/main/assets/www/index.html
+      - name: Fabriquer et signer
+        working-directory: dwg/android
+        env:
+          CLE_FICHIER: ${{ github.workspace }}/signature/mes-applis.keystore
+          CLE_MOT_DE_PASSE: ${{ secrets.CLE_MOT_DE_PASSE }}
+        run: |
+          if [ -z "$CLE_MOT_DE_PASSE" ]; then
+            gradle --no-daemon assembleDebug -PnumVersion=${{ github.run_number }}
+            echo "::error::Fabrication d'essai réussie, mais le secret CLE_MOT_DE_PASSE manque : APK non signé, non publié."; exit 1
+          fi
+          gradle --no-daemon assembleRelease -PnumVersion=${{ github.run_number }}
+          cp app/build/outputs/apk/release/app-release.apk ../../PlansDWG.apk
+          cp ../www/index.html ../../Lecteur_DWG_chantier.html
+      - name: Mettre en téléchargement
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: plans-dwg
+          name: "Plans DWG — dernière version"
+          body: |
+            **PlansDWG.apk** : à ouvrir sur le téléphone pour installer ou mettre à jour l'appli (tes plans et réglages sont gardés). Version de fabrication n° ${{ github.run_number }}.
+            **Lecteur_DWG_chantier.html** : la même page seule, pour « ⋮ → Mettre à jour l'appli » sans réinstaller.
+          files: |
+            PlansDWG.apk
+            Lecteur_DWG_chantier.html
+          make_latest: false
