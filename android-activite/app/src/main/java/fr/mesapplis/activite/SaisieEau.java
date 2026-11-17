@@ -21,10 +21,11 @@ public class SaisieEau extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setTitle("");
+        setShowWhenLocked(true); // utilisable depuis l'écran de verrouillage
         float d = getResources().getDisplayMetrics().density;
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL);
-        l.setPadding((int) (18 * d), (int) (14 * d), (int) (18 * d), (int) (14 * d));
+        l.setPadding((int) (14 * d), (int) (14 * d), (int) (14 * d), (int) (14 * d));
         l.setBackgroundColor(Color.WHITE);
 
         TextView t = new TextView(this);
@@ -39,6 +40,7 @@ public class SaisieEau extends Activity {
 
         GridLayout g = new GridLayout(this);
         g.setColumnCount(4);
+        g.setUseDefaultMargins(false);
         int[] choix = { 50, 100, 150, 200, 250, 330, 500, 750 };
         for (int q : choix) g.addView(bouton(q / 10 + " cl", d, v -> { ml = q; maj(); }));
         l.addView(g);
@@ -55,10 +57,15 @@ public class SaisieEau extends Activity {
         Button ok = bouton("✔ Noter", d, v -> { RappelEau.boire(this, ml, true); finish(); });
         ok.setTextColor(Color.WHITE);
         ((GradientDrawable) ok.getBackground()).setColor(0xFFB5451B);
+        for (Button x : new Button[] { annuler, ok }) {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams((int) (120 * d), (int) (52 * d));
+            p.setMargins((int) (4 * d), (int) (8 * d), (int) (4 * d), 0);
+            x.setLayoutParams(p);
+        }
         bas.addView(annuler); bas.addView(ok);
         l.addView(bas);
 
-        setContentView(l, new ViewGroup.LayoutParams((int) (330 * d), ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(l, new ViewGroup.LayoutParams((int) (372 * d), ViewGroup.LayoutParams.WRAP_CONTENT));
         maj();
     }
 
@@ -71,7 +78,7 @@ public class SaisieEau extends Activity {
         fond.setColor(0xFFE3F0FB); fond.setCornerRadius(12 * d); fond.setStroke((int) d, 0xFF1F6FB2);
         b.setBackground(fond);
         GridLayout.LayoutParams p = new GridLayout.LayoutParams();
-        p.width = (int) (70 * d); p.height = (int) (50 * d); p.setMargins((int) (3 * d), (int) (3 * d), (int) (3 * d), (int) (3 * d));
+        p.width = (int) (80 * d); p.height = (int) (50 * d); p.setMargins((int) (3 * d), (int) (3 * d), (int) (3 * d), (int) (3 * d));
         b.setLayoutParams(p);
         b.setOnClickListener(clic);
         return b;

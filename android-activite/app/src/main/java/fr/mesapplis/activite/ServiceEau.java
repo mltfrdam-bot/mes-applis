@@ -18,7 +18,7 @@ import org.json.JSONObject;
  * Android garde ainsi l'appli active, elle se rouvre sans recharger.
  */
 public class ServiceEau extends Service {
-    static final String CANAL = "eau-permanente";
+    static final String CANAL = "eau-permanente-2"; // nouveau canal : visible sur l'écran de verrouillage
     static final int ID = 2101;
 
     static boolean voulu(Context c) { return RappelEau.prefs(c).getBoolean("permanente", false); }
@@ -42,7 +42,11 @@ public class ServiceEau extends Service {
     static Notification fabriquer(Context c) {
         NotificationManager nm = (NotificationManager) c.getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) {
-            NotificationChannel canal = new NotificationChannel(CANAL, "Eau du jour (permanente)", NotificationManager.IMPORTANCE_LOW);
+            try { nm.deleteNotificationChannel("eau-permanente"); } catch (Exception e) { }
+            NotificationChannel canal = new NotificationChannel(CANAL, "Eau du jour (permanente)", NotificationManager.IMPORTANCE_DEFAULT);
+            canal.setSound(null, null);
+            canal.enableVibration(false);
+            canal.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             canal.setDescription("Total d'eau du jour et boutons pour noter ce que tu bois.");
             canal.setShowBadge(false);
             nm.createNotificationChannel(canal);
@@ -56,6 +60,7 @@ public class ServiceEau extends Service {
                 .setContentText("Touche ici pour une autre quantité")
                 .setContentIntent(autre)
                 .setOngoing(true)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + RappelEau.cl(q1), RappelEau.boissonDiscrete(c, q1, 91)).build())

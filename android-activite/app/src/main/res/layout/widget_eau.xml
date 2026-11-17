@@ -8,7 +8,7 @@
     android:padding="6dp"
     android:background="@drawable/widget_fond">
     <TextView android:id="@+id/weTotal" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
-        android:gravity="center_vertical" android:paddingStart="6dp" android:textColor="#1b1f23" android:textSize="15sp" android:textStyle="bold" android:maxLines="2" />
+        android:gravity="center_vertical" android:paddingStart="6dp" android:textColor="#1b1f23" android:textSize="14sp" android:textStyle="bold" android:maxLines="2" android:minWidth="120dp" />
     <TextView android:id="@+id/weB1" style="@style/BoutonWidget" />
     <TextView android:id="@+id/weB2" style="@style/BoutonWidget" />
     <TextView android:id="@+id/weB3" style="@style/BoutonWidget" />

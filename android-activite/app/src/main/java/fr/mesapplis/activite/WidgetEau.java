@@ -19,7 +19,7 @@ public class WidgetEau extends AppWidgetProvider {
         JSONObject r = RappelEau.reglages(c);
         int q1 = r.optInt("q1", 100), q2 = r.optInt("q2", 150), q3 = r.optInt("q3", 200);
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_eau);
-        v.setTextViewText(R.id.weTotal, "💧 " + RappelEau.resume(c));
+        v.setTextViewText(R.id.weTotal, "💧 " + RappelEau.resume(c).replace(" · ", "\n"));
         v.setTextViewText(R.id.weB1, "+" + RappelEau.cl(q1).replace(" cl", ""));
         v.setTextViewText(R.id.weB2, "+" + RappelEau.cl(q2).replace(" cl", ""));
         v.setTextViewText(R.id.weB3, "+" + RappelEau.cl(q3).replace(" cl", ""));
