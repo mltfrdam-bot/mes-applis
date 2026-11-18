@@ -40,17 +40,6 @@ body.outil-points #ptsPanel{display:flex}
 #tabPtsExp td.sup{width:28px;text-align:center;font-size:16px;cursor:pointer}
 #mesure,#ptsPanel{height:262px}
 body.enOutil #zone{bottom:290px}
-body.outil-calage #zone{bottom:250px}
-#calagePanel{position:fixed;left:0;right:0;bottom:0;height:250px;background:#fff;border-top:3px solid #6a1b9a;z-index:6;display:none;flex-direction:column;overflow:auto}
-#calagePanel .outils{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f6f0f9;border-bottom:1px solid #ddd}
-#tabCalage td{height:36px}
-#tabCalage tr.sel td{background:#efe2f5}
-#calagePanel.modeDist #tabCalage th:nth-child(n+3), #calagePanel.modeDist #tabCalage td:nth-child(n+3){display:none}
-#calagePanel:not(.modeDist) #cgDistZone{display:none}
-body.outil-calage #zone{bottom:290px}
-#calagePanel{height:290px!important}
-#tabCalage input{width:100%;min-width:92px;height:32px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:13px;padding:0 4px}
-#tabCalage td:nth-child(2){font-family:Consolas,'Courier New',monospace;font-size:12px}
 .ligneCalque{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:3px 8px;font-size:13px;border-bottom:1px solid #e0e0e0;background:#fafafa}
 #lblCalqueMes{white-space:nowrap} #selCalqueMes{max-width:150px}
 select{height:34px;border:1px solid #9a9a9a;border-radius:4px;background:#fff;font-size:14px;padding:0 4px;max-width:170px}
@@ -214,16 +203,6 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </head>
 <body>
 <div id="onglets"></div>
-<div id="calagePanel">
-  <div class="outils"><b style="flex:1;font-size:15px">📐 Caler le plan sur 2 points</b><button class="btn prim" id="cgAppliquer" disabled>✓ Appliquer</button><button class="btn" id="cgFermer">✕</button></div>
-  <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;flex-wrap:wrap;font-size:14px"><span class="seg"><button id="cgModeDist" class="on">📏 Par une distance</button><button id="cgModeXY">📍 Par X et Y</button></span><span id="cgDistZone">Vraie distance <input id="cgDist" inputmode="decimal" placeholder="m" style="width:84px;height:32px;border:1px solid #6a1b9a;border-radius:4px;background:#fffbe6;text-align:right;font-size:14px;padding:0 4px"> m</span></div>
-  <table class="xl compact" id="tabCalage"><thead><tr><th>Pt</th><th>Sur le plan (touché)</th><th style="text-align:right">Vrai X</th><th style="text-align:right">Vrai Y</th></tr></thead><tbody>
-    <tr id="cgL1"><td>1</td><td id="cg1P"></td><td><input id="cg1X" inputmode="decimal" placeholder="X"></td><td><input id="cg1Y" inputmode="decimal" placeholder="Y"></td></tr>
-    <tr id="cgL2"><td>2</td><td id="cg2P"></td><td><input id="cg2X" inputmode="decimal" placeholder="X"></td><td><input id="cg2Y" inputmode="decimal" placeholder="Y"></td></tr>
-  </tbody></table>
-  <div id="cgRes" style="padding:6px 8px;font-size:13.5px;line-height:1.4"></div>
-  <div style="padding:0 8px 6px;font-size:12px;color:#666">Touchez une ligne du tableau pour reprendre ce point. Le fichier d'origine n'est jamais modifié. <button class="btn petitb" id="cgRetirer" style="display:none">↩ Retirer le calage actuel</button></div>
-</div>
 <div id="barre">
   <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
@@ -359,8 +338,6 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="boutons">
     <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
     <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
-    <button class="btn" id="bMenuCaler">📐 Caler le plan (PDF converti) sur 2 points</button>
-    <button class="btn" id="bMenuRapport">📋 Copier le rapport du plan (pour Claude)</button>
     <button class="btn" id="bMenuClasseur">📚 Enregistrer le classeur (tous les plans)</button>
     <button class="btn" id="bMenuOuvrirSauv">📂 Ouvrir une sauvegarde (fusion)</button>
     <button class="btn" id="bMaj">⬆ Mettre à jour l'appli</button>
@@ -391,22 +368,21 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Mémoire – v2";
+const VERSION = "Classeur – v1 (retour avant FastView)";
 </script>
 <script>
 "use strict";
 // ================= Chargement du lecteur DWG (intégré, sans internet) =================
 let lecteurPromesse = null;
-let wasmOctets=null;
 function chargerLecteur(){
   if(lecteurPromesse) return lecteurPromesse;
   lecteurPromesse = (async()=>{
-    if(!wasmOctets){ const bin = atob(WASM_GZ_B64);
+    const bin = atob(WASM_GZ_B64);
     const gz = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
     const flux = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
-    wasmOctets = new Uint8Array(await new Response(flux).arrayBuffer()); }
-    return await window.DwgLib.create(wasmOctets.slice());
+    const wasm = new Uint8Array(await new Response(flux).arrayBuffer());
+    return await window.DwgLib.create(wasm);
   })();
   return lecteurPromesse;
 }
@@ -510,19 +486,7 @@ function nettoieMtext(s){
 const ctxMesure = document.createElement('canvas').getContext('2d');
 ctxMesure.font = '100px Arial, Helvetica, sans-serif';
 
-function grillesAccrochage(pts,segs,taille,gi0,gj0,GW,GH){
-  const cl=(v,n)=>v<0?0:(v>=n?n-1:v), cle=(i,j)=>cl(i-gi0,GW)*GH+cl(j-gj0,GH), NC=GW*GH;
-  function grille(parcourir){ const cpt=new Uint32Array(NC+1); parcourir((k,c)=>{ cpt[c+1]++; }); for(let c=0;c<NC;c++) cpt[c+1]+=cpt[c];
-    const pos=cpt.slice(0,NC), data=new Int32Array(cpt[NC]); parcourir((k,c)=>{ data[pos[c]++]=k; });
-    return {get:c=>{ if(c<0||c>=NC) return null; const a=cpt[c], b=cpt[c+1]; return b>a?data.subarray(a,b):null; }}; }
-  const gP=grille(f=>{ for(let k=0;k<pts.x.length;k++) f(k,cle(Math.floor(pts.x[k]/taille),Math.floor(pts.y[k]/taille))); });
-  const gS=grille(f=>{ for(let k=0;k<segs.x1.length;k++){
-    const i0=Math.floor(Math.min(segs.x1[k],segs.x2[k])/taille), i1=Math.floor(Math.max(segs.x1[k],segs.x2[k])/taille);
-    const j0=Math.floor(Math.min(segs.y1[k],segs.y2[k])/taille), j1=Math.floor(Math.max(segs.y1[k],segs.y2[k])/taille);
-    if((i1-i0+1)*(j1-j0+1)>6000) continue;
-    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++) f(k,cle(i,j)); } });
-  return {cle,gP,gS}; }
-function construireScene(db, calage){
+function construireScene(db){
   const t0=performance.now();
   const calques = new Map();
   for(const l of (db.tables.LAYER?.entries||[])){
@@ -538,7 +502,6 @@ function construireScene(db, calage){
   let racine = db.entities.filter(e=>e.type!=='ATTRIB' && (hModele===null || e.ownerBlockRecordSoftId===hModele));
   if(racine.length===0 && modele && modele.entities) racine = modele.entities;
 
-  const stats={vus:{}, ignores:{}, total:db.entities.length, racine:racine.length, blocs:blocs.size};
   const lots = new Map();   // clé → {haut, eff, couleur, traits:[], remplis:[], alpha}
   const textes = [];
   const tousX=[], tousY=[];
@@ -570,8 +533,7 @@ function construireScene(db, calage){
   function elemsDe(e,Me){
     const miroir=Me[0]<0; const P=(x,y)=>[Me[0]*x+Me[2]*y+Me[4], Me[1]*x+Me[3]*y+Me[5]];
     const L=(a,b,za,zb)=>{ const A=P(a.x,a.y),B=P(b.x,b.y); return {t:'L',x1:A[0],y1:A[1],z1:za,x2:B[0],y2:B[1],z2:zb}; };
-    const detM=Me[0]*Me[3]-Me[1]*Me[2], kM=Math.sqrt(Math.abs(detM));
-    const Arc=(cx,cy,r,a0,sw,za,zb)=>{ const C=P(cx,cy), S=P(cx+r*Math.cos(a0),cy+r*Math.sin(a0)); return {t:'A',cx:C[0],cy:C[1],r:r*kM,a0:Math.atan2(S[1]-C[1],S[0]-C[0]),sw:detM<0?-sw:sw,z1:za,z2:zb}; };
+    const Arc=(cx,cy,r,a0,sw,za,zb)=>{ const C=P(cx,cy); return miroir?{t:'A',cx:C[0],cy:C[1],r,a0:Math.PI-a0,sw:-sw,z1:za,z2:zb}:{t:'A',cx:C[0],cy:C[1],r,a0,sw,z1:za,z2:zb}; };
     const bulge=(a,b,bg,za,zb)=>{ if(!bg||Math.abs(bg)<1e-9) return L(a,b,za,zb);
       const th=4*Math.atan(bg), dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy); if(d<1e-12) return null;
       const h=(d/2)/Math.tan(th/2), cx=(a.x+b.x)/2-dy/d*h, cy=(a.y+b.y)/2+dx/d*h;
@@ -646,7 +608,6 @@ function construireScene(db, calage){
     const ex=e.extrusionDirection; if(ex && ex.z<-0.5) Me=mul(M,ech(-1,1));
     objCourant=-1;
     if(prof===0 && /^(LINE|ARC|LWPOLYLINE|POLYLINE2D|POLYLINE3D|SPLINE)$/.test(e.type)){ const els=elemsDe(e,Me); if(els.length){ objCourant=OBJETS.length; OBJETS.push({type:e.type,calque:e.layer||'0',els}); } }
-    stats.vus[e.type]=(stats.vus[e.type]||0)+1;
     switch(e.type){
       case 'LINE': { const a=e.startPoint,b=e.endPoint; ajTrait(L(),Me,[a.x,a.y,b.x,b.y]);
         A(L(),Me,a.x,a.y,zz(a.z),1); A(L(),Me,b.x,b.y,zz(b.z),1); A(L(),Me,(a.x+b.x)/2,(a.y+b.y)/2,(zz(a.z)+zz(b.z))/2,2); break; }
@@ -711,11 +672,11 @@ function construireScene(db, calage){
         const b=blocs.get(e.name);
         if(b && b.entities) for(const se of b.entities) traiter(se, M, haut, eff, coul, prof+1, 0, true);
         break; }
-      default: stats.ignores[e.type]=(stats.ignores[e.type]||0)+1; break;
+      default: break;
     }
   }
 
-  const M0=calage||[1,0,0,1,0,0];
+  const M0=[1,0,0,1,0,0];
   for(const e of racine){
     const c=calque(e.layer||'0'); c.nb++;
     traiter(e, M0, e.layer||'0', e.layer||'0', null, 0, 0, false);
@@ -728,19 +689,19 @@ function construireScene(db, calage){
   const listeLots=[], FONDS=[];
   const SG={x1:[],y1:[],x2:[],y2:[],l:[],o:[]};
   for(const L of lots.values()){
-    // Les tracés sont coupés en morceaux : un seul tracé géant n'est pas dessiné par certains téléphones
-    const morceaux=[]; let pt=new Path2D(), nSeg=0; morceaux.push(pt);
+    const pt=new Path2D();
     let nb=0, kt=0;
-    for(const p of L.traits){ if(nSeg>12000){ pt=new Path2D(); morceaux.push(pt); nSeg=0; } nSeg+=p.length/2; pt.moveTo(p[0]-ox,p[1]-oy); for(let i=2;i<p.length;i+=2){ pt.lineTo(p[i]-ox,p[i+1]-oy);
+    for(const p of L.traits){ pt.moveTo(p[0]-ox,p[1]-oy); for(let i=2;i<p.length;i+=2){ pt.lineTo(p[i]-ox,p[i+1]-oy);
         SG.x1.push(p[i-2]-ox); SG.y1.push(p[i-1]-oy); SG.x2.push(p[i]-ox); SG.y2.push(p[i+1]-oy); SG.l.push(L.idx); SG.o.push(L.objs[kt]); } nb++; kt++; }
     const remplis=[];
     const parAlpha=new Map();
-    for(const r of L.remplis){ let E=parAlpha.get(r.alpha); if(!E||E.n>12000){ E={P:new Path2D(),n:0}; parAlpha.set(r.alpha,E); remplis.push({alpha:r.alpha,P:E.P}); } const P=E.P; for(const an of r.a){ E.n+=an.length/2; P.moveTo(an[0]-ox,an[1]-oy); for(let i=2;i<an.length;i+=2) P.lineTo(an[i]-ox,an[i+1]-oy); P.closePath(); }
+    for(const r of L.remplis){ let P=parAlpha.get(r.alpha); if(!P){P=new Path2D(); parAlpha.set(r.alpha,P);} for(const an of r.a){ P.moveTo(an[0]-ox,an[1]-oy); for(let i=2;i<an.length;i+=2) P.lineTo(an[i]-ox,an[i+1]-oy); P.closePath(); }
       const loc=r.a.map(an=>{ const q=new Float64Array(an.length); for(let i=0;i<an.length;i+=2){ q[i]=an[i]-ox; q[i+1]=an[i+1]-oy; } return q; });
       let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity, aire=0; for(const q of loc) for(let i=0;i<q.length;i+=2){ a=Math.min(a,q[i]); b=Math.min(b,q[i+1]); c=Math.max(c,q[i]); d=Math.max(d,q[i+1]); }
       const q0=loc[0]; for(let i=0;i<q0.length;i+=2){ const j=(i+2)%q0.length; aire+=q0[i]*q0[j+1]-q0[j]*q0[i+1]; }
       FONDS.push({l:L.idx, an:loc, b:[a,b,c,d], aire:Math.abs(aire)/2}); }
-    listeLots.push({haut:L.haut, eff:L.eff, couleur:L.couleur, traits:nb?morceaux:null, remplis});
+    for(const [alpha,P] of parAlpha) remplis.push({alpha,P});
+    listeLots.push({haut:L.haut, eff:L.eff, couleur:L.couleur, traits:nb?pt:null, remplis});
   }
   for(const t of textes){ t.x-=ox; t.y-=oy; }
   const cotes=[];
@@ -751,12 +712,17 @@ function construireScene(db, calage){
   const taille=Math.max(empL.maxX-empL.minX, empL.maxY-empL.minY, 1)/300;
   const pts={x:Float64Array.from(SN.x,v=>v-ox), y:Float64Array.from(SN.y,v=>v-oy), z:Float64Array.from(SN.z), t:Uint8Array.from(SN.t), l:Int32Array.from(SN.l)};
   const segs={x1:Float64Array.from(SG.x1), y1:Float64Array.from(SG.y1), x2:Float64Array.from(SG.x2), y2:Float64Array.from(SG.y2), l:Int32Array.from(SG.l), o:Int32Array.from(SG.o)};
-  // Grille compacte (tableaux typés) : beaucoup moins de mémoire qu'une Map de tableaux sur les très gros plans
-  // la grille couvre l'emprise du plan (les objets très éloignés sont rangés dans les cases du bord)
-  const gi0=Math.floor(empL.minX/taille)-2, gj0=Math.floor(empL.minY/taille)-2, GW=Math.min(700,Math.floor(empL.maxX/taille)-gi0+3), GH=Math.min(700,Math.floor(empL.maxY/taille)-gj0+3);
-  const {cle,gP,gS}=grillesAccrochage(pts,segs,taille,gi0,gj0,GW,GH);
+  const cle=(i,j)=>i*1048576+j;
+  const gP=new Map(), gS=new Map();
+  for(let k=0;k<pts.x.length;k++){ const c=cle(Math.floor(pts.x[k]/taille),Math.floor(pts.y[k]/taille)); let a=gP.get(c); if(!a){a=[];gP.set(c,a);} a.push(k); }
+  for(let k=0;k<segs.x1.length;k++){
+    const i0=Math.floor(Math.min(segs.x1[k],segs.x2[k])/taille), i1=Math.floor(Math.max(segs.x1[k],segs.x2[k])/taille);
+    const j0=Math.floor(Math.min(segs.y1[k],segs.y2[k])/taille), j1=Math.floor(Math.max(segs.y1[k],segs.y2[k])/taille);
+    if((i1-i0+1)*(j1-j0+1)>6000) continue;
+    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){ const c=cle(i,j); let a=gS.get(c); if(!a){a=[];gS.set(c,a);} a.push(k); }
+  }
   const zone=zonePrincipale(tousX,tousY,ox,oy,emprise) || empL;
-  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, stats, msConstr:performance.now()-t0};
+  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, msConstr:performance.now()-t0};
 }
 // Zone qui contient le plus de dessin (le chantier, sans la légende éloignée)
 function zonePrincipale(X,Y,ox,oy,E){
@@ -815,7 +781,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } if(outil==='calage'){ dessinerCalage(ctx); dessinerMesure(ctx); } ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -827,7 +793,7 @@ function rendreScene(c){
   c.lineJoin='round'; c.lineCap='round';
   for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.remplis.length || !lotsVisibles[i]) continue; c.fillStyle=lt.couleur; for(const r of lt.remplis){ c.globalAlpha=r.alpha; c.fill(r.P,'evenodd'); } }
   c.globalAlpha=1; c.lineWidth=1/s;
-  for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.traits || !lotsVisibles[i]) continue; c.strokeStyle=lt.couleur; for(const P of lt.traits) c.stroke(P); }
+  for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.traits || !lotsVisibles[i]) continue; c.strokeStyle=lt.couleur; c.stroke(lt.traits); }
   const sauterTextes = enGeste && dernierTemps>45;
   if(!sauterTextes){
     const x0=-vue.tx/s, x1=(W-vue.tx)/s, y1=vue.ty/s, y0=(vue.ty-H)/s;
@@ -1025,7 +991,6 @@ function majPanneau(){
 }
 function poserPoint(){
   if(outil==='oeil') return;
-  if(outil==='calage'){ const v=pointVise(); if(v) poserCalage(v); return; }
   if(outil==='mesure' && coupeMode){ const v=pointVise(); if(v) poserCoupe(v); return; }
   if(outil==='mesure' && mesure.mode==='res'){ const v=pointVise(); if(v) poserReseau(v); return; }
   const v=pointVise(); if(!v) return;
@@ -1036,7 +1001,6 @@ function poserPoint(){
   mesure.pts.push({x:v.x,y:v.y,z:v.z,ff:v.ff,t:v.t,nom:v.nom});
 }
 function choisirOutil(o){
-  if(outil==='calage'){ calageSaisie=null; document.body.classList.remove('outil-calage'); $('calagePanel').style.display='none'; outil=null; }
   outil = (outil===o) ? null : o; if(outil && outil!=='oeil') fermerFiche();
   document.body.classList.toggle('enOutil',outil==='mesure'||outil==='points'); document.body.classList.toggle('outil-oeil',outil==='oeil');
   $('bOeil').classList.toggle('actif',outil==='oeil');
@@ -1659,7 +1623,7 @@ function deBase64(b){ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i
 function contenuSauvegarde(){
   const cs=[...scene.calques.values()], o=scene.origine;
   return JSON.stringify({format:'plansdwg', version:1, appli:VERSION, date:new Date().toISOString(),
-    plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null}, calage:scene.calage||null,
+    plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null},
     points:pointsExp, mesures:mesuresGardees, reseaux, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
     reglages:{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)},
     vue:{cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s}});
@@ -1711,7 +1675,6 @@ async function ouvrirSauvegarde(nomFichier, octets){
   enChargement=true;
   const ok=await ouvrirOctets(nom, planOct, (etatAvant&&etatAvant.nom===nom)?etatAvant:{nom:null});
   if(!ok){ enChargement=false; return; }
-  if(d.calage && !scene.calage){ await Memoire.ecrire('calage:'+nom,d.calage); cacheScenes.delete(nom); await ouvrirOctets(nom, planOct, {nom:null}); }
   Memoire.ecrire('plan',{nom, octets:planOct.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,planOct);
   const R=fusionner(d);
   if(!dejaLa && d.vue && d.vue.s>0){ const o=scene.origine; vue.s=d.vue.s; vue.tx=W/2-(d.vue.cx-o.x)*vue.s; vue.ty=H/2+(d.vue.cy-o.y)*vue.s; }
@@ -2336,7 +2299,7 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='oeil' && !sequenceMulti){ oeilViser(p); }
   else if(outil==='mesure' && (voirGardees||prendreSurface) && !coupeMode && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
-  else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (outil==='calage' ? null : mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
+  else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
     if(outil==='mesure' && coupeMode) deplace=null;
     if(outil==='mesure' && deplace===null && !coupeMode){ const k=coteSousDoigt(p.x,p.y); if(k!==null){ memoMes(); const a=mesure.pts[k], b=mesure.pts[(k+1)%mesure.pts.length]; mesure.pts.splice(k+1,0,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(Number.isFinite(a.z)&&Number.isFinite(b.z))?(a.z+b.z)/2:NaN,t:0}); deplace=k+1; mesure.insere=true; } }
     appui={x:p.x,y:p.y,bouge:false}; viser(p); }
@@ -2396,14 +2359,10 @@ async function chargerClasseur(){ const c=await Memoire.lire('classeur'); if(c&&
   else { const p=await Memoire.lire('plan'); if(p&&p.octets){ classeur={plans:[p.nom], actif:p.nom}; await Memoire.ecrire('fichier:'+p.nom,p); await Memoire.ecrire('classeur',classeur); } } }
 function sauverClasseur(){ Memoire.ecrire('classeur',classeur); }
 async function ajouterAuClasseur(nom,octets){ await Memoire.ecrire('fichier:'+nom,{nom, octets:octets.slice().buffer, date:Date.now()}); if(!classeur.plans.includes(nom)) classeur.plans.push(nom); classeur.actif=nom; sauverClasseur(); majOnglets(); }
-// Plans gardés en mémoire : 3 au plus, et pas plus d'environ 600 000 segments en tout (≈ 250 Mo) (un très gros plan reste seul)
-const BUDGET_SEGMENTS=600000; const poidsScene=sc=>(sc.acc&&sc.acc.segs?sc.acc.segs.x1.length:0)+20*((sc.fonds||[]).length)+5*((sc.textes||[]).length);
-function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc);
-  const total=()=>{ let t=0; for(const v of cacheScenes.values()) t+=poidsScene(v); return t; };
-  while(cacheScenes.size>1 && (cacheScenes.size>MAX_EN_MEMOIRE || total()>BUDGET_SEGMENTS)){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
+function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc); while(cacheScenes.size>MAX_EN_MEMOIRE){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
 function majOnglets(){ const z=$('onglets'); if(!z) return; z.replaceChildren(); document.body.classList.toggle('avecOnglets', classeur.plans.length>0);
   for(const nom of classeur.plans){ const b=document.createElement('div'); b.className='onglet'+(scene&&scene.nom===nom?' actif':'')+(cacheScenes.has(nom)?' chaud':''); b.title=nom;
-    const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf|pdf)$/i,''); b.appendChild(t);
+    const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf)$/i,''); b.appendChild(t);
     if(modifiePlans.get(nom)) { const m=document.createElement('i'); m.className='pointModif'; b.appendChild(m); }
     const x=document.createElement('span'); x.className='ferme'+(ongletAretirer===nom?' confirmer':''); x.textContent= ongletAretirer===nom ? 'Retirer ?' : '✕';
     x.onclick=ev=>{ ev.stopPropagation(); if(ongletAretirer===nom){ ongletAretirer=null; retirerDuClasseur(nom); } else { ongletAretirer=nom; majOnglets(); setTimeout(()=>{ if(ongletAretirer===nom){ ongletAretirer=null; majOnglets(); } },3500); } };
@@ -2423,9 +2382,9 @@ async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n
   if(scene && scene.nom===nom){ if(classeur.plans.length) { const n=classeur.plans[classeur.plans.length-1]; scene=null; await basculerPlan(n); } else location.reload(); } else majOnglets(); }
 // ---- Sauvegarde du classeur entier (un seul fichier) ----
 async function contenuPlanDepuisMemoire(nom){ const f=await Memoire.lire('fichier:'+nom); if(!f) return null; const e=await Memoire.lire('etat:'+nom), rg=await Memoire.lire('reglagesCalques:'+nom)||{};
-  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, calage:await Memoire.lire('calage:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
+  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
     reglages:{supprimes:rg.supprimes||[], verrous:rg.verrous||[]}, vue:e&&e.s>0?{cx:e.cx,cy:e.cy,s:e.s}:null}; }
-async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, calage:d.calage, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
+async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
   return JSON.stringify({format:'plansdwg', version:2, type:'classeur', appli:VERSION, date:new Date().toISOString(), actif:scene?scene.nom:null, calquesPerso, modelesStructure:modelesPerso, typesProfil, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes}, plans:L}); }
 function nomClasseurDefaut(){ const d=new Date(); return 'Classeur_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.plansdwg'; }
 let attenteClasseur=false;
@@ -2444,7 +2403,6 @@ async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+
   let total=0;
   for(const p of (d.plans||[])){ if(!p.plan||!p.plan.octets) continue; const nom=p.plan.nom, oct=deBase64(p.plan.octets);
     const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom)) || classeur.plans.includes(nom);
-    if(p.calage && !(await Memoire.lire('calage:'+nom))){ await Memoire.ecrire('calage:'+nom,p.calage); cacheScenes.delete(nom); }
     enChargement=true; const ok=await ouvrirOctets(nom,oct,(await Memoire.lire('etat:'+nom))||{nom:null}); if(!ok){ enChargement=false; lignes.push('⚠ '+nom+' : illisible'); continue; }
     await ajouterAuClasseur(nom,oct); const R=fusionner({...p, calquesPerso:[], modelesStructure:[]});
     if(!dejaLa && p.vue && p.vue.s>0){ const o=scene.origine; vue.s=p.vue.s; vue.tx=W/2-(p.vue.cx-o.x)*vue.s; vue.ty=H/2+(p.vue.cy-o.y)*vue.s; }
@@ -2455,125 +2413,6 @@ async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+
   lignes.push(total? '✓ Rien n\'a été perdu : tout ce qui manquait a été ajouté.' : '✓ Rien de nouveau : tout était déjà dans l\'appli.');
   $('errTitre').textContent='📂 Classeur ouvert'; $('errTitre').style.color='#1f5fa8'; $('errTexte').textContent='Descriptif de ce qui a été repris :';
   $('errDetail').value=lignes.join('\n'); $('errDetail').style.height='190px'; $('erreur').style.display='flex'; }
-
-// ================= Calage d'un plan (PDF converti) : 2 points connus → échelle, rotation, position =================
-let calageSaisie=null; // {pts:[{px,py,vx,vy}], ligne:0|1}
-const appliquerS=(S,x,y)=>[S[0]*x+S[2]*y+S[4], S[1]*x+S[3]*y+S[5]];
-function inverseS(S){ const det=S[0]*S[3]-S[1]*S[2]; const a=S[3]/det, b=-S[1]/det, c=-S[2]/det, d=S[0]/det; return [a,b,c,d,-(a*S[4]+c*S[5]),-(b*S[4]+d*S[5])]; }
-function similitude(p1,p2,q1,q2){ const dx=p2.x-p1.x, dy=p2.y-p1.y, ex=q2.x-q1.x, ey=q2.y-q1.y, n=dx*dx+dy*dy; if(n<1e-18) return null;
-  const ar=(ex*dx+ey*dy)/n, ai=(ey*dx-ex*dy)/n; return [ar, ai, -ai, ar, q1.x-(ar*p1.x-ai*p1.y), q1.y-(ai*p1.x+ar*p1.y)]; }
-function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); calageSaisie={pts:[{},{}], ligne:0, mode:(calageSaisie&&calageSaisie.mode)||'dist', dist:NaN}; for(const id of ['cg1X','cg1Y','cg2X','cg2Y','cgDist']) $(id).value=''; outil='calage'; document.body.classList.add('outil-calage'); $('calagePanel').style.display='flex'; redim(); majCalage(); }
-function fermerCalage(){ calageSaisie=null; outil=null; document.body.classList.remove('outil-calage'); $('calagePanel').style.display='none'; visee=null; redim(); demanderDessin(false); }
-function poserCalage(v){ const o=scene.origine, k=calageSaisie.ligne, p=calageSaisie.pts[k]; p.px=v.x+o.x; p.py=v.y+o.y; p.acc=v.t;
-  if(v.t===5 && v.nom){ const q=pointsExp.find(x=>x.nom===v.nom); } calageSaisie.ligne=k===0?1:1; majCalage(); demanderDessin(false);
-  const i=calageSaisie.mode==='dist' ? (k===1?$('cgDist'):null) : $('cg'+(k+1)+'X'); if(i && !i.value) setTimeout(()=>i.focus(),50); }
-function calageCalcule(){ const [a,b]=calageSaisie.pts;
-  if(calageSaisie.mode==='dist'){ if(![a.px,a.py,b.px,b.py,calageSaisie.dist].every(Number.isFinite) || calageSaisie.dist<=0) return null; const dPlan=Math.hypot(b.px-a.px,b.py-a.py); if(dPlan<1e-9) return null;
-    const k=calageSaisie.dist/dPlan; return {S:[k,0,0,k,(1-k)*a.px,(1-k)*a.py], ech:k, rot:0, dPlan, dVrai:calageSaisie.dist, modeDist:true}; }
-  if(![a.px,a.py,a.vx,a.vy,b.px,b.py,b.vx,b.vy].every(Number.isFinite)) return null;
-  const S=similitude({x:a.px,y:a.py},{x:b.px,y:b.py},{x:a.vx,y:a.vy},{x:b.vx,y:b.vy}); if(!S) return null;
-  return {S, ech:Math.hypot(S[0],S[1]), rot:Math.atan2(S[1],S[0])*180/Math.PI, dPlan:Math.hypot(b.px-a.px,b.py-a.py), dVrai:Math.hypot(b.vx-a.vx,b.vy-a.vy)}; }
-function majCalage(){ if(!calageSaisie) return; const P=calageSaisie.pts, f=v=>Number.isFinite(v)?frN(v,3):'—';
-  for(let k=0;k<2;k++){ const p=P[k]; $('cg'+(k+1)+'P').textContent= Number.isFinite(p.px) ? f(p.px)+' ; '+f(p.py) : (calageSaisie.ligne===k?'👆 touchez le plan':'—'); $('cgL'+(k+1)).classList.toggle('sel',calageSaisie.ligne===k); }
-  const c=calageCalcule();
-  const dist=calageSaisie.mode==='dist'; $('calagePanel').classList.toggle('modeDist',dist); $('cgModeDist').classList.toggle('on',dist); $('cgModeXY').classList.toggle('on',!dist);
-  $('cgRes').innerHTML = c ? 'Échelle : <b>1 unité du plan = '+frN(c.ech,4)+' m</b>'+(c.modeDist?' (le point 1 reste en place, X et Y à caler plus tard)':' · rotation '+frN(c.rot,2)+'°')+' · distance '+frN(c.dPlan,3)+' → <b>'+frN(c.dVrai,3)+' m</b>'
-    : (dist ? 'Touchez 2 points sur le plan dont vous connaissez la distance (une cote écrite, une largeur de voie…), puis tapez la vraie distance en mètres.' : 'Touchez le point 1 sur le plan, tapez ses vraies coordonnées X et Y, puis pareil pour le point 2 (le plus loin possible du point 1).');
-  $('cgAppliquer').disabled=!c; Memoire.lire('calage:'+scene.nom).then(x=>{ $('cgRetirer').style.display = x ? '' : 'none'; }); }
-// Transforme les données gardées du plan (points, mesures, réseaux) avec S
-async function transformerDonnees(nom,S){ const t=(o)=>{ const [x,y]=appliquerS(S,+o.x,+o.y); o.x=x; o.y=y; };
-  for(const p of pointsExp) t(p); sauverPointsMaintenant();
-  for(const m of mesuresGardees) for(const q of m.pts) t(q); Memoire.ecrire('mesures:'+nom, mesuresGardees);
-  for(const r of reseaux) for(const n of r.noeuds) t(n); Memoire.ecrire('reseaux:'+nom, reseaux);
-  await Memoire.effacer('etat:'+nom); }
-async function appliquerCalage(){ const c=calageCalcule(); if(!c) return; const nom=scene.nom, ancien=await Memoire.lire('calage:'+nom), M=ancien||[1,0,0,1,0,0];
-  const nouveau=mul(c.S,M); await Memoire.ecrire('calage:'+nom, nouveau); await transformerDonnees(nom,c.S);
-  fermerCalage(); await rouvrirPlanCourant(); marquerModifie();
-  $('etat').textContent= c.modeDist ? '📐 Échelle appliquée : 1 unité = '+frN(c.ech,4)+' m. Les mesures sont maintenant en mètres ; X et Y pourront être calés plus tard (« Par X et Y »).' : '📐 Plan calé : 1 unité = '+frN(c.ech,4)+' m, rotation '+frN(c.rot,2)+'°. Le fichier d\'origine n\'est pas modifié ; « ⋮ → Caler » pour retirer le calage.'; }
-async function retirerCalage(){ const nom=scene.nom, M=await Memoire.lire('calage:'+nom); if(!M) return; await transformerDonnees(nom,inverseS(M)); await Memoire.effacer('calage:'+nom);
-  fermerCalage(); await rouvrirPlanCourant(); marquerModifie(); $('etat').textContent='Calage retiré : le plan est revenu à ses coordonnées d\'origine.'; }
-async function rouvrirPlanCourant(){ const nom=scene.nom, oct=scene.octets; cacheScenes.delete(nom); scene=null; await ouvrirOctets(nom, oct, {nom:null}); }
-function dessinerCalage(c){ if(outil!=='calage'||!calageSaisie) return; const o=scene.origine; c.save();
-  calageSaisie.pts.forEach((p,k)=>{ if(!Number.isFinite(p.px)) return; const [x,y]=versEcran(p.px-o.x,p.py-o.y); c.strokeStyle='#6a1b9a'; c.lineWidth=2.5; c.beginPath(); c.arc(x,y,9,0,DEUXPI); c.stroke(); c.beginPath(); c.moveTo(x-14,y); c.lineTo(x+14,y); c.moveTo(x,y-14); c.lineTo(x,y+14); c.stroke(); c.font='bold 14px Arial'; c.fillStyle='#6a1b9a'; c.fillText(String(k+1),x+11,y-10); });
-  c.restore(); }
-function brancherCalage(){
-  $('bMenuCaler').onclick=()=>{ $('menu').classList.remove('ouvert'); ouvrirCalage(); };
-  $('cgFermer').onclick=fermerCalage; $('cgAppliquer').onclick=appliquerCalage; $('cgRetirer').onclick=retirerCalage;
-  $('cgModeDist').onclick=()=>{ calageSaisie.mode='dist'; majCalage(); }; $('cgModeXY').onclick=()=>{ calageSaisie.mode='xy'; majCalage(); };
-  $('cgDist').onchange=()=>{ const v=lireNombre($('cgDist').value); calageSaisie.dist=Number.isFinite(v)?v:NaN; if(Number.isFinite(v)) $('cgDist').value=frN(v,3); majCalage(); };
-  $('cgDist').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
-  for(const k of [1,2]){ $('cgL'+k).onclick=ev=>{ if(ev.target.tagName==='INPUT') return; calageSaisie.ligne=k-1; majCalage(); };
-    for(const a of ['X','Y']){ const i=$('cg'+k+a); i.onchange=()=>{ const v=lireNombre(i.value); if(Number.isNaN(v)){ i.style.background='#ffd6d6'; return; } i.style.background=''; calageSaisie.pts[k-1]['v'+a.toLowerCase()]= v===null?NaN:v; if(Number.isFinite(v)) i.value=frN(v,3); majCalage(); };
-      i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; } }
-}
-
-// ================= Lecture directe des PDF (plans dessinés) avec pdf.js, sans internet =================
-const PDFJS_GZ_B64="__PDFJS__", PDFWK_GZ_B64="__PDFWORKER__";
-let pdfjsPromesse=null;
-async function dezipB64(b64){ const bin=atob(b64), gz=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
-  return new Uint8Array(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); }
-function chargerPdfjs(){ if(!pdfjsPromesse) pdfjsPromesse=(async()=>{ const lib=await dezipB64(PDFJS_GZ_B64), wk=await dezipB64(PDFWK_GZ_B64);
-    const uL=URL.createObjectURL(new Blob([lib],{type:'text/javascript'})), uW=URL.createObjectURL(new Blob([wk],{type:'text/javascript'}));
-    const m=await import(uL); m.GlobalWorkerOptions.workerSrc=uW; return m; })().catch(e=>{ pdfjsPromesse=null; throw e; }); return pdfjsPromesse; }
-const estPdf=o=>o.length>4 && o[0]===0x25 && o[1]===0x50 && o[2]===0x44 && o[3]===0x46; // %PDF
-// Transforme les pages d'un PDF en objets de plan : traits (par couleur), remplissages, textes. Unité : mm sur le papier.
-async function lirePdf(octets){
-  const pdfjs=await chargerPdfjs(), O=pdfjs.OPS;
-  const doc=await pdfjs.getDocument({data:octets.slice(), isEvalSupported:false, disableFontFace:true, verbosity:0}).promise;
-  const MM=25.4/72, ents=[], calques=new Map(), hex=c=>((c[0]<<16)|(c[1]<<8)|c[2]);
-  const cal=(nom)=>{ if(!calques.has(nom)) calques.set(nom,{name:nom, colorIndex:7}); return nom; };
-  let dx=0, nbPages=doc.numPages, ignores=0;
-  for(let np=1; np<=nbPages; np++){
-    voile('Lecture du PDF : page '+np+' / '+nbPages+'…'); await attendreAffichage();
-    const page=await doc.getPage(np), vp=page.getViewport({scale:1}), pref=nbPages>1?'P'+np+' ':'';
-    const T0=mul([MM,0,0,-MM,dx,vp.height*MM], vp.transform);
-    const ol=await page.getOperatorList(); const F=ol.fnArray, A=ol.argsArray;
-    let ctm=T0, pile=[], trait=[0,0,0], fond=[0,0,0], sous=[], cour=null, px=0, py=0;
-    const pt=(x,y)=>[ctm[0]*x+ctm[2]*y+ctm[4], ctm[1]*x+ctm[3]*y+ctm[5]];
-    const nouveau=(x,y)=>{ cour={p:[...pt(x,y)], ferme:false, x0:x, y0:y}; sous.push(cour); px=x; py=y; };
-    const bez=(x1,y1,x2,y2,x3,y3)=>{ const x0=px,y0=py; for(let k=1;k<=8;k++){ const t=k/8, u=1-t, a=u*u*u, b=3*u*u*t, c=3*u*t*t, d=t*t*t; cour.p.push(...pt(a*x0+b*x1+c*x2+d*x3, a*y0+b*y1+c*y2+d*y3)); } px=x3; py=y3; };
-    const peindre=(trace,remplit,ferme)=>{
-      if(trace){ const nomC=cal(pref+'PDF traits '+('00000'+hex(trait).toString(16)).slice(-6)); for(const s of sous){ if(s.p.length<4) continue; const v=[]; for(let i=0;i<s.p.length;i+=2) v.push({x:s.p[i],y:s.p[i+1]});
-          ents.push({type:'LWPOLYLINE', layer:nomC, color:hex(trait), colorIndex:1, flag:(s.ferme||ferme)?512:0, vertices:v}); } }
-      if(remplit && !(fond[0]>=250&&fond[1]>=250&&fond[2]>=250)){ const bp=[]; for(const s of sous){ if(s.p.length<6) continue; const v=[]; for(let i=0;i<s.p.length;i+=2) v.push({x:s.p[i],y:s.p[i+1]}); bp.push({vertices:v}); }
-        if(bp.length) ents.push({type:'HATCH', layer:cal(pref+'PDF remplissages'), color:hex(fond), colorIndex:1, solidFill:1, boundaryPaths:bp}); }
-      sous=[]; cour=null; };
-    for(let i=0;i<F.length;i++){ const f=F[i], a=A[i];
-      switch(f){
-        case O.save: pile.push([ctm,trait,fond]); break;
-        case O.restore: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
-        case O.transform: ctm=mul(ctm,a); break;
-        case O.paintFormXObjectBegin: pile.push([ctm,trait,fond]); if(a&&a[0]) ctm=mul(ctm,a[0]); break;
-        case O.paintFormXObjectEnd: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
-        case O.setStrokeRGBColor: trait=[a[0],a[1],a[2]]; break;
-        case O.setFillRGBColor: fond=[a[0],a[1],a[2]]; break;
-        case O.constructPath: { const ops=a[0], c=a[1]; let k=0;
-          for(const op of ops){
-            if(op===O.moveTo){ nouveau(c[k],c[k+1]); k+=2; }
-            else if(op===O.lineTo){ if(!cour) nouveau(px,py); cour.p.push(...pt(c[k],c[k+1])); px=c[k]; py=c[k+1]; k+=2; }
-            else if(op===O.curveTo){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+4],c[k+5]); k+=6; }
-            else if(op===O.curveTo2){ if(!cour) nouveau(px,py); bez(px,py,c[k],c[k+1],c[k+2],c[k+3]); k+=4; }
-            else if(op===O.curveTo3){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+2],c[k+3]); k+=4; }
-            else if(op===O.rectangle){ const x=c[k],y=c[k+1],w=c[k+2],h=c[k+3]; k+=4; nouveau(x,y); cour.p.push(...pt(x+w,y),...pt(x+w,y+h),...pt(x,y+h)); cour.ferme=true; px=x; py=y; }
-            else if(op===O.closePath){ if(cour){ cour.ferme=true; px=cour.x0; py=cour.y0; } }
-          } break; }
-        case O.stroke: peindre(true,false,false); break;
-        case O.closeStroke: peindre(true,false,true); break;
-        case O.fill: case O.eoFill: peindre(false,true,true); break;
-        case O.fillStroke: case O.eoFillStroke: peindre(true,true,false); break;
-        case O.closeFillStroke: case O.closeEOFillStroke: peindre(true,true,true); break;
-        case O.endPath: sous=[]; cour=null; break;
-        case O.paintImageXObject: case O.paintInlineImageXObject: case O.paintImageMaskXObject: ignores++; break;
-      } }
-    // textes
-    try{ const tc=await page.getTextContent(); const nomT=cal(pref+'PDF textes');
-      for(const it of tc.items){ if(!it.str || !it.str.trim()) continue; const m=mul(T0,it.transform); const h=Math.hypot(m[2],m[3]); if(!(h>0)) continue;
-        ents.push({type:'TEXT', layer:nomT, colorIndex:7, text:it.str, textHeight:h, rotation:Math.atan2(m[1],m[0]), startPoint:{x:m[4],y:m[5]}, halign:0, valign:0, xScale:Math.hypot(m[0],m[1])/h||1}); } }catch(e){}
-    dx+=vp.width*MM+50; page.cleanup();
-  }
-  try{ await doc.destroy(); }catch(e){}
-  return {db:{tables:{LAYER:{entries:[...calques.values()]}, BLOCK_RECORD:{entries:[]}}, entities:ents}, nbPages, images:ignores};
-}
 
 // ================= Ouverture d'un fichier =================
 const $=id=>document.getElementById(id);
@@ -2587,46 +2426,37 @@ async function ouvrir(f){
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
   if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
-  let nom=f.name; if(!/\.(dwg|dxf|pdf)$/i.test(nom)) nom += estPdf(octets) ? '.pdf' : /^AC1\d{3}/.test(String.fromCharCode(...octets.slice(0,6))) ? '.dwg' : '.dxf'; // nom reçu sans extension (partage depuis une autre appli)
-  if(scene && scene.nom!==nom) quitterPlanCourant();
-  const ok=await ouvrirOctets(nom, octets, (await Memoire.lire('etat:'+nom))||null);
-  if(ok){ Memoire.ecrire('plan',{nom, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,octets); }
+  if(scene && scene.nom!==f.name) quitterPlanCourant();
+  const ok=await ouvrirOctets(f.name, octets, (await Memoire.lire('etat:'+f.name))||null);
+  if(ok){ Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(f.name,octets); }
 }
 async function ouvrirOctets(nom, octets, etat){
   const t0=performance.now();
   voile((etat?'Réouverture de « ':'Ouverture de « ')+nom+' »…'); await attendreAffichage();
   try{
     const entete=String.fromCharCode(...octets.slice(0,6));
-    const estDwg=/^AC1\d{3}/.test(entete), pdf=estPdf(octets);
-    if(!estDwg && !pdf && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
+    const estDwg=/^AC1\d{3}/.test(entete);
+    if(!estDwg && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
       throw new Error("Ce fichier n'est ni un DWG ni un DXF reconnu (début du fichier : « "+entete.replace(/[^\x20-\x7e]/g,'?')+" »).");
-    if(estDwg && /^AC100\d/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
+    if(estDwg && /^AC10(0|1|2)/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
     const enCache=cacheScenes.get(nom);
     if(enCache && enCache.octets && enCache.octets.length===octets.length){ scene=enCache; }
-    else {
-    let db, infoPdf=null;
-    if(pdf){ voile('Préparation du lecteur PDF…'); await attendreAffichage();
-      try{ infoPdf=await lirePdf(octets); db=infoPdf.db; }catch(e){ throw new Error('Le PDF n\'a pas pu être lu ('+((e&&e.message)||e)+').'); }
-      if(!db.entities.length) throw new Error(infoPdf.images ? 'Ce PDF ne contient que des images (plan scanné) : il n\'y a pas de traits à lire. Il faut le PDF exporté depuis le logiciel de dessin, ou le DWG.' : 'Ce PDF ne contient aucun trait.'); }
     else {
     voile('Préparation du lecteur…'); await attendreAffichage();
     const lib=await chargerLecteur();
     voile('Lecture du plan…'); await attendreAffichage();
+    let db;
     const ow=console.warn; console.warn=()=>{};
     try{
       const dwg=lib.dwg_read_data(estDwg?octets:dxfVersAnsi(octets), estDwg?DwgLib.Dwg_File_Type.DWG:DwgLib.Dwg_File_Type.DXF);
       if(!dwg) throw new Error('Lecture impossible (aucune donnée renvoyée).');
       db=lib.convert(dwg);
       try{ lib.dwg_free(dwg); }catch(e){}
-      if(octets.length>1000000) lecteurPromesse=null; // la mémoire du lecteur grandit avec le fichier et ne redescend pas : on le jette pour la libérer
-    } catch(e){ lecteurPromesse=null; // le lecteur est inutilisable après un plantage : il sera recréé pour le prochain plan
-      throw new Error('Le lecteur DWG n\'a pas pu lire ce fichier ('+((e&&e.message)||e)+'). Essayez de l\'enregistrer dans une autre version DWG (2013 ou 2018) ou en DXF.'); }
-    finally { console.warn=ow; }
-    }
+    } finally { console.warn=ow; }
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
     voile('Préparation de l\'affichage…'); await attendreAffichage();
-    const cal=await Memoire.lire('calage:'+nom); scene=construireScene(db, cal||null); scene.calage=cal||null;
-    scene.nom=nom; scene.octets=octets; scene.version=pdf?'PDF ('+infoPdf.nbPages+' page'+(infoPdf.nbPages>1?'s':'')+(infoPdf.images?', '+infoPdf.images+' image(s) non lue(s)':'')+') — unité : mm du papier, à caler':estDwg?versionDwg(entete):'DXF';
+    scene=construireScene(db);
+    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF';
     }
     garderEnMemoire(nom,scene); modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
     mesure={mode:mesure.mode,pts:[]}; visee=null; edition=null; histMes=[]; coinSel=null; coupeMode=false; coupeAB=[]; tnCache=null;
@@ -2653,8 +2483,6 @@ async function ouvrirOctets(nom, octets, etat){
 }
 async function reouvrirDernier(){
   await chargerClasseur(); majOnglets();
-  try{ if(APPLI && APPLI.plantageRecent && APPLI.plantageRecent()){ setTimeout(()=>{ $('errTitre').textContent='⚠ L\'appli a redémarré'; $('errTitre').style.color='#b00020'; $('errTexte').textContent='Le téléphone a manqué de mémoire (plan très lourd, ou trop de plans ouverts). Vos données sont gardées.';
-    $('errDetail').value='Conseils :\n• Fermez (✕) les onglets dont vous n\'avez pas besoin.\n• Les plans convertis depuis un PDF par DWG FastView sont très lourds : ouvrez plutôt le PDF directement dans Plans DWG, ou le vrai DWG.\n• Le dernier plan ouvert n\'a peut-être pas été ajouté au classeur : rouvrez-le avec ＋.'; $('errDetail').style.height='120px'; $('erreur').style.display='flex'; },800); } }catch(e){}
   let nom=classeur.actif && classeur.plans.includes(classeur.actif) ? classeur.actif : classeur.plans[classeur.plans.length-1];
   let f=nom?await Memoire.lire('fichier:'+nom):null; if(!f){ const p=await Memoire.lire('plan'); if(!p||!p.octets) return; f=p; nom=p.nom; }
   const etat=(await Memoire.lire('etat:'+nom))||await Memoire.lire('etat');
@@ -2669,7 +2497,7 @@ function dxfVersAnsi(o){
   for(const ch of s){ const c=ch.codePointAt(0); r[n++]= c<0x80||(c>=0xa0&&c<0x100) ? c : (sp[ch]??0x3f); }
   return r.subarray(0,n);
 }
-function versionDwg(e){ return ({AC1012:'DWG R13',AC1014:'DWG R14',AC1015:'DWG 2000',AC1018:'DWG 2004',AC1021:'DWG 2007',AC1024:'DWG 2010',AC1027:'DWG 2013',AC1032:'DWG 2018'})[e]||('DWG '+e); }
+function versionDwg(e){ return ({AC1015:'DWG 2000',AC1018:'DWG 2004',AC1021:'DWG 2007',AC1024:'DWG 2010',AC1027:'DWG 2013',AC1032:'DWG 2018'})[e]||('DWG '+e); }
 function montrerErreur(nom, err){
   const msg=(err&&err.message)||String(err);
   $('errTexte').textContent="Le fichier « "+nom+" » n'a pas pu être ouvert. Copiez le message ci-dessous et envoyez-le à Claude. Solution de secours : demander le plan en DXF.";
@@ -2740,14 +2568,6 @@ $('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h)
 $('bEffacer').onclick=()=>{ if(mesure.mode==='res'){ const r=resCourant(); if(!r.noeuds.length) return; memoRes(); const i=noeudSel!==null&&noeudSel<r.noeuds.length?noeudSel:r.noeuds.length-1; r.noeuds.splice(i,1); noeudSel=null; lectureRes=null; sauverReseaux(); $('etat').textContent='Point retiré du réseau (↶ pour annuler).'; } else if(coinSel!==null && coinSel<mesure.pts.length){ memoMes(); mesure.pts.splice(coinSel,1); $('etat').textContent='Point '+(coinSel+1)+' retiré (↶ pour annuler).'; coinSel=null; } else { if(mesure.pts.length) memoMes(); mesure.pts=[]; } majPanneau(); demanderDessin(false); };
 // ================= Menu, appli Android, mise à jour =================
 const APPLI = (window.AndroidApp && AndroidApp.estAppli && AndroidApp.estAppli()) ? window.AndroidApp : null;
-function rapportPlan(){ if(!scene) return 'Aucun plan ouvert.'; const st=scene.stats||{vus:{},ignores:{}}; const tri=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>k+' '+v).join(', ')||'aucun';
-  const cal=[...scene.calques.values()].filter(c=>c.nb>0).sort((a,b)=>b.nb-a.nb).slice(0,40).map(c=>c.nom+' ('+c.nb+(c.visible?'':', masqué')+')').join(', ');
-  const e=scene.emprise, o=scene.origine;
-  return ['Rapport du plan — '+VERSION, 'Plan : '+scene.nom+' · '+scene.version+' · '+scene.nbObjets+' objets dans l\'espace objet (sur '+st.total+' au total, '+st.blocs+' blocs)',
-    'Types lus (avec le contenu des blocs) : '+tri(st.vus), 'Types NON affichés : '+tri(st.ignores),
-    'Calques : '+cal, 'Emprise X '+Math.round(e.minX+o.x)+' → '+Math.round(e.maxX+o.x)+' · Y '+Math.round(e.minY+o.y)+' → '+Math.round(e.maxY+o.y),
-    'Calage : '+(scene.calage?'oui (1 unité = '+frN(Math.hypot(scene.calage[0],scene.calage[1]),4)+' m)':'non'),
-    'Traits : '+scene.acc.segs.x1.length+' segments · hachures/remplissages : '+(scene.fonds||[]).length+' · textes : '+(scene.textes||[]).length].join('\n'); }
 function remplirMenu(){
   $('mVersion').textContent=VERSION;
   $('mAppli').textContent = APPLI ? ('APK '+APPLI.versionApk()+(APPLI.surMiseAJour()?' + mise à jour':'')) : 'Page web (navigateur)';
@@ -2809,9 +2629,8 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D(); brancherTN(); brancherCalage();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
-$('bMenuRapport').onclick=async()=>{ const t=rapportPlan(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); } $('menu').classList.remove('ouvert'); $('etat').textContent= ok?'📋 Rapport copié : collez-le dans la conversation avec Claude.':'⚠ Copie impossible.'; };
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };

@@ -37,7 +37,6 @@
                 <data android:mimeType="application/dxf" />
                 <data android:mimeType="application/x-dxf" />
                 <data android:mimeType="application/octet-stream" />
-                <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
     </application>

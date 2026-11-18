@@ -2,11 +2,6 @@
   "name": "lecteur-dwg-source",
   "private": true,
   "description": "Outils pour refabriquer la page du Lecteur DWG chantier",
-  "dependencies": {
-    "@mlightcad/libredwg-web": "0.9.0",
-    "pdfjs-dist": "4.10.38"
-  },
-  "devDependencies": {
-    "esbuild": "0.28.2"
-  }
+  "dependencies": { "@mlightcad/libredwg-web": "0.9.0" },
+  "devDependencies": { "esbuild": "0.28.2" }
 }
