@@ -77,6 +77,7 @@ table.xl td.sup{cursor:pointer}
 #tabRes input.gris,#tabRes .gris{color:#888;font-size:12px}
 #tabRes tr.troncon td{background:#eef6fb;color:#0277bd;font-size:12.5px;height:24px}
 #tabRes tr.sel td{background:#dce8f7}
+#tabMesCour tr.sel td{background:#dce8f7}
 #structBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column;overflow:auto}
 #structBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #structBoite .tete b{flex:1;font-size:15px}
@@ -318,7 +319,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Quantités – v2";
+const VERSION = "Retirer un coin – v1";
 </script>
 <script>
 "use strict";
@@ -808,7 +809,7 @@ function accrocher(sx,sy){
 }
 
 // ================= Mesure =================
-let outil=null, mesure={mode:'dist',pts:[]}, visee=null, deplace=null, edition=null, histMes=[];
+let outil=null, mesure={mode:'dist',pts:[]}, visee=null, deplace=null, edition=null, histMes=[], coinSel=null;
 function memoMes(){ histMes.push(JSON.stringify(mesure.pts)); if(histMes.length>60) histMes.shift(); }
 // Côté de la surface en cours dont le milieu (repère ＋) est sous le doigt
 function coteSousDoigt(sx,sy){ if(mesure.mode!=='surf'||mesure.pts.length<3) return null; const P=mesure.pts, n=P.length; let k=null, dm=RAYON_PRISE; for(let i=0;i<n;i++){ const a=P[i], b=P[(i+1)%n], [x,y]=versEcran((a.x+b.x)/2,(a.y+b.y)/2), d=Math.hypot(x-sx,y-sy); if(d<dm){dm=d;k=i;} } return k; }
@@ -838,6 +839,7 @@ function dessinerMesure(c){
     if(mesure.mode==='surf' && E.length>=3){ c.closePath(); c.fillStyle='rgba(230,92,0,0.15)'; c.fill(); }
     c.strokeStyle=orange; c.lineWidth=2.5; c.setLineDash(visee?[8,5]:[]); c.stroke(); c.setLineDash([]);
   }
+  if(coinSel!==null && E[coinSel] && outil==='mesure'){ c.beginPath(); c.arc(E[coinSel][0],E[coinSel][1],11,0,DEUXPI); c.fillStyle='rgba(31,95,168,0.25)'; c.fill(); c.strokeStyle='#1f5fa8'; c.lineWidth=2; c.stroke(); }
   E.forEach((e,i)=>{ c.beginPath(); c.arc(e[0],e[1],4,0,DEUXPI); c.fillStyle='#fff'; c.fill(); c.lineWidth=2; c.strokeStyle=orange; c.stroke();
     c.font='bold 12px Arial'; c.fillStyle=orange; c.textAlign='left'; c.textBaseline='bottom'; c.fillText(String(i+1),e[0]+6,e[1]-4); });
   const r=calculs(p);
@@ -893,6 +895,7 @@ function majLoupe(){
   loupeTxt.style.top=(top+T+4)+'px';
 }
 function majPanneau(){
+  $('bEffacer').textContent = (coinSel!==null && coinSel<mesure.pts.length && mesure.mode!=='res') ? '🗑 '+(coinSel+1) : '🗑';
   if(mesure.mode==='res'){ if(scene) majReseau(!!visee); return; }
   const p=ptsCalcul(), r=calculs(p), o=scene?scene.origine:{x:0,y:0};
   let h='';
@@ -903,13 +906,13 @@ function majPanneau(){
   } else {
     if(r.aire) h='Surface : '+fr(r.aire,2)+' m² <span class="petit">· périmètre : '+fr(r.perim,2)+' m</span>';
     else h='<span class="petit">Posez les coins un par un (3 au minimum). La surface se ferme toute seule.</span>';
-    if(r.aire && !visee) h+=' <span class="petit">· ＋ = ajouter un coin</span>';
+    if(r.aire && !visee) h+=' <span class="petit">· ＋ = ajouter un coin · appui sur un coin puis 🗑 = le retirer</span>';
   }
   if(voirGardees) h='<span class="petit">Touchez une mesure gardée sur le plan (ou dans la liste) pour la sélectionner. Un doigt déplace le plan. « ✎ Modifier » pour la changer, « ✎ Mesurer » pour une nouvelle mesure.</span>';
   $('resultat').innerHTML=h;
   if(typeof mesuresGardees!=='undefined'){ $('bGarder').disabled=!mesureGardable(); majListeGardees(); }
   const tb=$('tbPts'); const frag=document.createDocumentFragment();
-  p.forEach((q,i)=>{ const tr=document.createElement('tr'); const prov = visee && (deplace!==null ? i===deplace : (i===p.length-1 && i>=mesure.pts.length));
+  p.forEach((q,i)=>{ const tr=document.createElement('tr'); if(i===coinSel) tr.className='sel'; const prov = visee && (deplace!==null ? i===deplace : (i===p.length-1 && i>=mesure.pts.length));
     tr.innerHTML=`<td>${i+1}${prov?' …':''}</td><td class="num">${fr(q.x+o.x,3)}</td><td class="num">${fr(q.y+o.y,3)}</td><td class="num" style="padding:0;width:84px"></td><td>${NOMS_ACC[q.t]}</td>`;
     if(prov){ tr.style.color='#999'; tr.children[3].textContent=zOk(q.z)?fr(q.z,3):'—'; tr.children[3].style.padding='0 5px'; }
     else { const inp=document.createElement('input'); inp.inputMode='decimal'; inp.placeholder='Z ?'; inp.value=zOk(q.z)?frN(q.z,3):'';
@@ -943,7 +946,7 @@ function choisirOutil(o){
   $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points');
   visee=null; deplace=null; redim(); majPanneau(); if(outil==='points'){ majTablePoints(); majVueLigne(); } demanderDessin(false);
 }
-function choisirMode(m){ if(edition) finEdition(); mesure={mode:m,pts:[]}; histMes=[]; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
+function choisirMode(m){ if(edition) finEdition(); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
 
 // ================= Calques perso (créés dans l'appli) =================
 const CALQUE_PTS='POINTS_EXPORT', CALQUE_MES='MESURES', ROSE='#c2185b';
@@ -1031,7 +1034,7 @@ function garderMesure(){
   if(edition && mesuresGardees[edition.i]){ const anc=mesuresGardees[edition.i]; ix=edition.i; if(anc.date) m.date=anc.date; m.modifie=Date.now(); if(anc.structure && m.type==='surf') m.structure=anc.structure; mesuresGardees[ix]=m; finEdition(); $('etat').textContent='✓ Mesure modifiée : '+texteMesure(m)+(m.structure?' (quantités recalculées)':'')+'.'; }
   else { mesuresGardees.push(m); ix=mesuresGardees.length-1; }
   sauverMesuresGardees(); majComptesPerso();
-  mesure.pts=[]; histMes=[]; majPanneau(); remplirCalques(); demanderDessin(false); return ix;
+  mesure.pts=[]; histMes=[]; coinSel=null; majPanneau(); remplirCalques(); demanderDessin(false); return ix;
 }
 // Modifier une mesure gardée : elle redevient la mesure en cours ; 📌 la remplace, ✕ Annuler la laisse comme avant
 function modifierMesure(i){ const m=mesuresGardees[i]; if(!m) return; const o=scene.origine;
@@ -1979,8 +1982,8 @@ const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.po
       dernierTap={x:appui.x,y:appui.y}; if(t) ouvrirFiche(t); else fermerFiche(); } }
   else if(outil==='mesure' && voirGardees && !visee){ if(tap){ const i=mesureGardeeSousDoigt(appui.x,appui.y); selMes=i; majListeGardees(); } }
   else if(visee && !sequenceMulti && ev.type==='pointerup'){
-    if(tap && deplace!==null){ if(outil==='points'){ ptSel=deplace; } else if(mesure.mode==='res'){ noeudSel=deplace; lectureRes=null; } } // appui court sur un point existant : sélection, pas de déplacement
-    else poserPoint();
+    if(tap && deplace!==null){ if(outil==='points'){ ptSel=deplace; } else if(mesure.mode==='res'){ noeudSel=deplace; lectureRes=null; } else { coinSel = (coinSel===deplace && !mesure.insere) ? null : deplace; } } // appui court sur un point existant : sélection, pas de déplacement
+    else { coinSel=null; poserPoint(); }
   }
   const etaitVisee=!!visee; visee=null; deplace=null; mesure.insere=false; appui=null; geste=null; enGeste=false; sequenceMulti=false; majPanneau(); if(outil==='points'){ if(etaitVisee||filtreEcran) majTablePoints(); majVueLigne(); } else majTableauxEcran(); demanderDessin(); sauverEtatBientot(); };
 cv.addEventListener('pointerup',finP); cv.addEventListener('pointercancel',finP);
@@ -2156,8 +2159,8 @@ $('bMesure').onclick=()=>choisirOutil('mesure');
 $('bPoints').onclick=()=>choisirOutil('points');
 $('mDist').onclick=()=>choisirMode('dist');
 $('mSurf').onclick=()=>choisirMode('surf');
-$('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h){ reseaux=JSON.parse(h); resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); noeudSel=null; sauverReseaux(); } } else { const h=histMes.pop(); if(h!==undefined) mesure.pts=JSON.parse(h).map(q=>({...q,z:q.z===null?NaN:q.z})); else mesure.pts.pop(); } majPanneau(); demanderDessin(false); };
-$('bEffacer').onclick=()=>{ if(mesure.mode==='res'){ const r=resCourant(); if(!r.noeuds.length) return; memoRes(); const i=noeudSel!==null&&noeudSel<r.noeuds.length?noeudSel:r.noeuds.length-1; r.noeuds.splice(i,1); noeudSel=null; lectureRes=null; sauverReseaux(); $('etat').textContent='Point retiré du réseau (↶ pour annuler).'; } else { if(mesure.pts.length) memoMes(); mesure.pts=[]; } majPanneau(); demanderDessin(false); };
+$('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h){ reseaux=JSON.parse(h); resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); noeudSel=null; sauverReseaux(); } } else { const h=histMes.pop(); coinSel=null; if(h!==undefined) mesure.pts=JSON.parse(h).map(q=>({...q,z:q.z===null?NaN:q.z})); else mesure.pts.pop(); } majPanneau(); demanderDessin(false); };
+$('bEffacer').onclick=()=>{ if(mesure.mode==='res'){ const r=resCourant(); if(!r.noeuds.length) return; memoRes(); const i=noeudSel!==null&&noeudSel<r.noeuds.length?noeudSel:r.noeuds.length-1; r.noeuds.splice(i,1); noeudSel=null; lectureRes=null; sauverReseaux(); $('etat').textContent='Point retiré du réseau (↶ pour annuler).'; } else if(coinSel!==null && coinSel<mesure.pts.length){ memoMes(); mesure.pts.splice(coinSel,1); $('etat').textContent='Point '+(coinSel+1)+' retiré (↶ pour annuler).'; coinSel=null; } else { if(mesure.pts.length) memoMes(); mesure.pts=[]; } majPanneau(); demanderDessin(false); };
 // ================= Menu, appli Android, mise à jour =================
 const APPLI = (window.AndroidApp && AndroidApp.estAppli && AndroidApp.estAppli()) ? window.AndroidApp : null;
 function remplirMenu(){
