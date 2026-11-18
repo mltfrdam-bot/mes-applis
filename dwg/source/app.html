@@ -60,6 +60,9 @@ body.ligneOuverte.enOutil #zone{bottom:378px}
 #exportBoite #expCalques input{width:24px;height:24px;flex:none;margin:0}
 #expCalques label{justify-content:flex-start}
 table.xl td.sup{cursor:pointer}
+#tabGardees tr.sel td{background:#dce8f7}
+#ligneEcranPts span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.btn.petitb.actif{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
 #exportBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
 #exportBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
 #exportBoite h3{margin:0 0 8px;font-size:17px;color:#c2185b}
@@ -155,7 +158,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="bGarder" disabled>📌 Garder</button>
   </div>
   <div id="resultat"></div>
-  <div class="ligneCalque"><span>Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
+  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z</th><th>Accroché à</th></tr></thead><tbody id="tbPts"></tbody></table>
     <table class="xl compact" id="tabGardees" style="display:none"><thead><tr><th>Mesure</th><th style="text-align:right">Valeur</th><th>Calque</th><th></th></tr></thead><tbody id="tbGardees"></tbody></table></div>
 </div>
@@ -178,6 +181,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <div class="lfl"><span class="lb">Z arrivée</span><input id="lfZ1" inputmode="decimal" placeholder="—"><button class="btn petitb sugg" id="lfZ1s"></button></div>
     <div class="lfl"><span class="lb">Préfixe</span><input id="lfPre" placeholder="(aucun)" autocapitalize="characters"><button class="btn petitb" id="lfInv">⇄ Inverser le sens</button></div>
   </div>
+  <div class="ligneCalque" id="ligneEcranPts"><button class="btn petitb" id="bEcranPts">👁 À l'écran</button><span style="font-size:12px;color:#666">Appui court sur un point = le sélectionner · glisser = le déplacer</span></div>
   <div id="tabPtsWrap2" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table class="xl compact" id="tabPtsExp"><thead><tr><th style="width:56px">Nom</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right;width:70px">Z</th><th></th></tr></thead><tbody id="tbPtsExp"></tbody></table></div>
 </div>
 <div id="calqueBoite"><div class="boite">
@@ -228,7 +232,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Points sur ligne – v1";
+const VERSION = "Sélection – v1";
 </script>
 <script>
 "use strict";
@@ -626,7 +630,7 @@ function cadrer(e,marge){
   const w=(e.maxX-e.minX)||1, h=(e.maxY-e.minY)||1;
   vue.s=Math.min(W/w,H/h)*(marge||0.94);
   vue.tx=W/2-(e.minX+e.maxX)/2*vue.s; vue.ty=H/2+(e.minY+e.maxY)/2*vue.s;
-  demanderDessin(); sauverEtatBientot();
+  demanderDessin(); sauverEtatBientot(); if(typeof majTableauxEcran==='function') majTableauxEcran();
 }
 function toutVoir(){ if(scene) cadrer(scene.emprise); }
 function demanderDessin(sale=true){ if(sale) sceneSale=true; if(!aDessiner){ aDessiner=true; requestAnimationFrame(dessiner);} }
@@ -800,6 +804,7 @@ function majPanneau(){
     if(r.aire) h='Surface : '+fr(r.aire,2)+' m² <span class="petit">· périmètre : '+fr(r.perim,2)+' m</span>';
     else h='<span class="petit">Posez les coins un par un (3 au minimum). La surface se ferme toute seule.</span>';
   }
+  if(voirGardees) h='<span class="petit">Touchez une mesure gardée sur le plan (ou dans la liste) pour la sélectionner. Un doigt déplace le plan. « ✎ Mesurer » pour reprendre la mesure.</span>';
   $('resultat').innerHTML=h;
   if(typeof mesuresGardees!=='undefined'){ $('bGarder').disabled=!mesureGardable(); majListeGardees(); }
   const tb=$('tbPts'); const frag=document.createDocumentFragment();
@@ -902,7 +907,8 @@ function supprimerCalquePerso(n){
 }
 
 // ================= Mesures gardées sur le plan =================
-let mesuresGardees=[], voirGardees=false;
+let mesuresGardees=[], voirGardees=false, selMes=null, filtreEcran=false;
+const SEUIL_TAP=9; // px : en dessous, c'est un appui (sélection), au-dessus un glissé
 const cleMesPlan=()=>'mesures:'+(scene?scene.nom:'');
 async function chargerMesuresGardees(){ const r=await Memoire.lire(cleMesPlan()); mesuresGardees=Array.isArray(r)?r:[]; }
 function sauverMesuresGardees(){ Memoire.ecrire(cleMesPlan(), mesuresGardees); }
@@ -920,34 +926,59 @@ function dessinerMesuresGardees(c){
   if(!scene||!mesuresGardees.length) return;
   const o=scene.origine;
   c.save();
-  for(const m of mesuresGardees){
-    const cal=m.calque||CALQUE_MES; if(!calqueVisible(cal)) continue;
+  mesuresGardees.forEach((m,im)=>{
+    const cal=m.calque||CALQUE_MES; if(!calqueVisible(cal)) return;
     const col=couleurCalque(cal), E=m.pts.map(q=>versEcran(q.x-o.x,q.y-o.y));
     c.beginPath(); c.moveTo(E[0][0],E[0][1]); for(let i=1;i<E.length;i++) c.lineTo(E[i][0],E[i][1]);
     if(m.type==='surf'){ c.closePath(); c.globalAlpha=0.12; c.fillStyle=col; c.fill(); c.globalAlpha=1; }
+    if(im===selMes && outil==='mesure' && voirGardees){ c.strokeStyle='rgba(31,95,168,0.45)'; c.lineWidth=10; c.lineJoin='round'; c.stroke(); }
     c.strokeStyle=col; c.lineWidth=2; c.stroke();
     for(const e of E){ c.beginPath(); c.arc(e[0],e[1],3,0,DEUXPI); c.fillStyle=col; c.fill(); }
     let pos; if(m.type==='dist') pos=[(E[0][0]+E[1][0])/2,(E[0][1]+E[1][1])/2]; else { let gx=0,gy=0; for(const e of E){gx+=e[0];gy+=e[1];} pos=[gx/E.length,gy/E.length]; }
-    if(pos[0]<-100||pos[1]<-50||pos[0]>W+100||pos[1]>H+50) continue;
+    if(pos[0]<-100||pos[1]<-50||pos[0]>W+100||pos[1]>H+50) return;
     const t=texteMesure(m); c.font='bold 13px Arial'; const w=c.measureText(t).width+10;
     c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(pos[0]-w/2,pos[1]-21,w,18); c.strokeStyle=col; c.lineWidth=1; c.strokeRect(pos[0]-w/2,pos[1]-21,w,18);
     c.fillStyle=col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,pos[0],pos[1]-12);
-  }
+  });
   c.restore();
 }
+// À l'écran ?
+function surEcran(xw,yw){ const o=scene.origine; const [x,y]=versEcran(xw-o.x,yw-o.y); return x>=0&&y>=0&&x<=W&&y<=H; }
+function mesureSurEcran(m){ const o=scene.origine; let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity; for(const q of m.pts){ const [x,y]=versEcran(q.x-o.x,q.y-o.y); a=Math.min(a,x); b=Math.max(b,x); c=Math.min(c,y); d=Math.max(d,y); } return b>=0&&a<=W&&d>=0&&c<=H; }
+// Mesure gardée sous le doigt (trait, ou intérieur d'une surface)
+function mesureGardeeSousDoigt(sx,sy){
+  const o=scene.origine; let best=null, bd=RAYON_PRISE;
+  mesuresGardees.forEach((m,i)=>{ if(!calqueVisible(m.calque||CALQUE_MES)) return; const E=m.pts.map(q=>versEcran(q.x-o.x,q.y-o.y)); const n=E.length, nb=m.type==='surf'?n:n-1;
+    for(let k=0;k<nb;k++){ const a=E[k], b=E[(k+1)%n], dx=b[0]-a[0], dy=b[1]-a[1], l2=dx*dx+dy*dy; let t=l2?((sx-a[0])*dx+(sy-a[1])*dy)/l2:0; t=Math.max(0,Math.min(1,t)); const d=Math.hypot(a[0]+t*dx-sx,a[1]+t*dy-sy); if(d<bd){bd=d;best=i;} }
+    if(m.type==='surf' && best!==i){ let dedans=false; for(let k=0,j=n-1;k<n;j=k++){ if(((E[k][1]>sy)!==(E[j][1]>sy)) && (sx < (E[j][0]-E[k][0])*(sy-E[k][1])/(E[j][1]-E[k][1])+E[k][0])) dedans=!dedans; } if(dedans && bd>=RAYON_PRISE*0.99){ best=i; bd=RAYON_PRISE*0.98; } }
+  });
+  return best;
+}
+function selectionnerMesure(i){ selMes=i; majListeGardees(); demanderDessin(false); }
+let minuterieEcran=null;
+function majTableauxEcran(){ if(!filtreEcran) return; clearTimeout(minuterieEcran); minuterieEcran=setTimeout(()=>{ if(outil==='points' && !(ptsMode==='ligne'&&ligneSel)) majTablePoints(); if(outil==='mesure' && voirGardees) majListeGardees(); },120); }
+function basculerFiltreEcran(){ filtreEcran=!filtreEcran; for(const id of ['bEcranPts','bEcranMes']) $(id).classList.toggle('actif',filtreEcran); majTablePoints(); majListeGardees(); }
 function majListeGardees(){
-  $('bVoirGardees').textContent = voirGardees ? '✎ Mesure en cours' : '📋 Gardées ('+mesuresGardees.length+')';
+  $('bVoirGardees').textContent = voirGardees ? '✎ Mesurer' : '📋 Gardées ('+mesuresGardees.length+')';
+  $('lblCalqueMes').style.display=$('selCalqueMes').style.display=voirGardees?'none':'';
   $('tabMesCour').style.display=voirGardees?'none':''; $('tabGardees').style.display=voirGardees?'':'none';
+  $('bEcranMes').style.display=voirGardees?'':'none';
   if(!voirGardees) return;
-  const tb=$('tbGardees'), frag=document.createDocumentFragment();
-  mesuresGardees.forEach((m,i)=>{ const tr=document.createElement('tr');
+  const tb=$('tbGardees'), frag=document.createDocumentFragment(); let nbVus=0;
+  mesuresGardees.forEach((m,i)=>{ if(filtreEcran && i!==selMes && !mesureSurEcran(m)) return; nbVus++; const tr=document.createElement('tr'); if(i===selMes) tr.className='sel'; tr.dataset.i=i;
+    tr.onclick=ev=>{ if(ev.target.classList.contains('sup')) return; selMes=i; centrerSur(m.pts); majListeGardees(); demanderDessin(false); };
     tr.innerHTML=`<td>${m.type==='dist'?'Distance':'Surface'}</td><td class="num">${texteMesure(m)}</td><td style="color:${couleurCalque(m.calque||CALQUE_MES)};font-weight:bold;font-size:12px"></td><td class="sup" title="Supprimer">🗑</td>`;
     tr.children[2].textContent=m.calque||CALQUE_MES;
-    tr.querySelector('.sup').onclick=()=>{ mesuresGardees.splice(i,1); sauverMesuresGardees(); majComptesPerso(); majListeGardees(); remplirCalques(); demanderDessin(false); };
+    tr.querySelector('.sup').onclick=()=>{ mesuresGardees.splice(i,1); selMes=null; sauverMesuresGardees(); majComptesPerso(); majListeGardees(); remplirCalques(); demanderDessin(false); };
     frag.appendChild(tr); });
   tb.replaceChildren(frag);
-  if(!mesuresGardees.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center;height:34px">Aucune mesure gardée</td>'; tb.appendChild(tr); }
+  $('bEcranMes').textContent='👁 Écran'+(filtreEcran?' ('+nbVus+'/'+mesuresGardees.length+')':'');
+  if(!nbVus){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center;height:34px">'+(mesuresGardees.length?'Aucune mesure gardée à l\'écran':'Aucune mesure gardée')+'</td>'; tb.appendChild(tr); }
+  const r=tb.querySelector('tr.sel'); if(r) r.scrollIntoView({block:'nearest'});
 }
+// Centre le plan sur des points (coordonnées réelles) si ils sont hors de l'écran
+function centrerSur(pts){ if(!pts.length) return; const o=scene.origine; if(pts.every(q=>surEcran(q.x,q.y))) return;
+  let gx=0,gy=0; for(const q of pts){ gx+=q.x-o.x; gy+=q.y-o.y; } gx/=pts.length; gy/=pts.length; vue.tx=W/2-gx*vue.s; vue.ty=H/2+gy*vue.s; demanderDessin(); sauverEtatBientot(); }
 
 // ================= Points à exporter (pour la TS11) =================
 // Coordonnées gardées en valeurs RÉELLES du plan (X, Y), Z saisi à la main (ou vide).
@@ -980,6 +1011,7 @@ function dessinerPointsExport(c){
     const [x,y]=versEcran(p.x,p.y); if(x<-40||y<-40||x>W+40||y>H+40) continue;
     const col=couleurCalque(p.cal);
     c.globalAlpha=p.prov?0.7:1; c.strokeStyle=col; c.lineWidth=2;
+    if(p.i===ptSel&&enPts&&!p.prov){ c.beginPath(); c.arc(x,y,13,0,DEUXPI); c.fillStyle='rgba(31,95,168,0.25)'; c.fill(); c.strokeStyle='#1f5fa8'; c.lineWidth=2; c.stroke(); c.strokeStyle=col; }
     c.beginPath(); c.arc(x,y,6,0,DEUXPI); c.fillStyle= p.i===ptSel&&enPts ? '#fde4ef':'rgba(255,255,255,0.85)'; c.fill(); c.stroke();
     c.beginPath(); c.moveTo(x-9,y); c.lineTo(x+9,y); c.moveTo(x,y-9); c.lineTo(x,y+9); c.lineWidth=1.5; c.stroke();
     const t=String(p.nom); const w=c.measureText(t).width;
@@ -1012,9 +1044,10 @@ function majInfoPoints(){
 function majTablePoints(){
   majInfoPoints();
   if(!scene) return;
-  const tb=$('tbPtsExp'), frag=document.createDocumentFragment();
+  const tb=$('tbPtsExp'), frag=document.createDocumentFragment(); let nbVus=0;
   pointsExp.forEach((p,i)=>{
-    const tr=document.createElement('tr'); if(i===ptSel) tr.className='sel';
+    if(filtreEcran && i!==ptSel && !surEcran(p.x,p.y)) return; nbVus++;
+    const tr=document.createElement('tr'); if(i===ptSel) tr.className='sel'; tr.dataset.i=i;
     tr.innerHTML=`<td><input data-c="nom"></td><td><input class="num" data-c="x" inputmode="decimal"></td><td><input class="num" data-c="y" inputmode="decimal"></td><td><input class="num" data-c="z" inputmode="decimal" placeholder="Z ?"></td><td class="sup" title="Supprimer">🗑</td>`;
     tr.children[0].style.borderLeft='5px solid '+couleurCalque(calqueDe(p)); tr.children[0].title=calqueDe(p);
     const [iN,iX,iY,iZ]=tr.querySelectorAll('input');
@@ -1026,14 +1059,15 @@ function majTablePoints(){
         if(v!==p[c]){ memoriserPourAnnuler(); p[c]=v; } inp.value = v===null?'':frN(v,3); }
       inp.classList.remove('faux'); sauverPoints(); demanderDessin(false);
     };
-    for(const inp of [iN,iX,iY,iZ]){ inp.onchange=()=>valider(inp); inp.onfocus=()=>{ ptSel=i; for(const r of tb.children) r.classList.toggle('sel',r===tr); demanderDessin(false); };
-      inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); valider(inp); const suiv = inp.dataset.c==='z' ? tb.children[i+1]?.querySelector('input[data-c="z"]') : null; if(suiv) suiv.focus(); else inp.blur(); } }; }
+    for(const inp of [iN,iX,iY,iZ]){ inp.onchange=()=>valider(inp); inp.onfocus=()=>{ ptSel=i; for(const r of tb.children) r.classList.toggle('sel',r===tr); centrerSur([p]); demanderDessin(false); };
+      inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); valider(inp); const suiv = inp.dataset.c==='z' ? tr.nextElementSibling?.querySelector('input[data-c="z"]') : null; if(suiv) suiv.focus(); else inp.blur(); } }; }
     tr.querySelector('.sup').onclick=()=>{ memoriserPourAnnuler(); pointsExp.splice(i,1); ptSel=null; majCompteCalque(); sauverPoints(); majTablePoints(); remplirCalques(); demanderDessin(false); };
     frag.appendChild(tr);
   });
   tb.replaceChildren(frag);
-  if(!pointsExp.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="5" style="color:#777;text-align:center;height:34px">Aucun point pour l\'instant</td>'; tb.appendChild(tr); }
-  if(ptSel!==null && tb.children[ptSel]) tb.children[ptSel].scrollIntoView({block:'nearest'});
+  $('bEcranPts').textContent='👁 À l\'écran'+(filtreEcran?' ('+nbVus+'/'+pointsExp.length+')':'');
+  if(!nbVus){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="5" style="color:#777;text-align:center;height:34px">'+(pointsExp.length?'Aucun point à l\'écran':'Aucun point pour l\'instant')+'</td>'; tb.appendChild(tr); }
+  const rs=tb.querySelector('tr.sel'); if(rs) rs.scrollIntoView({block:'nearest'});
 }
 function annulerPoints(){ const h=historiquePts.pop(); if(!h) return; pointsExp=JSON.parse(h); ptSel=null; majCompteCalque(); sauverPoints(); majTablePoints(); remplirCalques(); demanderDessin(false); }
 
@@ -1245,7 +1279,7 @@ function majVueLigne(){
   const enLigne = outil==='points' && ptsMode==='ligne';
   const ouvrir = enLigne && !!ligneSel; if(document.body.classList.contains('ligneOuverte')!==ouvrir){ document.body.classList.toggle('ligneOuverte',ouvrir); redim(); }
   $('ligneForm').style.display = enLigne && ligneSel ? '' : 'none';
-  $('tabPtsWrap2').style.display = enLigne && ligneSel ? 'none' : '';
+  $('tabPtsWrap2').style.display = enLigne && ligneSel ? 'none' : ''; $('ligneEcranPts').style.display = enLigne && ligneSel ? 'none' : '';
   majInfoPoints();
 }
 function creerPointsLigne(){
@@ -1298,19 +1332,26 @@ function brancherLigne(){
 }
 
 // ================= Gestes au doigt (et souris) =================
-const pointeurs=new Map(); let geste=null, sequenceMulti=false;
+const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
 function viser(p){ const enLigne=outil==='points'&&ptsMode==='ligne'; visee={sx:p.x, sy:p.y, acc:enLigne?null:accrocher(p.x,p.y), obj:enLigne?objetSousDoigt(p.x,p.y):null}; if(outil==='points') majInfoPoints(); else majPanneau(); demanderDessin(false); }
 cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(ev.pointerId); const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
-  else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : pointSousDoigt(p.x,p.y); viser(p); }
+  else if(outil==='mesure' && voirGardees && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
+  else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : pointSousDoigt(p.x,p.y); appui={x:p.x,y:p.y,bouge:false}; viser(p); }
   else debutGeste(); });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
-  if(visee && pointeurs.size===1) viser(p); else suiteGeste(); });
+  if(appui && !appui.bouge && Math.hypot(p.x-appui.x,p.y-appui.y)>SEUIL_TAP) appui.bouge=true;
+  if(visee && pointeurs.size===1){ if(deplace!==null && !appui?.bouge) return; viser(p); } else suiteGeste(); });
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
-  if(visee && !sequenceMulti && ev.type==='pointerup'){ poserPoint(); }
-  const etaitVisee=!!visee; visee=null; deplace=null; geste=null; enGeste=false; sequenceMulti=false; majPanneau(); if(outil==='points'){ if(etaitVisee) majTablePoints(); majVueLigne(); } demanderDessin(); sauverEtatBientot(); };
+  const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
+  if(outil==='mesure' && voirGardees && !visee){ if(tap){ const i=mesureGardeeSousDoigt(appui.x,appui.y); selMes=i; majListeGardees(); } }
+  else if(visee && !sequenceMulti && ev.type==='pointerup'){
+    if(tap && deplace!==null){ if(outil==='points'){ ptSel=deplace; } } // appui court sur un point existant : sélection, pas de déplacement
+    else poserPoint();
+  }
+  const etaitVisee=!!visee; visee=null; deplace=null; appui=null; geste=null; enGeste=false; sequenceMulti=false; majPanneau(); if(outil==='points'){ if(etaitVisee||filtreEcran) majTablePoints(); majVueLigne(); } else majTableauxEcran(); demanderDessin(); sauverEtatBientot(); };
 cv.addEventListener('pointerup',finP); cv.addEventListener('pointercancel',finP);
 function etatPointeurs(){ const p=[...pointeurs.values()]; if(p.length===1) return {cx:p[0].x,cy:p[0].y,d:0}; return {cx:(p[0].x+p[1].x)/2, cy:(p[0].y+p[1].y)/2, d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)}; }
 function debutGeste(){ const e=etatPointeurs(); geste={...e, s:vue.s, tx:vue.tx, ty:vue.ty, n:pointeurs.size}; enGeste=true; }
@@ -1322,7 +1363,7 @@ function suiteGeste(){
 }
 function limiteZoom(s){ return Math.max(1e-6, Math.min(s, 20000)); }
 cv.addEventListener('wheel',ev=>{ if(!scene) return; ev.preventDefault(); const p=posLocale(ev); const f=Math.exp(-ev.deltaY*0.0015); const s=limiteZoom(vue.s*f);
-  const wx=(p.x-vue.tx)/vue.s, wy=(vue.ty-p.y)/vue.s; vue.s=s; vue.tx=p.x-wx*s; vue.ty=p.y+wy*s; demanderDessin(); sauverEtatBientot(); },{passive:false});
+  const wx=(p.x-vue.tx)/vue.s, wy=(vue.ty-p.y)/vue.s; vue.s=s; vue.tx=p.x-wx*s; vue.ty=p.y+wy*s; demanderDessin(); sauverEtatBientot(); majTableauxEcran(); },{passive:false});
 cv.addEventListener('contextmenu',ev=>ev.preventDefault());
 
 // ================= Mémoire du dernier plan (dans le navigateur) =================
@@ -1526,7 +1567,8 @@ $('bExpCopier').onclick=async()=>{
   $('exportResultat').innerHTML= ok ? '✓ Texte « Nom;X;Y;Z » copié. '+resumeExport(pts) : '⚠ Copie impossible.';
 };
 $('bGarder').onclick=garderMesure;
-$('bVoirGardees').onclick=()=>{ voirGardees=!voirGardees; majListeGardees(); };
+$('bVoirGardees').onclick=()=>{ voirGardees=!voirGardees; if(!voirGardees) selMes=null; majListeGardees(); majPanneau(); demanderDessin(false); };
+$('bEcranPts').onclick=basculerFiltreEcran; $('bEcranMes').onclick=basculerFiltreEcran;
 $('selCalquePts').onchange=e=>{ calqueActifPts=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); majInfoPoints(); };
 $('selCalqueMes').onchange=e=>{ calqueActifMes=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); };
 $('bNouveauCalque').onclick=()=>ouvrirNouveauCalque(null);
