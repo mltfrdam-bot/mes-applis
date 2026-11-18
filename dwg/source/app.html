@@ -340,7 +340,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Coupe – v1";
+const VERSION = "Cubage – v1";
 </script>
 <script>
 "use strict";
@@ -929,7 +929,10 @@ function majPanneau(){
       if(r.dz!==undefined) h+=' <span class="petit">· ΔZ : '+(r.dz>=0?'+':'')+fr(r.dz,2)+' m'+(r.pente!==undefined?' · pente : '+fr(r.pente,1)+' %':'')+'</span>'; }
     else h='<span class="petit">Visez le 1<sup>er</sup> point avec un doigt (loupe), relâchez pour le poser. Pour corriger un point : posez le doigt dessus et glissez. Deux doigts : déplacer / zoomer.</span>';
   } else {
-    if(r.aire) h='Surface : '+fr(r.aire,2)+' m² <span class="petit">· périmètre : '+fr(r.perim,2)+' m</span>';
+    if(r.aire){ h='Surface : '+fr(r.aire,2)+' m² <span class="petit">· périmètre : '+fr(r.perim,2)+' m</span>';
+      const vf=volumeFF(p.map(q=>({x:q.x,y:q.y,z:q.z,ff:q.ff})));
+      if(vf && vf.V!==undefined) h+='<br><b style="color:#4e342e">Cubage fouille : '+fr(vf.V,2)+' m³</b> <span class="petit">· prof. '+fr(vf.pmin,2)+' à '+fr(vf.pmax,2)+' m (fini − FF)</span>'+(vf.neg?' <span style="color:#b00020">⚠ FF au-dessus du fini</span>':'');
+      else if(vf && vf.manque) h+='<br><span style="color:#b00020;font-size:13px">Cubage : il manque Z fini ou FF au(x) coin(s) '+vf.manque.join(', ')+'</span>'; }
     else h='<span class="petit">Posez les coins un par un (3 au minimum). La surface se ferme toute seule.</span>';
     if(r.aire && !visee) h+=' <span class="petit">· ＋ = ajouter un coin · appui sur un coin puis 🗑 = le retirer</span>';
   }
@@ -948,7 +951,7 @@ function majPanneau(){
       tr.children[3].appendChild(inp);
       const iF=document.createElement('input'); iF.inputMode='decimal'; iF.placeholder='FF'; iF.value=Number.isFinite(pt.ff)?frN(pt.ff,3):''; iF.style.cssText=inp.style.cssText;
       iF.onchange=()=>{ const v=lireNombre(iF.value); if(Number.isNaN(v)){ iF.style.background='#ffd6d6'; return; } memoMes(); pt.ff = v===null?NaN:v; majPanneau(); demanderDessin(false); };
-      iF.onkeydown=inp.onkeydown; tr.children[4].appendChild(iF);
+      iF.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); iF.blur(); } }; tr.children[4].appendChild(iF);
       if(!zOk(q.z)){ const c=coteProche(q.x,q.y,4); if(c){ const b=document.createElement('button'); b.className='btn petitb sugg'; b.style.cssText='height:24px;font-size:11px;padding:0 4px;margin:2px'; b.textContent='≈'+frN(c.v,2); b.title='Cote écrite à '+frN(c.d,1)+' m'; b.onclick=()=>{ pt.z=c.v; majPanneau(); demanderDessin(false); }; tr.children[5].appendChild(b); } } }
     frag.appendChild(tr); });
   const vp=$('bMesVersPoints'); if(vp) vp.style.display = (mesure.mode==='dist' && mesure.pts.length>=2) ? '' : 'none';
@@ -1074,7 +1077,7 @@ function modifierMesure(i){ const m=mesuresGardees[i]; if(!m) return; const o=sc
   $('etat').textContent='✎ Modification de la mesure : glissez ses points (＋ au milieu d\'un côté = nouveau coin), puis 📌 Remplacer.'; }
 function finEdition(){ edition=null; remplirSelectsCalques(); }
 function annulerEdition(){ finEdition(); mesure.pts=[]; histMes=[]; voirGardees=true; majListeGardees(); majPanneau(); demanderDessin(false); $('etat').textContent='Modification annulée : la mesure est restée comme avant.'; }
-function texteMesure(m){ if(m.type==='surf' && m.structure) return fr(m.valeur,2)+' m² · 🧱'; return m.type==='dist' ? fr(m.valeur,2)+' m'+(m.pente!==undefined?' · '+(m.pente>=0?'+':'')+fr(m.pente,1)+' %':'') : fr(m.valeur,2)+' m²'; }
+function texteMesure(m){ if(m.type==='surf'){ const vf=volumeFF(m.pts.map(q=>({x:+q.x,y:+q.y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN}))); if(vf && vf.V!==undefined) return fr(m.valeur,2)+' m² · '+fr(vf.V,2)+' m³'+(m.structure?' · 🧱':''); } if(m.type==='surf' && m.structure) return fr(m.valeur,2)+' m² · 🧱'; return m.type==='dist' ? fr(m.valeur,2)+' m'+(m.pente!==undefined?' · '+(m.pente>=0?'+':'')+fr(m.pente,1)+' %':'') : fr(m.valeur,2)+' m²'; }
 function dessinerMesuresGardees(c){
   if(!scene||!mesuresGardees.length) return;
   const o=scene.origine;
@@ -1214,6 +1217,7 @@ function majTablePoints(){
       if(c==='nom'){ const n=inp.value.trim(); if(!n){ inp.classList.add('faux'); return; } if(n!==p.nom){ memoriserPourAnnuler(); p.nom=n; } }
       else { const v=lireNombre(inp.value); if(Number.isNaN(v) || (v===null && c!=='z' && c!=='ff')){ inp.classList.add('faux'); return; }
         if(v!==p[c]){ memoriserPourAnnuler(); p[c]=v; } inp.value = v===null?'':frN(v,3); }
+      if(c==='z'||c==='ff'){ const o=scene.origine; for(const q of mesure.pts) if(q.t===5 && q.nom===p.nom && Math.abs(q.x+o.x-p.x)<0.001 && Math.abs(q.y+o.y-p.y)<0.001) q[c]=vOkN(p[c])?+p[c]:NaN; }
       inp.classList.remove('faux'); sauverPoints(); demanderDessin(false);
     };
     for(const inp of [iN,iX,iY,iZ,iF]){ inp.onchange=()=>valider(inp); inp.onfocus=()=>{ ptSel=i; for(const r of tb.children) r.classList.toggle('sel',r===tr); centrerSur([p]); demanderDessin(false); };
