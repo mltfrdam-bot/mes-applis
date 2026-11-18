@@ -76,6 +76,16 @@ public class MainActivity extends Activity {
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 return chargeur.shouldInterceptRequest(r.getUrl());
             }
+            // La page a planté (souvent : plus de mémoire avec un très gros plan) : on la relance au lieu de rester sur un écran blanc
+            @Override
+            public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
+                getSharedPreferences("reglages", MODE_PRIVATE).edit().putBoolean("plantage", true).apply();
+                try { ((android.view.ViewGroup) v.getParent()).removeView(v); } catch (Exception e) {}
+                try { v.destroy(); } catch (Exception e) {}
+                web = null;
+                recreate();
+                return true;
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -213,6 +223,12 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return "Erreur : " + e.getMessage(); }
         }
 
+        @JavascriptInterface public boolean plantageRecent() {
+            SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+            boolean v = p.getBoolean("plantage", false);
+            if (v) p.edit().putBoolean("plantage", false).apply();
+            return v;
+        }
         @JavascriptInterface public void recharger() { runOnUiThread(() -> web.loadUrl(urlDepart())); }
 
         @JavascriptInterface public String nomFichierEnAttente() { return fichierNom == null ? "" : fichierNom; }

@@ -391,7 +391,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "PDF – v1";
+const VERSION = "Mémoire – v2";
 </script>
 <script>
 "use strict";
@@ -510,6 +510,18 @@ function nettoieMtext(s){
 const ctxMesure = document.createElement('canvas').getContext('2d');
 ctxMesure.font = '100px Arial, Helvetica, sans-serif';
 
+function grillesAccrochage(pts,segs,taille,gi0,gj0,GW,GH){
+  const cl=(v,n)=>v<0?0:(v>=n?n-1:v), cle=(i,j)=>cl(i-gi0,GW)*GH+cl(j-gj0,GH), NC=GW*GH;
+  function grille(parcourir){ const cpt=new Uint32Array(NC+1); parcourir((k,c)=>{ cpt[c+1]++; }); for(let c=0;c<NC;c++) cpt[c+1]+=cpt[c];
+    const pos=cpt.slice(0,NC), data=new Int32Array(cpt[NC]); parcourir((k,c)=>{ data[pos[c]++]=k; });
+    return {get:c=>{ if(c<0||c>=NC) return null; const a=cpt[c], b=cpt[c+1]; return b>a?data.subarray(a,b):null; }}; }
+  const gP=grille(f=>{ for(let k=0;k<pts.x.length;k++) f(k,cle(Math.floor(pts.x[k]/taille),Math.floor(pts.y[k]/taille))); });
+  const gS=grille(f=>{ for(let k=0;k<segs.x1.length;k++){
+    const i0=Math.floor(Math.min(segs.x1[k],segs.x2[k])/taille), i1=Math.floor(Math.max(segs.x1[k],segs.x2[k])/taille);
+    const j0=Math.floor(Math.min(segs.y1[k],segs.y2[k])/taille), j1=Math.floor(Math.max(segs.y1[k],segs.y2[k])/taille);
+    if((i1-i0+1)*(j1-j0+1)>6000) continue;
+    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++) f(k,cle(i,j)); } });
+  return {cle,gP,gS}; }
 function construireScene(db, calage){
   const t0=performance.now();
   const calques = new Map();
@@ -739,15 +751,10 @@ function construireScene(db, calage){
   const taille=Math.max(empL.maxX-empL.minX, empL.maxY-empL.minY, 1)/300;
   const pts={x:Float64Array.from(SN.x,v=>v-ox), y:Float64Array.from(SN.y,v=>v-oy), z:Float64Array.from(SN.z), t:Uint8Array.from(SN.t), l:Int32Array.from(SN.l)};
   const segs={x1:Float64Array.from(SG.x1), y1:Float64Array.from(SG.y1), x2:Float64Array.from(SG.x2), y2:Float64Array.from(SG.y2), l:Int32Array.from(SG.l), o:Int32Array.from(SG.o)};
-  const cle=(i,j)=>i*1048576+j;
-  const gP=new Map(), gS=new Map();
-  for(let k=0;k<pts.x.length;k++){ const c=cle(Math.floor(pts.x[k]/taille),Math.floor(pts.y[k]/taille)); let a=gP.get(c); if(!a){a=[];gP.set(c,a);} a.push(k); }
-  for(let k=0;k<segs.x1.length;k++){
-    const i0=Math.floor(Math.min(segs.x1[k],segs.x2[k])/taille), i1=Math.floor(Math.max(segs.x1[k],segs.x2[k])/taille);
-    const j0=Math.floor(Math.min(segs.y1[k],segs.y2[k])/taille), j1=Math.floor(Math.max(segs.y1[k],segs.y2[k])/taille);
-    if((i1-i0+1)*(j1-j0+1)>6000) continue;
-    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){ const c=cle(i,j); let a=gS.get(c); if(!a){a=[];gS.set(c,a);} a.push(k); }
-  }
+  // Grille compacte (tableaux typés) : beaucoup moins de mémoire qu'une Map de tableaux sur les très gros plans
+  // la grille couvre l'emprise du plan (les objets très éloignés sont rangés dans les cases du bord)
+  const gi0=Math.floor(empL.minX/taille)-2, gj0=Math.floor(empL.minY/taille)-2, GW=Math.min(700,Math.floor(empL.maxX/taille)-gi0+3), GH=Math.min(700,Math.floor(empL.maxY/taille)-gj0+3);
+  const {cle,gP,gS}=grillesAccrochage(pts,segs,taille,gi0,gj0,GW,GH);
   const zone=zonePrincipale(tousX,tousY,ox,oy,emprise) || empL;
   return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, stats, msConstr:performance.now()-t0};
 }
@@ -2389,7 +2396,11 @@ async function chargerClasseur(){ const c=await Memoire.lire('classeur'); if(c&&
   else { const p=await Memoire.lire('plan'); if(p&&p.octets){ classeur={plans:[p.nom], actif:p.nom}; await Memoire.ecrire('fichier:'+p.nom,p); await Memoire.ecrire('classeur',classeur); } } }
 function sauverClasseur(){ Memoire.ecrire('classeur',classeur); }
 async function ajouterAuClasseur(nom,octets){ await Memoire.ecrire('fichier:'+nom,{nom, octets:octets.slice().buffer, date:Date.now()}); if(!classeur.plans.includes(nom)) classeur.plans.push(nom); classeur.actif=nom; sauverClasseur(); majOnglets(); }
-function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc); while(cacheScenes.size>MAX_EN_MEMOIRE){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
+// Plans gardés en mémoire : 3 au plus, et pas plus d'environ 600 000 segments en tout (≈ 250 Mo) (un très gros plan reste seul)
+const BUDGET_SEGMENTS=600000; const poidsScene=sc=>(sc.acc&&sc.acc.segs?sc.acc.segs.x1.length:0)+20*((sc.fonds||[]).length)+5*((sc.textes||[]).length);
+function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc);
+  const total=()=>{ let t=0; for(const v of cacheScenes.values()) t+=poidsScene(v); return t; };
+  while(cacheScenes.size>1 && (cacheScenes.size>MAX_EN_MEMOIRE || total()>BUDGET_SEGMENTS)){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
 function majOnglets(){ const z=$('onglets'); if(!z) return; z.replaceChildren(); document.body.classList.toggle('avecOnglets', classeur.plans.length>0);
   for(const nom of classeur.plans){ const b=document.createElement('div'); b.className='onglet'+(scene&&scene.nom===nom?' actif':'')+(cacheScenes.has(nom)?' chaud':''); b.title=nom;
     const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf|pdf)$/i,''); b.appendChild(t);
@@ -2607,6 +2618,7 @@ async function ouvrirOctets(nom, octets, etat){
       if(!dwg) throw new Error('Lecture impossible (aucune donnée renvoyée).');
       db=lib.convert(dwg);
       try{ lib.dwg_free(dwg); }catch(e){}
+      if(octets.length>1000000) lecteurPromesse=null; // la mémoire du lecteur grandit avec le fichier et ne redescend pas : on le jette pour la libérer
     } catch(e){ lecteurPromesse=null; // le lecteur est inutilisable après un plantage : il sera recréé pour le prochain plan
       throw new Error('Le lecteur DWG n\'a pas pu lire ce fichier ('+((e&&e.message)||e)+'). Essayez de l\'enregistrer dans une autre version DWG (2013 ou 2018) ou en DXF.'); }
     finally { console.warn=ow; }
@@ -2641,6 +2653,8 @@ async function ouvrirOctets(nom, octets, etat){
 }
 async function reouvrirDernier(){
   await chargerClasseur(); majOnglets();
+  try{ if(APPLI && APPLI.plantageRecent && APPLI.plantageRecent()){ setTimeout(()=>{ $('errTitre').textContent='⚠ L\'appli a redémarré'; $('errTitre').style.color='#b00020'; $('errTexte').textContent='Le téléphone a manqué de mémoire (plan très lourd, ou trop de plans ouverts). Vos données sont gardées.';
+    $('errDetail').value='Conseils :\n• Fermez (✕) les onglets dont vous n\'avez pas besoin.\n• Les plans convertis depuis un PDF par DWG FastView sont très lourds : ouvrez plutôt le PDF directement dans Plans DWG, ou le vrai DWG.\n• Le dernier plan ouvert n\'a peut-être pas été ajouté au classeur : rouvrez-le avec ＋.'; $('errDetail').style.height='120px'; $('erreur').style.display='flex'; },800); } }catch(e){}
   let nom=classeur.actif && classeur.plans.includes(classeur.actif) ? classeur.actif : classeur.plans[classeur.plans.length-1];
   let f=nom?await Memoire.lire('fichier:'+nom):null; if(!f){ const p=await Memoire.lire('plan'); if(!p||!p.octets) return; f=p; nom=p.nom; }
   const etat=(await Memoire.lire('etat:'+nom))||await Memoire.lire('etat');
