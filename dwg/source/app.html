@@ -368,21 +368,22 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Classeur – v1";
+const VERSION = "Classeur – v2";
 </script>
 <script>
 "use strict";
 // ================= Chargement du lecteur DWG (intégré, sans internet) =================
 let lecteurPromesse = null;
+let wasmOctets=null;
 function chargerLecteur(){
   if(lecteurPromesse) return lecteurPromesse;
   lecteurPromesse = (async()=>{
-    const bin = atob(WASM_GZ_B64);
+    if(!wasmOctets){ const bin = atob(WASM_GZ_B64);
     const gz = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
     const flux = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
-    const wasm = new Uint8Array(await new Response(flux).arrayBuffer());
-    return await window.DwgLib.create(wasm);
+    wasmOctets = new Uint8Array(await new Response(flux).arrayBuffer()); }
+    return await window.DwgLib.create(wasmOctets.slice());
   })();
   return lecteurPromesse;
 }
@@ -2426,9 +2427,10 @@ async function ouvrir(f){
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
   if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
-  if(scene && scene.nom!==f.name) quitterPlanCourant();
-  const ok=await ouvrirOctets(f.name, octets, (await Memoire.lire('etat:'+f.name))||null);
-  if(ok){ Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(f.name,octets); }
+  let nom=f.name; if(!/\.(dwg|dxf)$/i.test(nom)) nom += /^AC1\d{3}/.test(String.fromCharCode(...octets.slice(0,6))) ? '.dwg' : '.dxf'; // nom reçu sans extension (partage depuis une autre appli)
+  if(scene && scene.nom!==nom) quitterPlanCourant();
+  const ok=await ouvrirOctets(nom, octets, (await Memoire.lire('etat:'+nom))||null);
+  if(ok){ Memoire.ecrire('plan',{nom, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,octets); }
 }
 async function ouvrirOctets(nom, octets, etat){
   const t0=performance.now();
@@ -2438,7 +2440,7 @@ async function ouvrirOctets(nom, octets, etat){
     const estDwg=/^AC1\d{3}/.test(entete);
     if(!estDwg && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
       throw new Error("Ce fichier n'est ni un DWG ni un DXF reconnu (début du fichier : « "+entete.replace(/[^\x20-\x7e]/g,'?')+" »).");
-    if(estDwg && /^AC10(0|1|2)/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
+    if(estDwg && /^AC100\d/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
     const enCache=cacheScenes.get(nom);
     if(enCache && enCache.octets && enCache.octets.length===octets.length){ scene=enCache; }
     else {
@@ -2452,7 +2454,9 @@ async function ouvrirOctets(nom, octets, etat){
       if(!dwg) throw new Error('Lecture impossible (aucune donnée renvoyée).');
       db=lib.convert(dwg);
       try{ lib.dwg_free(dwg); }catch(e){}
-    } finally { console.warn=ow; }
+    } catch(e){ lecteurPromesse=null; // le lecteur est inutilisable après un plantage : il sera recréé pour le prochain plan
+      throw new Error('Le lecteur DWG n\'a pas pu lire ce fichier ('+((e&&e.message)||e)+'). Essayez de l\'enregistrer dans une autre version DWG (2013 ou 2018) ou en DXF.'); }
+    finally { console.warn=ow; }
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
     voile('Préparation de l\'affichage…'); await attendreAffichage();
     scene=construireScene(db);
@@ -2497,7 +2501,7 @@ function dxfVersAnsi(o){
   for(const ch of s){ const c=ch.codePointAt(0); r[n++]= c<0x80||(c>=0xa0&&c<0x100) ? c : (sp[ch]??0x3f); }
   return r.subarray(0,n);
 }
-function versionDwg(e){ return ({AC1015:'DWG 2000',AC1018:'DWG 2004',AC1021:'DWG 2007',AC1024:'DWG 2010',AC1027:'DWG 2013',AC1032:'DWG 2018'})[e]||('DWG '+e); }
+function versionDwg(e){ return ({AC1012:'DWG R13',AC1014:'DWG R14',AC1015:'DWG 2000',AC1018:'DWG 2004',AC1021:'DWG 2007',AC1024:'DWG 2010',AC1027:'DWG 2013',AC1032:'DWG 2018'})[e]||('DWG '+e); }
 function montrerErreur(nom, err){
   const msg=(err&&err.message)||String(err);
   $('errTexte').textContent="Le fichier « "+nom+" » n'a pas pu être ouvert. Copiez le message ci-dessous et envoyez-le à Claude. Solution de secours : demander le plan en DXF.";
