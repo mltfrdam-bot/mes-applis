@@ -85,6 +85,18 @@ table.xl.compact td{height:30px}
 #menu .tete b{flex:1}
 #menu .boutons{display:flex;flex-direction:column;gap:8px;padding:10px}
 #menu .info{padding:0 10px 10px;font-size:13px;color:#444}
+#ficheCalque{position:fixed;left:0;right:0;bottom:28px;background:#fff;border-top:2px solid #1f5fa8;z-index:7;display:none;flex-direction:column;padding:6px 8px;gap:6px;box-shadow:0 -2px 8px rgba(0,0,0,.12)}
+#ficheCalque.ouvert{display:flex}
+#ficheCalque .fl1{display:flex;align-items:center;gap:8px;font-size:15px;min-width:0}
+#ficheCalque .fl1{flex-wrap:wrap}
+#ficheCalque .fl1 b{overflow-wrap:anywhere}
+#fcInfo{font-size:12px;color:#666;order:5;flex-basis:100%}
+#ficheCalque .fl2{display:flex;gap:6px;flex-wrap:wrap}
+#ficheCalque .fl2 .btn.on{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
+#fcEtat{font-size:12.5px;color:#444}
+#confirmBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:32;padding:16px}
+#confirmBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px;font-size:15px;line-height:1.4}
+#confirmBoite .lig{display:flex;gap:8px;margin-top:12px}
 #loupe{position:fixed;width:150px;height:150px;border-radius:50%;border:3px solid #333;box-shadow:0 3px 10px rgba(0,0,0,.35);background:#fff;z-index:15;display:none;pointer-events:none}
 #loupeTxt{position:fixed;z-index:16;display:none;pointer-events:none;background:#e65c00;color:#fff;font-size:12px;font-weight:bold;padding:2px 6px;border-radius:3px;white-space:nowrap}
 #zone{position:fixed;left:0;right:0;top:52px;bottom:28px;touch-action:none;background:#fff}
@@ -147,7 +159,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <input id="recherche" type="search" placeholder="Rechercher un calque…" autocomplete="off">
     <button class="btn prim" id="bNouveauCalque" style="flex:1 1 100%">＋ Nouveau calque</button>
   </div>
-  <div id="tabWrap"><table class="xl"><thead><tr><th>Vis.</th><th>Coul.</th><th>Nom du calque</th><th style="text-align:right">Objets</th></tr></thead><tbody id="tbCalques"></tbody></table></div>
+  <div id="tabWrap"><table class="xl"><thead><tr><th>Vis.</th><th>Coul.</th><th>Nom du calque</th><th title="Verrouillé">🔒</th><th style="text-align:right">Objets</th></tr></thead><tbody id="tbCalques"></tbody></table></div>
   <div class="pied" id="piedCalques"></div>
 </div>
 <div id="mesure">
@@ -219,6 +231,12 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   </div>
   <div id="mInfo" class="info"></div>
 </div>
+<div id="ficheCalque">
+  <div class="fl1"><span class="pastille" id="fcCoul"></span><b id="fcNom"></b><span id="fcInfo"></span><span style="flex:1"></span><button class="btn" id="fcFermer">✕</button></div>
+  <div class="fl2"><button class="btn" id="fcGeler">❄ Geler</button><button class="btn" id="fcVerrou">🔒 Verrouiller</button><button class="btn" id="fcSuppr" style="color:#a11">🗑 Supprimer</button></div>
+  <div id="fcEtat"></div>
+</div>
+<div id="confirmBoite"><div class="boite"><div id="confirmTexte"></div><div class="lig"><button class="btn" id="confirmOui" style="background:#a11;color:#fff;border-color:#a11">Supprimer</button><button class="btn" id="confirmNon">Annuler</button></div></div></div>
 <canvas id="loupe"></canvas><div id="loupeTxt"></div>
 <div id="etat">Prêt.</div>
 <div id="voile"><div class="rond"></div><div id="voileTxt">Ouverture du plan…</div></div>
@@ -232,7 +250,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Sélection – v1";
+const VERSION = "Fiche calque – v1";
 </script>
 <script>
 "use strict";
@@ -617,7 +635,9 @@ const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const cache=document.createElement('canvas'), cctx=cache.getContext('2d');
 let scene=null, vue={s:1,tx:0,ty:0}, dpr=1, W=0, H=0, enGeste=false, dernierTemps=0, aDessiner=false, sceneSale=true;
 let lotsVisibles=new Uint8Array(0);
-function majVisibles(){ if(!scene) return; lotsVisibles=new Uint8Array(scene.lots.length); scene.lots.forEach((lt,i)=>{ lotsVisibles[i]=visible(lt)?1:0; }); }
+let lotsAccroch=new Uint8Array(0);
+function majVisibles(){ if(!scene) return; lotsVisibles=new Uint8Array(scene.lots.length); lotsAccroch=new Uint8Array(scene.lots.length);
+  scene.lots.forEach((lt,i)=>{ const v=visible(lt); lotsVisibles[i]=v?1:0; const a=scene.calques.get(lt.haut), b=scene.calques.get(lt.eff); lotsAccroch[i]=(v && !(a&&a.verrou) && !(b&&b.verrou))?1:0; }); }
 function redim(){
   const r=cv.getBoundingClientRect(); dpr=Math.min(window.devicePixelRatio||1,3);
   const ancienW=W, ancienH=H; W=r.width; H=r.height;
@@ -634,12 +654,12 @@ function cadrer(e,marge){
 }
 function toutVoir(){ if(scene) cadrer(scene.emprise); }
 function demanderDessin(sale=true){ if(sale) sceneSale=true; if(!aDessiner){ aDessiner=true; requestAnimationFrame(dessiner);} }
-function visible(lt){ const a=scene.calques.get(lt.haut), b=scene.calques.get(lt.eff); return (!a||a.visible) && (!b||b.visible); }
+function visible(lt){ const a=scene.calques.get(lt.haut), b=scene.calques.get(lt.eff); return (!a||(a.visible&&!a.supprime)) && (!b||(b.visible&&!b.supprime)); }
 function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerMesuresGardees(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -659,7 +679,7 @@ function rendreScene(c){
     for(const t of scene.textes){
       const hp=t.h*s; if(hp<3.5) continue;
       if(t.x+t.r<x0||t.x-t.r>x1||t.y+t.r<y0||t.y-t.r>y1) continue;
-      const a=scene.calques.get(t.haut), b=scene.calques.get(t.eff); if((a&&!a.visible)||(b&&!b.visible)) continue;
+      const a=scene.calques.get(t.haut), b=scene.calques.get(t.eff); if((a&&(!a.visible||a.supprime))||(b&&(!b.visible||b.supprime))) continue;
       const k=t.h*s/100, co=Math.cos(-t.a), si=Math.sin(-t.a);
       const sx=t.x*s+vue.tx, sy=-t.y*s+vue.ty;
       c.setTransform(dpr*k*t.w*co, dpr*k*t.w*si, -dpr*k*si, dpr*k*co, dpr*sx, dpr*sy);
@@ -691,11 +711,11 @@ function accrocher(sx,sy){
   for(let i=ci-n;i<=ci+n;i++) for(let j=cj-n;j<=cj+n;j++){
     const c=A.cle(i,j);
     const lp=A.gP.get(c);
-    if(lp) for(const k of lp){ if(!lotsVisibles[P.l[k]]) continue; const d=Math.hypot(P.x[k]-lx,P.y[k]-ly); if(d>r) continue;
+    if(lp) for(const k of lp){ if(!lotsAccroch[P.l[k]]) continue; const d=Math.hypot(P.x[k]-lx,P.y[k]-ly); if(d>r) continue;
       const sc=d*vue.s+PENALITE[P.t[k]]; const z=P.z[k];
       if(sc<bestScore-0.3 || (sc<bestScore+0.3 && best && !zOk(best.z) && zOk(z) && Math.hypot(best.x-P.x[k],best.y-P.y[k])<1e-6)){bestScore=Math.min(sc,bestScore); best={x:P.x[k],y:P.y[k],z,t:P.t[k]};} }
     const ls=A.gS.get(c);
-    if(ls && segs.length<700) for(const k of ls){ if(vus.has(k)) continue; vus.add(k); if(!lotsVisibles[A.segs.l[k]]) continue; segs.push(k); }
+    if(ls && segs.length<700) for(const k of ls){ if(vus.has(k)) continue; vus.add(k); if(!lotsAccroch[A.segs.l[k]]) continue; segs.push(k); }
   }
   // intersections entre traits proches
   const S=A.segs, proches=[];
@@ -829,7 +849,7 @@ function poserPoint(){
   mesure.pts.push({x:v.x,y:v.y,z:v.z,t:v.t});
 }
 function choisirOutil(o){
-  outil = (outil===o) ? null : o;
+  outil = (outil===o) ? null : o; if(outil) fermerFiche();
   document.body.classList.toggle('enOutil',!!outil);
   document.body.classList.toggle('outil-mesure',outil==='mesure'); document.body.classList.toggle('outil-points',outil==='points');
   $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points');
@@ -1170,7 +1190,7 @@ function objetSousDoigt(sx,sy){
   const n=Math.min(40,Math.ceil(r/tl)), ci=Math.floor(lx/tl), cj=Math.floor(ly/tl);
   let best=-1, bd=r; const vus=new Set();
   for(let i=ci-n;i<=ci+n;i++) for(let j=cj-n;j<=cj+n;j++){ const ls=A.gS.get(A.cle(i,j)); if(!ls) continue;
-    for(const k of ls){ if(vus.has(k)) continue; vus.add(k); const o=S.o[k]; if(o<0||!lotsVisibles[S.l[k]]) continue;
+    for(const k of ls){ if(vus.has(k)) continue; vus.add(k); const o=S.o[k]; if(o<0||!lotsAccroch[S.l[k]]) continue;
       const x1=S.x1[k],y1=S.y1[k],dx=S.x2[k]-x1,dy=S.y2[k]-y1,L2=dx*dx+dy*dy; let t=L2?((lx-x1)*dx+(ly-y1)*dy)/L2:0; t=Math.max(0,Math.min(1,t));
       const d=Math.hypot(x1+t*dx-lx,y1+t*dy-ly); if(d<bd){bd=d;best=o;} } }
   return best>=0 ? scene.objets[best] : null;
@@ -1331,6 +1351,71 @@ function brancherLigne(){
     choisirOutil('points'); choisirModePoints('ligne'); selectionnerSegmentMesure(A,B); demanderDessin(false); };
 }
 
+// ================= Fiche du calque d'un trait touché (sans outil actif) =================
+let ficheSel=null;
+const NOMS_TYPE={LINE:'ligne',LWPOLYLINE:'polyligne',POLYLINE2D:'polyligne',POLYLINE3D:'polyligne 3D',ARC:'arc',SPLINE:'courbe'};
+function traitSousDoigt(sx,sy){
+  if(!scene) return null;
+  const A=scene.acc, S=A.segs, [lx,ly]=versPlan(sx,sy), r=RAYON_ACC/vue.s, tl=A.taille;
+  const n=Math.min(40,Math.ceil(r/tl)), ci=Math.floor(lx/tl), cj=Math.floor(ly/tl);
+  let best=-1, bd=r; const vus=new Set();
+  for(let i=ci-n;i<=ci+n;i++) for(let j=cj-n;j<=cj+n;j++){ const ls=A.gS.get(A.cle(i,j)); if(!ls) continue;
+    for(const k of ls){ if(vus.has(k)) continue; vus.add(k); if(!lotsVisibles[S.l[k]]) continue;
+      const x1=S.x1[k],y1=S.y1[k],dx=S.x2[k]-x1,dy=S.y2[k]-y1,L2=dx*dx+dy*dy; let t=L2?((lx-x1)*dx+(ly-y1)*dy)/L2:0; t=Math.max(0,Math.min(1,t));
+      const d=Math.hypot(x1+t*dx-lx,y1+t*dy-ly); if(d<bd){bd=d;best=k;} } }
+  if(best<0) return null;
+  const lt=scene.lots[S.l[best]], o=S.o[best];
+  return {calque:lt.eff, haut:lt.haut, obj:o>=0?scene.objets[o]:null, lx, ly};
+}
+function ouvrirFiche(sel){ ficheSel=sel; majFiche(); $('ficheCalque').classList.add('ouvert'); demanderDessin(false); }
+function fermerFiche(){ ficheSel=null; $('ficheCalque').classList.remove('ouvert'); demanderDessin(false); }
+function majFiche(){
+  if(!ficheSel) return; const c=scene.calques.get(ficheSel.calque); if(!c){ fermerFiche(); return; }
+  $('fcCoul').style.background=c.couleur; $('fcNom').textContent=c.nom;
+  let info=(ficheSel.obj?(NOMS_TYPE[ficheSel.obj.type]||'objet'):(ficheSel.haut!==ficheSel.calque||scene.calques.get(ficheSel.haut)?.nb===undefined?'objet de bloc':'objet'))+' · '+((c.nb||0)+(c.nbPerso||0))+' objet(s) sur ce calque';
+  if(ficheSel.haut!==ficheSel.calque) info+=' · bloc posé sur « '+ficheSel.haut+' »';
+  $('fcInfo').textContent=info;
+  $('fcGeler').textContent = c.visible ? '❄ Geler' : '☀ Dégeler'; $('fcGeler').classList.toggle('on',!c.visible);
+  $('fcVerrou').textContent = c.verrou ? '🔓 Déverrouiller' : '🔒 Verrouiller'; $('fcVerrou').classList.toggle('on',!!c.verrou);
+  $('fcSuppr').disabled = !!c.perso;
+  $('fcEtat').textContent = !c.visible ? '❄ Calque gelé : il n\'est plus affiché. « ☀ Dégeler » pour le revoir (ou dans ☰ Calques).'
+    : c.verrou ? '🔒 Calque verrouillé : il reste visible, mais on ne peut plus s\'y accrocher ni le sélectionner pour les mesures et les points.'
+    : c.perso ? 'Calque créé dans l\'appli : il se supprime depuis ☰ Calques quand il est vide.'
+    : 'Geler = cacher · Verrouiller = visible mais intouchable · Supprimer = retirer du plan (le fichier d\'origine reste intact).';
+}
+function calqueFiche(){ return ficheSel && scene.calques.get(ficheSel.calque); }
+async function chargerReglagesCalques(nom){
+  const r=await Memoire.lire('reglagesCalques:'+nom); if(!r) return;
+  for(const n of (r.supprimes||[])){ const c=scene.calques.get(n); if(c){ c.supprime=true; c.visible=false; } }
+  for(const n of (r.verrous||[])){ const c=scene.calques.get(n); if(c) c.verrou=true; }
+}
+function sauverReglagesCalques(){
+  if(!scene) return; const cs=[...scene.calques.values()];
+  Memoire.ecrire('reglagesCalques:'+scene.nom,{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)});
+  sauverEtatBientot();
+}
+function dessinerFiche(c){
+  if(!ficheSel||!scene) return; const o=scene.origine;
+  c.save();
+  if(ficheSel.obj){ const els=ficheSel.obj.els; c.beginPath();
+    els.forEach((e,i)=>{ if(e.t==='L'){ const a=versEcran(e.x1-o.x,e.y1-o.y), b=versEcran(e.x2-o.x,e.y2-o.y); if(i===0) c.moveTo(a[0],a[1]); else c.lineTo(a[0],a[1]); c.lineTo(b[0],b[1]); }
+      else { const ce=versEcran(e.cx-o.x,e.cy-o.y), st=elPt(e,0), s0=versEcran(st[0]-o.x,st[1]-o.y); if(i===0) c.moveTo(s0[0],s0[1]); else c.lineTo(s0[0],s0[1]); c.arc(ce[0],ce[1],e.r*vue.s,-e.a0,-(e.a0+e.sw),e.sw>0); } });
+    c.strokeStyle='rgba(31,95,168,0.45)'; c.lineWidth=9; c.lineJoin='round'; c.lineCap='round'; c.stroke(); }
+  else { const [x,y]=versEcran(ficheSel.lx,ficheSel.ly); c.beginPath(); c.arc(x,y,12,0,DEUXPI); c.strokeStyle='#1f5fa8'; c.lineWidth=2.5; c.stroke(); }
+  c.restore();
+}
+function brancherFiche(){
+  $('fcFermer').onclick=fermerFiche;
+  $('fcGeler').onclick=()=>{ const c=calqueFiche(); if(!c) return; c.visible=!c.visible; majVisibles(); remplirCalques(); majFiche(); demanderDessin(); sauverEtatBientot(); };
+  $('fcVerrou').onclick=()=>{ const c=calqueFiche(); if(!c) return; c.verrou=!c.verrou; majVisibles(); remplirCalques(); majFiche(); sauverReglagesCalques(); };
+  $('fcSuppr').onclick=()=>{ const c=calqueFiche(); if(!c||c.perso) return;
+    $('confirmTexte').innerHTML=`Supprimer le calque <b></b> et ses <b>${c.nb}</b> objet(s) de ce plan ?<br><span style="font-size:13px;color:#555">Le fichier d'origine n'est pas modifié. Le calque reste récupérable dans ☰ Calques → « Calques supprimés ».</span>`;
+    $('confirmTexte').querySelector('b').textContent=c.nom; $('confirmBoite').style.display='flex';
+    $('confirmOui').onclick=()=>{ $('confirmBoite').style.display='none'; c.supprime=true; c.visible=false; c.verrou=false; majVisibles(); remplirCalques(); sauverReglagesCalques(); fermerFiche(); demanderDessin();
+      $('etat').textContent='🗑 Calque « '+c.nom+' » supprimé de ce plan ('+c.nb+' objets). Récupérable dans ☰ Calques.'; };
+    $('confirmNon').onclick=()=>{ $('confirmBoite').style.display='none'; }; };
+}
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -1339,14 +1424,15 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='mesure' && voirGardees && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
   else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : pointSousDoigt(p.x,p.y); appui={x:p.x,y:p.y,bouge:false}; viser(p); }
-  else debutGeste(); });
+  else { if(!outil && !sequenceMulti) appui={x:p.x,y:p.y,bouge:false}; debutGeste(); } });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(appui && !appui.bouge && Math.hypot(p.x-appui.x,p.y-appui.y)>SEUIL_TAP) appui.bouge=true;
   if(visee && pointeurs.size===1){ if(deplace!==null && !appui?.bouge) return; viser(p); } else suiteGeste(); });
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
   const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
-  if(outil==='mesure' && voirGardees && !visee){ if(tap){ const i=mesureGardeeSousDoigt(appui.x,appui.y); selMes=i; majListeGardees(); } }
+  if(!outil){ if(tap){ const t=traitSousDoigt(appui.x,appui.y); if(t) ouvrirFiche(t); else fermerFiche(); } }
+  else if(outil==='mesure' && voirGardees && !visee){ if(tap){ const i=mesureGardeeSousDoigt(appui.x,appui.y); selMes=i; majListeGardees(); } }
   else if(visee && !sequenceMulti && ev.type==='pointerup'){
     if(tap && deplace!==null){ if(outil==='points'){ ptSel=deplace; } } // appui court sur un point existant : sélection, pas de déplacement
     else poserPoint();
@@ -1423,7 +1509,7 @@ async function ouvrirOctets(nom, octets, etat){
     mesure={mode:mesure.mode,pts:[]}; visee=null;
     // calques et vue mémorisés
     if(etat && etat.nom===nom && etat.calques) for(const c of scene.calques.values()) if(c.nom in etat.calques) c.visible=!!etat.calques[c.nom];
-    await chargerCalquesPerso(); installerCalquesPerso(etat);
+    await chargerCalquesPerso(); installerCalquesPerso(etat); await chargerReglagesCalques(nom); fermerFiche();
     majVisibles();
     $('accueil').style.display='none';
     for(const id of ['bAjuster','bCalques','bMesure','bPoints']) $(id).disabled=false;
@@ -1484,25 +1570,26 @@ function calquesChanges(){ remplirCalques(); majVisibles(); demanderDessin(); sa
 function calquesFiltres(){
   if(!scene) return [];
   const q=$('recherche').value.trim().toLowerCase();
-  return [...scene.calques.values()].filter(c=>(c.nb>0||c.perso) && (!q || c.nom.toLowerCase().includes(q)))
+  return [...scene.calques.values()].filter(c=>(c.nb>0||c.perso) && !c.supprime && (!q || c.nom.toLowerCase().includes(q)))
     .sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{numeric:true,sensitivity:'base'}));
 }
 function remplirCalques(){
   if(!scene) return;
   const liste=calquesFiltres(), tb=$('tbCalques');
-  const tous=[...scene.calques.values()], utilises=tous.filter(c=>c.nb>0||c.perso);
+  const tous=[...scene.calques.values()].filter(c=>!c.supprime), utilises=tous.filter(c=>c.nb>0||c.perso);
   const vis=utilises.filter(c=>c.visible).length;
   $('titreCalques').textContent=`Calques (${vis}/${utilises.length} affichés)`;
   const q=$('recherche').value.trim();
   $('bTous').textContent = q ? 'Afficher ces calques' : 'Tout afficher';
   $('bAucun').textContent = q ? 'Masquer ces calques' : 'Tout masquer';
   const vides=tous.length-utilises.length;
-  $('piedCalques').textContent = (vides? vides+' calque(s) vide(s) non listé(s). ':'') + 'Un appui sur une ligne affiche ou masque le calque.';
+  $('piedCalques').textContent = (vides? vides+' calque(s) vide(s) non listé(s). ':'') + 'Un appui sur une ligne affiche ou masque le calque · 🔒 verrouille (visible mais intouchable) · sur le plan, touchez un trait (sans outil) pour sa fiche.';
   const frag=document.createDocumentFragment();
   for(const c of liste){
     const tr=document.createElement('tr'); if(!c.visible) tr.className='masque';
     const nbTot=(c.nb||0)+(c.nbPerso||0), suppr=c.perso&&!c.base&&!c.nbPerso;
-    tr.innerHTML=`<td class="c"><span class="coche"></span></td><td class="c"><span class="pastille" style="background:${c.couleur}"></span></td><td class="nom"></td><td class="n">${suppr?'<span class="supCalque" title="Supprimer ce calque vide" style="font-size:17px">🗑</span>':nbTot}</td>`;
+    tr.innerHTML=`<td class="c"><span class="coche"></span></td><td class="c"><span class="pastille" style="background:${c.couleur}"></span></td><td class="nom"></td><td class="c verrou" style="width:40px;font-size:17px;${c.verrou?'':'opacity:.25'}">🔒</td><td class="n">${suppr?'<span class="supCalque" title="Supprimer ce calque vide" style="font-size:17px">🗑</span>':nbTot}</td>`;
+    tr.querySelector('.verrou').onclick=ev=>{ ev.stopPropagation(); c.verrou=!c.verrou; ev.target.style.opacity=c.verrou?'':'.25'; majVisibles(); sauverReglagesCalques(); };
     tr.children[2].textContent=c.nom; if(c.perso){ const m=document.createElement('span'); m.textContent=' ✎ perso'; m.style.cssText='font-size:11px;color:#1f5fa8'; tr.children[2].appendChild(m); }
     const sc=tr.querySelector('.supCalque'); if(sc) sc.onclick=ev=>{ ev.stopPropagation(); supprimerCalquePerso(c.nom); };
     tr.onclick=()=>{ c.visible=!c.visible; tr.classList.toggle('masque',!c.visible);
@@ -1510,7 +1597,14 @@ function remplirCalques(){
     frag.appendChild(tr);
   }
   tb.replaceChildren(frag);
-  if(!liste.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center">Aucun calque trouvé</td>'; tb.appendChild(tr); }
+  if(!liste.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="5" style="color:#777;text-align:center">Aucun calque trouvé</td>'; tb.appendChild(tr); }
+  // calques supprimés (restaurables)
+  const sup=[...scene.calques.values()].filter(c=>c.supprime).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  if(sup.length){
+    const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="5" style="background:#f3f3f3;font-weight:bold;color:#a11">🗑 Calques supprimés de ce plan (${sup.length}) — le fichier d'origine est intact</td>`; tb.appendChild(tr);
+    for(const c of sup){ const r=document.createElement('tr'); r.innerHTML=`<td class="c"></td><td class="c"><span class="pastille" style="background:${c.couleur};opacity:.4"></span></td><td class="nom" style="color:#999;text-decoration:line-through"></td><td colspan="2" style="text-align:right"><button class="btn petitb">↺ Restaurer</button></td>`;
+      r.children[2].textContent=c.nom; r.querySelector('button').onclick=ev=>{ ev.stopPropagation(); c.supprime=false; c.visible=true; sauverReglagesCalques(); majVisibles(); remplirCalques(); demanderDessin(); }; tb.appendChild(r); }
+  }
 }
 $('bMesure').onclick=()=>choisirOutil('mesure');
 $('bPoints').onclick=()=>choisirOutil('points');
@@ -1577,7 +1671,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne();
+brancherPoints(); brancherLigne(); brancherFiche();
 redim();
 $('etat').textContent='Prêt. '+VERSION;
 (async()=>{ if(!(await ouvrirFichierAppli())) reouvrirDernier(); })();
