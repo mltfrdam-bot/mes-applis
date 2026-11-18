@@ -369,7 +369,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Classeur – v3";
+const VERSION = "Gros plans – v1";
 </script>
 <script>
 "use strict";
@@ -693,19 +693,19 @@ function construireScene(db){
   const listeLots=[], FONDS=[];
   const SG={x1:[],y1:[],x2:[],y2:[],l:[],o:[]};
   for(const L of lots.values()){
-    const pt=new Path2D();
+    // Les tracés sont coupés en morceaux : un seul tracé géant n'est pas dessiné par certains téléphones
+    const morceaux=[]; let pt=new Path2D(), nSeg=0; morceaux.push(pt);
     let nb=0, kt=0;
-    for(const p of L.traits){ pt.moveTo(p[0]-ox,p[1]-oy); for(let i=2;i<p.length;i+=2){ pt.lineTo(p[i]-ox,p[i+1]-oy);
+    for(const p of L.traits){ if(nSeg>12000){ pt=new Path2D(); morceaux.push(pt); nSeg=0; } nSeg+=p.length/2; pt.moveTo(p[0]-ox,p[1]-oy); for(let i=2;i<p.length;i+=2){ pt.lineTo(p[i]-ox,p[i+1]-oy);
         SG.x1.push(p[i-2]-ox); SG.y1.push(p[i-1]-oy); SG.x2.push(p[i]-ox); SG.y2.push(p[i+1]-oy); SG.l.push(L.idx); SG.o.push(L.objs[kt]); } nb++; kt++; }
     const remplis=[];
     const parAlpha=new Map();
-    for(const r of L.remplis){ let P=parAlpha.get(r.alpha); if(!P){P=new Path2D(); parAlpha.set(r.alpha,P);} for(const an of r.a){ P.moveTo(an[0]-ox,an[1]-oy); for(let i=2;i<an.length;i+=2) P.lineTo(an[i]-ox,an[i+1]-oy); P.closePath(); }
+    for(const r of L.remplis){ let E=parAlpha.get(r.alpha); if(!E||E.n>12000){ E={P:new Path2D(),n:0}; parAlpha.set(r.alpha,E); remplis.push({alpha:r.alpha,P:E.P}); } const P=E.P; for(const an of r.a){ E.n+=an.length/2; P.moveTo(an[0]-ox,an[1]-oy); for(let i=2;i<an.length;i+=2) P.lineTo(an[i]-ox,an[i+1]-oy); P.closePath(); }
       const loc=r.a.map(an=>{ const q=new Float64Array(an.length); for(let i=0;i<an.length;i+=2){ q[i]=an[i]-ox; q[i+1]=an[i+1]-oy; } return q; });
       let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity, aire=0; for(const q of loc) for(let i=0;i<q.length;i+=2){ a=Math.min(a,q[i]); b=Math.min(b,q[i+1]); c=Math.max(c,q[i]); d=Math.max(d,q[i+1]); }
       const q0=loc[0]; for(let i=0;i<q0.length;i+=2){ const j=(i+2)%q0.length; aire+=q0[i]*q0[j+1]-q0[j]*q0[i+1]; }
       FONDS.push({l:L.idx, an:loc, b:[a,b,c,d], aire:Math.abs(aire)/2}); }
-    for(const [alpha,P] of parAlpha) remplis.push({alpha,P});
-    listeLots.push({haut:L.haut, eff:L.eff, couleur:L.couleur, traits:nb?pt:null, remplis});
+    listeLots.push({haut:L.haut, eff:L.eff, couleur:L.couleur, traits:nb?morceaux:null, remplis});
   }
   for(const t of textes){ t.x-=ox; t.y-=oy; }
   const cotes=[];
@@ -797,7 +797,7 @@ function rendreScene(c){
   c.lineJoin='round'; c.lineCap='round';
   for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.remplis.length || !lotsVisibles[i]) continue; c.fillStyle=lt.couleur; for(const r of lt.remplis){ c.globalAlpha=r.alpha; c.fill(r.P,'evenodd'); } }
   c.globalAlpha=1; c.lineWidth=1/s;
-  for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.traits || !lotsVisibles[i]) continue; c.strokeStyle=lt.couleur; c.stroke(lt.traits); }
+  for(let i=0;i<scene.lots.length;i++){ const lt=scene.lots[i]; if(!lt.traits || !lotsVisibles[i]) continue; c.strokeStyle=lt.couleur; for(const P of lt.traits) c.stroke(P); }
   const sauterTextes = enGeste && dernierTemps>45;
   if(!sauterTextes){
     const x0=-vue.tx/s, x1=(W-vue.tx)/s, y1=vue.ty/s, y0=(vue.ty-H)/s;
