@@ -45,6 +45,10 @@ body.outil-calage #zone{bottom:250px}
 #calagePanel .outils{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f6f0f9;border-bottom:1px solid #ddd}
 #tabCalage td{height:36px}
 #tabCalage tr.sel td{background:#efe2f5}
+#calagePanel.modeDist #tabCalage th:nth-child(n+3), #calagePanel.modeDist #tabCalage td:nth-child(n+3){display:none}
+#calagePanel:not(.modeDist) #cgDistZone{display:none}
+body.outil-calage #zone{bottom:290px}
+#calagePanel{height:290px!important}
 #tabCalage input{width:100%;min-width:92px;height:32px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:13px;padding:0 4px}
 #tabCalage td:nth-child(2){font-family:Consolas,'Courier New',monospace;font-size:12px}
 .ligneCalque{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:3px 8px;font-size:13px;border-bottom:1px solid #e0e0e0;background:#fafafa}
@@ -212,6 +216,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <div id="onglets"></div>
 <div id="calagePanel">
   <div class="outils"><b style="flex:1;font-size:15px">📐 Caler le plan sur 2 points</b><button class="btn prim" id="cgAppliquer" disabled>✓ Appliquer</button><button class="btn" id="cgFermer">✕</button></div>
+  <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;flex-wrap:wrap;font-size:14px"><span class="seg"><button id="cgModeDist" class="on">📏 Par une distance</button><button id="cgModeXY">📍 Par X et Y</button></span><span id="cgDistZone">Vraie distance <input id="cgDist" inputmode="decimal" placeholder="m" style="width:84px;height:32px;border:1px solid #6a1b9a;border-radius:4px;background:#fffbe6;text-align:right;font-size:14px;padding:0 4px"> m</span></div>
   <table class="xl compact" id="tabCalage"><thead><tr><th>Pt</th><th>Sur le plan (touché)</th><th style="text-align:right">Vrai X</th><th style="text-align:right">Vrai Y</th></tr></thead><tbody>
     <tr id="cgL1"><td>1</td><td id="cg1P"></td><td><input id="cg1X" inputmode="decimal" placeholder="X"></td><td><input id="cg1Y" inputmode="decimal" placeholder="Y"></td></tr>
     <tr id="cgL2"><td>2</td><td id="cg2P"></td><td><input id="cg2X" inputmode="decimal" placeholder="X"></td><td><input id="cg2Y" inputmode="decimal" placeholder="Y"></td></tr>
@@ -386,7 +391,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Calage – v1";
+const VERSION = "Calage – v2";
 </script>
 <script>
 "use strict";
@@ -2446,18 +2451,23 @@ const appliquerS=(S,x,y)=>[S[0]*x+S[2]*y+S[4], S[1]*x+S[3]*y+S[5]];
 function inverseS(S){ const det=S[0]*S[3]-S[1]*S[2]; const a=S[3]/det, b=-S[1]/det, c=-S[2]/det, d=S[0]/det; return [a,b,c,d,-(a*S[4]+c*S[5]),-(b*S[4]+d*S[5])]; }
 function similitude(p1,p2,q1,q2){ const dx=p2.x-p1.x, dy=p2.y-p1.y, ex=q2.x-q1.x, ey=q2.y-q1.y, n=dx*dx+dy*dy; if(n<1e-18) return null;
   const ar=(ex*dx+ey*dy)/n, ai=(ey*dx-ex*dy)/n; return [ar, ai, -ai, ar, q1.x-(ar*p1.x-ai*p1.y), q1.y-(ai*p1.x+ar*p1.y)]; }
-function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); calageSaisie={pts:[{},{}], ligne:0}; outil='calage'; document.body.classList.add('outil-calage'); $('calagePanel').style.display='flex'; redim(); majCalage(); }
+function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); calageSaisie={pts:[{},{}], ligne:0, mode:(calageSaisie&&calageSaisie.mode)||'dist', dist:NaN}; for(const id of ['cg1X','cg1Y','cg2X','cg2Y','cgDist']) $(id).value=''; outil='calage'; document.body.classList.add('outil-calage'); $('calagePanel').style.display='flex'; redim(); majCalage(); }
 function fermerCalage(){ calageSaisie=null; outil=null; document.body.classList.remove('outil-calage'); $('calagePanel').style.display='none'; visee=null; redim(); demanderDessin(false); }
 function poserCalage(v){ const o=scene.origine, k=calageSaisie.ligne, p=calageSaisie.pts[k]; p.px=v.x+o.x; p.py=v.y+o.y; p.acc=v.t;
   if(v.t===5 && v.nom){ const q=pointsExp.find(x=>x.nom===v.nom); } calageSaisie.ligne=k===0?1:1; majCalage(); demanderDessin(false);
-  const i=$('cg'+(k+1)+'X'); if(i && !i.value) setTimeout(()=>i.focus(),50); }
-function calageCalcule(){ const [a,b]=calageSaisie.pts; if(![a.px,a.py,a.vx,a.vy,b.px,b.py,b.vx,b.vy].every(Number.isFinite)) return null;
+  const i=calageSaisie.mode==='dist' ? (k===1?$('cgDist'):null) : $('cg'+(k+1)+'X'); if(i && !i.value) setTimeout(()=>i.focus(),50); }
+function calageCalcule(){ const [a,b]=calageSaisie.pts;
+  if(calageSaisie.mode==='dist'){ if(![a.px,a.py,b.px,b.py,calageSaisie.dist].every(Number.isFinite) || calageSaisie.dist<=0) return null; const dPlan=Math.hypot(b.px-a.px,b.py-a.py); if(dPlan<1e-9) return null;
+    const k=calageSaisie.dist/dPlan; return {S:[k,0,0,k,(1-k)*a.px,(1-k)*a.py], ech:k, rot:0, dPlan, dVrai:calageSaisie.dist, modeDist:true}; }
+  if(![a.px,a.py,a.vx,a.vy,b.px,b.py,b.vx,b.vy].every(Number.isFinite)) return null;
   const S=similitude({x:a.px,y:a.py},{x:b.px,y:b.py},{x:a.vx,y:a.vy},{x:b.vx,y:b.vy}); if(!S) return null;
   return {S, ech:Math.hypot(S[0],S[1]), rot:Math.atan2(S[1],S[0])*180/Math.PI, dPlan:Math.hypot(b.px-a.px,b.py-a.py), dVrai:Math.hypot(b.vx-a.vx,b.vy-a.vy)}; }
 function majCalage(){ if(!calageSaisie) return; const P=calageSaisie.pts, f=v=>Number.isFinite(v)?frN(v,3):'—';
   for(let k=0;k<2;k++){ const p=P[k]; $('cg'+(k+1)+'P').textContent= Number.isFinite(p.px) ? f(p.px)+' ; '+f(p.py) : (calageSaisie.ligne===k?'👆 touchez le plan':'—'); $('cgL'+(k+1)).classList.toggle('sel',calageSaisie.ligne===k); }
   const c=calageCalcule();
-  $('cgRes').innerHTML = c ? 'Échelle : <b>1 unité du plan = '+frN(c.ech,4)+' m</b> · rotation '+frN(c.rot,2)+'° · distance '+frN(c.dPlan,3)+' → <b>'+frN(c.dVrai,3)+' m</b>' : 'Touchez le point 1 sur le plan, tapez ses vraies coordonnées X et Y, puis pareil pour le point 2 (le plus loin possible du point 1).';
+  const dist=calageSaisie.mode==='dist'; $('calagePanel').classList.toggle('modeDist',dist); $('cgModeDist').classList.toggle('on',dist); $('cgModeXY').classList.toggle('on',!dist);
+  $('cgRes').innerHTML = c ? 'Échelle : <b>1 unité du plan = '+frN(c.ech,4)+' m</b>'+(c.modeDist?' (le point 1 reste en place, X et Y à caler plus tard)':' · rotation '+frN(c.rot,2)+'°')+' · distance '+frN(c.dPlan,3)+' → <b>'+frN(c.dVrai,3)+' m</b>'
+    : (dist ? 'Touchez 2 points sur le plan dont vous connaissez la distance (une cote écrite, une largeur de voie…), puis tapez la vraie distance en mètres.' : 'Touchez le point 1 sur le plan, tapez ses vraies coordonnées X et Y, puis pareil pour le point 2 (le plus loin possible du point 1).');
   $('cgAppliquer').disabled=!c; Memoire.lire('calage:'+scene.nom).then(x=>{ $('cgRetirer').style.display = x ? '' : 'none'; }); }
 // Transforme les données gardées du plan (points, mesures, réseaux) avec S
 async function transformerDonnees(nom,S){ const t=(o)=>{ const [x,y]=appliquerS(S,+o.x,+o.y); o.x=x; o.y=y; };
@@ -2468,7 +2478,7 @@ async function transformerDonnees(nom,S){ const t=(o)=>{ const [x,y]=appliquerS(
 async function appliquerCalage(){ const c=calageCalcule(); if(!c) return; const nom=scene.nom, ancien=await Memoire.lire('calage:'+nom), M=ancien||[1,0,0,1,0,0];
   const nouveau=mul(c.S,M); await Memoire.ecrire('calage:'+nom, nouveau); await transformerDonnees(nom,c.S);
   fermerCalage(); await rouvrirPlanCourant(); marquerModifie();
-  $('etat').textContent='📐 Plan calé : 1 unité = '+frN(c.ech,4)+' m, rotation '+frN(c.rot,2)+'°. Le fichier d\'origine n\'est pas modifié ; « ⋮ → Caler » pour retirer le calage.'; }
+  $('etat').textContent= c.modeDist ? '📐 Échelle appliquée : 1 unité = '+frN(c.ech,4)+' m. Les mesures sont maintenant en mètres ; X et Y pourront être calés plus tard (« Par X et Y »).' : '📐 Plan calé : 1 unité = '+frN(c.ech,4)+' m, rotation '+frN(c.rot,2)+'°. Le fichier d\'origine n\'est pas modifié ; « ⋮ → Caler » pour retirer le calage.'; }
 async function retirerCalage(){ const nom=scene.nom, M=await Memoire.lire('calage:'+nom); if(!M) return; await transformerDonnees(nom,inverseS(M)); await Memoire.effacer('calage:'+nom);
   fermerCalage(); await rouvrirPlanCourant(); marquerModifie(); $('etat').textContent='Calage retiré : le plan est revenu à ses coordonnées d\'origine.'; }
 async function rouvrirPlanCourant(){ const nom=scene.nom, oct=scene.octets; cacheScenes.delete(nom); scene=null; await ouvrirOctets(nom, oct, {nom:null}); }
@@ -2478,6 +2488,9 @@ function dessinerCalage(c){ if(outil!=='calage'||!calageSaisie) return; const o=
 function brancherCalage(){
   $('bMenuCaler').onclick=()=>{ $('menu').classList.remove('ouvert'); ouvrirCalage(); };
   $('cgFermer').onclick=fermerCalage; $('cgAppliquer').onclick=appliquerCalage; $('cgRetirer').onclick=retirerCalage;
+  $('cgModeDist').onclick=()=>{ calageSaisie.mode='dist'; majCalage(); }; $('cgModeXY').onclick=()=>{ calageSaisie.mode='xy'; majCalage(); };
+  $('cgDist').onchange=()=>{ const v=lireNombre($('cgDist').value); calageSaisie.dist=Number.isFinite(v)?v:NaN; if(Number.isFinite(v)) $('cgDist').value=frN(v,3); majCalage(); };
+  $('cgDist').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   for(const k of [1,2]){ $('cgL'+k).onclick=ev=>{ if(ev.target.tagName==='INPUT') return; calageSaisie.ligne=k-1; majCalage(); };
     for(const a of ['X','Y']){ const i=$('cg'+k+a); i.onchange=()=>{ const v=lireNombre(i.value); if(Number.isNaN(v)){ i.style.background='#ffd6d6'; return; } i.style.background=''; calageSaisie.pts[k-1]['v'+a.toLowerCase()]= v===null?NaN:v; if(Number.isFinite(v)) i.value=frN(v,3); majCalage(); };
       i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; } }
