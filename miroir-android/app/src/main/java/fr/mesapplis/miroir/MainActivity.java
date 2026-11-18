@@ -165,6 +165,8 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // Taille du texte fixe : la taille de police de la tablette ne fait plus déborder les boutons
+        s.setTextZoom(100);
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -195,7 +197,19 @@ public class MainActivity extends Activity {
         });
         web.addJavascriptInterface(new Pont(), "MiroirApp");
 
-        setContentView(web);
+        // L'appli se place entre les barres du système quand elles sont visibles (rien ne passe dessous)
+        android.widget.FrameLayout cadre = new android.widget.FrameLayout(this);
+        cadre.addView(web, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        if (Build.VERSION.SDK_INT >= 30) {
+            cadre.setOnApplyWindowInsetsListener((v, ins) -> {
+                android.graphics.Insets b2 = ins.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                v.setPadding(b2.left, b2.top, b2.right, b2.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        } else {
+            cadre.setFitsSystemWindows(true);
+        }
+        setContentView(cadre);
         appliquerPleinEcran();
         if (b != null) web.restoreState(b);
         else web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");

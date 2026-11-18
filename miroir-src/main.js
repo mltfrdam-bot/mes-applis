@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.3";
+const VERSION = "2.4";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -863,19 +863,20 @@ if (!APPLI && "serviceWorker" in navigator) navigator.serviceWorker.register("sw
 // ---------- Raccourci : réglages du point d'accès du téléphone ----------
 async function ouvrirPointAcces() {
   if (!adb) return;
-  const essais = [
-    "am start -n com.android.settings/.TetherSettings",
-    "am start -a android.settings.TETHER_SETTINGS",
-    "am start -n 'com.android.settings/.Settings$TetherSettingsActivity'",
-    "am start -a android.settings.WIRELESS_SETTINGS",
-  ];
-  for (const c of essais) {
-    try {
-      const sortie = await adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", c + " 2>&1"]);
-      if (!/Error|Exception|not found|unable/i.test(sortie)) { bulle("📡 Réglages du point d'accès ouverts sur le téléphone"); return; }
-    } catch {}
+  const lancer = async (c) => {
+    try { return await adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", c + " 2>&1"]); } catch (e) { return "Error " + e; }
+  };
+  const echec = (t) => /Error|Exception|Denial|does not exist|Unknown|not found|unable/i.test(t);
+  // 1) Le plus sûr : descendre le panneau des raccourcis rapides (tuile « Point d'accès mobile »)
+  if (!echec(await lancer("cmd statusbar expand-settings"))) {
+    bulle("📡 Raccourcis ouverts sur le téléphone : touche la tuile « Point d'accès mobile »");
+    return;
   }
-  bulle("Je n'ai pas trouvé le réglage : ouvre-le à la main (Paramètres → Connexions)");
+  // 2) Sinon, ouvrir la page de réglages du point d'accès
+  for (const c of ["am start -a android.settings.TETHER_SETTINGS", "am start -n com.android.settings/.TetherSettings", "am start -a android.settings.WIRELESS_SETTINGS"]) {
+    if (!echec(await lancer(c))) { bulle("📡 Réglages ouverts sur le téléphone : active « Point d'accès mobile »"); return; }
+  }
+  bulle("Ouvre-le à la main : glisse deux fois du haut de l'image vers le bas, puis touche « Point d'accès mobile »");
 }
 
 // ---------- Passer en sans fil (depuis Chrome, par câble) ----------
