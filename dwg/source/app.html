@@ -92,6 +92,12 @@ table.xl td.sup{cursor:pointer}
 #tabStruct input{width:100%;border:0;background:#fffbe6;height:32px;font-family:Consolas,'Courier New',monospace;font-size:14px;text-align:right;padding:0 4px}
 #tabStruct input.nomc{text-align:left;font-family:Arial;background:transparent}
 #bDuPlan.actif{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
+#coupeBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
+#coupeBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
+#coupeBoite .tete b{flex:1;font-size:15px}
+#cpCanvas{width:100%;height:36vh;display:block;touch-action:none;border-bottom:1px solid #ddd}
+#cpSeuils input{width:52px;height:30px;border:1px solid #1f5fa8;border-radius:4px;background:#fffbe6;text-align:right;font-size:14px;padding:0 4px}
+#bCoupe.actif{background:#efe2f5;border-color:#6a1b9a;color:#6a1b9a;font-weight:bold}
 #profilBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
 #profilBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #profilBoite .tete b{flex:1;font-size:15px}
@@ -214,7 +220,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="bProfil">📈 Profil</button>
   </div>
   <div id="resultat"></div>
-  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
+  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
   <div id="tabResWrap"><table class="xl compact" id="tabRes"><thead><tr><th style="width:52px">Nom</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE arr.</th><th style="text-align:right">FE dép.</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbRes"></tbody></table></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z fini</th><th class="colFF" style="text-align:right">FF</th><th>Accroche</th></tr></thead><tbody id="tbPts"></tbody></table>
@@ -261,6 +267,17 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div style="display:flex;gap:8px;padding:8px;flex-wrap:wrap"><button class="btn prim" id="stGarder">📌 Garder avec la surface</button><button class="btn" id="stCopier">📋 Copier le récapitulatif</button></div>
   <div id="stInfo" style="padding:0 10px;font-size:13px;color:#2e7d32"></div>
   <div style="padding:6px 10px;font-size:12px;color:#777">Dens. = densité en t/m³ (pour les tonnes). Volumes en place (compactés), sans foisonnement.</div>
+</div>
+<div id="coupeBoite">
+  <div class="tete"><b>📐 Coupe de la surface</b><button class="btn" id="cpRefaire">✎ Autre coupe</button><button class="btn" id="cpFermer">✕ Fermer</button></div>
+  <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #eee;font-size:14px"><select id="cpType" style="max-width:200px"></select><span class="seg"><button id="cpTravers" class="on">↔ En travers</button><button id="cpLong">↕ En long</button></span></div>
+  <div id="cpSeuils" style="padding:5px 8px;font-size:13.5px;border-bottom:1px solid #eee"></div>
+  <canvas id="cpCanvas"></canvas>
+  <div id="cpEchelle" style="padding:2px 8px;font-size:12px;color:#666"></div>
+  <div id="cpInfo" style="padding:4px 8px;font-size:13.5px;min-height:20px"></div>
+  <div id="cpBilan" style="padding:6px 8px;font-size:14.5px;background:#f6f9fc;border-top:1px solid #dde;border-bottom:1px solid #dde"></div>
+  <div style="flex:1;overflow:auto"><table class="xl compact"><thead><tr><th>N°</th><th style="text-align:right">De → à (m)</th><th style="text-align:right">Long.</th><th style="text-align:right">Pente %</th><th>État</th></tr></thead><tbody id="tbCoupe"></tbody></table></div>
+  <div style="padding:8px"><button class="btn" id="cpCopier">📋 Copier la coupe</button></div>
 </div>
 <div id="profilBoite">
   <div class="tete"><b id="pfTitre">Profil en long</b><button class="btn" id="pfFermer">✕ Fermer</button></div>
@@ -323,7 +340,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Fond de fouille – v1";
+const VERSION = "Coupe – v1";
 </script>
 <script>
 "use strict";
@@ -736,7 +753,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure') dessinerMesure(ctx); ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -817,13 +834,13 @@ function accrocher(sx,sy){
 }
 
 // ================= Mesure =================
-let outil=null, mesure={mode:'dist',pts:[]}, visee=null, deplace=null, edition=null, histMes=[], coinSel=null;
+let outil=null, mesure={mode:'dist',pts:[]}, visee=null, deplace=null, edition=null, histMes=[], coinSel=null, coupeMode=false, coupeAB=[];
 function memoMes(){ histMes.push(JSON.stringify(mesure.pts)); if(histMes.length>60) histMes.shift(); }
 // Côté de la surface en cours dont le milieu (repère ＋) est sous le doigt
 function coteSousDoigt(sx,sy){ if(mesure.mode!=='surf'||mesure.pts.length<3) return null; const P=mesure.pts, n=P.length; let k=null, dm=RAYON_PRISE; for(let i=0;i<n;i++){ const a=P[i], b=P[(i+1)%n], [x,y]=versEcran((a.x+b.x)/2,(a.y+b.y)/2), d=Math.hypot(x-sx,y-sy); if(d<dm){dm=d;k=i;} } return k; }
 const RAYON_PRISE=26; // px : doigt posé sur un point déjà placé → on le déplace
 function pointVise(){ if(!visee) return null; if(visee.acc) return visee.acc; const [x,y]=versPlan(visee.sx,visee.sy); return {x,y,z:NaN,t:0}; }
-function ptsCalcul(){ if(mesure.mode==='res') return []; const p=mesure.pts.slice(); const v=outil==='mesure'?pointVise():null; if(v){ if(deplace!==null) p[deplace]=v; else if(!(mesure.mode==='dist'&&p.length>=2)) p.push(v); } return p; }
+function ptsCalcul(){ if(mesure.mode==='res') return []; if(coupeMode) return mesure.pts.slice(); const p=mesure.pts.slice(); const v=outil==='mesure'?pointVise():null; if(v){ if(deplace!==null) p[deplace]=v; else if(!(mesure.mode==='dist'&&p.length>=2)) p.push(v); } return p; }
 function pointSousDoigt(sx,sy){ let k=null, dm=RAYON_PRISE; mesure.pts.forEach((q,i)=>{ const [x,y]=versEcran(q.x,q.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
 const zOk=z=>Number.isFinite(z)&&z!==0;
 function calculs(p){
@@ -936,12 +953,13 @@ function majPanneau(){
     frag.appendChild(tr); });
   const vp=$('bMesVersPoints'); if(vp) vp.style.display = (mesure.mode==='dist' && mesure.pts.length>=2) ? '' : 'none';
   const surfSel = voirGardees && selMes!==null && mesuresGardees[selMes] && mesuresGardees[selMes].type==='surf';
-  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none';
+  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none'; $('bCoupe').style.display=$('bStruct').style.display;
   $('bDuPlan').style.display = (mesure.mode==='surf' && !voirGardees && !edition) ? '' : 'none'; if(mesure.mode!=='surf'||voirGardees){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); }
   tb.replaceChildren(frag); $('tabMesCour').classList.toggle('sansFF',mesure.mode!=='surf');
 }
 function poserPoint(){
   if(outil==='oeil') return;
+  if(outil==='mesure' && coupeMode){ const v=pointVise(); if(v) poserCoupe(v); return; }
   if(outil==='mesure' && mesure.mode==='res'){ const v=pointVise(); if(v) poserReseau(v); return; }
   const v=pointVise(); if(!v) return;
   if(outil==='points'){ if(ptsMode==='ligne'){ if(visee&&visee.obj) selectionnerObjet(visee.obj); return; } poserPointExport(v); return; }
@@ -958,7 +976,7 @@ function choisirOutil(o){
   $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points');
   visee=null; deplace=null; redim(); majPanneau(); if(outil==='points'){ majTablePoints(); majVueLigne(); } demanderDessin(false);
 }
-function choisirMode(m){ if(edition) finEdition(); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
+function choisirMode(m){ if(edition) finEdition(); coupeMode=false; coupeAB=[]; $('bCoupe').classList.remove('actif'); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
 
 // ================= Calques perso (créés dans l'appli) =================
 const CALQUE_PTS='POINTS_EXPORT', CALQUE_MES='MESURES', ROSE='#c2185b';
@@ -1994,6 +2012,115 @@ function brancherStructure(){
   $('stCopier').onclick=async()=>{ const t=texteStructure(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); } $('stInfo').textContent= ok?'✓ Récapitulatif copié.':'⚠ Copie impossible.'; };
 }
 
+// ================= Coupe d'une surface (dessus, fond, couches, pentes PMR) =================
+const TYPES_BASE=[{nom:'Cheminement sans dévers', tv:0, tr:2, lv:5, pmr:true},{nom:'Cheminement avec dévers', tv:1, tr:2, lv:5, pmr:true},{nom:'Route', tv:null, tr:null, lv:null, pmr:false}];
+let typesProfil=null, coupeType=0, coupeSens='travers', coupeSurf=null, coupeCurseur=null;
+async function chargerTypesProfil(){ const r=await Memoire.lire('typesProfil'); typesProfil=Array.isArray(r)&&r.length?r:JSON.parse(JSON.stringify(TYPES_BASE)); const t=await Memoire.lire('typeProfilDefaut'); if(Number.isInteger(t)&&t<typesProfil.length) coupeType=t; }
+function sauverTypesProfil(){ Memoire.ecrire('typesProfil',typesProfil); Memoire.ecrire('typeProfilDefaut',coupeType); }
+// Surface source : surface en cours, ou surface gardée sélectionnée (en coordonnées locales)
+function lancerCoupe(){
+  let pts=null, garde=null, o=scene.origine;
+  if(voirGardees && selMes!==null && mesuresGardees[selMes] && mesuresGardees[selMes].type==='surf'){ garde=mesuresGardees[selMes]; pts=garde.pts.map(q=>({x:q.x-o.x,y:q.y-o.y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN})); }
+  else if(mesure.mode==='surf' && mesure.pts.length>=3) pts=mesure.pts.map(q=>({x:q.x,y:q.y,z:q.z,ff:q.ff}));
+  if(!pts){ $('etat').textContent='Faites une surface (ou sélectionnez une surface gardée) avant la coupe.'; return; }
+  const manque=pts.map((q,i)=>zOk(q.z)?null:i+1).filter(x=>x);
+  if(manque.length){ $('etat').textContent='⚠ Cote finie manquante aux coins '+manque.join(', ')+' : posez-les sur vos points ou tapez le Z fini.'; return; }
+  const st = garde&&garde.structure ? garde.structure : {modele:structModele, couches:(tousModeles().find(x=>x.nom===structModele)||MODELES_BASE[0]).couches};
+  coupeSurf={pts, couches:copieCouches(st.couches), modele:st.modele}; coupeAB=[]; coupeMode=true; coupeCurseur=null;
+  $('bCoupe').classList.add('actif'); $('etat').textContent='📐 Touchez 2 points pour tracer la coupe (le trait peut dépasser la surface).'; demanderDessin(false);
+}
+function finCoupeMode(){ coupeMode=false; $('bCoupe').classList.remove('actif'); }
+function poserCoupe(v){ coupeAB.push({x:v.x,y:v.y}); if(coupeAB.length>=2){ coupeAB=coupeAB.slice(-2); finCoupeMode(); ouvrirCoupe(); } }
+// Calcul du profil le long de A→B, triangle par triangle
+function plan3(P,a,b,c,cle){ const A=P[a],B=P[b],C=P[c]; const d=(B.x-A.x)*(C.y-A.y)-(C.x-A.x)*(B.y-A.y); if(Math.abs(d)<1e-12) return null;
+  const za=A[cle],zb=B[cle],zc=C[cle]; const gx=((zb-za)*(C.y-A.y)-(zc-za)*(B.y-A.y))/d, gy=((zc-za)*(B.x-A.x)-(zb-za)*(C.x-A.x))/d; return (x,y)=>za+gx*(x-A.x)+gy*(y-A.y); }
+function calcCoupe(){
+  const P=coupeSurf.pts, [A,B]=coupeAB, L=Math.hypot(B.x-A.x,B.y-A.y); if(L<0.01) return null;
+  const T=trianguler(P), avecFF=P.every(q=>Number.isFinite(q.ff)), ep=coupeSurf.couches.reduce((s,c)=>s+(Number.isFinite(c.ep)?c.ep:0),0);
+  const ts=new Set([0,1]); const n=P.length;
+  const couper=(p,q)=>{ const rx=B.x-A.x, ry=B.y-A.y, sx=q.x-p.x, sy=q.y-p.y, den=rx*sy-ry*sx; if(Math.abs(den)<1e-12) return; const t=((p.x-A.x)*sy-(p.y-A.y)*sx)/den, u=((p.x-A.x)*ry-(p.y-A.y)*rx)/den; if(t>1e-9&&t<1-1e-9&&u>=-1e-9&&u<=1+1e-9) ts.add(t); };
+  for(const [i,j,k] of T){ couper(P[i],P[j]); couper(P[j],P[k]); couper(P[k],P[i]); }
+  const tt=[...ts].sort((a,b)=>a-b), segs=[];
+  const dansTri=(x,y,[i,j,k])=>{ const c=(o,p)=>(p.x-o.x)*(y-o.y)-(p.y-o.y)*(x-o.x); const a=c(P[i],P[j]),b=c(P[j],P[k]),d=c(P[k],P[i]); return (a>=-1e-9&&b>=-1e-9&&d>=-1e-9)||(a<=1e-9&&b<=1e-9&&d<=1e-9); };
+  for(let m=0;m<tt.length-1;m++){ const t0=tt[m], t1=tt[m+1]; if(t1-t0<1e-7) continue; const tm=(t0+t1)/2, xm=A.x+(B.x-A.x)*tm, ym=A.y+(B.y-A.y)*tm;
+    const tri=T.find(t=>dansTri(xm,ym,t)); if(!tri) continue;
+    const fz=plan3(P,...tri,'z'); if(!fz) continue; const ff=avecFF?plan3(P,...tri,'ff'):null;
+    const x0=A.x+(B.x-A.x)*t0, y0=A.y+(B.y-A.y)*t0, x1=A.x+(B.x-A.x)*t1, y1=A.y+(B.y-A.y)*t1;
+    const s={s0:t0*L, s1:t1*L, z0:fz(x0,y0), z1:fz(x1,y1)}; s.f0=ff?ff(x0,y0):s.z0-ep; s.f1=ff?ff(x1,y1):s.z1-ep; segs.push(s); }
+  // regroupe les morceaux de même pente qui se suivent
+  const R=[]; for(const s of segs){ const p=(s.z1-s.z0)/(s.s1-s.s0)*100, d=R[R.length-1];
+    if(d && Math.abs(d.s1-s.s0)<1e-6 && Math.abs(d.p-p)<0.01){ d.s1=s.s1; d.z1=s.z1; d.f1=s.f1; } else R.push({...s,p}); }
+  for(const s of R){ s.L=s.s1-s.s0; s.etat=etatPente(s.p,s.L); }
+  return {L, segs:R, avecFF, ep};
+}
+// 0 = vert, 1 = orange, 2 = rouge, -1 = pas de contrôle
+function etatPente(p,lg){ const t=typesProfil[coupeType], a=Math.abs(p);
+  if(coupeSens==='travers'){ if(!Number.isFinite(t.tr) || t.tr===null) return -1; const v=Number.isFinite(t.tv)?t.tv:t.tr; return a<=v+0.005?0:(a<=t.tr+0.005?1:2); }
+  if(!Number.isFinite(t.lv) || t.lv===null) return -1; if(a<=t.lv+0.005) return 0;
+  if(t.pmr && ((lg<=0.5+1e-6 && a<=10.005) || (lg<=2+1e-6 && a<=8.005))) return 1; return 2; }
+const COUL_ETAT={'-1':'#555','0':'#2e7d32','1':'#ef8a00','2':'#d32f2f'}, MOT_ETAT={'-1':'—','0':'✓ conforme','1':'⚠ hors cible','2':'✗ hors norme'};
+function ouvrirCoupe(){ $('coupeBoite').style.display='flex'; remplirTypesCoupe(); setTimeout(()=>{ dessinerCoupe(); majTableCoupe(); },30); }
+function remplirTypesCoupe(){ const sel=$('cpType'); sel.replaceChildren(); typesProfil.forEach((t,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=t.nom; if(i===coupeType) o.selected=true; sel.appendChild(o); });
+  $('cpTravers').classList.toggle('on',coupeSens==='travers'); $('cpLong').classList.toggle('on',coupeSens==='long');
+  const t=typesProfil[coupeType], f=v=>Number.isFinite(v)?frN(v,1):'';
+  if(coupeSens==='travers'){ $('cpSeuils').innerHTML='Dévers : vert ≤ <input id="cpV" inputmode="decimal"> % · rouge &gt; <input id="cpR" inputmode="decimal"> %'; $('cpV').value=f(t.tv); $('cpR').value=f(t.tr); }
+  else { $('cpSeuils').innerHTML='Pente en long : vert ≤ <input id="cpV" inputmode="decimal"> %'+(t.pmr?' <span style="font-size:12px;color:#666">(PMR : 8 % sur 2 m, 10 % sur 0,50 m = orange)</span>':''); $('cpV').value=f(t.lv); }
+  const lire=(id,cle)=>{ const e=$(id); if(!e) return; e.onchange=()=>{ const v=lireNombre(e.value); if(Number.isNaN(v)){ e.style.background='#ffd6d6'; return; } t[cle]=v===null?null:v; sauverTypesProfil(); dessinerCoupe(); majTableCoupe(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; };
+  if(coupeSens==='travers'){ lire('cpV','tv'); lire('cpR','tr'); } else lire('cpV','lv');
+  if(!Number.isFinite(coupeSens==='travers'?t.tr:t.lv)) $('cpSeuils').insertAdjacentHTML('beforeend',' <span style="font-size:12px;color:#666">— pas de contrôle (tapez une valeur pour l\'activer)</span>');
+}
+function dessinerCoupe(){
+  const cv2=$('cpCanvas'), dp=Math.min(window.devicePixelRatio||1,3), Wc=cv2.clientWidth, Hc=cv2.clientHeight; cv2.width=Wc*dp; cv2.height=Hc*dp; const g=cv2.getContext('2d'); g.setTransform(dp,0,0,dp,0,0); g.fillStyle='#fff'; g.fillRect(0,0,Wc,Hc);
+  const r=calcCoupe(); cv2._r=r; if(!r||!r.segs.length){ g.fillStyle='#666'; g.font='14px Arial'; g.fillText('Le trait de coupe ne traverse pas la surface.',12,30); $('cpInfo').textContent=''; return; }
+  const S=r.segs, s0=S[0].s0, s1=S[S.length-1].s1; const zs=[]; for(const s of S) zs.push(s.z0,s.z1,s.f0,s.f1);
+  let zmin=Math.min(...zs), zmax=Math.max(...zs); if(zmax-zmin<0.3){ const m=(zmax+zmin)/2; zmin=m-0.15; zmax=m+0.15; }
+  const mg={g:46,d:14,h:26,b:28}, wP=Wc-mg.g-mg.d, hP=Hc-mg.h-mg.b, kx=wP/((s1-s0)||1), kz=hP/((zmax-zmin)*1.2);
+  const X=x=>mg.g+(x-s0)*kx, Z=z=>mg.h+hP-(z-zmin+(zmax-zmin)*0.1)*kz;
+  $('cpEchelle').textContent='Hauteurs ×'+((kz/kx)>=10?Math.round(kz/kx):fr(kz/kx,1))+' · coupe '+fr(s1-s0,2)+' m dans la surface · fond : '+(r.avecFF?'cotes FF':'structure '+fr(r.ep,2)+' m');
+  g.strokeStyle='#e3e3e3'; g.lineWidth=1; g.font='10px Arial'; g.fillStyle='#666';
+  const pz=[0.05,0.1,0.2,0.25,0.5,1,2,5].find(p=>(zmax-zmin)/p<=6)||10; for(let z=Math.ceil(zmin/pz)*pz; z<=zmax+1e-9; z+=pz){ g.beginPath(); g.moveTo(mg.g,Z(z)); g.lineTo(Wc-mg.d,Z(z)); g.stroke(); g.textAlign='right'; g.fillText(fr(z,2),mg.g-3,Z(z)+3); }
+  const px=[0.5,1,2,5,10,20,50].find(p=>(s1-s0)/p<=8)||100; for(let x=Math.ceil(s0/px)*px;x<=s1+1e-9;x+=px){ g.beginPath(); g.moveTo(X(x),mg.h); g.lineTo(X(x),Hc-mg.b); g.stroke(); g.textAlign='center'; g.fillText(fr(x,1),X(x),Hc-mg.b+12); }
+  for(const s of S){ g.beginPath(); g.moveTo(X(s.s0),Z(s.z0)); g.lineTo(X(s.s1),Z(s.z1)); g.lineTo(X(s.s1),Z(s.f1)); g.lineTo(X(s.s0),Z(s.f0)); g.closePath(); g.fillStyle='rgba(141,110,99,0.13)'; g.fill(); }
+  // couches de la structure (si le fond vient de la structure)
+  if(!r.avecFF){ let cum=0; coupeSurf.couches.forEach((c,ic)=>{ cum+=Number.isFinite(c.ep)?c.ep:0; if(ic===coupeSurf.couches.length-1) return; g.setLineDash([5,4]); g.strokeStyle='#8d6e63'; g.lineWidth=1;
+    for(const s of S){ g.beginPath(); g.moveTo(X(s.s0),Z(s.z0-cum)); g.lineTo(X(s.s1),Z(s.z1-cum)); g.stroke(); } g.setLineDash([]); });
+    let c2=0; g.font='10px Arial'; g.fillStyle='#6d4c41'; g.textAlign='left'; const sd=S[S.length-1]; coupeSurf.couches.forEach(c=>{ const e=Number.isFinite(c.ep)?c.ep:0; const zm=sd.z1-c2-e/2; c2+=e; if(Z(zm)<Hc-mg.b-2) g.fillText(c.nom,Math.max(mg.g+2,X(s1)-90),Z(zm)+3); }); }
+  // fond
+  g.strokeStyle='#4e342e'; g.lineWidth=2; for(const s of S){ g.beginPath(); g.moveTo(X(s.s0),Z(s.f0)); g.lineTo(X(s.s1),Z(s.f1)); g.stroke(); }
+  // dessus coloré selon la pente
+  for(const s of S){ const col=COUL_ETAT[s.etat]; g.beginPath(); g.moveTo(X(s.s0),Z(s.z0)); g.lineTo(X(s.s1),Z(s.z1)); g.strokeStyle=col; g.lineWidth=3.5; g.stroke();
+    if(X(s.s1)-X(s.s0)>34){ g.font='bold 11px Arial'; g.fillStyle=col; g.textAlign='center'; g.fillText((s.p>=0?'+':'')+fr(s.p,2)+' %',(X(s.s0)+X(s.s1))/2,Math.min(Z(s.z0),Z(s.z1))-6); } }
+  g.font='bold 12px Arial'; g.fillStyle='#6a1b9a'; g.textAlign='left'; g.fillText('A',mg.g+2,mg.h-8); g.textAlign='right'; g.fillText('B',Wc-mg.d-2,mg.h-8);
+  if(coupeCurseur!==null){ const x=Math.max(s0,Math.min(s1,coupeCurseur)), s=S.find(q=>x>=q.s0-1e-9&&x<=q.s1+1e-9);
+    g.strokeStyle='#000'; g.lineWidth=1; g.setLineDash([4,3]); g.beginPath(); g.moveTo(X(x),mg.h); g.lineTo(X(x),Hc-mg.b); g.stroke(); g.setLineDash([]);
+    if(s){ const k=(x-s.s0)/(s.L||1), z=s.z0+(s.z1-s.z0)*k, f=s.f0+(s.f1-s.f0)*k; $('cpInfo').innerHTML='À <b>'+fr(x,2)+' m</b> de A : fini '+fr(z,3)+' · fond '+fr(f,3)+' · <b>profondeur '+fr(z-f,2)+' m</b>'; } }
+  else $('cpInfo').textContent='Glissez le doigt sur la coupe pour lire les cotes.';
+  cv2._X=X; cv2._kx=kx; cv2._mg=mg; cv2._s0=s0;
+}
+function majTableCoupe(){ const r=$('cpCanvas')._r||calcCoupe(), tb=$('tbCoupe'), frag=document.createDocumentFragment(); if(!r){ tb.replaceChildren(); $('cpBilan').textContent=''; return; }
+  let pire=-1; r.segs.forEach((s,i)=>{ pire=Math.max(pire,s.etat); const tr=document.createElement('tr'); tr.innerHTML=`<td>${i+1}</td><td class="num">${fr(s.s0,2)} → ${fr(s.s1,2)}</td><td class="num">${fr(s.L,2)}</td><td class="num" style="color:${COUL_ETAT[s.etat]};font-weight:bold">${(s.p>=0?'+':'')+fr(s.p,2)}</td><td style="color:${COUL_ETAT[s.etat]}">${MOT_ETAT[s.etat]}</td>`; tr.onclick=()=>{ coupeCurseur=(s.s0+s.s1)/2; dessinerCoupe(); }; frag.appendChild(tr); });
+  tb.replaceChildren(frag);
+  const max=Math.max(...r.segs.map(s=>Math.abs(s.p))); const t=typesProfil[coupeType];
+  $('cpBilan').innerHTML=(coupeSens==='travers'?'Dévers':'Pente en long')+' maxi <b>'+fr(max,2)+' %</b> → '+(pire<0?'pas de contrôle pour « '+t.nom+' »':'<b style="color:'+COUL_ETAT[pire]+'">'+MOT_ETAT[pire]+'</b>');
+}
+function texteCoupe(){ const r=calcCoupe(); if(!r) return ''; const t=typesProfil[coupeType]; const L=['Coupe — '+(scene?scene.nom:'')+' — '+t.nom+' — '+(coupeSens==='travers'?'en travers (dévers)':'en long'), 'Fond : '+(r.avecFF?'cotes FF':'structure '+frN(r.ep,2)+' m')];
+  r.segs.forEach((s,i)=>L.push((i+1)+'. '+frN(s.s0,2)+' → '+frN(s.s1,2)+' m : '+(s.p>=0?'+':'')+frN(s.p,2)+' % · fini '+frN(s.z0,3)+' → '+frN(s.z1,3)+' · prof. '+frN(s.z0-s.f0,2)+' → '+frN(s.z1-s.f1,2)+(s.etat>=0?' · '+MOT_ETAT[s.etat]:''))); return L.join('\n'); }
+function brancherCoupe(){
+  $('bCoupe').onclick=()=>{ if(coupeMode){ finCoupeMode(); coupeAB=[]; $('etat').textContent=''; demanderDessin(false); return; } lancerCoupe(); };
+  $('cpFermer').onclick=()=>{ $('coupeBoite').style.display='none'; };
+  $('cpRefaire').onclick=()=>{ $('coupeBoite').style.display='none'; lancerCoupe(); };
+  $('cpType').onchange=e=>{ coupeType=+e.target.value; sauverTypesProfil(); remplirTypesCoupe(); dessinerCoupe(); majTableCoupe(); };
+  $('cpTravers').onclick=()=>{ coupeSens='travers'; remplirTypesCoupe(); dessinerCoupe(); majTableCoupe(); };
+  $('cpLong').onclick=()=>{ coupeSens='long'; remplirTypesCoupe(); dessinerCoupe(); majTableCoupe(); };
+  $('cpCopier').onclick=async()=>{ const t=texteCoupe(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); } $('cpInfo').textContent= ok?'✓ Coupe copiée.':'⚠ Copie impossible.'; };
+  const cv2=$('cpCanvas'); const lire=ev=>{ if(!cv2._X) return; const r=cv2.getBoundingClientRect(); coupeCurseur=cv2._s0+(ev.clientX-r.left-cv2._mg.g)/cv2._kx; dessinerCoupe(); };
+  cv2.addEventListener('pointerdown',ev=>{ cv2.setPointerCapture(ev.pointerId); lire(ev); }); cv2.addEventListener('pointermove',ev=>{ if(ev.buttons||ev.pointerType==='touch') lire(ev); });
+  chargerTypesProfil();
+}
+function dessinerTraitCoupe(c){ if(!coupeAB.length && !coupeMode) return; const L=coupeAB.slice(); if(coupeMode && visee){ const v=pointVise(); if(v) L.push({x:v.x,y:v.y}); } if(!L.length) return;
+  const E=L.map(q=>versEcran(q.x,q.y)); c.save(); c.strokeStyle='#6a1b9a'; c.lineWidth=2.5; c.setLineDash([10,5]); if(E.length>=2){ c.beginPath(); c.moveTo(E[0][0],E[0][1]); c.lineTo(E[1][0],E[1][1]); c.stroke(); } c.setLineDash([]);
+  E.forEach((e,i)=>{ c.beginPath(); c.arc(e[0],e[1],5,0,DEUXPI); c.fillStyle='#fff'; c.fill(); c.stroke(); c.font='bold 13px Arial'; c.fillStyle='#6a1b9a'; c.textAlign='left'; c.fillText(i?'B':'A',e[0]+7,e[1]-6); }); c.restore(); }
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -2001,9 +2128,10 @@ function viser(p){ const enLigne=outil==='points'&&ptsMode==='ligne'; visee={sx:
 cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(ev.pointerId); const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='oeil' && !sequenceMulti){ oeilViser(p); }
-  else if(outil==='mesure' && (voirGardees||prendreSurface) && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
+  else if(outil==='mesure' && (voirGardees||prendreSurface) && !coupeMode && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
   else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
-    if(outil==='mesure' && deplace===null){ const k=coteSousDoigt(p.x,p.y); if(k!==null){ memoMes(); const a=mesure.pts[k], b=mesure.pts[(k+1)%mesure.pts.length]; mesure.pts.splice(k+1,0,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(Number.isFinite(a.z)&&Number.isFinite(b.z))?(a.z+b.z)/2:NaN,t:0}); deplace=k+1; mesure.insere=true; } }
+    if(outil==='mesure' && coupeMode) deplace=null;
+    if(outil==='mesure' && deplace===null && !coupeMode){ const k=coteSousDoigt(p.x,p.y); if(k!==null){ memoMes(); const a=mesure.pts[k], b=mesure.pts[(k+1)%mesure.pts.length]; mesure.pts.splice(k+1,0,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(Number.isFinite(a.z)&&Number.isFinite(b.z))?(a.z+b.z)/2:NaN,t:0}); deplace=k+1; mesure.insere=true; } }
     appui={x:p.x,y:p.y,bouge:false}; viser(p); }
   else { if(!outil && !sequenceMulti) appui={x:p.x,y:p.y,bouge:false}; debutGeste(); } });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
@@ -2262,7 +2390,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe();
 $('bSauver').onclick=enregistrer;
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
