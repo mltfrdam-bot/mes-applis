@@ -81,6 +81,9 @@ table.xl td.sup{cursor:pointer}
 #structBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #structBoite .tete b{flex:1;font-size:15px}
 #tabStruct td{padding:0 2px}
+#tabStruct td.verrou{text-align:center;font-size:15px;color:#1f5fa8;cursor:pointer;opacity:.55}
+#tabStruct td.verrou.on{opacity:1;background:#fff3cd}
+#stTotal{border-top:0!important}
 #tabStruct input{width:100%;border:0;background:#fffbe6;height:32px;font-family:Consolas,'Courier New',monospace;font-size:14px;text-align:right;padding:0 4px}
 #tabStruct input.nomc{text-align:left;font-family:Arial;background:transparent}
 #bDuPlan.actif{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
@@ -246,8 +249,9 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="tete"><b id="stTitre">Quantités</b><button class="btn" id="stFermer">✕ Fermer</button></div>
   <div id="stSource" style="padding:6px 10px;font-size:14px;border-bottom:1px solid #eee"></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #eee;font-size:14px">Structure : <select id="stModele" style="max-width:190px"></select><button class="btn petitb" id="stSauverModele">💾 Modèle</button><button class="btn petitb" id="stSupModele" title="Supprimer ce modèle perso">🗑</button><input id="stNomModele" style="display:none;height:32px;width:170px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"></div>
-  <div style="overflow:auto"><table class="xl compact" id="tabStruct"><thead><tr><th>Couche</th><th style="text-align:right;width:62px">Ép. (m)</th><th style="text-align:right;width:56px">Dens.</th><th style="text-align:right">m³</th><th style="text-align:right">t</th><th style="width:30px"></th></tr></thead><tbody id="tbStruct"></tbody></table></div>
+  <div style="overflow:auto"><table class="xl compact" id="tabStruct"><thead><tr><th>Couche</th><th style="text-align:right;width:62px">Ép. (m)</th><th style="width:28px" title="Verrouiller l'épaisseur">🔒</th><th style="text-align:right;width:56px">Dens.</th><th style="text-align:right">m³</th><th style="text-align:right">t</th><th style="width:30px"></th></tr></thead><tbody id="tbStruct"></tbody></table></div>
   <div style="padding:6px 8px"><button class="btn petitb" id="stAjout">＋ Couche</button></div>
+  <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;font-size:14.5px;background:#f6f9fc;border-top:1px solid #dde;flex-wrap:wrap">Épaisseur totale : <input id="stEpTot" inputmode="decimal" style="width:76px;height:34px;border:1px solid #1f5fa8;border-radius:4px;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:15px;font-weight:bold;padding:0 5px"> m <span id="stAjuste" style="font-size:12.5px;color:#555"></span></div>
   <div id="stTotal" style="padding:8px 10px;font-size:14.5px;line-height:1.5;background:#f6f9fc;border-top:1px solid #dde;border-bottom:1px solid #dde"></div>
   <div style="display:flex;gap:8px;padding:8px;flex-wrap:wrap"><button class="btn prim" id="stGarder">📌 Garder avec la surface</button><button class="btn" id="stCopier">📋 Copier le récapitulatif</button></div>
   <div id="stInfo" style="padding:0 10px;font-size:13px;color:#2e7d32"></div>
@@ -314,7 +318,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Modifier mesure – v1";
+const VERSION = "Quantités – v2";
 </script>
 <script>
 "use strict";
@@ -1852,13 +1856,19 @@ function brancherReseau(){
 }
 
 // ================= Quantités d'une surface : structure (enrobé, 0/20, 0/80…) =================
-const MODELES_BASE=[{nom:'Voirie enrobé', base:true, couches:[{nom:'Enrobé',ep:0.06,dens:2.40},{nom:'GNT 0/20 compactée',ep:0.20,dens:2.20},{nom:'GNT 0/80',ep:0.30,dens:2.20}]},
+const MODELES_BASE=[{nom:'Voirie enrobé', base:true, couches:[{nom:'Enrobé',ep:0.06,dens:2.40},{nom:'GNT 0/20 compactée',ep:0.10,dens:2.20},{nom:'GNT 0/80',ep:0.20,dens:2.20}]},
   {nom:'Trottoir enrobé', base:true, couches:[{nom:'Enrobé',ep:0.04,dens:2.40},{nom:'GNT 0/20 compactée',ep:0.15,dens:2.20}]},
   {nom:'Béton désactivé', base:true, couches:[{nom:'Béton',ep:0.12,dens:2.40},{nom:'GNT 0/20 compactée',ep:0.15,dens:2.20}]}];
 let modelesPerso=[], structCour=null, structModele='Voirie enrobé', structSurf=null, prendreSurface=false;
 async function chargerModeles(){ const r=await Memoire.lire('modelesStructure'); modelesPerso=Array.isArray(r)?r:[]; const d=await Memoire.lire('modeleStructureDefaut'); if(d) structModele=d; }
 const tousModeles=()=>[...MODELES_BASE,...modelesPerso];
-function copieCouches(c){ return c.map(x=>({nom:x.nom, ep:x.ep, dens:x.dens})); }
+function copieCouches(c){ return c.map(x=>({nom:x.nom, ep:x.ep, dens:x.dens, ...(x.verrou?{verrou:true}:{})})); }
+// Couche qui absorbe un changement du total : la plus basse non verrouillée (le 0/80 en général)
+function coucheAjustable(){ for(let i=structCour.length-1;i>=0;i--) if(!structCour[i].verrou) return i; return -1; }
+function changerTotal(nouv){ const r=calcStructure(), k=coucheAjustable();
+  if(k<0){ $('stInfo').textContent='⚠ Toutes les couches sont verrouillées 🔒 : déverrouillez celle qui doit changer.'; return; }
+  const e=(structCour[k].ep||0)+(nouv-r.ep); if(e<0){ $('stInfo').textContent='⚠ Total trop petit : « '+structCour[k].nom+' » passerait sous 0.'; return; }
+  structCour[k].ep=Math.round(e*1000)/1000; $('stInfo').textContent='« '+structCour[k].nom+' » passe à '+frN(structCour[k].ep,2)+' m.'; }
 function aireAnneau(pts){ let a=0; for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length]; a+=p.x*q.y-q.x*p.y; } return Math.abs(a)/2; }
 function perimAnneau(pts){ let s=0; for(let i=0;i<pts.length;i++){ const p=pts[i], q=pts[(i+1)%pts.length]; s+=Math.hypot(q.x-p.x,q.y-p.y); } return s; }
 // Ouvre la fenêtre des quantités pour la surface en cours, ou la mesure gardée sélectionnée
@@ -1884,7 +1894,7 @@ function remplirStructure(){
   majTableStructure();
 }
 function majTableStructure(){
-  const r=calcStructure(), tb=$('tbStruct'), frag=document.createDocumentFragment();
+  const r=calcStructure(), tb=$('tbStruct'), frag=document.createDocumentFragment(), kAj=coucheAjustable();
   r.lignes.forEach((l,i)=>{ const tr=document.createElement('tr');
     const iN=document.createElement('input'); iN.value=l.c.nom; iN.className='nomc'; iN.onchange=()=>{ structCour[i].nom=iN.value.trim()||structCour[i].nom; };
     const num=(v,d,cb)=>{ const x=document.createElement('input'); x.inputMode='decimal'; x.value=Number.isFinite(v)?frN(v,d):''; x.onchange=()=>{ const n=lireNombre(x.value); if(Number.isNaN(n)){ x.classList.add('faux'); return; } cb(n); majTableStructure(); }; x.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); x.blur(); } }; return x; };
@@ -1892,9 +1902,12 @@ function majTableStructure(){
     const t1=td(); t1.appendChild(iN); const t2=td(); t2.appendChild(num(l.c.ep,3,n=>structCour[i].ep=n)); const t3=td(); t3.appendChild(num(l.c.dens,2,n=>structCour[i].dens=n));
     const t4=td(); t4.className='num'; t4.textContent=frN(l.V,2); const t5=td(); t5.className='num'; t5.innerHTML='<b>'+(l.T!==null?frN(l.T,1):'—')+'</b>';
     const t6=td(); t6.className='sup'; t6.textContent='🗑'; t6.onclick=()=>{ structCour.splice(i,1); majTableStructure(); };
-    tr.append(t1,t2,t3,t4,t5,t6); frag.appendChild(tr); });
+    const tv=td(); tv.className='verrou'+(l.c.verrou?' on':''); tv.textContent=l.c.verrou?'🔒':(i===kAj?'↕':'🔓'); tv.title=l.c.verrou?'Épaisseur verrouillée':(i===kAj?'Cette couche suit le total':'Toucher pour verrouiller');
+    tv.onclick=()=>{ structCour[i].verrou=!structCour[i].verrou; if(!structCour[i].verrou) delete structCour[i].verrou; majTableStructure(); };
+    tr.append(t1,t2,tv,t3,t4,t5,t6); frag.appendChild(tr); });
   tb.replaceChildren(frag);
-  $('stTotal').innerHTML='Épaisseur totale <b>'+frN(r.ep,2)+' m</b> → fond de fouille à −'+frN(r.ep,2)+' m sous le fini<br>Volume de fouille (décaissement) : <b>'+frN(r.Vf,2)+' m³</b> en place'+
+  const it=$('stEpTot'); if(document.activeElement!==it) it.value=frN(r.ep,3); $('stAjuste').textContent= kAj>=0 ? '↕ ajuste : '+structCour[kAj].nom : '⚠ tout est verrouillé';
+  $('stTotal').innerHTML='Fond de fouille à −'+frN(r.ep,2)+' m sous le fini<br>Volume de fouille (décaissement) : <b>'+frN(r.Vf,2)+' m³</b> en place'+
     (r.lignes.some(l=>l.T!==null)?' · total matériaux : <b>'+frN(r.lignes.reduce((a,l)=>a+(l.T||0),0),1)+' t</b>':'');
 }
 function texteStructure(){ const r=calcStructure(); const L=['Quantités — '+(scene?scene.nom:'')+' — '+structModele, 'Surface : '+frN(r.A,2)+' m²'];
@@ -1921,10 +1934,13 @@ function surfaceDuPlan(sx,sy){
 function surfaceDuPlanFond(f){ let best=null, ba=-1; for(const q of f.an){ const P=[]; for(let i=0;i<q.length;i+=2) P.push({x:q[i],y:q[i+1]}); const a=aireAnneau(P); if(a>ba){ba=a;best=P;} }
   mesure.pts=best.map(p=>({x:p.x,y:p.y,z:NaN,t:0})); $('etat').textContent='⬚ Surface prise sur le plan (hachure) : '+fr(ba,2)+' m².'; return true; }
 function brancherStructure(){
+  new MutationObserver(()=>{ const e=$('stInfo'); e.style.color=e.textContent.startsWith('⚠')?'#b00020':'#2e7d32'; }).observe($('stInfo'),{childList:true,characterData:true,subtree:true});
   $('bStruct').onclick=ouvrirStructure;
   $('bDuPlan').onclick=()=>{ prendreSurface=!prendreSurface; $('bDuPlan').classList.toggle('actif',prendreSurface); $('etat').textContent= prendreSurface?'⬚ Touchez une polyligne fermée ou une hachure du plan.':''; };
   $('stFermer').onclick=()=>{ $('structBoite').style.display='none'; };
   $('stModele').onchange=e=>{ const m=tousModeles().find(x=>x.nom===e.target.value); if(m){ structModele=m.nom; structCour=copieCouches(m.couches); Memoire.ecrire('modeleStructureDefaut',structModele); } remplirStructure(); };
+  $('stEpTot').onchange=()=>{ const n=lireNombre($('stEpTot').value); if(Number.isNaN(n)||n===null||n<0){ $('stEpTot').style.background='#ffd6d6'; return; } $('stEpTot').style.background='#fffbe6'; changerTotal(n); majTableStructure(); };
+  $('stEpTot').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   $('stAjout').onclick=()=>{ structCour.push({nom:'Couche '+(structCour.length+1), ep:0.10, dens:2.20}); majTableStructure(); };
   $('stSauverModele').onclick=()=>{ const i=$('stNomModele'); i.style.display=''; i.value=structModele.endsWith(' (perso)')?structModele:structModele+' (perso)'; i.focus(); i.select(); };
   $('stNomModele').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
