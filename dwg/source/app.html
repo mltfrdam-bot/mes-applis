@@ -92,6 +92,10 @@ table.xl td.sup{cursor:pointer}
 #tabStruct input{width:100%;border:0;background:#fffbe6;height:32px;font-family:Consolas,'Courier New',monospace;font-size:14px;text-align:right;padding:0 4px}
 #tabStruct input.nomc{text-align:left;font-family:Arial;background:transparent}
 #bDuPlan.actif{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
+#vue3dBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
+#vue3dBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
+#vue3dBoite .tete b{flex:1;font-size:15px}
+#v3Canvas{width:100%;flex:1;min-height:200px;display:block;touch-action:none}
 #coupeBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
 #coupeBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #coupeBoite .tete b{flex:1;font-size:15px}
@@ -220,7 +224,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="bProfil">📈 Profil</button>
   </div>
   <div id="resultat"></div>
-  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
+  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
   <div id="tabResWrap"><table class="xl compact" id="tabRes"><thead><tr><th style="width:52px">Nom</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE arr.</th><th style="text-align:right">FE dép.</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbRes"></tbody></table></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z fini</th><th class="colFF" style="text-align:right">FF</th><th>Accroche</th></tr></thead><tbody id="tbPts"></tbody></table>
@@ -267,6 +271,14 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div style="display:flex;gap:8px;padding:8px;flex-wrap:wrap"><button class="btn prim" id="stGarder">📌 Garder avec la surface</button><button class="btn" id="stCopier">📋 Copier le récapitulatif</button></div>
   <div id="stInfo" style="padding:0 10px;font-size:13px;color:#2e7d32"></div>
   <div style="padding:6px 10px;font-size:12px;color:#777">Dens. = densité en t/m³ (pour les tonnes). Volumes en place (compactés), sans foisonnement.</div>
+</div>
+<div id="vue3dBoite">
+  <div class="tete"><b>🧊 Vue 3D</b><button class="btn" id="v3Dessus">⬇ Dessus</button><button class="btn" id="v3Iso">↺ 3D</button><button class="btn" id="v3Fermer">✕ Fermer</button></div>
+  <div style="display:flex;gap:6px;align-items:center;padding:5px 8px;font-size:13.5px;border-bottom:1px solid #eee;flex-wrap:wrap">Hauteurs <span class="seg"><button id="v3x1">×1</button><button id="v3x2">×2</button><button id="v3x5">×5</button><button id="v3x10">×10</button></span></div>
+  <canvas id="v3Canvas"></canvas>
+  <div id="v3Info" style="padding:6px 8px;font-size:14px;background:#f6f9fc;border-top:1px solid #dde"></div>
+  <div id="v3Legende" style="padding:4px 8px;font-size:13px"></div>
+  <div style="padding:2px 8px 8px;font-size:12px;color:#777">Un doigt : tourner · deux doigts : zoomer</div>
 </div>
 <div id="coupeBoite">
   <div class="tete"><b>📐 Coupe de la surface</b><button class="btn" id="cpRefaire">✎ Autre coupe</button><button class="btn" id="cpFermer">✕ Fermer</button></div>
@@ -340,7 +352,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Cubage – v1";
+const VERSION = "Vue 3D – v1";
 </script>
 <script>
 "use strict";
@@ -956,7 +968,7 @@ function majPanneau(){
     frag.appendChild(tr); });
   const vp=$('bMesVersPoints'); if(vp) vp.style.display = (mesure.mode==='dist' && mesure.pts.length>=2) ? '' : 'none';
   const surfSel = voirGardees && selMes!==null && mesuresGardees[selMes] && mesuresGardees[selMes].type==='surf';
-  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none'; $('bCoupe').style.display=$('bStruct').style.display;
+  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none'; $('bCoupe').style.display=$('b3D').style.display=$('bStruct').style.display;
   $('bDuPlan').style.display = (mesure.mode==='surf' && !voirGardees && !edition) ? '' : 'none'; if(mesure.mode!=='surf'||voirGardees){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); }
   tb.replaceChildren(frag); $('tabMesCour').classList.toggle('sansFF',mesure.mode!=='surf');
 }
@@ -2125,6 +2137,77 @@ function dessinerTraitCoupe(c){ if(!coupeAB.length && !coupeMode) return; const 
   const E=L.map(q=>versEcran(q.x,q.y)); c.save(); c.strokeStyle='#6a1b9a'; c.lineWidth=2.5; c.setLineDash([10,5]); if(E.length>=2){ c.beginPath(); c.moveTo(E[0][0],E[0][1]); c.lineTo(E[1][0],E[1][1]); c.stroke(); } c.setLineDash([]);
   E.forEach((e,i)=>{ c.beginPath(); c.arc(e[0],e[1],5,0,DEUXPI); c.fillStyle='#fff'; c.fill(); c.stroke(); c.font='bold 13px Arial'; c.fillStyle='#6a1b9a'; c.textAlign='left'; c.fillText(i?'B':'A',e[0]+7,e[1]-6); }); c.restore(); }
 
+// ================= Vue 3D d'une surface (fini, fond, couches) =================
+let v3=null; // {pts, couches, avecFF, ep, yaw, pitch, zoom, exag, ...}
+const COUL_COUCHES=['#5f6368','#d8c7a3','#b08d63','#9c7b55','#c9b28a','#8d6e63'];
+function ouvrir3D(){
+  let pts=null, garde=null, o=scene.origine;
+  if(voirGardees && selMes!==null && mesuresGardees[selMes] && mesuresGardees[selMes].type==='surf'){ garde=mesuresGardees[selMes]; pts=garde.pts.map(q=>({x:q.x-o.x,y:q.y-o.y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN})); }
+  else if(mesure.mode==='surf' && mesure.pts.length>=3) pts=mesure.pts.map(q=>({x:q.x,y:q.y,z:q.z,ff:q.ff,nom:q.nom}));
+  if(!pts){ $('etat').textContent='Faites une surface (ou sélectionnez une surface gardée) avant la vue 3D.'; return; }
+  const manque=pts.map((q,i)=>zOk(q.z)?null:i+1).filter(x=>x);
+  if(manque.length){ $('etat').textContent='⚠ Cote finie manquante aux coins '+manque.join(', ')+' : il faut les Z pour la 3D.'; return; }
+  const st = garde&&garde.structure ? garde.structure : {couches:(tousModeles().find(x=>x.nom===structModele)||MODELES_BASE[0]).couches, modele:structModele};
+  const avecFF=pts.every(q=>Number.isFinite(q.ff)), couches=copieCouches(st.couches), ep=couches.reduce((s,c)=>s+(Number.isFinite(c.ep)?c.ep:0),0);
+  let cx=0,cy=0; for(const q of pts){ cx+=q.x; cy+=q.y; } cx/=pts.length; cy/=pts.length;
+  const R=Math.max(...pts.map(q=>Math.hypot(q.x-cx,q.y-cy)))||1;
+  const zh=Math.max(...pts.map(q=>q.z)), zb=Math.min(...pts.map(q=>avecFF?q.ff:q.z-ep)), cz=(zh+zb)/2, H=Math.max(zh-zb,0.01);
+  const ex=[1,2,5,10].reduce((m,e)=>Math.abs(H*e/(2*R)-0.25)<Math.abs(H*m/(2*R)-0.25)?e:m,1); // relief lisible : hauteur ≈ 1/4 de la largeur
+  v3={pts, T:trianguler(pts), couches, avecFF, ep, cx, cy, cz, R, H, yaw:-0.6, pitch:0.75, zoom:1, exag:ex, modele:st.modele};
+  $('vue3dBoite').style.display='flex'; majBoutons3D(); setTimeout(dessiner3D,30);
+}
+function majBoutons3D(){ for(const e of [1,2,5,10]) $('v3x'+e).classList.toggle('on',v3.exag===e); }
+function dessiner3D(){
+  if(!v3) return; const cv3=$('v3Canvas'), dp=Math.min(window.devicePixelRatio||1,3), Wc=cv3.clientWidth, Hc=cv3.clientHeight; cv3.width=Wc*dp; cv3.height=Hc*dp;
+  const g=cv3.getContext('2d'); g.setTransform(dp,0,0,dp,0,0); const fond=g.createLinearGradient(0,0,0,Hc); fond.addColorStop(0,'#eef3f8'); fond.addColorStop(1,'#ffffff'); g.fillStyle=fond; g.fillRect(0,0,Wc,Hc);
+  const {pts:P,T,cx,cy,cz,exag}=v3, cyw=Math.cos(v3.yaw), syw=Math.sin(v3.yaw), cp=Math.cos(v3.pitch), sp=Math.sin(v3.pitch), k=Math.min(Wc,Hc)*0.40/Math.hypot(v3.R,v3.H*exag/2)*v3.zoom;
+  const pr=(x,y,z)=>{ const dx=x-cx, dy=y-cy, dz=(z-cz)*exag; const X1=dx*cyw-dy*syw, Y1=dx*syw+dy*cyw; return [Wc/2+X1*k, Hc*0.5-(Y1*sp+dz*cp)*k, Y1*cp-dz*sp]; };
+  const L=[0.35,-0.45,0.82], nl=Math.hypot(...L);
+  const faces=[];
+  const ajout=(pts3,col,trait,ordre)=>{ // pts3 : [[x,y,z],...] en coordonnées monde
+    const a=pts3[0],b=pts3[1],c=pts3[2]; const u=[b[0]-a[0],b[1]-a[1],(b[2]-a[2])*exag], v=[c[0]-a[0],c[1]-a[1],(c[2]-a[2])*exag];
+    const n=[u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]], nn=Math.hypot(...n)||1;
+    const lum=0.62+0.38*Math.abs((n[0]*L[0]+n[1]*L[1]+n[2]*L[2])/nn/nl);
+    const E=pts3.map(p=>pr(...p)); faces.push({E, d:E.reduce((s,e)=>s+e[2],0)/E.length, col, lum, trait, ordre}); };
+  const fondZ=q=>v3.avecFF?q.ff:q.z-v3.ep;
+  // dessus et fond
+  for(const [i,j,m] of T){ ajout([[P[i].x,P[i].y,P[i].z],[P[j].x,P[j].y,P[j].z],[P[m].x,P[m].y,P[m].z]],'#9e9e9e',false,2);
+    ajout([[P[i].x,P[i].y,fondZ(P[i])],[P[j].x,P[j].y,fondZ(P[j])],[P[m].x,P[m].y,fondZ(P[m])]],'#6d4c41',false,0); }
+  // parois : une bande par couche (ou une seule bande « fouille » avec les FF)
+  const n=P.length;
+  for(let i=0;i<n;i++){ const a=P[i], b=P[(i+1)%n];
+    if(v3.avecFF) ajout([[a.x,a.y,a.z],[b.x,b.y,b.z],[b.x,b.y,b.ff],[a.x,a.y,a.ff]],'#a1887f',true,1);
+    else { let cum=0; v3.couches.forEach((c,ic)=>{ const e=Number.isFinite(c.ep)?c.ep:0; if(e<=0) return; ajout([[a.x,a.y,a.z-cum],[b.x,b.y,b.z-cum],[b.x,b.y,b.z-cum-e],[a.x,a.y,a.z-cum-e]],COUL_COUCHES[ic%COUL_COUCHES.length],true,1); cum+=e; }); } }
+  faces.sort((p,q)=>(p.ordre-q.ordre)||(q.d-p.d)); // fond, puis parois, puis dessus (on regarde toujours d'en haut)
+  const teinte=(hex,l)=>{ const r=parseInt(hex.slice(1,3),16),gg=parseInt(hex.slice(3,5),16),bb=parseInt(hex.slice(5,7),16); return 'rgb('+Math.round(r*l)+','+Math.round(gg*l)+','+Math.round(bb*l)+')'; };
+  for(const f of faces){ g.beginPath(); g.moveTo(f.E[0][0],f.E[0][1]); for(let i=1;i<f.E.length;i++) g.lineTo(f.E[i][0],f.E[i][1]); g.closePath(); g.fillStyle=teinte(f.col,f.lum); g.fill(); g.strokeStyle=f.trait?'rgba(0,0,0,0.25)':'rgba(255,255,255,0.35)'; g.lineWidth=0.8; g.stroke(); }
+  // contour du dessus + cotes des coins
+  g.strokeStyle='#263238'; g.lineWidth=1.6; g.beginPath(); P.forEach((q,i)=>{ const e=pr(q.x,q.y,q.z); i?g.lineTo(e[0],e[1]):g.moveTo(e[0],e[1]); }); g.closePath(); g.stroke();
+  g.font='bold 11px Arial'; g.textAlign='center';
+  P.forEach((q,i)=>{ const e=pr(q.x,q.y,q.z); const t=(q.nom||String(i+1))+' · '+frN(q.z,2)+(Number.isFinite(q.ff)?' / FF '+frN(q.ff,2):''); const w=g.measureText(t).width+8;
+    g.fillStyle='rgba(255,255,255,0.88)'; g.fillRect(e[0]-w/2,e[1]-22,w,15); g.fillStyle='#263238'; g.fillText(t,e[0],e[1]-10.5); g.beginPath(); g.arc(e[0],e[1],3,0,DEUXPI); g.fill(); });
+  // flèche du nord
+  const nN=pr(cx,cy+v3.R*0.25,cz), n0=pr(cx,cy,cz); const ax=nN[0]-n0[0], ay=nN[1]-n0[1], la=Math.hypot(ax,ay)||1;
+  g.save(); g.translate(30,Hc-34); g.strokeStyle='#1f5fa8'; g.fillStyle='#1f5fa8'; g.lineWidth=2; g.beginPath(); g.moveTo(0,0); g.lineTo(ax/la*20,ay/la*20); g.stroke(); g.font='bold 12px Arial'; g.fillText('N',ax/la*30,ay/la*30+4); g.restore();
+  const A=aireAnneau(P), vf=v3.avecFF?volumeFF(P):null;
+  $('v3Info').innerHTML=fr(A,2)+' m² · fond : '+(v3.avecFF?'cotes FF':'structure '+frN(v3.ep,2)+' m')+' · fouille <b>'+fr(vf&&vf.V!==undefined?vf.V:A*v3.ep,2)+' m³</b> · hauteurs ×'+exag;
+  $('v3Legende').innerHTML= v3.avecFF ? '<span style="color:#a1887f">■</span> fouille (fini → FF)' : v3.couches.map((c,i)=>'<span style="color:'+COUL_COUCHES[i%COUL_COUCHES.length]+'">■</span> '+c.nom+' '+frN(c.ep,2)).join(' · ');
+}
+function brancher3D(){
+  $('b3D').onclick=ouvrir3D; $('v3Fermer').onclick=()=>{ $('vue3dBoite').style.display='none'; };
+  for(const e of [1,2,5,10]) $('v3x'+e).onclick=()=>{ v3.exag=e; majBoutons3D(); dessiner3D(); };
+  $('v3Dessus').onclick=()=>{ v3.pitch=Math.PI/2-0.001; v3.yaw=0; v3.zoom=1; dessiner3D(); };
+  $('v3Iso').onclick=()=>{ v3.pitch=0.75; v3.yaw=-0.6; v3.zoom=1; dessiner3D(); };
+  const cv3=$('v3Canvas'), doigts=new Map(); let dist0=0, zoom0=1;
+  cv3.addEventListener('pointerdown',ev=>{ cv3.setPointerCapture(ev.pointerId); doigts.set(ev.pointerId,{x:ev.clientX,y:ev.clientY}); if(doigts.size===2){ const [a,b]=[...doigts.values()]; dist0=Math.hypot(a.x-b.x,a.y-b.y); zoom0=v3.zoom; } });
+  cv3.addEventListener('pointermove',ev=>{ const d=doigts.get(ev.pointerId); if(!d||!v3) return; const p={x:ev.clientX,y:ev.clientY};
+    if(doigts.size===1){ v3.yaw-= (p.x-d.x)*0.01; v3.pitch=Math.max(0.05,Math.min(Math.PI/2-0.001,v3.pitch+(p.y-d.y)*0.008)); doigts.set(ev.pointerId,p); dessiner3D(); }
+    else if(doigts.size===2){ doigts.set(ev.pointerId,p); const [a,b]=[...doigts.values()]; const dd=Math.hypot(a.x-b.x,a.y-b.y); if(dist0>0){ v3.zoom=Math.max(0.3,Math.min(8,zoom0*dd/dist0)); dessiner3D(); } } });
+  const fin=ev=>{ doigts.delete(ev.pointerId); if(doigts.size<2) dist0=0; }; cv3.addEventListener('pointerup',fin); cv3.addEventListener('pointercancel',fin);
+  cv3.addEventListener('wheel',ev=>{ ev.preventDefault(); v3.zoom=Math.max(0.3,Math.min(8,v3.zoom*(ev.deltaY<0?1.15:1/1.15))); dessiner3D(); },{passive:false});
+  window.addEventListener('resize',()=>{ if($('vue3dBoite').style.display==='flex') dessiner3D(); });
+}
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -2394,7 +2477,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D();
 $('bSauver').onclick=enregistrer;
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
