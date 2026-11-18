@@ -41,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
     private static final int CHOIX_FICHIER = 41;
     private static final int CHOIX_DOSSIER = 42;
+    private static final int CREER_FICHIER = 43;
     private static final String HOTE = "https://appassets.androidplatform.net";
     private static final String MARQUE = "content=\"lecteur-dwg-chantier\"";
 
@@ -231,6 +232,40 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** « Enregistrer sous » : Android demande le nom et l'emplacement. Réponse : window.fichierCree(uri, nom) ("" si annulé). */
+        @JavascriptInterface public void creerFichier(String nomPropose) {
+            runOnUiThread(() -> {
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                i.addCategory(Intent.CATEGORY_OPENABLE);
+                i.setType("application/octet-stream");
+                i.putExtra(Intent.EXTRA_TITLE, nomPropose);
+                try { startActivityForResult(i, CREER_FICHIER); }
+                catch (Exception e) { repondreFichier("", ""); }
+            });
+        }
+
+        /** Écrit (remplace) le contenu d'un fichier déjà choisi. "ok", "absent" (fichier introuvable / clé débranchée) ou un message. */
+        @JavascriptInterface public String ecrireUri(String uri, String contenu) {
+            try {
+                Uri u = Uri.parse(uri);
+                OutputStream o;
+                try { o = getContentResolver().openOutputStream(u, "wt"); }
+                catch (Exception e) { o = getContentResolver().openOutputStream(u, "w"); }
+                if (o == null) return "absent";
+                try (OutputStream os = o) { os.write(contenu.getBytes(StandardCharsets.UTF_8)); }
+                return "ok";
+            } catch (SecurityException e) {
+                return "absent";
+            } catch (java.io.FileNotFoundException e) {
+                return "absent";
+            } catch (Exception e) {
+                return "erreur : " + e.getMessage();
+            }
+        }
+
+        /** Nom affiché d'un fichier choisi. */
+        @JavascriptInterface public String nomUri(String uri) { return nomAffiche(Uri.parse(uri)); }
+
         /** Nom lisible du dossier d'export retenu, ou "" s'il n'y en a pas. */
         @JavascriptInterface public String nomDossier() { return nomLisibleDossier(); }
 
@@ -295,6 +330,18 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return "dossier choisi"; }
     }
 
+    private String nomAffiche(Uri u) {
+        try (Cursor c = getContentResolver().query(u, null, null, null, null)) {
+            if (c != null && c.moveToFirst()) { int i = c.getColumnIndex(OpenableColumns.DISPLAY_NAME); if (i >= 0 && c.getString(i) != null) return c.getString(i); }
+        } catch (Exception ignored) {}
+        String d = u.getLastPathSegment(); return d == null ? "fichier" : d;
+    }
+
+    private void repondreFichier(String uri, String nom) {
+        String js = "window.fichierCree && window.fichierCree(" + org.json.JSONObject.quote(uri) + "," + org.json.JSONObject.quote(nom) + ")";
+        if (web != null) web.evaluateJavascript(js, null);
+    }
+
     private void repondreDossier(String nom) {
         String js = "window.dossierChoisi && window.dossierChoisi(" + org.json.JSONObject.quote(nom) + ")";
         if (web != null) web.evaluateJavascript(js, null);
@@ -302,6 +349,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int code, int res, Intent data) {
+        if (code == CREER_FICHIER) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                Uri u = data.getData();
+                try { getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); }
+                catch (Exception ignored) {}
+                repondreFichier(u.toString(), nomAffiche(u));
+            } else repondreFichier("", "");
+            return;
+        }
         if (code == CHOIX_DOSSIER) {
             if (res == RESULT_OK && data != null && data.getData() != null) {
                 Uri u = data.getData();

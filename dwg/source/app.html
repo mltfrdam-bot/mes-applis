@@ -85,6 +85,9 @@ table.xl.compact td{height:30px}
 #menu .tete b{flex:1}
 #menu .boutons{display:flex;flex-direction:column;gap:8px;padding:10px}
 #menu .info{padding:0 10px 10px;font-size:13px;color:#444}
+#bSauver{position:fixed;right:8px;top:118px;width:50px;height:50px;border-radius:50%;border:1px solid #9a9a9a;background:#fff;font-size:22px;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.25);display:none}
+body.planOuvert:not(.enOutil) #bSauver{display:block}
+#bSauver.modifie::after{content:"";position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#d32f2f;border:2px solid #fff}
 #bOeil{position:fixed;right:8px;top:60px;width:50px;height:50px;border-radius:50%;border:1px solid #9a9a9a;background:#fff;font-size:24px;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.25);display:none}
 body.planOuvert:not(.enOutil) #bOeil{display:block}
 #bOeil.actif{background:#1f5fa8;border-color:#1f5fa8;box-shadow:0 0 0 4px rgba(31,95,168,.3)}
@@ -226,14 +229,19 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <table class="xl"><tbody>
     <tr><td>Version de la page</td><td id="mVersion"></td></tr>
     <tr><td>Appli</td><td id="mAppli"></td></tr>
+    <tr><td>Sauvegarde</td><td id="mSauv"></td></tr>
   </tbody></table>
   <div class="boutons">
-    <button class="btn prim" id="bMaj">⬆ Mettre à jour l'appli</button>
+    <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
+    <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
+    <button class="btn" id="bMenuOuvrirSauv">📂 Ouvrir une sauvegarde (fusion)</button>
+    <button class="btn" id="bMaj">⬆ Mettre à jour l'appli</button>
     <button class="btn" id="bPrec">↩ Revenir à la version précédente</button>
     <input type="file" id="fichierMaj" style="display:none">
   </div>
   <div id="mInfo" class="info"></div>
 </div>
+<button id="bSauver" title="Enregistrer (un appui)">💾</button>
 <button id="bOeil" title="Œil : glissez-le sur le plan pour savoir à quel calque appartient ce qui est dessous">👁</button>
 <div id="ficheCalque">
   <div class="fl1"><span class="pastille" id="fcCoul"></span><b id="fcNom"></b><span id="fcInfo"></span><span style="flex:1"></span><button class="btn" id="fcFermer">✕</button></div>
@@ -255,7 +263,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Œil et fonds – v1";
+const VERSION = "Sauvegarde – v1";
 </script>
 <script>
 "use strict";
@@ -878,7 +886,7 @@ async function chargerCalquesPerso(){
   const r=await Memoire.lire('calquesPerso'); calquesPerso=Array.isArray(r)?r:[];
   const a=await Memoire.lire('calquesActifs'); if(a){ calqueActifPts=a.pts||CALQUE_PTS; calqueActifMes=a.mes||CALQUE_MES; }
 }
-function sauverCalquesPerso(){ Memoire.ecrire('calquesPerso',calquesPerso); Memoire.ecrire('calquesActifs',{pts:calqueActifPts,mes:calqueActifMes}); }
+function sauverCalquesPerso(){ marquerModifie(); Memoire.ecrire('calquesPerso',calquesPerso); Memoire.ecrire('calquesActifs',{pts:calqueActifPts,mes:calqueActifMes}); }
 const tousCalquesPerso=()=>[...CALQUES_BASE,...calquesPerso];
 function installerCalquesPerso(etat){
   for(const d of tousCalquesPerso()){
@@ -943,7 +951,7 @@ let mesuresGardees=[], voirGardees=false, selMes=null, filtreEcran=false;
 const SEUIL_TAP=9; // px : en dessous, c'est un appui (sélection), au-dessus un glissé
 const cleMesPlan=()=>'mesures:'+(scene?scene.nom:'');
 async function chargerMesuresGardees(){ const r=await Memoire.lire(cleMesPlan()); mesuresGardees=Array.isArray(r)?r:[]; }
-function sauverMesuresGardees(){ Memoire.ecrire(cleMesPlan(), mesuresGardees); }
+function sauverMesuresGardees(){ marquerModifie(); Memoire.ecrire(cleMesPlan(), mesuresGardees); }
 function mesureGardable(){ const p=mesure.pts; return mesure.mode==='dist' ? p.length>=2 : p.length>=3; }
 function garderMesure(){
   if(!mesureGardable()) return;
@@ -1019,7 +1027,7 @@ const cleptsPlan=()=>'points:'+(scene?scene.nom:'');
 const calqueDe=p=>p.calque||CALQUE_PTS;
 async function chargerPointsExport(){ const r=await Memoire.lire(cleptsPlan()); pointsExp=Array.isArray(r)?r:[]; historiquePts=[]; ptSel=null; }
 let minuteriePts=null;
-function sauverPoints(){ clearTimeout(minuteriePts); minuteriePts=setTimeout(()=>Memoire.ecrire(cleptsPlan(), pointsExp), 150); }
+function sauverPoints(){ marquerModifie(); clearTimeout(minuteriePts); minuteriePts=setTimeout(()=>Memoire.ecrire(cleptsPlan(), pointsExp), 150); }
 function memoriserPourAnnuler(){ historiquePts.push(JSON.stringify(pointsExp)); if(historiquePts.length>60) historiquePts.shift(); }
 function majCompteCalque(){ majComptesPerso(); }
 function calquePtsVisible(){ return calqueVisible(calqueActifPts); }
@@ -1423,6 +1431,7 @@ async function chargerReglagesCalques(nom){
   for(const n of (r.verrous||[])){ const c=scene.calques.get(n); if(c) c.verrou=true; }
 }
 function sauverReglagesCalques(){
+  marquerModifie();
   if(!scene) return; const cs=[...scene.calques.values()];
   Memoire.ecrire('reglagesCalques:'+scene.nom,{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)});
   sauverEtatBientot();
@@ -1454,6 +1463,122 @@ function brancherFiche(){
 }
 
 function oeilViser(p){ const h=traitSousDoigt(p.x,p.y); visee={sx:p.x, sy:p.y, acc:null, obj:null, modeOeil:true, oeil:h}; if(h){ if(!ficheSel || ficheSel.calque!==h.calque || ficheSel.obj!==h.obj || ficheSel.fond!==h.fond) ouvrirFiche(h); } else fermerFiche(); demanderDessin(false); }
+// ================= Sauvegarde dans un fichier (.plansdwg) + ouverture avec fusion =================
+let modifie=false, enChargement=false;
+function marquerModifie(){ if(enChargement||!scene) return; modifie=true; majBoutonSauver(); }
+function majBoutonSauver(){ const b=$('bSauver'); if(b) b.classList.toggle('modifie',modifie); }
+const cleSauv=()=>'sauvegarde:'+(scene?scene.nom:'');
+function enBase64(u8){ let s=''; const P=0x8000; for(let i=0;i<u8.length;i+=P) s+=String.fromCharCode.apply(null,u8.subarray(i,i+P)); return btoa(s); }
+function deBase64(b){ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+function contenuSauvegarde(){
+  const cs=[...scene.calques.values()], o=scene.origine;
+  return JSON.stringify({format:'plansdwg', version:1, appli:VERSION, date:new Date().toISOString(),
+    plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null},
+    points:pointsExp, mesures:mesuresGardees, calquesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
+    reglages:{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)},
+    vue:{cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s}});
+}
+function nomSauvegardeDefaut(){ return (scene.nom.replace(/\.[^.]*$/,'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')||'PLAN')+'.plansdwg'; }
+function heure(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function sauveOk(ou){ modifie=false; majBoutonSauver(); $('etat').textContent='💾 Enregistré à '+heure()+' ✓ — '+ou; }
+let attenteSauvegarde=false;
+async function enregistrer(){
+  if(!scene) return;
+  if(APPLI && APPLI.ecrireUri){
+    const s=await Memoire.lire(cleSauv());
+    if(!s||!s.uri){ enregistrerSous(); return; }
+    voile('Enregistrement…'); await attendreAffichage();
+    const r=APPLI.ecrireUri(s.uri, contenuSauvegarde()); finVoile();
+    if(r==='ok') sauveOk(s.nom); else if(r==='absent'){ $('etat').textContent='Fichier « '+s.nom+' » introuvable (clé débranchée ?) : choisissez un emplacement.'; enregistrerSous(); } else $('etat').textContent='⚠ Enregistrement impossible : '+r;
+    return;
+  }
+  sauverHorsAppli();
+}
+function sauverHorsAppli(){ // navigateur, ou ancienne APK sans « Enregistrer sous »
+  if(APPLI && APPLI.enregistrer){ const r=APPLI.enregistrer(nomSauvegardeDefaut(), contenuSauvegarde(), 'application/octet-stream'); if(r) sauveOk('Téléchargements/'+nomSauvegardeDefaut()+' (installez la dernière APK pour choisir l\'emplacement)'); else $('etat').textContent='⚠ Enregistrement impossible.'; return; }
+  telecharger(nomSauvegardeDefaut(), contenuSauvegarde(), 'application/octet-stream'); sauveOk('fichier téléchargé');
+}
+function enregistrerSous(){
+  if(!scene) return;
+  if(APPLI && APPLI.creerFichier){ attenteSauvegarde=true; APPLI.creerFichier(nomSauvegardeDefaut()); return; }
+  sauverHorsAppli();
+}
+// Réponse d'Android après « Enregistrer sous »
+window.fichierCree=async function(uri,nom){
+  if(!attenteSauvegarde) return; attenteSauvegarde=false;
+  if(!uri){ $('etat').textContent='Enregistrement annulé.'; return; }
+  await Memoire.ecrire(cleSauv(),{uri,nom});
+  voile('Enregistrement…'); await attendreAffichage();
+  const r=APPLI.ecrireUri(uri, contenuSauvegarde()); finVoile();
+  if(r==='ok') sauveOk(nom); else $('etat').textContent='⚠ Enregistrement impossible : '+r;
+};
+// ---- Ouverture d'une sauvegarde : plan + fusion de tout le reste ----
+function estSauvegarde(octets){ const t=new TextDecoder().decode(octets.subarray(0,64)); return /^\s*\{\s*"format"\s*:\s*"plansdwg"/.test(t); }
+async function ouvrirSauvegarde(nomFichier, octets){
+  let d; try{ d=JSON.parse(new TextDecoder().decode(octets)); }catch(e){ montrerErreur(nomFichier, new Error('Sauvegarde illisible : '+e.message)); return; }
+  if(!d.plan||!d.plan.octets){ montrerErreur(nomFichier,new Error("Cette sauvegarde ne contient pas le plan.")); return; }
+  const planOct=deBase64(d.plan.octets), nom=d.plan.nom;
+  const etatAvant=await Memoire.lire('etat');
+  const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom));
+  enChargement=true;
+  const ok=await ouvrirOctets(nom, planOct, (etatAvant&&etatAvant.nom===nom)?etatAvant:{nom:null});
+  if(!ok){ enChargement=false; return; }
+  Memoire.ecrire('plan',{nom, octets:planOct.slice().buffer, date:Date.now()});
+  const R=fusionner(d);
+  if(!dejaLa && d.vue && d.vue.s>0){ const o=scene.origine; vue.s=d.vue.s; vue.tx=W/2-(d.vue.cx-o.x)*vue.s; vue.ty=H/2+(d.vue.cy-o.y)*vue.s; }
+  enChargement=false;
+  sauverPointsMaintenant(); sauverMesuresGardees(); sauverCalquesPerso(); sauverReglagesCalques(); majComptesPerso(); majVisibles(); remplirSelectsCalques(); remplirCalques(); majTablePoints(); majPanneau(); demanderDessin(); sauverEtatBientot();
+  modifie = R.total>0 && dejaLa; majBoutonSauver();
+  montrerDescriptif(nomFichier, d, R, dejaLa);
+}
+const memePos=(a,b)=>Math.abs(a.x-b.x)<0.0005&&Math.abs(a.y-b.y)<0.0005;
+const memeZ=(a,b)=>(a===null||a===undefined)?(b===null||b===undefined):(b!==null&&b!==undefined&&Math.abs(a-b)<0.0005);
+function nomLibre(n){ let k=2; while(pointsExp.some(p=>p.nom===n+' ('+k+')')) k++; return n+' ('+k+')'; }
+function fusionner(d){
+  const R={ptsAjout:[], ptsIdem:0, ptsZ:[], ptsRenom:[], mesAjout:0, mesIdem:0, calAjout:[], supAjout:[], verAjout:[], total:0};
+  for(const p of (d.points||[])){
+    const q={nom:String(p.nom), x:+p.x, y:+p.y, z:(p.z===null||p.z===undefined)?null:+p.z, calque:p.calque||CALQUE_PTS};
+    const meme=pointsExp.find(e=>e.nom===q.nom);
+    if(!meme){ pointsExp.push(q); R.ptsAjout.push(q.nom); continue; }
+    if(memePos(meme,q) && (meme.calque||CALQUE_PTS)===q.calque){
+      if(memeZ(meme.z,q.z)){ R.ptsIdem++; continue; }
+      if(meme.z===null||meme.z===undefined){ meme.z=q.z; R.ptsZ.push(q.nom); continue; }
+      if(q.z===null){ R.ptsIdem++; continue; }
+    }
+    const n2=nomLibre(q.nom); R.ptsRenom.push(q.nom+' → '+n2); q.nom=n2; pointsExp.push(q);
+  }
+  const cle=m=>m.type+'|'+(m.calque||CALQUE_MES)+'|'+m.pts.map(q=>(+q.x).toFixed(3)+','+(+q.y).toFixed(3)).join(';');
+  const deja=new Set(mesuresGardees.map(cle));
+  for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
+  for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; if(tousCalquesPerso().some(x=>x.nom===c.nom)) continue; calquesPerso.push(c); R.calAjout.push(c.nom); }
+  installerCalquesPerso(null);
+  const rg=d.reglages||{};
+  for(const n of (rg.supprimes||[])){ const c=scene.calques.get(n); if(c && !c.supprime){ c.supprime=true; c.visible=false; R.supAjout.push(n); } }
+  for(const n of (rg.verrous||[])){ const c=scene.calques.get(n); if(c && !c.verrou && !c.supprime){ c.verrou=true; R.verAjout.push(n); } }
+  R.total=R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
+  return R;
+}
+function montrerDescriptif(nomFichier,d,R,dejaLa){
+  const lim=(a)=>a.length>12?a.slice(0,12).join(', ')+'… (+'+(a.length-12)+')':a.join(', ');
+  const L=[];
+  L.push('Sauvegarde : '+nomFichier+(d.date?' (du '+new Date(d.date).toLocaleString('fr-FR')+')':''));
+  L.push('Plan : '+d.plan.nom+(dejaLa?' — fusion avec ce qui était déjà dans l\'appli':' — ouvert tel quel'));
+  L.push('Points ajoutés : '+R.ptsAjout.length+(R.ptsAjout.length?' ('+lim(R.ptsAjout)+')':''));
+  if(R.ptsZ.length) L.push('Z complétés : '+R.ptsZ.length+' ('+lim(R.ptsZ)+')');
+  if(R.ptsRenom.length) L.push('Points de même nom mais différents, gardés tous les deux : '+R.ptsRenom.length+' ('+lim(R.ptsRenom)+')');
+  L.push('Points déjà identiques : '+R.ptsIdem);
+  L.push('Mesures gardées ajoutées : '+R.mesAjout+' · déjà identiques : '+R.mesIdem);
+  if(R.calAjout.length) L.push('Calques perso ajoutés : '+R.calAjout.join(', '));
+  if(R.supAjout.length) L.push('Calques supprimés repris : '+lim(R.supAjout));
+  if(R.verAjout.length) L.push('Calques verrouillés repris : '+lim(R.verAjout));
+  L.push(R.total? '✓ Rien n\'a été perdu : tout ce qui manquait a été ajouté.' : '✓ Rien de nouveau : tout était déjà dans l\'appli.');
+  const txt=L.join('\n');
+  $('errTitre').textContent='📂 Sauvegarde ouverte'; $('errTitre').style.color='#1f5fa8';
+  $('errTexte').textContent='Descriptif de ce qui a été repris :';
+  $('errDetail').value=txt; $('errDetail').style.height='190px'; $('erreur').style.display='flex';
+}
+function sauverPointsMaintenant(){ clearTimeout(minuteriePts); Memoire.ecrire(cleptsPlan(), pointsExp); }
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -1522,6 +1647,7 @@ async function ouvrir(f){
   voile('Ouverture de « '+f.name+' »…'); await attendreAffichage();
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
+  if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
   const ok=await ouvrirOctets(f.name, octets, null);
   if(ok) Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()});
 }
@@ -1548,7 +1674,7 @@ async function ouvrirOctets(nom, octets, etat){
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
     voile('Préparation de l\'affichage…'); await attendreAffichage();
     scene=construireScene(db);
-    scene.nom=nom; scene.version=estDwg?versionDwg(entete):'DXF';
+    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF'; modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
     mesure={mode:mesure.mode,pts:[]}; visee=null;
     // calques et vue mémorisés
     if(etat && etat.nom===nom && etat.calques) for(const c of scene.calques.values()) if(c.nom in etat.calques) c.visible=!!etat.calques[c.nom];
@@ -1661,6 +1787,8 @@ function remplirMenu(){
   $('mVersion').textContent=VERSION;
   $('mAppli').textContent = APPLI ? ('APK '+APPLI.versionApk()+(APPLI.surMiseAJour()?' + mise à jour':'')) : 'Page web (navigateur)';
   $('bMaj').disabled=!APPLI; $('bPrec').disabled=!(APPLI && APPLI.aVersionPrecedente());
+  for(const id of ['bMenuSauver','bMenuSauverSous']) $(id).disabled=!scene;
+  $('mSauv').textContent='—'; if(scene) Memoire.lire(cleSauv()).then(x=>{ $('mSauv').textContent = (x&&x.nom ? x.nom : 'pas encore de fichier') + (modifie?' · ● modifications non enregistrées':' · à jour'); });
   if(!APPLI) $('mInfo').textContent="Dans le navigateur, il suffit d'ouvrir le nouveau fichier HTML.";
 }
 $('bMenu').onclick=()=>{ remplirMenu(); $('menu').classList.toggle('ouvert'); };
@@ -1715,6 +1843,11 @@ $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
 brancherPoints(); brancherLigne(); brancherFiche();
+$('bSauver').onclick=enregistrer;
+$('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
+$('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
+$('bMenuOuvrirSauv').onclick=()=>{ $('menu').classList.remove('ouvert'); $('fichier').value=''; $('fichier').click(); };
+$('bFermerErr').addEventListener('click',()=>{ $('errTitre').textContent="Le plan ne s'ouvre pas"; $('errTitre').style.color=''; $('errDetail').style.height=''; });
 redim();
 $('etat').textContent='Prêt. '+VERSION;
 (async()=>{ if(!(await ouvrirFichierAppli())) reouvrirDernier(); })();
