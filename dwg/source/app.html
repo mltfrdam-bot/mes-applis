@@ -338,6 +338,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="boutons">
     <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
     <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
+    <button class="btn" id="bMenuRapport">📋 Copier le rapport du plan (pour Claude)</button>
     <button class="btn" id="bMenuClasseur">📚 Enregistrer le classeur (tous les plans)</button>
     <button class="btn" id="bMenuOuvrirSauv">📂 Ouvrir une sauvegarde (fusion)</button>
     <button class="btn" id="bMaj">⬆ Mettre à jour l'appli</button>
@@ -368,7 +369,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Classeur – v2";
+const VERSION = "Classeur – v3";
 </script>
 <script>
 "use strict";
@@ -503,6 +504,7 @@ function construireScene(db){
   let racine = db.entities.filter(e=>e.type!=='ATTRIB' && (hModele===null || e.ownerBlockRecordSoftId===hModele));
   if(racine.length===0 && modele && modele.entities) racine = modele.entities;
 
+  const stats={vus:{}, ignores:{}, total:db.entities.length, racine:racine.length, blocs:blocs.size};
   const lots = new Map();   // clé → {haut, eff, couleur, traits:[], remplis:[], alpha}
   const textes = [];
   const tousX=[], tousY=[];
@@ -609,6 +611,7 @@ function construireScene(db){
     const ex=e.extrusionDirection; if(ex && ex.z<-0.5) Me=mul(M,ech(-1,1));
     objCourant=-1;
     if(prof===0 && /^(LINE|ARC|LWPOLYLINE|POLYLINE2D|POLYLINE3D|SPLINE)$/.test(e.type)){ const els=elemsDe(e,Me); if(els.length){ objCourant=OBJETS.length; OBJETS.push({type:e.type,calque:e.layer||'0',els}); } }
+    stats.vus[e.type]=(stats.vus[e.type]||0)+1;
     switch(e.type){
       case 'LINE': { const a=e.startPoint,b=e.endPoint; ajTrait(L(),Me,[a.x,a.y,b.x,b.y]);
         A(L(),Me,a.x,a.y,zz(a.z),1); A(L(),Me,b.x,b.y,zz(b.z),1); A(L(),Me,(a.x+b.x)/2,(a.y+b.y)/2,(zz(a.z)+zz(b.z))/2,2); break; }
@@ -673,7 +676,7 @@ function construireScene(db){
         const b=blocs.get(e.name);
         if(b && b.entities) for(const se of b.entities) traiter(se, M, haut, eff, coul, prof+1, 0, true);
         break; }
-      default: break;
+      default: stats.ignores[e.type]=(stats.ignores[e.type]||0)+1; break;
     }
   }
 
@@ -723,7 +726,7 @@ function construireScene(db){
     for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){ const c=cle(i,j); let a=gS.get(c); if(!a){a=[];gS.set(c,a);} a.push(k); }
   }
   const zone=zonePrincipale(tousX,tousY,ox,oy,emprise) || empL;
-  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, msConstr:performance.now()-t0};
+  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, stats, msConstr:performance.now()-t0};
 }
 // Zone qui contient le plus de dessin (le chantier, sans la légende éloignée)
 function zonePrincipale(X,Y,ox,oy,E){
@@ -2572,6 +2575,13 @@ $('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h)
 $('bEffacer').onclick=()=>{ if(mesure.mode==='res'){ const r=resCourant(); if(!r.noeuds.length) return; memoRes(); const i=noeudSel!==null&&noeudSel<r.noeuds.length?noeudSel:r.noeuds.length-1; r.noeuds.splice(i,1); noeudSel=null; lectureRes=null; sauverReseaux(); $('etat').textContent='Point retiré du réseau (↶ pour annuler).'; } else if(coinSel!==null && coinSel<mesure.pts.length){ memoMes(); mesure.pts.splice(coinSel,1); $('etat').textContent='Point '+(coinSel+1)+' retiré (↶ pour annuler).'; coinSel=null; } else { if(mesure.pts.length) memoMes(); mesure.pts=[]; } majPanneau(); demanderDessin(false); };
 // ================= Menu, appli Android, mise à jour =================
 const APPLI = (window.AndroidApp && AndroidApp.estAppli && AndroidApp.estAppli()) ? window.AndroidApp : null;
+function rapportPlan(){ if(!scene) return 'Aucun plan ouvert.'; const st=scene.stats||{vus:{},ignores:{}}; const tri=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>k+' '+v).join(', ')||'aucun';
+  const cal=[...scene.calques.values()].filter(c=>c.nb>0).sort((a,b)=>b.nb-a.nb).slice(0,40).map(c=>c.nom+' ('+c.nb+(c.visible?'':', masqué')+')').join(', ');
+  const e=scene.emprise, o=scene.origine;
+  return ['Rapport du plan — '+VERSION, 'Plan : '+scene.nom+' · '+scene.version+' · '+scene.nbObjets+' objets dans l\'espace objet (sur '+st.total+' au total, '+st.blocs+' blocs)',
+    'Types lus (avec le contenu des blocs) : '+tri(st.vus), 'Types NON affichés : '+tri(st.ignores),
+    'Calques : '+cal, 'Emprise X '+Math.round(e.minX+o.x)+' → '+Math.round(e.maxX+o.x)+' · Y '+Math.round(e.minY+o.y)+' → '+Math.round(e.maxY+o.y),
+    'Traits : '+scene.acc.segs.x1.length+' segments · hachures/remplissages : '+(scene.fonds||[]).length+' · textes : '+(scene.textes||[]).length].join('\n'); }
 function remplirMenu(){
   $('mVersion').textContent=VERSION;
   $('mAppli').textContent = APPLI ? ('APK '+APPLI.versionApk()+(APPLI.surMiseAJour()?' + mise à jour':'')) : 'Page web (navigateur)';
@@ -2635,6 +2645,7 @@ $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
 brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
+$('bMenuRapport').onclick=async()=>{ const t=rapportPlan(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); } $('menu').classList.remove('ouvert'); $('etat').textContent= ok?'📋 Rapport copié : collez-le dans la conversation avec Claude.':'⚠ Copie impossible.'; };
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
