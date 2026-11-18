@@ -154,6 +154,19 @@ body.planOuvert:not(.enOutil) #bOeil{display:block}
 #loupe{position:fixed;width:150px;height:150px;border-radius:50%;border:3px solid #333;box-shadow:0 3px 10px rgba(0,0,0,.35);background:#fff;z-index:15;display:none;pointer-events:none}
 #loupeTxt{position:fixed;z-index:16;display:none;pointer-events:none;background:#e65c00;color:#fff;font-size:12px;font-weight:bold;padding:2px 6px;border-radius:3px;white-space:nowrap}
 #zone{position:fixed;left:0;right:0;top:52px;bottom:28px;touch-action:none;background:#fff}
+#onglets{position:fixed;left:0;right:0;top:52px;height:36px;display:none;gap:2px;padding:3px 4px 0;background:#e4e4e4;border-bottom:1px solid #b8b8b8;z-index:5;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+body.avecOnglets #onglets{display:flex}
+#onglets .onglet{flex:0 0 auto;display:flex;align-items:center;gap:6px;height:32px;padding:0 6px 0 10px;background:#f4f4f4;border:1px solid #b8b8b8;border-bottom:0;border-radius:6px 6px 0 0;font-size:13.5px;color:#444;max-width:190px;cursor:pointer;position:relative}
+#onglets .onglet .nomOnglet{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#onglets .onglet.actif{background:#fff;color:#1a1a1a;font-weight:bold;border-color:#1f5fa8;border-top:3px solid #1f5fa8}
+#onglets .onglet.chaud:not(.actif) .nomOnglet::before{content:"● ";color:#2e7d32;font-size:9px;vertical-align:middle}
+#onglets .onglet .ferme{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:11px;color:#777;font-weight:normal;font-size:13px}
+#onglets .onglet .ferme.confirmer{background:#d32f2f;color:#fff;padding:0 6px}
+#onglets .onglet .pointModif{width:8px;height:8px;border-radius:50%;background:#d32f2f;display:inline-block}
+#onglets .onglet.plus{padding:0 14px;font-size:18px;color:#1f5fa8;font-weight:bold}
+body.avecOnglets #zone, body.avecOnglets #accueil, body.avecOnglets #calques{top:88px}
+body.avecOnglets #bOeil{top:96px}
+body.avecOnglets #bSauver{top:154px}
 #cv{display:block;width:100%;height:100%;touch-action:none}
 #etat{position:fixed;left:0;right:0;bottom:0;height:28px;line-height:27px;padding:0 8px;background:#f3f3f3;border-top:1px solid #c8c8c8;font-size:12.5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #accueil{position:fixed;left:0;right:0;top:52px;bottom:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;color:#444}
@@ -189,6 +202,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </style>
 </head>
 <body>
+<div id="onglets"></div>
 <div id="barre">
   <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
@@ -324,6 +338,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="boutons">
     <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
     <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
+    <button class="btn" id="bMenuClasseur">📚 Enregistrer le classeur (tous les plans)</button>
     <button class="btn" id="bMenuOuvrirSauv">📂 Ouvrir une sauvegarde (fusion)</button>
     <button class="btn" id="bMaj">⬆ Mettre à jour l'appli</button>
     <button class="btn" id="bPrec">↩ Revenir à la version précédente</button>
@@ -353,7 +368,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Terrain naturel – v1";
+const VERSION = "Classeur – v1";
 </script>
 <script>
 "use strict";
@@ -1640,6 +1655,7 @@ function enregistrerSous(){
 }
 // Réponse d'Android après « Enregistrer sous »
 window.fichierCree=async function(uri,nom){
+  if(attenteClasseur){ const t=attenteClasseur; attenteClasseur=false; if(!uri){ $('etat').textContent='Enregistrement annulé.'; return; } voile('Enregistrement du classeur…'); await attendreAffichage(); const r=APPLI.ecrireUri(uri,t); finVoile(); $('etat').textContent= r==='ok' ? '💾 Classeur enregistré à '+heure()+' ✓ — '+nom : '⚠ Enregistrement impossible : '+r; return; }
   if(!attenteSauvegarde) return; attenteSauvegarde=false;
   if(!uri){ $('etat').textContent='Enregistrement annulé.'; return; }
   await Memoire.ecrire(cleSauv(),{uri,nom});
@@ -1651,14 +1667,15 @@ window.fichierCree=async function(uri,nom){
 function estSauvegarde(octets){ const t=new TextDecoder().decode(octets.subarray(0,64)); return /^\s*\{\s*"format"\s*:\s*"plansdwg"/.test(t); }
 async function ouvrirSauvegarde(nomFichier, octets){
   let d; try{ d=JSON.parse(new TextDecoder().decode(octets)); }catch(e){ montrerErreur(nomFichier, new Error('Sauvegarde illisible : '+e.message)); return; }
+  if(d.type==='classeur'){ await ouvrirClasseurFichier(nomFichier,d); return; }
   if(!d.plan||!d.plan.octets){ montrerErreur(nomFichier,new Error("Cette sauvegarde ne contient pas le plan.")); return; }
-  const planOct=deBase64(d.plan.octets), nom=d.plan.nom;
+  const planOct=deBase64(d.plan.octets), nom=d.plan.nom; if(scene && scene.nom!==nom) quitterPlanCourant();
   const etatAvant=await Memoire.lire('etat');
   const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom));
   enChargement=true;
   const ok=await ouvrirOctets(nom, planOct, (etatAvant&&etatAvant.nom===nom)?etatAvant:{nom:null});
   if(!ok){ enChargement=false; return; }
-  Memoire.ecrire('plan',{nom, octets:planOct.slice().buffer, date:Date.now()});
+  Memoire.ecrire('plan',{nom, octets:planOct.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,planOct);
   const R=fusionner(d);
   if(!dejaLa && d.vue && d.vue.s>0){ const o=scene.origine; vue.s=d.vue.s; vue.tx=W/2-(d.vue.cx-o.x)*vue.s; vue.ty=H/2+(d.vue.cy-o.y)*vue.s; }
   enChargement=false;
@@ -2325,6 +2342,7 @@ const Memoire={
   ouvrir(){ if(this.bd) return Promise.resolve(this.bd); return new Promise((ok,ko)=>{ try{ const r=indexedDB.open('LecteurDWGchantier',1);
     r.onupgradeneeded=()=>r.result.createObjectStore('donnees'); r.onsuccess=()=>{this.bd=r.result; ok(this.bd);}; r.onerror=()=>ko(r.error); }catch(e){ko(e);} }); },
   async lire(k){ try{ const bd=await this.ouvrir(); return await new Promise((ok,ko)=>{ const q=bd.transaction('donnees').objectStore('donnees').get(k); q.onsuccess=()=>ok(q.result); q.onerror=()=>ko(q.error); }); }catch(e){ return null; } },
+  async effacer(k){ try{ const bd=await this.ouvrir(); await new Promise((ok,ko)=>{ const t=bd.transaction('donnees','readwrite'); t.objectStore('donnees').delete(k); t.oncomplete=ok; t.onerror=()=>ko(t.error); }); return true; }catch(e){ return false; } },
   async ecrire(k,v){ try{ const bd=await this.ouvrir(); await new Promise((ok,ko)=>{ const t=bd.transaction('donnees','readwrite'); t.objectStore('donnees').put(v,k); t.oncomplete=ok; t.onerror=()=>ko(t.error); }); return true; }catch(e){ return false; } }
 };
 let minuterieEtat=null;
@@ -2332,8 +2350,69 @@ function sauverEtatBientot(){ if(!scene) return; clearTimeout(minuterieEtat); mi
 function sauverEtat(){
   if(!scene) return;
   const o=scene.origine, calq={}; for(const c of scene.calques.values()) calq[c.nom]=(isole && isole.avant.has(c.nom)) ? isole.avant.get(c.nom) : c.visible;
-  Memoire.ecrire('etat',{nom:scene.nom, cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s, calques:calq});
+  const e={nom:scene.nom, cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s, calques:calq}; Memoire.ecrire('etat',e); Memoire.ecrire('etat:'+scene.nom,e);
 }
+
+// ================= Classeur : plusieurs plans ouverts, un onglet par plan =================
+let classeur={plans:[], actif:null}; const cacheScenes=new Map(), MAX_EN_MEMOIRE=3, modifiePlans=new Map(); let ongletAretirer=null;
+async function chargerClasseur(){ const c=await Memoire.lire('classeur'); if(c&&Array.isArray(c.plans)) classeur=c;
+  else { const p=await Memoire.lire('plan'); if(p&&p.octets){ classeur={plans:[p.nom], actif:p.nom}; await Memoire.ecrire('fichier:'+p.nom,p); await Memoire.ecrire('classeur',classeur); } } }
+function sauverClasseur(){ Memoire.ecrire('classeur',classeur); }
+async function ajouterAuClasseur(nom,octets){ await Memoire.ecrire('fichier:'+nom,{nom, octets:octets.slice().buffer, date:Date.now()}); if(!classeur.plans.includes(nom)) classeur.plans.push(nom); classeur.actif=nom; sauverClasseur(); majOnglets(); }
+function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc); while(cacheScenes.size>MAX_EN_MEMOIRE){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
+function majOnglets(){ const z=$('onglets'); if(!z) return; z.replaceChildren(); document.body.classList.toggle('avecOnglets', classeur.plans.length>0);
+  for(const nom of classeur.plans){ const b=document.createElement('div'); b.className='onglet'+(scene&&scene.nom===nom?' actif':'')+(cacheScenes.has(nom)?' chaud':''); b.title=nom;
+    const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf)$/i,''); b.appendChild(t);
+    if(modifiePlans.get(nom)) { const m=document.createElement('i'); m.className='pointModif'; b.appendChild(m); }
+    const x=document.createElement('span'); x.className='ferme'+(ongletAretirer===nom?' confirmer':''); x.textContent= ongletAretirer===nom ? 'Retirer ?' : '✕';
+    x.onclick=ev=>{ ev.stopPropagation(); if(ongletAretirer===nom){ ongletAretirer=null; retirerDuClasseur(nom); } else { ongletAretirer=nom; majOnglets(); setTimeout(()=>{ if(ongletAretirer===nom){ ongletAretirer=null; majOnglets(); } },3500); } };
+    b.appendChild(x); b.onclick=()=>basculerPlan(nom); z.appendChild(b); }
+  const p=document.createElement('div'); p.className='onglet plus'; p.textContent='＋'; p.title='Ouvrir un autre plan'; p.onclick=()=>{ $('fichier').value=''; $('fichier').click(); }; z.appendChild(p);
+  const a=z.querySelector('.actif'); if(a) a.scrollIntoView({block:'nearest',inline:'nearest'}); }
+// Avant de quitter un plan : tout ce qui est en cours est rangé
+function quitterPlanCourant(){ if(!scene) return; sauverEtat(); sauverPointsMaintenant(); modifiePlans.set(scene.nom,modifie);
+  for(const id of ['structBoite','coupeBoite','vue3dBoite','profilBoite']) { const e=$(id); if(e) e.style.display='none'; }
+  coupeMode=false; coupeAB=[]; edition=null; tnCache=null; prendreSurface=false; voirGardees=false; selMes=null; ptSel=null; coinSel=null; }
+async function basculerPlan(nom){ if(scene && scene.nom===nom) return; const f=await Memoire.lire('fichier:'+nom);
+  if(!f||!f.octets){ $('etat').textContent='⚠ Le plan « '+nom+' » n\'est plus dans l\'appli : rouvrez-le avec ＋.'; classeur.plans=classeur.plans.filter(n=>n!==nom); sauverClasseur(); majOnglets(); return; }
+  quitterPlanCourant(); const etat=await Memoire.lire('etat:'+nom);
+  const ok=await ouvrirOctets(nom,new Uint8Array(f.octets),etat||{nom:null}); if(ok){ classeur.actif=nom; sauverClasseur(); Memoire.ecrire('plan',f); modifie=!!modifiePlans.get(nom); majBoutonSauver(); majOnglets(); } }
+async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n!==nom); cacheScenes.delete(nom); modifiePlans.delete(nom); await Memoire.effacer('fichier:'+nom); sauverClasseur();
+  $('etat').textContent='« '+nom+' » retiré du classeur. Ses points, mesures et réseaux restent gardés : ils reviendront si vous rouvrez ce plan.';
+  if(scene && scene.nom===nom){ if(classeur.plans.length) { const n=classeur.plans[classeur.plans.length-1]; scene=null; await basculerPlan(n); } else location.reload(); } else majOnglets(); }
+// ---- Sauvegarde du classeur entier (un seul fichier) ----
+async function contenuPlanDepuisMemoire(nom){ const f=await Memoire.lire('fichier:'+nom); if(!f) return null; const e=await Memoire.lire('etat:'+nom), rg=await Memoire.lire('reglagesCalques:'+nom)||{};
+  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
+    reglages:{supprimes:rg.supprimes||[], verrous:rg.verrous||[]}, vue:e&&e.s>0?{cx:e.cx,cy:e.cy,s:e.s}:null}; }
+async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
+  return JSON.stringify({format:'plansdwg', version:2, type:'classeur', appli:VERSION, date:new Date().toISOString(), actif:scene?scene.nom:null, calquesPerso, modelesStructure:modelesPerso, typesProfil, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes}, plans:L}); }
+function nomClasseurDefaut(){ const d=new Date(); return 'Classeur_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.plansdwg'; }
+let attenteClasseur=false;
+async function enregistrerClasseur(){ if(!classeur.plans.length) return; voile('Préparation du classeur ('+classeur.plans.length+' plans)…'); await attendreAffichage(); const txt=await contenuClasseur(); finVoile();
+  if(APPLI && APPLI.creerFichier){ attenteClasseur=txt; APPLI.creerFichier(nomClasseurDefaut()); return; }
+  if(APPLI && APPLI.enregistrer){ APPLI.enregistrer(nomClasseurDefaut(), txt, 'application/octet-stream'); $('etat').textContent='💾 Classeur enregistré dans Téléchargements.'; return; }
+  telecharger(nomClasseurDefaut(), txt, 'application/octet-stream'); $('etat').textContent='💾 Classeur téléchargé ('+classeur.plans.length+' plans).'; }
+// Ouverture d'un classeur : chaque plan est ouvert puis fusionné, sans rien perdre
+async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+nomFichier+(d.date?' (du '+new Date(d.date).toLocaleString('fr-FR')+')':''), 'Plans dans le classeur : '+(d.plans||[]).length];
+  if(scene) quitterPlanCourant();
+  // réglages communs
+  const Rc={calAjout:[]}; for(const c of (d.calquesPerso||[])){ if(c&&c.nom&&!calquesPerso.some(x=>x.nom===c.nom)&&!CALQUES_BASE.some(x=>x.nom===c.nom)){ calquesPerso.push(c); Rc.calAjout.push(c.nom); } }
+  if(Rc.calAjout.length){ sauverCalquesPerso(); lignes.push('Calques perso ajoutés : '+Rc.calAjout.join(', ')); }
+  const mAj=[]; for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); mAj.push(m.nom); } } if(mAj.length){ Memoire.ecrire('modelesStructure',modelesPerso); lignes.push('Modèles de structure ajoutés : '+mAj.join(', ')); }
+  if(Array.isArray(d.typesProfil) && typesProfil){ const tAj=[]; for(const t of d.typesProfil){ if(t&&t.nom&&!typesProfil.some(x=>x.nom===t.nom)){ typesProfil.push(t); tAj.push(t.nom); } } if(tAj.length){ sauverTypesProfil(); lignes.push('Types de profil ajoutés : '+tAj.join(', ')); } }
+  let total=0;
+  for(const p of (d.plans||[])){ if(!p.plan||!p.plan.octets) continue; const nom=p.plan.nom, oct=deBase64(p.plan.octets);
+    const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom)) || classeur.plans.includes(nom);
+    enChargement=true; const ok=await ouvrirOctets(nom,oct,(await Memoire.lire('etat:'+nom))||{nom:null}); if(!ok){ enChargement=false; lignes.push('⚠ '+nom+' : illisible'); continue; }
+    await ajouterAuClasseur(nom,oct); const R=fusionner({...p, calquesPerso:[], modelesStructure:[]});
+    if(!dejaLa && p.vue && p.vue.s>0){ const o=scene.origine; vue.s=p.vue.s; vue.tx=W/2-(p.vue.cx-o.x)*vue.s; vue.ty=H/2+(p.vue.cy-o.y)*vue.s; }
+    enChargement=false; sauverPointsMaintenant(); sauverMesuresGardees(); Memoire.ecrire(cleResPlan(), reseaux); sauverReglagesCalques(); sauverEtat(); total+=R.total;
+    lignes.push('— '+nom+(dejaLa?' (fusion)':' (nouveau)')+' : '+R.ptsAjout.length+' point(s) ajouté(s)'+(R.ptsZ.length?', '+R.ptsZ.length+' Z complété(s)':'')+(R.ptsRenom.length?', '+R.ptsRenom.length+' renommé(s)':'')+', '+R.ptsIdem+' identique(s) · '+R.mesAjout+' mesure(s) · '+R.resAjout.length+' réseau(x)'); }
+  if(d.actif && classeur.plans.includes(d.actif) && (!scene||scene.nom!==d.actif)) await basculerPlan(d.actif);
+  majComptesPerso(); majVisibles(); remplirSelectsCalques(); remplirCalques(); majTablePoints(); majPanneau(); demanderDessin(); majOnglets();
+  lignes.push(total? '✓ Rien n\'a été perdu : tout ce qui manquait a été ajouté.' : '✓ Rien de nouveau : tout était déjà dans l\'appli.');
+  $('errTitre').textContent='📂 Classeur ouvert'; $('errTitre').style.color='#1f5fa8'; $('errTexte').textContent='Descriptif de ce qui a été repris :';
+  $('errDetail').value=lignes.join('\n'); $('errDetail').style.height='190px'; $('erreur').style.display='flex'; }
 
 // ================= Ouverture d'un fichier =================
 const $=id=>document.getElementById(id);
@@ -2347,8 +2426,9 @@ async function ouvrir(f){
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
   if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
-  const ok=await ouvrirOctets(f.name, octets, null);
-  if(ok) Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()});
+  if(scene && scene.nom!==f.name) quitterPlanCourant();
+  const ok=await ouvrirOctets(f.name, octets, (await Memoire.lire('etat:'+f.name))||null);
+  if(ok){ Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(f.name,octets); }
 }
 async function ouvrirOctets(nom, octets, etat){
   const t0=performance.now();
@@ -2359,6 +2439,9 @@ async function ouvrirOctets(nom, octets, etat){
     if(!estDwg && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
       throw new Error("Ce fichier n'est ni un DWG ni un DXF reconnu (début du fichier : « "+entete.replace(/[^\x20-\x7e]/g,'?')+" »).");
     if(estDwg && /^AC10(0|1|2)/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
+    const enCache=cacheScenes.get(nom);
+    if(enCache && enCache.octets && enCache.octets.length===octets.length){ scene=enCache; }
+    else {
     voile('Préparation du lecteur…'); await attendreAffichage();
     const lib=await chargerLecteur();
     voile('Lecture du plan…'); await attendreAffichage();
@@ -2373,8 +2456,10 @@ async function ouvrirOctets(nom, octets, etat){
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
     voile('Préparation de l\'affichage…'); await attendreAffichage();
     scene=construireScene(db);
-    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF'; modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
-    mesure={mode:mesure.mode,pts:[]}; visee=null; edition=null; histMes=[];
+    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF';
+    }
+    garderEnMemoire(nom,scene); modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
+    mesure={mode:mesure.mode,pts:[]}; visee=null; edition=null; histMes=[]; coinSel=null; coupeMode=false; coupeAB=[]; tnCache=null;
     // calques et vue mémorisés
     if(etat && etat.nom===nom && etat.calques) for(const c of scene.calques.values()) if(c.nom in etat.calques) c.visible=!!etat.calques[c.nom];
     await chargerCalquesPerso(); installerCalquesPerso(etat); await chargerReglagesCalques(nom); fermerFiche();
@@ -2388,7 +2473,7 @@ async function ouvrirOctets(nom, octets, etat){
     remplirCalques(); majPanneau();
     const nbCal=[...scene.calques.values()].filter(c=>c.nb>0).length;
     $('etat').textContent=`${nom} · ${scene.version} · ${scene.nbObjets} objets · ${nbCal} calques · ${((performance.now()-t0)/1000).toFixed(1)} s`;
-    finVoile();
+    finVoile(); majOnglets();
     return true;
   }catch(err){
     finVoile();
@@ -2397,10 +2482,11 @@ async function ouvrirOctets(nom, octets, etat){
   }
 }
 async function reouvrirDernier(){
-  const plan=await Memoire.lire('plan');
-  if(!plan || !plan.octets) return;
-  const etat=await Memoire.lire('etat');
-  await ouvrirOctets(plan.nom, new Uint8Array(plan.octets), etat||{nom:null});
+  await chargerClasseur(); majOnglets();
+  let nom=classeur.actif && classeur.plans.includes(classeur.actif) ? classeur.actif : classeur.plans[classeur.plans.length-1];
+  let f=nom?await Memoire.lire('fichier:'+nom):null; if(!f){ const p=await Memoire.lire('plan'); if(!p||!p.octets) return; f=p; nom=p.nom; }
+  const etat=(await Memoire.lire('etat:'+nom))||await Memoire.lire('etat');
+  await ouvrirOctets(nom, new Uint8Array(f.octets), etat||{nom:null});
 }
 // Les DXF récents sont en UTF-8 ; le lecteur attend de l'ANSI (accents, Ø, °…) → conversion
 function dxfVersAnsi(o){
@@ -2545,6 +2631,7 @@ $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
 brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
+$('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
 $('bMenuOuvrirSauv').onclick=()=>{ $('menu').classList.remove('ouvert'); $('fichier').value=''; $('fichier').click(); };
