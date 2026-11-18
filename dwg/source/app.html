@@ -101,6 +101,7 @@ table.xl td.sup{cursor:pointer}
 #coupeBoite .tete b{flex:1;font-size:15px}
 #cpCanvas{width:100%;height:36vh;display:block;touch-action:none;border-bottom:1px solid #ddd}
 #cpSeuils input{width:52px;height:30px;border:1px solid #1f5fa8;border-radius:4px;background:#fffbe6;text-align:right;font-size:14px;padding:0 4px}
+#bTN.actif{background:#e8f5e9;border-color:#2e7d32;color:#2e7d32;font-weight:bold}
 #bCoupe.actif{background:#efe2f5;border-color:#6a1b9a;color:#6a1b9a;font-weight:bold}
 #profilBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
 #profilBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
@@ -224,7 +225,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="bProfil">📈 Profil</button>
   </div>
   <div id="resultat"></div>
-  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
+  <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bTN" title="Terrain naturel : déblai / remblai" style="display:none">⛰ TN</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
   <div id="tabResWrap"><table class="xl compact" id="tabRes"><thead><tr><th style="width:52px">Nom</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE arr.</th><th style="text-align:right">FE dép.</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbRes"></tbody></table></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z fini</th><th class="colFF" style="text-align:right">FF</th><th>Accroche</th></tr></thead><tbody id="tbPts"></tbody></table>
@@ -249,7 +250,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <div class="lfl"><span class="lb">Z arrivée</span><input id="lfZ1" inputmode="decimal" placeholder="—"><button class="btn petitb sugg" id="lfZ1s"></button></div>
     <div class="lfl"><span class="lb">Préfixe</span><input id="lfPre" placeholder="(aucun)" autocapitalize="characters"><button class="btn petitb" id="lfInv">⇄ Inverser le sens</button></div>
   </div>
-  <div class="ligneCalque" id="ligneEcranPts"><button class="btn petitb" id="bEcranPts">👁 À l'écran</button><label style="white-space:nowrap;font-size:13px"><input type="checkbox" id="cbFF" style="width:18px;height:18px;vertical-align:middle"> Afficher FF</label><span style="font-size:12px;color:#666">Appui court sur un point = le sélectionner · glisser = le déplacer</span></div>
+  <div class="ligneCalque" id="ligneEcranPts"><button class="btn petitb" id="bEcranPts">👁 À l'écran</button><button class="btn petitb" id="bImporter" title="Importer un fichier de points (TS11)">📥 Importer</button><input type="file" id="fichierPts" accept=".txt,.csv,.asc,.xyz,text/plain" style="display:none"><label style="white-space:nowrap;font-size:13px"><input type="checkbox" id="cbFF" style="width:18px;height:18px;vertical-align:middle"> Afficher FF</label><span style="font-size:12px;color:#666">Appui court sur un point = le sélectionner · glisser = le déplacer</span></div>
   <div id="tabPtsWrap2" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table class="xl compact" id="tabPtsExp"><thead><tr><th style="width:44px">Nom</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right;width:58px">Z fini</th><th style="text-align:right;width:54px">FF</th><th></th></tr></thead><tbody id="tbPtsExp"></tbody></table></div>
 </div>
 <div id="calqueBoite"><div class="boite">
@@ -352,7 +353,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Vue 3D – v1";
+const VERSION = "Terrain naturel – v1";
 </script>
 <script>
 "use strict";
@@ -765,7 +766,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -840,7 +841,7 @@ function accrocher(sx,sy){
       const x=ax+t*bx, y=ay+t*by, d=Math.hypot(x-lx,y-ly); if(d>r) continue;
       const sc=d*vue.s+PENALITE[4]; if(sc<bestScore){bestScore=sc; best={x,y,z:NaN,t:4};}
     } }
-  if(outil!=='points'){ const o=scene.origine; for(const q of pointsExp){ if(!calqueVisible(calqueDe(q))) continue; const x=q.x-o.x, y=q.y-o.y, d=Math.hypot(x-lx,y-ly); if(d>r) continue;
+  if(outil!=='points'){ const o=scene.origine; for(const q of pointsExp){ if(!calqueVisible(calqueDe(q)) || calqueDe(q)==='POINTS_TN') continue; const x=q.x-o.x, y=q.y-o.y, d=Math.hypot(x-lx,y-ly); if(d>r) continue;
     const sc=d*vue.s+PENALITE[5]; if(sc<bestScore){ bestScore=sc; best={x,y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN,t:5,nom:q.nom}; } } }
   return best;
 }
@@ -944,7 +945,8 @@ function majPanneau(){
     if(r.aire){ h='Surface : '+fr(r.aire,2)+' m² <span class="petit">· périmètre : '+fr(r.perim,2)+' m</span>';
       const vf=volumeFF(p.map(q=>({x:q.x,y:q.y,z:q.z,ff:q.ff})));
       if(vf && vf.V!==undefined) h+='<br><b style="color:#4e342e">Cubage fouille : '+fr(vf.V,2)+' m³</b> <span class="petit">· prof. '+fr(vf.pmin,2)+' à '+fr(vf.pmax,2)+' m (fini − FF)</span>'+(vf.neg?' <span style="color:#b00020">⚠ FF au-dessus du fini</span>':'');
-      else if(vf && vf.manque) h+='<br><span style="color:#b00020;font-size:13px">Cubage : il manque Z fini ou FF au(x) coin(s) '+vf.manque.join(', ')+'</span>'; }
+      else if(vf && vf.manque) h+='<br><span style="color:#b00020;font-size:13px">Cubage : il manque Z fini ou FF au(x) coin(s) '+vf.manque.join(', ')+'</span>';
+      if(tnActif && !visee) h+=htmlTN(p); }
     else h='<span class="petit">Posez les coins un par un (3 au minimum). La surface se ferme toute seule.</span>';
     if(r.aire && !visee) h+=' <span class="petit">· ＋ = ajouter un coin · appui sur un coin puis 🗑 = le retirer</span>';
   }
@@ -968,7 +970,7 @@ function majPanneau(){
     frag.appendChild(tr); });
   const vp=$('bMesVersPoints'); if(vp) vp.style.display = (mesure.mode==='dist' && mesure.pts.length>=2) ? '' : 'none';
   const surfSel = voirGardees && selMes!==null && mesuresGardees[selMes] && mesuresGardees[selMes].type==='surf';
-  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none'; $('bCoupe').style.display=$('b3D').style.display=$('bStruct').style.display;
+  $('bStruct').style.display = ((mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees) || surfSel) ? '' : 'none'; $('bCoupe').style.display=$('b3D').style.display=$('bStruct').style.display; $('bTN').style.display=(mesure.mode==='surf' && mesure.pts.length>=3 && !voirGardees)?'':'none';
   $('bDuPlan').style.display = (mesure.mode==='surf' && !voirGardees && !edition) ? '' : 'none'; if(mesure.mode!=='surf'||voirGardees){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); }
   tb.replaceChildren(frag); $('tabMesCour').classList.toggle('sansFF',mesure.mode!=='surf');
 }
@@ -996,7 +998,7 @@ function choisirMode(m){ if(edition) finEdition(); coupeMode=false; coupeAB=[]; 
 // ================= Calques perso (créés dans l'appli) =================
 const CALQUE_PTS='POINTS_EXPORT', CALQUE_MES='MESURES', ROSE='#c2185b';
 const COULEURS_PERSO=[['#e53935',1],['#e65c00',30],['#c9a000',2],['#2e7d32',3],['#00838f',4],['#1f5fa8',5],['#6a1b9a',6],['#c2185b',221],['#6d4c41',34],['#000000',7]];
-const CALQUES_BASE=[{nom:CALQUE_PTS,couleur:'#c2185b',aci:221,base:true},{nom:CALQUE_MES,couleur:'#e65c00',aci:30,base:true},{nom:'RESEAUX',couleur:'#0277bd',aci:5,base:true}];
+const CALQUES_BASE=[{nom:CALQUE_PTS,couleur:'#c2185b',aci:221,base:true},{nom:CALQUE_MES,couleur:'#e65c00',aci:30,base:true},{nom:'RESEAUX',couleur:'#0277bd',aci:5,base:true},{nom:'POINTS_TN',couleur:'#2e7d32',aci:3,base:true}];
 let calquesPerso=[], calqueActifPts=CALQUE_PTS, calqueActifMes=CALQUE_MES;
 async function chargerCalquesPerso(){
   const r=await Memoire.lire('calquesPerso'); calquesPerso=Array.isArray(r)?r:[];
@@ -2089,6 +2091,7 @@ function dessinerCoupe(){
   const cv2=$('cpCanvas'), dp=Math.min(window.devicePixelRatio||1,3), Wc=cv2.clientWidth, Hc=cv2.clientHeight; cv2.width=Wc*dp; cv2.height=Hc*dp; const g=cv2.getContext('2d'); g.setTransform(dp,0,0,dp,0,0); g.fillStyle='#fff'; g.fillRect(0,0,Wc,Hc);
   const r=calcCoupe(); cv2._r=r; if(!r||!r.segs.length){ g.fillStyle='#666'; g.font='14px Arial'; g.fillText('Le trait de coupe ne traverse pas la surface.',12,30); $('cpInfo').textContent=''; return; }
   const S=r.segs, s0=S[0].s0, s1=S[S.length-1].s1; const zs=[]; for(const s of S) zs.push(s.z0,s.z1,s.f0,s.f1);
+  const ST=pointsTN(coupeSurf.pts,15), tnL=[]; if(ST.L.length>=3){ const [A,B]=coupeAB, Lc=Math.hypot(B.x-A.x,B.y-A.y); for(let k=0;k<=120;k++){ const sx=s0+(s1-s0)*k/120, t=sx/Lc, z=zTN(ST.L,A.x+(B.x-A.x)*t,A.y+(B.y-A.y)*t); if(Number.isFinite(z)){ tnL.push([sx,z]); zs.push(z); } } }
   let zmin=Math.min(...zs), zmax=Math.max(...zs); if(zmax-zmin<0.3){ const m=(zmax+zmin)/2; zmin=m-0.15; zmax=m+0.15; }
   const mg={g:46,d:14,h:26,b:28}, wP=Wc-mg.g-mg.d, hP=Hc-mg.h-mg.b, kx=wP/((s1-s0)||1), kz=hP/((zmax-zmin)*1.2);
   const X=x=>mg.g+(x-s0)*kx, Z=z=>mg.h+hP-(z-zmin+(zmax-zmin)*0.1)*kz;
@@ -2101,6 +2104,8 @@ function dessinerCoupe(){
   if(!r.avecFF){ let cum=0; coupeSurf.couches.forEach((c,ic)=>{ cum+=Number.isFinite(c.ep)?c.ep:0; if(ic===coupeSurf.couches.length-1) return; g.setLineDash([5,4]); g.strokeStyle='#8d6e63'; g.lineWidth=1;
     for(const s of S){ g.beginPath(); g.moveTo(X(s.s0),Z(s.z0-cum)); g.lineTo(X(s.s1),Z(s.z1-cum)); g.stroke(); } g.setLineDash([]); });
     let c2=0; g.font='10px Arial'; g.fillStyle='#6d4c41'; g.textAlign='left'; const sd=S[S.length-1]; coupeSurf.couches.forEach(c=>{ const e=Number.isFinite(c.ep)?c.ep:0; const zm=sd.z1-c2-e/2; c2+=e; if(Z(zm)<Hc-mg.b-2) g.fillText(c.nom,Math.max(mg.g+2,X(s1)-90),Z(zm)+3); }); }
+  // terrain naturel
+  if(tnL.length){ g.strokeStyle='#2e7d32'; g.lineWidth=2; g.setLineDash([2,3]); g.beginPath(); tnL.forEach(([x,z],i)=>i?g.lineTo(X(x),Z(z)):g.moveTo(X(x),Z(z))); g.stroke(); g.setLineDash([]); g.font='bold 11px Arial'; g.fillStyle='#2e7d32'; g.textAlign='left'; g.fillText('TN',X(tnL[0][0])+3,Z(tnL[0][1])-5); }
   // fond
   g.strokeStyle='#4e342e'; g.lineWidth=2; for(const s of S){ g.beginPath(); g.moveTo(X(s.s0),Z(s.f0)); g.lineTo(X(s.s1),Z(s.f1)); g.stroke(); }
   // dessus coloré selon la pente
@@ -2109,7 +2114,8 @@ function dessinerCoupe(){
   g.font='bold 12px Arial'; g.fillStyle='#6a1b9a'; g.textAlign='left'; g.fillText('A',mg.g+2,mg.h-8); g.textAlign='right'; g.fillText('B',Wc-mg.d-2,mg.h-8);
   if(coupeCurseur!==null){ const x=Math.max(s0,Math.min(s1,coupeCurseur)), s=S.find(q=>x>=q.s0-1e-9&&x<=q.s1+1e-9);
     g.strokeStyle='#000'; g.lineWidth=1; g.setLineDash([4,3]); g.beginPath(); g.moveTo(X(x),mg.h); g.lineTo(X(x),Hc-mg.b); g.stroke(); g.setLineDash([]);
-    if(s){ const k=(x-s.s0)/(s.L||1), z=s.z0+(s.z1-s.z0)*k, f=s.f0+(s.f1-s.f0)*k; $('cpInfo').innerHTML='À <b>'+fr(x,2)+' m</b> de A : fini '+fr(z,3)+' · fond '+fr(f,3)+' · <b>profondeur '+fr(z-f,2)+' m</b>'; } }
+    if(s){ const k=(x-s.s0)/(s.L||1), z=s.z0+(s.z1-s.z0)*k, f=s.f0+(s.f1-s.f0)*k; let tx=''; if(tnL.length){ const [A,B]=coupeAB, Lc=Math.hypot(B.x-A.x,B.y-A.y), zt=zTN(ST.L,A.x+(B.x-A.x)*x/Lc,A.y+(B.y-A.y)*x/Lc); if(Number.isFinite(zt)) tx=' · TN '+fr(zt,2)+' ('+(zt>=f?'déblai '+fr(zt-f,2):'remblai '+fr(f-zt,2))+' m)'; }
+      $('cpInfo').innerHTML='À <b>'+fr(x,2)+' m</b> de A : fini '+fr(z,3)+' · fond '+fr(f,3)+' · <b>profondeur '+fr(z-f,2)+' m</b>'+tx; } }
   else $('cpInfo').textContent='Glissez le doigt sur la coupe pour lire les cotes.';
   cv2._X=X; cv2._kx=kx; cv2._mg=mg; cv2._s0=s0;
 }
@@ -2206,6 +2212,66 @@ function brancher3D(){
   const fin=ev=>{ doigts.delete(ev.pointerId); if(doigts.size<2) dist0=0; }; cv3.addEventListener('pointerup',fin); cv3.addEventListener('pointercancel',fin);
   cv3.addEventListener('wheel',ev=>{ ev.preventDefault(); v3.zoom=Math.max(0.3,Math.min(8,v3.zoom*(ev.deltaY<0?1.15:1/1.15))); dessiner3D(); },{passive:false});
   window.addEventListener('resize',()=>{ if($('vue3dBoite').style.display==='flex') dessiner3D(); });
+}
+
+// ================= Terrain naturel (TN) : déblai / remblai =================
+const CALQUE_TN='POINTS_TN';
+let tnActif=false, tnCotesPlan=true, tnCache=null;
+// Points TN : mes points du calque POINTS_TN, plus (option) les cotes écrites du plan autour de la surface
+function pointsTN(P,marge){ const o=scene.origine; let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity; for(const q of P){ a=Math.min(a,q.x); b=Math.max(b,q.x); c=Math.min(c,q.y); d=Math.max(d,q.y); }
+  a-=marge; b+=marge; c-=marge; d+=marge; const L=[], dans=(x,y)=>x>=a&&x<=b&&y>=c&&y<=d;
+  for(const p of pointsExp){ if(calqueDe(p)!==CALQUE_TN || !vOkN(p.z)) continue; const x=p.x-o.x, y=p.y-o.y; if(dans(x,y)) L.push({x,y,z:+p.z,src:'pt'}); }
+  const nbMes=L.length;
+  if(tnCotesPlan && scene.cotes){ const zs=P.map(q=>q.z).filter(zOk); const ref=L.length?L.map(q=>q.z):zs; if(ref.length){ const zmin=Math.min(...ref)-5, zmax=Math.max(...ref)+5;
+    for(const k of scene.cotes){ if(!dans(k.x,k.y) || k.v<zmin || k.v>zmax) continue; const A=scene.calques.get(k.haut), B=scene.calques.get(k.eff); if((A&&!A.visible)||(B&&!B.visible)) continue; L.push({x:k.x,y:k.y,z:k.v,src:'plan'}); } } }
+  return {L, nbMes, nbPlan:L.length-nbMes}; }
+// Altitude du TN en un point : moyenne pondérée des 8 points les plus proches (1/d²)
+function zTN(L,x,y){ let best=[]; for(const p of L){ const d2=(p.x-x)**2+(p.y-y)**2; if(d2<1e-8) return p.z; if(best.length<8){ best.push([d2,p.z]); best.sort((u,v)=>u[0]-v[0]); } else if(d2<best[7][0]){ best[7]=[d2,p.z]; best.sort((u,v)=>u[0]-v[0]); } }
+  if(!best.length) return NaN; let s=0,w=0; for(const [d2,z] of best){ const k=1/d2; s+=k*z; w+=k; } return s/w; }
+function epStructureDefaut(){ return (tousModeles().find(x=>x.nom===structModele)||MODELES_BASE[0]).couches.reduce((s,c)=>s+(Number.isFinite(c.ep)?c.ep:0),0); }
+// Calcul sur une grille dans la surface : déblai = TN au-dessus du fond, remblai = TN sous le fond
+function calcTN(P,ep){
+  if(P.length<3 || !P.every(q=>zOk(q.z))) return {erreur:'Il faut le Z fini à tous les coins.'};
+  const avecFF=P.every(q=>Number.isFinite(q.ff)); if(!avecFF && !Number.isFinite(ep)) ep=epStructureDefaut();
+  const cle=JSON.stringify([P.map(q=>[q.x,q.y,q.z,q.ff]),ep,tnCotesPlan,pointsExp.filter(p=>calqueDe(p)===CALQUE_TN).map(p=>[p.x,p.y,p.z])]);
+  if(tnCache && tnCache.cle===cle) return tnCache.r;
+  const S=pointsTN(P,15); if(S.L.length<3){ const r={erreur:'Pas assez de points TN autour de la surface ('+S.L.length+'). Mettez des points sur le calque '+CALQUE_TN+(tnCotesPlan?'':' ou cochez « cotes du plan »')+'.', S}; tnCache={cle,r}; return r; }
+  const T=trianguler(P), A=aireAnneau(P); let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity; for(const q of P){ a=Math.min(a,q.x); b=Math.max(b,q.x); c=Math.min(c,q.y); d=Math.max(d,q.y); }
+  const pas=Math.max(0.05,Math.sqrt(A/2500)), cell=pas*pas, plans=T.map(t=>({t,fz:plan3(P,...t,'z'),ff:avecFF?plan3(P,...t,'ff'):null}));
+  const dansT=(x,y,[i,j,k])=>{ const cr=(o,p)=>(p.x-o.x)*(y-o.y)-(p.y-o.y)*(x-o.x); const u=cr(P[i],P[j]),v=cr(P[j],P[k]),w=cr(P[k],P[i]); return (u>=-1e-9&&v>=-1e-9&&w>=-1e-9)||(u<=1e-9&&v<=1e-9&&w<=1e-9); };
+  let deb=0, rem=0, n=0, sTN=0, dmax=0, rmax=0; const cases=[];
+  for(let x=a+pas/2;x<b;x+=pas) for(let y=c+pas/2;y<d;y+=pas){ const pl=plans.find(p=>dansT(x,y,p.t)); if(!pl||!pl.fz) continue;
+    const zf=pl.fz(x,y), fond=pl.ff?pl.ff(x,y):zf-ep, tn=zTN(S.L,x,y); if(!Number.isFinite(tn)) continue;
+    const e=tn-fond; if(e>0){ deb+=e*cell; dmax=Math.max(dmax,e); } else { rem+=-e*cell; rmax=Math.max(rmax,-e); } sTN+=tn; n++; cases.push([x,y,e]); }
+  const r={deb, rem, tnMoy:n?sTN/n:NaN, dmax, rmax, pas, cases, S, avecFF, ep}; tnCache={cle,r}; return r; }
+function htmlTN(P){ const r=calcTN(P); const cb='<label style="font-size:12px;white-space:nowrap"><input type="checkbox" '+(tnCotesPlan?'checked':'')+' onchange="basculerCotesPlanTN(this.checked)" style="vertical-align:middle"> cotes du plan</label>';
+  if(r.erreur) return '<br><span style="color:#b00020;font-size:13px">⛰ '+r.erreur+'</span> '+cb;
+  return '<br><b style="color:#b71c1c">⛰ Déblai '+fr(r.deb,2)+' m³</b> · <b style="color:#0d47a1">Remblai '+fr(r.rem,2)+' m³</b> <span class="petit">· TN moyen '+fr(r.tnMoy,2)+' · '+r.S.nbMes+' pt(s) TN'+(r.S.nbPlan?' + '+r.S.nbPlan+' cote(s) du plan':'')+' · fond : '+(r.avecFF?'FF':'structure '+fr(r.ep,2)+' m')+'</span> '+cb; }
+function basculerCotesPlanTN(v){ tnCotesPlan=v; Memoire.ecrire('tnCotesPlan',v); tnCache=null; majPanneau(); demanderDessin(false); }
+function dessinerCarteTN(c){ if(!tnActif || outil!=='mesure' || mesure.mode!=='surf' || mesure.pts.length<3 || voirGardees) return; const r=calcTN(mesure.pts); if(r.erreur) return;
+  const k=r.pas*vue.s; c.save(); for(const [x,y,e] of r.cases){ const [sx,sy]=versEcran(x,y); if(sx<-k||sy<-k||sx>W+k||sy>H+k) continue; const t=Math.min(1,Math.abs(e)/0.8);
+    c.fillStyle= e>0 ? 'rgba(211,47,47,'+(0.12+0.5*t)+')' : 'rgba(25,118,210,'+(0.12+0.5*t)+')'; c.fillRect(sx-k/2,sy-k/2,k+0.6,k+0.6); }
+  // points TN utilisés
+  for(const p of r.S.L){ const [sx,sy]=versEcran(p.x,p.y); if(sx<0||sy<0||sx>W||sy>H) continue; c.beginPath(); c.arc(sx,sy,3,0,DEUXPI); c.fillStyle=p.src==='pt'?'#2e7d32':'#81c784'; c.fill(); }
+  c.restore(); }
+// Import d'un fichier de points (TS11 : Nom;X;Y;Z ou X;Y;Z, séparateur ; , tabulation ou espace)
+function lireFichierPoints(txt){ const L=[]; for(const ligne of txt.split(/\r?\n/)){ const s=ligne.trim(); if(!s) continue;
+    let ch = s.includes(';') ? s.split(';') : s.includes('\t') ? s.split('\t') : (s.split(',').length>=3 && !/\d,\d{1,3}\s/.test(s) ? s.split(',') : s.split(/\s+/));
+    ch=ch.map(x=>x.trim()).filter(x=>x!==''); const num=x=>{ const v=Number(String(x).replace(',','.')); return Number.isFinite(v)?v:NaN; };
+    let nom=null,x,y,z; if(ch.length>=4 && Number.isNaN(num(ch[0]))){ nom=ch[0]; x=num(ch[1]); y=num(ch[2]); z=num(ch[3]); } else if(ch.length>=4){ nom=ch[0]; x=num(ch[1]); y=num(ch[2]); z=num(ch[3]); } else if(ch.length===3){ x=num(ch[0]); y=num(ch[1]); z=num(ch[2]); } else continue;
+    if(!Number.isFinite(x)||!Number.isFinite(y)) continue; L.push({nom,x,y,z:Number.isFinite(z)?z:null}); } return L; }
+function importerPoints(txt,nomFichier){ const L=lireFichierPoints(txt); if(!L.length){ $('ptsInfo').innerHTML='⚠ Aucun point lu dans « '+nomFichier+' » (attendu : Nom;X;Y;Z).'; return; }
+  memoriserPourAnnuler(); let aj=0, idem=0, ren=0; const cal=calqueActifPts;
+  for(const q of L){ let nom=q.nom||prochainNom(); const ex=pointsExp.find(p=>p.nom===nom);
+    if(ex && Math.abs(ex.x-q.x)<0.0005 && Math.abs(ex.y-q.y)<0.0005 && memeZ(ex.z,q.z)){ idem++; continue; }
+    if(ex){ nom=nomLibre(nom); ren++; } pointsExp.push({nom, x:q.x, y:q.y, z:q.z, calque:cal}); aj++; }
+  majComptesPerso(); sauverPoints(); majTablePoints(); remplirCalques(); tnCache=null; demanderDessin(false);
+  $('ptsInfo').innerHTML='✓ Import « '+nomFichier+' » : <b>'+aj+' point(s) ajouté(s)</b> sur le calque <b>'+cal+'</b>'+(idem?' · '+idem+' déjà présent(s)':'')+(ren?' · '+ren+' renommé(s) (nom déjà pris)':'')+'.'; }
+function brancherTN(){
+  Memoire.lire('tnCotesPlan').then(v=>{ if(v===false) tnCotesPlan=false; });
+  $('bTN').onclick=()=>{ tnActif=!tnActif; $('bTN').classList.toggle('actif',tnActif); majPanneau(); demanderDessin(false); };
+  $('bImporter').onclick=()=>$('fichierPts').click();
+  $('fichierPts').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; const t=await f.text(); importerPoints(t,f.name); e.target.value=''; };
 }
 
 // ================= Gestes au doigt (et souris) =================
@@ -2477,7 +2543,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
 $('bMenuSauverSous').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerSous(); };
