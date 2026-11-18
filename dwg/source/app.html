@@ -391,7 +391,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Calage – v2";
+const VERSION = "PDF – v1";
 </script>
 <script>
 "use strict";
@@ -2392,7 +2392,7 @@ async function ajouterAuClasseur(nom,octets){ await Memoire.ecrire('fichier:'+no
 function garderEnMemoire(nom,sc){ cacheScenes.delete(nom); cacheScenes.set(nom,sc); while(cacheScenes.size>MAX_EN_MEMOIRE){ const vieux=cacheScenes.keys().next().value; if(vieux===nom) break; cacheScenes.delete(vieux); } }
 function majOnglets(){ const z=$('onglets'); if(!z) return; z.replaceChildren(); document.body.classList.toggle('avecOnglets', classeur.plans.length>0);
   for(const nom of classeur.plans){ const b=document.createElement('div'); b.className='onglet'+(scene&&scene.nom===nom?' actif':'')+(cacheScenes.has(nom)?' chaud':''); b.title=nom;
-    const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf)$/i,''); b.appendChild(t);
+    const t=document.createElement('span'); t.className='nomOnglet'; t.textContent=nom.replace(/\.(dwg|dxf|pdf)$/i,''); b.appendChild(t);
     if(modifiePlans.get(nom)) { const m=document.createElement('i'); m.className='pointModif'; b.appendChild(m); }
     const x=document.createElement('span'); x.className='ferme'+(ongletAretirer===nom?' confirmer':''); x.textContent= ongletAretirer===nom ? 'Retirer ?' : '✕';
     x.onclick=ev=>{ ev.stopPropagation(); if(ongletAretirer===nom){ ongletAretirer=null; retirerDuClasseur(nom); } else { ongletAretirer=nom; majOnglets(); setTimeout(()=>{ if(ongletAretirer===nom){ ongletAretirer=null; majOnglets(); } },3500); } };
@@ -2496,6 +2496,74 @@ function brancherCalage(){
       i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); i.blur(); } }; } }
 }
 
+// ================= Lecture directe des PDF (plans dessinés) avec pdf.js, sans internet =================
+const PDFJS_GZ_B64="__PDFJS__", PDFWK_GZ_B64="__PDFWORKER__";
+let pdfjsPromesse=null;
+async function dezipB64(b64){ const bin=atob(b64), gz=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
+  return new Uint8Array(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); }
+function chargerPdfjs(){ if(!pdfjsPromesse) pdfjsPromesse=(async()=>{ const lib=await dezipB64(PDFJS_GZ_B64), wk=await dezipB64(PDFWK_GZ_B64);
+    const uL=URL.createObjectURL(new Blob([lib],{type:'text/javascript'})), uW=URL.createObjectURL(new Blob([wk],{type:'text/javascript'}));
+    const m=await import(uL); m.GlobalWorkerOptions.workerSrc=uW; return m; })().catch(e=>{ pdfjsPromesse=null; throw e; }); return pdfjsPromesse; }
+const estPdf=o=>o.length>4 && o[0]===0x25 && o[1]===0x50 && o[2]===0x44 && o[3]===0x46; // %PDF
+// Transforme les pages d'un PDF en objets de plan : traits (par couleur), remplissages, textes. Unité : mm sur le papier.
+async function lirePdf(octets){
+  const pdfjs=await chargerPdfjs(), O=pdfjs.OPS;
+  const doc=await pdfjs.getDocument({data:octets.slice(), isEvalSupported:false, disableFontFace:true, verbosity:0}).promise;
+  const MM=25.4/72, ents=[], calques=new Map(), hex=c=>((c[0]<<16)|(c[1]<<8)|c[2]);
+  const cal=(nom)=>{ if(!calques.has(nom)) calques.set(nom,{name:nom, colorIndex:7}); return nom; };
+  let dx=0, nbPages=doc.numPages, ignores=0;
+  for(let np=1; np<=nbPages; np++){
+    voile('Lecture du PDF : page '+np+' / '+nbPages+'…'); await attendreAffichage();
+    const page=await doc.getPage(np), vp=page.getViewport({scale:1}), pref=nbPages>1?'P'+np+' ':'';
+    const T0=mul([MM,0,0,-MM,dx,vp.height*MM], vp.transform);
+    const ol=await page.getOperatorList(); const F=ol.fnArray, A=ol.argsArray;
+    let ctm=T0, pile=[], trait=[0,0,0], fond=[0,0,0], sous=[], cour=null, px=0, py=0;
+    const pt=(x,y)=>[ctm[0]*x+ctm[2]*y+ctm[4], ctm[1]*x+ctm[3]*y+ctm[5]];
+    const nouveau=(x,y)=>{ cour={p:[...pt(x,y)], ferme:false, x0:x, y0:y}; sous.push(cour); px=x; py=y; };
+    const bez=(x1,y1,x2,y2,x3,y3)=>{ const x0=px,y0=py; for(let k=1;k<=8;k++){ const t=k/8, u=1-t, a=u*u*u, b=3*u*u*t, c=3*u*t*t, d=t*t*t; cour.p.push(...pt(a*x0+b*x1+c*x2+d*x3, a*y0+b*y1+c*y2+d*y3)); } px=x3; py=y3; };
+    const peindre=(trace,remplit,ferme)=>{
+      if(trace){ const nomC=cal(pref+'PDF traits '+('00000'+hex(trait).toString(16)).slice(-6)); for(const s of sous){ if(s.p.length<4) continue; const v=[]; for(let i=0;i<s.p.length;i+=2) v.push({x:s.p[i],y:s.p[i+1]});
+          ents.push({type:'LWPOLYLINE', layer:nomC, color:hex(trait), colorIndex:1, flag:(s.ferme||ferme)?512:0, vertices:v}); } }
+      if(remplit && !(fond[0]>=250&&fond[1]>=250&&fond[2]>=250)){ const bp=[]; for(const s of sous){ if(s.p.length<6) continue; const v=[]; for(let i=0;i<s.p.length;i+=2) v.push({x:s.p[i],y:s.p[i+1]}); bp.push({vertices:v}); }
+        if(bp.length) ents.push({type:'HATCH', layer:cal(pref+'PDF remplissages'), color:hex(fond), colorIndex:1, solidFill:1, boundaryPaths:bp}); }
+      sous=[]; cour=null; };
+    for(let i=0;i<F.length;i++){ const f=F[i], a=A[i];
+      switch(f){
+        case O.save: pile.push([ctm,trait,fond]); break;
+        case O.restore: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
+        case O.transform: ctm=mul(ctm,a); break;
+        case O.paintFormXObjectBegin: pile.push([ctm,trait,fond]); if(a&&a[0]) ctm=mul(ctm,a[0]); break;
+        case O.paintFormXObjectEnd: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
+        case O.setStrokeRGBColor: trait=[a[0],a[1],a[2]]; break;
+        case O.setFillRGBColor: fond=[a[0],a[1],a[2]]; break;
+        case O.constructPath: { const ops=a[0], c=a[1]; let k=0;
+          for(const op of ops){
+            if(op===O.moveTo){ nouveau(c[k],c[k+1]); k+=2; }
+            else if(op===O.lineTo){ if(!cour) nouveau(px,py); cour.p.push(...pt(c[k],c[k+1])); px=c[k]; py=c[k+1]; k+=2; }
+            else if(op===O.curveTo){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+4],c[k+5]); k+=6; }
+            else if(op===O.curveTo2){ if(!cour) nouveau(px,py); bez(px,py,c[k],c[k+1],c[k+2],c[k+3]); k+=4; }
+            else if(op===O.curveTo3){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+2],c[k+3]); k+=4; }
+            else if(op===O.rectangle){ const x=c[k],y=c[k+1],w=c[k+2],h=c[k+3]; k+=4; nouveau(x,y); cour.p.push(...pt(x+w,y),...pt(x+w,y+h),...pt(x,y+h)); cour.ferme=true; px=x; py=y; }
+            else if(op===O.closePath){ if(cour){ cour.ferme=true; px=cour.x0; py=cour.y0; } }
+          } break; }
+        case O.stroke: peindre(true,false,false); break;
+        case O.closeStroke: peindre(true,false,true); break;
+        case O.fill: case O.eoFill: peindre(false,true,true); break;
+        case O.fillStroke: case O.eoFillStroke: peindre(true,true,false); break;
+        case O.closeFillStroke: case O.closeEOFillStroke: peindre(true,true,true); break;
+        case O.endPath: sous=[]; cour=null; break;
+        case O.paintImageXObject: case O.paintInlineImageXObject: case O.paintImageMaskXObject: ignores++; break;
+      } }
+    // textes
+    try{ const tc=await page.getTextContent(); const nomT=cal(pref+'PDF textes');
+      for(const it of tc.items){ if(!it.str || !it.str.trim()) continue; const m=mul(T0,it.transform); const h=Math.hypot(m[2],m[3]); if(!(h>0)) continue;
+        ents.push({type:'TEXT', layer:nomT, colorIndex:7, text:it.str, textHeight:h, rotation:Math.atan2(m[1],m[0]), startPoint:{x:m[4],y:m[5]}, halign:0, valign:0, xScale:Math.hypot(m[0],m[1])/h||1}); } }catch(e){}
+    dx+=vp.width*MM+50; page.cleanup();
+  }
+  try{ await doc.destroy(); }catch(e){}
+  return {db:{tables:{LAYER:{entries:[...calques.values()]}, BLOCK_RECORD:{entries:[]}}, entities:ents}, nbPages, images:ignores};
+}
+
 // ================= Ouverture d'un fichier =================
 const $=id=>document.getElementById(id);
 $('bOuvrir').onclick=()=>{ $('fichier').value=''; $('fichier').click(); };
@@ -2508,7 +2576,7 @@ async function ouvrir(f){
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
   if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
-  let nom=f.name; if(!/\.(dwg|dxf)$/i.test(nom)) nom += /^AC1\d{3}/.test(String.fromCharCode(...octets.slice(0,6))) ? '.dwg' : '.dxf'; // nom reçu sans extension (partage depuis une autre appli)
+  let nom=f.name; if(!/\.(dwg|dxf|pdf)$/i.test(nom)) nom += estPdf(octets) ? '.pdf' : /^AC1\d{3}/.test(String.fromCharCode(...octets.slice(0,6))) ? '.dwg' : '.dxf'; // nom reçu sans extension (partage depuis une autre appli)
   if(scene && scene.nom!==nom) quitterPlanCourant();
   const ok=await ouvrirOctets(nom, octets, (await Memoire.lire('etat:'+nom))||null);
   if(ok){ Memoire.ecrire('plan',{nom, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,octets); }
@@ -2518,17 +2586,21 @@ async function ouvrirOctets(nom, octets, etat){
   voile((etat?'Réouverture de « ':'Ouverture de « ')+nom+' »…'); await attendreAffichage();
   try{
     const entete=String.fromCharCode(...octets.slice(0,6));
-    const estDwg=/^AC1\d{3}/.test(entete);
-    if(!estDwg && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
+    const estDwg=/^AC1\d{3}/.test(entete), pdf=estPdf(octets);
+    if(!estDwg && !pdf && !/\.dxf$/i.test(nom) && !/SECTION/.test(new TextDecoder().decode(octets.slice(0,2000))))
       throw new Error("Ce fichier n'est ni un DWG ni un DXF reconnu (début du fichier : « "+entete.replace(/[^\x20-\x7e]/g,'?')+" »).");
     if(estDwg && /^AC100\d/.test(entete)) throw new Error('Version DWG trop ancienne ('+entete+').');
     const enCache=cacheScenes.get(nom);
     if(enCache && enCache.octets && enCache.octets.length===octets.length){ scene=enCache; }
     else {
+    let db, infoPdf=null;
+    if(pdf){ voile('Préparation du lecteur PDF…'); await attendreAffichage();
+      try{ infoPdf=await lirePdf(octets); db=infoPdf.db; }catch(e){ throw new Error('Le PDF n\'a pas pu être lu ('+((e&&e.message)||e)+').'); }
+      if(!db.entities.length) throw new Error(infoPdf.images ? 'Ce PDF ne contient que des images (plan scanné) : il n\'y a pas de traits à lire. Il faut le PDF exporté depuis le logiciel de dessin, ou le DWG.' : 'Ce PDF ne contient aucun trait.'); }
+    else {
     voile('Préparation du lecteur…'); await attendreAffichage();
     const lib=await chargerLecteur();
     voile('Lecture du plan…'); await attendreAffichage();
-    let db;
     const ow=console.warn; console.warn=()=>{};
     try{
       const dwg=lib.dwg_read_data(estDwg?octets:dxfVersAnsi(octets), estDwg?DwgLib.Dwg_File_Type.DWG:DwgLib.Dwg_File_Type.DXF);
@@ -2538,10 +2610,11 @@ async function ouvrirOctets(nom, octets, etat){
     } catch(e){ lecteurPromesse=null; // le lecteur est inutilisable après un plantage : il sera recréé pour le prochain plan
       throw new Error('Le lecteur DWG n\'a pas pu lire ce fichier ('+((e&&e.message)||e)+'). Essayez de l\'enregistrer dans une autre version DWG (2013 ou 2018) ou en DXF.'); }
     finally { console.warn=ow; }
+    }
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
     voile('Préparation de l\'affichage…'); await attendreAffichage();
     const cal=await Memoire.lire('calage:'+nom); scene=construireScene(db, cal||null); scene.calage=cal||null;
-    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF';
+    scene.nom=nom; scene.octets=octets; scene.version=pdf?'PDF ('+infoPdf.nbPages+' page'+(infoPdf.nbPages>1?'s':'')+(infoPdf.images?', '+infoPdf.images+' image(s) non lue(s)':'')+') — unité : mm du papier, à caler':estDwg?versionDwg(entete):'DXF';
     }
     garderEnMemoire(nom,scene); modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
     mesure={mode:mesure.mode,pts:[]}; visee=null; edition=null; histMes=[]; coinSel=null; coupeMode=false; coupeAB=[]; tnCache=null;
