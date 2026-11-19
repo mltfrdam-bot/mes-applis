@@ -190,6 +190,15 @@ body.avecOnglets #zone, body.avecOnglets #accueil, body.avecOnglets #calques{top
 body.avecOnglets #bOeil{top:96px}
 #bandeauArticle{position:fixed;left:8px;top:58px;max-width:calc(100% - 80px);min-height:34px;display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:17px;border:1px solid #888;font-size:14.5px;z-index:6;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.avecOnglets #bandeauArticle{top:94px}
+#pastilleChrono{position:fixed;left:8px;top:58px;max-width:calc(100% - 80px);height:36px;display:none;align-items:center;gap:6px;padding:0 4px 0 10px;border-radius:18px;background:#fff3e0;border:2px solid #e65c00;z-index:6;box-shadow:0 2px 6px rgba(0,0,0,.25);font-size:14px;white-space:nowrap}
+#pastilleChrono.pause{background:#eee;border-color:#888}
+#pastilleChrono .pc{font-size:18px;cursor:pointer}
+#pastilleChrono .pt{overflow:hidden;text-overflow:ellipsis;max-width:150px;cursor:pointer}
+#pastilleChrono .ph{font-family:Consolas,'Courier New',monospace;cursor:pointer}
+#pastilleChrono .pf{height:30px;min-width:34px;border:1px solid #9a9a9a;border-radius:15px;background:#fff;font-size:14px;padding:0 6px}
+#tabPlanning .tps{display:block;font-family:Consolas,'Courier New',monospace;font-size:12.5px;color:#555;margin-top:3px;cursor:pointer}
+#tabPlanning .tps[data-cours="1"]{color:#e65c00;font-weight:bold}
+#tabPlanning tr.seances td{background:#fafafa;font-size:12.5px;color:#555}
 #listeArticles{position:fixed;left:8px;right:8px;top:96px;max-height:60vh;overflow:auto;background:#fff;border:1px solid #888;border-radius:8px;padding:6px;z-index:30;display:none;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 body.avecOnglets #listeArticles{top:132px}
 body.avecOnglets #bSauver{top:154px}
@@ -229,7 +238,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </head>
 <body>
 <div id="onglets"></div>
-<div id="bandeauArticle"></div><div id="listeArticles"></div>
+<div id="bandeauArticle"></div><div id="listeArticles"></div><div id="pastilleChrono"><span class="pc">⏸</span><span class="pt"></span><b class="ph">0:00:00</b><button class="pf" title="Terminer">✅</button></div><datalist id="dlTaches"></datalist>
 <div id="barre">
   <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
@@ -311,7 +320,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div id="mtLotInfo" class="petit" style="padding:3px 8px;color:#555"></div>
   <div id="mtOnglets" class="seg" style="margin:4px 8px;display:flex"><button data-o="demande" class="on">Demande</button><button data-o="mesure">Mesuré</button><button data-o="attente">En attente</button><button data-o="planning">Planning</button></div>
   <div id="zonePlanning" style="display:none;flex:1;overflow:auto;flex-direction:column">
-    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="mtAjTache">＋ Tâche</button><button class="btn" id="mtCopierPlanning">📋 Copier</button><span id="mtResumePlanning" class="petit" style="flex:1;text-align:right"></span></div>
+    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="mtAjTache">＋ Tâche</button><button class="btn" id="mtAjChrono">＋ ⏱ Chronométrée</button><button class="btn" id="mtCopierPlanning">📋 Copier</button><span id="mtResumePlanning" class="petit" style="flex:1;text-align:right"></span></div>
     <table class="xl compact" id="tabPlanning"><thead><tr><th>N°</th><th>Tâche</th><th>État</th><th></th></tr></thead><tbody id="tbPlanning"></tbody></table>
     <div class="petit" style="padding:6px 8px;color:#666">État : un appui fait passer À faire → En cours → Fait. 📍 place la tâche sur le plan (drapeau rouge / orange / vert).</div>
   </div>
@@ -422,7 +431,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Réseaux métré – v1";
+const VERSION = "Chrono – v1";
 </script>
 <script>
 "use strict";
@@ -1772,9 +1781,10 @@ function fusionner(d){
   for(const n of (rg.verrous||[])){ const c=scene.calques.get(n); if(c && !c.verrou && !c.supprime){ c.verrou=true; R.verAjout.push(n); } }
   if(d.devis && d.devis.arts){ for(const l of (d.devis.lots||[])) if(!devis.lots.includes(l)){ devis.lots.push(l); (R.lotsAj=R.lotsAj||[]).push(l); }
     for(const [k,v] of Object.entries(d.devis.arts)){ const e=devis.arts[k]=devis.arts[k]||{}; let a=false; if(Number.isFinite(v.qte)&&!Number.isFinite(e.qte)){ e.qte=v.qte; a=true; } if(Number.isFinite(v.pu)&&!Number.isFinite(e.pu)){ e.pu=v.pu; a=true; } if(a){ const cp=calquesPerso.find(x=>x.nom===k); (R.devAj=R.devAj||[]).push(cp&&cp.devis&&cp.devis.des||k.replace(/^DEVIS_/,'')); } }
-    if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(t&&t.id&&!T.some(x=>x.id===t.id)){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); } } }
+    if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(!t||!t.id) continue; const ex=T.find(x=>x.id===t.id); if(!ex){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); continue; }
+        if(t.chrono&&Array.isArray(t.chrono.sessions)){ const c=chronoDe(ex); let n=0; for(const x of t.chrono.sessions) if(!c.sessions.some(y=>y.d===x.d)){ c.sessions.push(x); n++; } if(n){ c.sessions.sort((a,b)=>a.d-b.d); (R.seancesAj=R.seancesAj||[]).push(ex.titre+' (+'+n+')'); } } } }
     sauverDevis(); }
-  R.total=(R.tachesAj?R.tachesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
+  R.total=(R.tachesAj?R.tachesAj.length:0)+(R.seancesAj?R.seancesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
   return R;
 }
 function montrerDescriptif(nomFichier,d,R,dejaLa){
@@ -1792,6 +1802,7 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   if(R.calAjout.length) L.push('Calques perso ajoutés : '+R.calAjout.join(', '));
   if(R.lotsAj) L.push('Lots ajoutés : '+R.lotsAj.join(', '));
   if(R.tachesAj) L.push('Tâches ajoutées : '+R.tachesAj.join(', '));
+  if(R.seancesAj) L.push('Séances de chrono ajoutées : '+R.seancesAj.join(', '));
   if(R.devAj) L.push('Quantités / prix du devis complétés : '+R.devAj.join(', '));
   if(R.modAjout) L.push('Modèles de structure ajoutés : '+R.modAjout.join(', '));
   if(R.supAjout.length) L.push('Calques supprimés repris : '+lim(R.supAjout));
@@ -2473,7 +2484,7 @@ function brancherMetre(){
 // ================= Article actif : bandeau sur le plan (choisi une fois, toutes les mesures y vont) =================
 let articlesRecents=[];
 const articleCourant=()=>{ const n= outil==='points' ? calqueActifPts : calqueActifMes; return articles().find(a=>a.nom===n)||null; };
-function majBandeau(){ const b=$('bandeauArticle'); if(!b) return; const vis=!!scene && (outil==='mesure'||outil==='points') && !edition; b.style.display=vis?'flex':'none'; if(!vis) return;
+function majBandeau(){ setTimeout(majPastille,0); const b=$("bandeauArticle"); if(!b) return; const vis=!!scene && (outil==='mesure'||outil==='points') && !edition; b.style.display=vis?'flex':'none'; if(!vis) return;
   const a=articleCourant(); const lot=devis&&devis.lotActif?' · '+devis.lotActif:'';
   if(a){ b.style.background=a.couleur; b.style.color='#fff'; b.innerHTML='🧾 <b>'+echapper(a.devis.des)+'</b>'+echapper(lot)+' <span style="opacity:.85">('+a.devis.unite+') ▾</span>'; }
   else { b.style.background='#fff'; b.style.color='#444'; b.innerHTML='🧾 Article : <b>aucun</b>'+echapper(lot)+' ▾'; }
@@ -2496,7 +2507,7 @@ function choisirArticle(nom){ const a=nom?articles().find(x=>x.nom===nom):null;
 function brancherBandeau(){ $('bandeauArticle').onclick=ouvrirListeArticles; Memoire.lire('articlesRecents').then(v=>{ if(Array.isArray(v)) articlesRecents=v; }); }
 
 // ================= Métré : onglets Demande / Mesuré / En attente / Planning (forfaits → tâches) =================
-let ongletMetre='demande', placementTache=null;
+let ongletMetre='demande', placementTache=null, seancesOuvertes=new Set();
 const estForfait=a=>a&&a.devis&&a.devis.base==='F';
 const ETATS=[['afaire','⬜ À faire'],['encours','🔄 En cours'],['fait','✅ Fait']];
 function tachesDe(){ if(!Array.isArray(devis.taches)) devis.taches=[]; return devis.taches; }
@@ -2508,9 +2519,13 @@ function majPlanning(){ const T=tachesDe(), tb=$('tbPlanning'), frag=document.cr
   T.forEach((t,i)=>{ const tr=document.createElement('tr'); if(t.etat==='fait') tr.className='fait';
     const td=()=>document.createElement('td');
     const c0=td(); c0.className='num'; c0.textContent=i+1;
-    const c1=td(); const it=document.createElement('input'); it.value=t.titre; it.className='titre'; it.onchange=()=>{ t.titre=it.value.trim()||t.titre; sauverDevis(); demanderDessin(false); }; c1.appendChild(it);
+    const c1=td(); const it=document.createElement('input'); it.value=t.titre; it.className='titre'; it.setAttribute('list','dlTaches'); it.onchange=()=>{ t.titre=it.value.trim()||t.titre; retenirNomTache(t.titre); if(chronoG&&chronoG.plan===scene.nom&&chronoG.id===t.id){ chronoG.titre=t.titre; sauverChronoG(); majPastille(); } sauverDevis(); demanderDessin(false); }; c1.appendChild(it);
     if(t.art){ const a=calquesPerso.find(x=>x.nom===t.art); if(a){ const s=document.createElement('div'); s.className='petit'; s.innerHTML='<span style="color:'+a.couleur+'">■</span> forfait du devis'; c1.appendChild(s); } }
-    const c2=td(); const be=document.createElement('button'); be.className='btn petitb etat'; be.textContent=(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]; be.onclick=()=>{ const k=ETATS.findIndex(e=>e[0]===t.etat); t.etat=ETATS[(k+1)%3][0]; if(t.etat==='fait' && !t.fait) t.fait=new Date().toISOString().slice(0,10); sauverDevis(); majPlanning(); demanderDessin(false); }; c2.appendChild(be);
+    const c2=td(); const be=document.createElement('button'); be.className='btn petitb etat'; be.textContent=(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]; be.onclick=()=>{ const k=ETATS.findIndex(e=>e[0]===t.etat); t.etat=ETATS[(k+1)%3][0]; if(t.etat==='fait'){ if(!t.fait) t.fait=new Date().toISOString().slice(0,10); if(t.chrono&&t.chrono.enCours){ terminerChrono(scene.nom,t.id).then(()=>demanderDessin(false)); return; } } sauverDevis(); majPlanning(); demanderDessin(false); }; c2.appendChild(be);
+    const enC=!!(t.chrono&&t.chrono.enCours), ms=tempsTache(t);
+    const bc=document.createElement('button'); bc.className='btn petitb chrono'; bc.style.marginTop='3px'; bc.textContent= enC?'⏸ Pause':(ms>0?'▶ Reprendre':'▶ Chrono'); if(t.etat==='fait' && !enC) bc.style.display='none';
+    bc.onclick=()=>{ if(enC) pauseChronoG(); else demarrerChrono(t).then(()=>{ demanderDessin(false); }); }; c2.appendChild(document.createElement('br')); c2.appendChild(bc);
+    if(ms>0||enC){ const sp=document.createElement('span'); sp.className='tps'; sp.dataset.id=t.id; sp.dataset.cours=enC?'1':''; sp.textContent='⏱ '+hms(ms); sp.title='Voir les séances'; sp.onclick=()=>{ seancesOuvertes.has(t.id)?seancesOuvertes.delete(t.id):seancesOuvertes.add(t.id); majPlanning(); }; c2.appendChild(sp); }
     const ld=document.createElement('div'); ld.className='petit'; ld.textContent='Date : '; const id=document.createElement('input'); id.type='date'; id.value=t.date||''; id.onchange=()=>{ t.date=id.value; sauverDevis(); }; ld.appendChild(id); c1.appendChild(ld);
     const c4=td(); c4.className='act';
     const b=(txt,titre,f)=>{ const x=document.createElement('button'); x.className='btn petitb'; x.textContent=txt; x.title=titre; x.onclick=f; c4.appendChild(x); };
@@ -2518,8 +2533,11 @@ function majPlanning(){ const T=tachesDe(), tb=$('tbPlanning'), frag=document.cr
     b('▼','Descendre',()=>{ if(i<T.length-1){ [T[i+1],T[i]]=[T[i],T[i+1]]; sauverDevis(); majPlanning(); } });
     b(t.x!==undefined?'🎯':'📍', t.x!==undefined?'Voir sur le plan (appui long : déplacer)':'Placer sur le plan', ()=>{ if(t.x!==undefined){ $('metreBoite').style.display='none'; centrerSur([{x:t.x,y:t.y}]); demanderDessin(false); } else placerTache(t); });
     if(t.x!==undefined) b('↔','Déplacer sur le plan',()=>placerTache(t));
-    b('🗑','Supprimer',()=>{ if(t.art && !confirmerSuppr(tr)) return; T.splice(i,1); sauverDevis(); majPlanning(); demanderDessin(false); });
-    tr.append(c0,c1,c2,c4); frag.appendChild(tr); });
+    b('🗑','Supprimer',()=>{ if((t.art||tempsTache(t)>0) && !confirmerSuppr(tr)) return; if(chronoG&&chronoG.plan===scene.nom&&chronoG.id===t.id){ chronoG=null; sauverChronoG(); majChronoPartout(); } T.splice(i,1); sauverDevis(); majPlanning(); demanderDessin(false); });
+    tr.append(c0,c1,c2,c4); frag.appendChild(tr);
+    if(seancesOuvertes.has(t.id) && t.chrono){ const S=[...(t.chrono.sessions||[])]; if(t.chrono.enCours) S.push({d:t.chrono.enCours,f:null}); const r=document.createElement('tr'); r.className='seances';
+      const hh=x=>{ const d=new Date(x); return String(d.getHours()).padStart(2,'0')+'h'+String(d.getMinutes()).padStart(2,'0'); }, jj=x=>new Date(x).toLocaleDateString('fr-FR');
+      r.innerHTML='<td></td><td colspan="3">'+(S.length?S.map((x,k)=>(k+1)+'. '+jj(x.d)+' · '+hh(x.d)+' → '+(x.f?hh(x.f)+' · '+hms(x.f-x.d):'en cours')).join('<br>'):'Aucune séance')+'</td>'; frag.appendChild(r); } });
   tb.replaceChildren(frag);
   const n=k=>T.filter(t=>t.etat===k).length; $('mtResumePlanning').textContent=n('afaire')+' à faire · '+n('encours')+' en cours · '+n('fait')+' faite(s)'; }
 function confirmerSuppr(tr){ if(tr.dataset.conf==='1') return true; tr.dataset.conf='1'; const b=tr.querySelector('button[title="Supprimer"]'); b.textContent='Sûr ?'; b.style.background='#d32f2f'; b.style.color='#fff'; setTimeout(()=>{ tr.dataset.conf=''; b.textContent='🗑'; b.style.background=''; b.style.color=''; },3000); return false; }
@@ -2532,13 +2550,55 @@ function dessinerTaches(c){ if(!scene||!devis||!Array.isArray(devis.taches)) ret
     c.fillStyle=coul; c.beginPath(); c.moveTo(x,y-24); c.lineTo(x+16,y-19); c.lineTo(x,y-14); c.closePath(); c.fill();
     const txt=(i+1)+'. '+t.titre+(t.etat==='fait'?' ✓':''); const w=c.measureText(txt).width; c.fillStyle='rgba(255,255,255,0.88)'; c.fillRect(x+18,y-30,w+6,16); c.fillStyle=coul; c.fillText(txt,x+21,y-18); });
   c.restore(); }
-function textePlanning(){ return ['Planning — '+scene.nom, ['N°','Tâche','État','Date','Fait le'].join('\t'), ...tachesDe().map((t,i)=>[i+1,t.titre,(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1].replace(/^\S+\s/,''),t.date||'',t.fait||''].join('\t'))].join('\n'); }
+function textePlanning(){ return ['Planning — '+scene.nom, ['N°','Tâche','État','Date','Fait le','Temps'].join('\t'), ...tachesDe().map((t,i)=>[i+1,t.titre,(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1].replace(/^\S+\s/,''),t.date||'',t.fait||'',tempsTache(t)?hms(tempsTache(t)):''].join('\t'))].join('\n'); }
 function choisirOngletMetre(o){ ongletMetre=o; for(const b of document.querySelectorAll('#mtOnglets button')) b.classList.toggle('on',b.dataset.o===o);
   const pl=o==='planning'; $('zoneMetre').style.display=pl?'none':'flex'; $('zonePlanning').style.display=pl?'flex':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else majTableMetre(); }
 function brancherPlanning(){
   for(const b of document.querySelectorAll('#mtOnglets button')) b.onclick=()=>choisirOngletMetre(b.dataset.o);
   $('mtAjTache').onclick=()=>{ tachesDe().push({id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:''}); sauverDevis(); majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } };
   $('mtCopierPlanning').onclick=async()=>{ const t=textePlanning(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){} $('mtInfo').textContent= ok?'✓ Planning copié.':'⚠ Copie impossible.'; };
+}
+
+// ================= Chronomètre des tâches =================
+let chronoG=null, nomsTaches=[], minuteurChrono=null;
+const maintenant=()=>Date.now();
+function chronoDe(t){ if(!t.chrono) t.chrono={sessions:[], enCours:null}; if(!Array.isArray(t.chrono.sessions)) t.chrono.sessions=[]; return t.chrono; }
+function tempsTache(t){ if(!t||!t.chrono) return 0; let s=0; for(const x of t.chrono.sessions||[]) s+=Math.max(0,x.f-x.d); if(t.chrono.enCours) s+=Math.max(0,maintenant()-t.chrono.enCours); return s; }
+function hms(ms){ const s=Math.floor(ms/1000), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return h+':'+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); }
+function sauverChronoG(){ Memoire.ecrire('chronoActif', chronoG); }
+// agit sur une tâche d'un plan (ouvert ou non)
+async function avecTache(plan,id,fn){
+  if(scene && plan===scene.nom){ const t=tachesDe().find(x=>x.id===id); if(t){ fn(t); sauverDevis(); } return; }
+  const d=await Memoire.lire('devis:'+plan); if(!d||!Array.isArray(d.taches)) return; const t=d.taches.find(x=>x.id===id); if(t){ fn(t); await Memoire.ecrire('devis:'+plan,d); } }
+async function pauseChronoG(){ if(!chronoG||!chronoG.depuis) return; const g=chronoG, f=maintenant();
+  await avecTache(g.plan,g.id,t=>{ const c=chronoDe(t); if(c.enCours){ c.sessions.push({d:c.enCours,f}); c.enCours=null; } });
+  g.base=(g.base||0)+(f-g.depuis); g.depuis=null; sauverChronoG(); majChronoPartout(); }
+async function demarrerChrono(t){ if(chronoG && chronoG.depuis && !(chronoG.plan===scene.nom && chronoG.id===t.id)) await pauseChronoG();
+  const c=chronoDe(t); if(c.enCours) return; const d=maintenant(); c.enCours=d; if(t.etat!=='fait') t.etat='encours'; sauverDevis();
+  chronoG={plan:scene.nom, id:t.id, titre:t.titre, base:tempsTache(t)-(d-c.enCours), depuis:d}; chronoG.base=tempsTache(t); sauverChronoG(); retenirNomTache(t.titre); majChronoPartout(); }
+async function reprendreChronoG(){ if(!chronoG||chronoG.depuis) return; const g=chronoG, d=maintenant();
+  await avecTache(g.plan,g.id,t=>{ const c=chronoDe(t); if(!c.enCours) c.enCours=d; if(t.etat!=='fait') t.etat='encours'; });
+  g.depuis=d; sauverChronoG(); majChronoPartout(); }
+async function terminerChrono(plan,id){ const f=maintenant();
+  await avecTache(plan,id,t=>{ const c=chronoDe(t); if(c.enCours){ c.sessions.push({d:c.enCours,f}); c.enCours=null; } t.etat='fait'; t.fait=new Date(f).toISOString().slice(0,10); c.fin=f; });
+  if(chronoG && chronoG.plan===plan && chronoG.id===id){ chronoG=null; sauverChronoG(); } majChronoPartout(); }
+function retenirNomTache(n){ n=String(n||'').trim(); if(!n||n==='Nouvelle tâche') return; nomsTaches=[n,...nomsTaches.filter(x=>x!==n)].slice(0,30); Memoire.ecrire('nomsTaches',nomsTaches); majListeNoms(); }
+function majListeNoms(){ const dl=$('dlTaches'); if(!dl) return; dl.replaceChildren(); for(const n of nomsTaches){ const o=document.createElement('option'); o.value=n; dl.appendChild(o); } }
+function majPastille(){ const p=$('pastilleChrono'); if(!chronoG){ p.style.display='none'; return; }
+  const ms=(chronoG.base||0)+(chronoG.depuis?maintenant()-chronoG.depuis:0), ailleurs=!scene||chronoG.plan!==scene.nom;
+  p.querySelector('.pc').textContent=(chronoG.depuis?'⏸':'▶'); p.querySelector('.pt').textContent=chronoG.titre+(ailleurs?' ('+chronoG.plan.replace(/\.[^.]*$/,'')+')':''); p.querySelector('.ph').textContent=hms(ms);
+  p.classList.toggle('pause',!chronoG.depuis); p.style.display='flex';
+  const b=$('bandeauArticle'), vb=b && getComputedStyle(b).display!=='none'; p.style.top=(vb? b.getBoundingClientRect().bottom+6 : (document.body.classList.contains('avecOnglets')?94:58))+'px'; }
+function majChronoPartout(){ majPastille(); if($('metreBoite').style.display==='flex' && ongletMetre==='planning') majPlanning(); 
+  clearInterval(minuteurChrono); if(chronoG&&chronoG.depuis) minuteurChrono=setInterval(()=>{ majPastille(); document.querySelectorAll('#tbPlanning .tps[data-cours="1"]').forEach(e=>{ const t=tachesDe().find(x=>x.id===e.dataset.id); if(t) e.textContent='⏱ '+hms(tempsTache(t)); }); },1000); }
+function brancherChrono(){
+  Memoire.lire('nomsTaches').then(v=>{ if(Array.isArray(v)) nomsTaches=v; majListeNoms(); });
+  Memoire.lire('chronoActif').then(v=>{ chronoG=v&&v.id?v:null; majChronoPartout(); });
+  const p=$('pastilleChrono');
+  p.querySelector('.pc').onclick=e=>{ e.stopPropagation(); chronoG&&chronoG.depuis?pauseChronoG():reprendreChronoG(); };
+  p.querySelector('.pt').onclick=p.querySelector('.ph').onclick=p.querySelector('.pc').onclick;
+  p.querySelector('.pf').onclick=e=>{ e.stopPropagation(); if(!chronoG) return; const b=e.currentTarget; if(b.dataset.conf!=='1'){ b.dataset.conf='1'; b.textContent='Fini ?'; setTimeout(()=>{ b.dataset.conf=''; b.textContent='✅'; },3000); return; } b.dataset.conf=''; b.textContent='✅'; const g=chronoG; terminerChrono(g.plan,g.id).then(()=>{ $('etat').textContent='✅ « '+g.titre+' » terminée.'; }); };
+  $('mtAjChrono').onclick=()=>{ const t={id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:new Date().toISOString().slice(0,10)}; tachesDe().push(t); demarrerChrono(t).then(()=>{ majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } }); };
 }
 
 // ================= Gestes au doigt (et souris) =================
@@ -2722,7 +2782,7 @@ async function ouvrirOctets(nom, octets, etat){
     majVisibles();
     $('accueil').style.display='none';
     for(const id of ['bAjuster','bCalques','bMesure','bPoints','bMetre']) $(id).disabled=false; document.body.classList.add('planOuvert');
-    await chargerPointsExport(); await chargerMesuresGardees(); await chargerReseaux(); await chargerDevis(); majComptesPerso();
+    await chargerPointsExport(); await chargerMesuresGardees(); await chargerReseaux(); await chargerDevis(); majComptesPerso(); majPastille();
     redim();
     if(etat && etat.nom===nom && etat.s>0){ const o=scene.origine; vue.s=etat.s; vue.tx=W/2-(etat.cx-o.x)*vue.s; vue.ty=H/2+(etat.cy-o.y)*vue.s; demanderDessin(); }
     else cadrer(scene.zone, 0.96);
@@ -2885,7 +2945,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
