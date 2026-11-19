@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.5";
+const VERSION = "2.6";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -389,11 +389,21 @@ async function nettoyer() {
   setTimeout(() => (deconnexionTraitee = false), 500);
 }
 
+async function mettreEnVeille() {
+  try {
+    const etat = await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", "dumpsys power | grep -m1 mWakefulness="]), 3000);
+    if (/Awake/i.test(etat)) { await touche(TOUCHE.marche); await attendre(400); }
+  } catch {
+    try { await touche(TOUCHE.veille); await attendre(300); } catch {}
+  }
+}
+
 async function deconnecter() {
   clearInterval(minuterieEcran);
   // Écran toujours éteint : le téléphone reste éteint en quittant (un appui sur un de ses boutons le rallume)
   // Touche « Veille » : met le téléphone en veille (verrouillé, tactile inactif) ; ne le rallume jamais s'il dort déjà
-  if (reglages.ecranEteint && client) { try { await touche(TOUCHE.veille); await attendre(300); } catch {} }
+  // Comme un appui sur le bouton du téléphone : veille + verrouillage immédiat (si le téléphone est éveillé)
+  if (reglages.ecranEteint && client) { await mettreEnVeille(); }
   deconnexionTraitee = true;
   await nettoyer();
   afficherAccueil();
