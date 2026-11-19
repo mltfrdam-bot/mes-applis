@@ -460,7 +460,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Fouilles – v2";
+const VERSION = "Fouilles – v3";
 </script>
 <script>
 "use strict";
@@ -2657,7 +2657,7 @@ function largeurAuto(H){ return H<=F.p1+1e-9?F.l1 : H<F.p2-1e-9?F.l2 : F.l3; }
 // section de fouille (m²) pour une profondeur H et une largeur au fond W
 function secFouille(H,W){ if(H<=F.talus+1e-9) return W*H; const h=H-F.droit; return W*F.droit+(W+h)*h; }
 // calcul d'une coupe : H = profondeur de fouille (dessus → fond), D diamètre, W largeur
-function coupe(H,D,type,W,e){ e=Math.max(0,Math.min(e||0,H)); const s=F.sable[type]||F.sable.autre, Wm=D+s.g+s.d; W=Math.max(W,Wm); const hs=Math.min(H-e,s.b+D+s.h), tube=Math.PI*D*D/4, Sex=bandeHaut(e,H,W), S=secFouille(H,W)-Sex, Sa=Math.max(0,W*hs-tube), Re=Math.max(0,S-Sa-tube); return {H,D,W,S,Sa,Re,hs,s,e,Sex,talus:H>F.talus+1e-9, court:s.b+D+s.h>H-e+1e-6}; }
+function coupe(H,D,type,W,e){ e=Math.max(0,Math.min(e||0,H)); const s=F.sable[type]||F.sable.autre, Wm=D+s.g+s.d; W=Math.max(W,Wm); const hs=Math.min(H-e,s.b+D+s.h), tube=Math.PI*D*D/4, Sex=bandeHaut(e,H,W), S=secFouille(H,W)-Sex, Ws=Math.min(W,Wm), Sa=Math.max(0,Ws*hs-tube), Re=Math.max(0,S-Sa-tube); return {H,D,W,Ws,S,Sa,Re,hs,s,e,Sex,talus:H>F.talus+1e-9, court:s.b+D+s.h>H-e+1e-6}; }
 // lignes de fouille : réseaux liés + mesures de distance avec Z fini / FF
 function lignesFouilles(lot){ const L=[];
   reseaux.forEach((r,ri)=>{ const a=articles().find(x=>x.nom===r.artTuyau); if(!estTuyau(a)) return; if(lot && (r.lot||'')!==lot) return; const t=infoTuyau(a), s=F.sable[t.type]||F.sable.autre, c=calcReseau(r);
@@ -2733,22 +2733,23 @@ function svgCoupe(a,H,Wf,dessus){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undef
   const poly=[[-Wh/2,0],[fondG,yD],[fondG,yF],[fondD,yF],[fondD,yD],[Wh/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
   const cy=H-s.b-t.d/2, sableCoul=t.type==='EDF'?'#f3d27a':'#f7e3a6';
   let g='<svg xmlns="http://www.w3.org/2000/svg" width="'+Math.round(Wpx)+'" height="'+Math.round(Hpx)+'" viewBox="0 0 '+Math.round(Wpx)+' '+Math.round(Hpx)+'" font-family="Arial" font-size="13">';
+  // cotes
+  const cote=(x1,y1,x2,y2,txt,dx,dy)=>{ g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#d32f2f" stroke-width="1.2"/><text x="'+((x1+x2)/2+(dx||0))+'" y="'+((y1+y2)/2+(dy||0))+'" fill="#d32f2f" text-anchor="middle" font-weight="bold">'+txt+'</text>'; };
   g+='<rect width="100%" height="100%" fill="#fff"/><text x="12" y="22" font-size="16" font-weight="bold">Coupe type de tranchée — '+echapper(a.devis.des)+'</text><text x="12" y="42" fill="#555">Profondeur '+n(H)+' m · Ø '+frN(t.d*1000,0)+' mm · '+(t.type==='EDF'?'câble EDF, '+echapper(s.mat):echapper(s.mat))+'</text>';
   g+='<line x1="'+X(-larg/2)+'" y1="'+Y(0)+'" x2="'+X(larg/2)+'" y2="'+Y(0)+'" stroke="#6d4c41" stroke-width="3"/><text x="'+X(-larg/2)+'" y="'+(Y(0)-6)+'" fill="#6d4c41">Terrain fini</text>';
   g+='<polygon points="'+poly+'" fill="#e8dccb" stroke="#333" stroke-width="2"/>';
-  g+='<rect x="'+X(fondG)+'" y="'+Y(H-c.hs)+'" width="'+(W*sc)+'" height="'+(c.hs*sc)+'" fill="'+sableCoul+'" stroke="#b08900"/>';
+  g+='<rect x="'+X(-c.Ws/2)+'" y="'+Y(H-c.hs)+'" width="'+(c.Ws*sc)+'" height="'+(c.hs*sc)+'" fill="'+sableCoul+'" stroke="#b08900"/>';
+  if(c.Ws<W-0.005) cote(X(-c.Ws/2),Y(H-c.hs)-5,X(c.Ws/2),Y(H-c.hs)-5,'sable '+n(c.Ws)+' m',0,-5);
   if(c.e>0){ const e=c.e, pts=[[-largeurA(0,H,W)/2,0],[-largeurA(e,H,W)/2,e],[largeurA(e,H,W)/2,e],[largeurA(0,H,W)/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
     g+='<polygon points="'+pts+'" fill="'+(dessus==='EV'?'#b9dca0':'#bdbdbd')+'" stroke="#555"/><text x="'+X(0)+'" y="'+(Y(e/2)+5)+'" text-anchor="middle" font-size="12">'+echapper(dessus==='EV'?'Terre végétale':libDessus(dessus))+' '+n(e)+' m (dans la surface)</text>'; }
   g+='<circle cx="'+X(0)+'" cy="'+Y(cy)+'" r="'+Math.max(3,t.d/2*sc)+'" fill="#fff" stroke="#1f5fa8" stroke-width="3"/>';
   if(c.hs<H-c.e-0.02) g+='<text x="'+X(0)+'" y="'+(Y((H+c.e-c.hs)/2)+5)+'" text-anchor="middle" fill="#555">Remblai : '+echapper(t.nat)+'</text>';
   g+='<text x="'+(X(fondG)-6)+'" y="'+(Y(H-c.hs/2)+4)+'" fill="#8a6d00" text-anchor="end">'+echapper(s.mat)+'</text>';
-  // cotes
-  const cote=(x1,y1,x2,y2,txt,dx,dy)=>{ g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#d32f2f" stroke-width="1.2"/><text x="'+((x1+x2)/2+(dx||0))+'" y="'+((y1+y2)/2+(dy||0))+'" fill="#d32f2f" text-anchor="middle" font-weight="bold">'+txt+'</text>'; };
   cote(X(fondG),Y(H)+22,X(fondD),Y(H)+22,n(W)+' m',0,16);
   cote(X(-Wh/2)-22,Y(0),X(-Wh/2)-22,Y(H),n(H)+' m',-24,4); if(!c.talus) cote(X(fondD)+20,Y(H-c.hs),X(fondD)+20,Y(H),'sable '+n(c.hs)+' m',40,4);
   if(c.talus){ cote(X(-Wh/2),Y(0)-14,X(Wh/2),Y(0)-14,n(Wh)+' m en haut',0,-6); cote(X(fondD)+20,Y(yD),X(fondD)+20,Y(H),n(F.droit)+' m droit',44,4); g+='<text x="'+X(Wh/2-hT/2+0.1)+'" y="'+Y(hT/2)+'" fill="#e65c00">talus 1/1</text>'; }
   if(c.court) g+='<text x="12" y="'+(Hpx-68)+'" fill="#d32f2f" font-weight="bold">⚠ Trop peu profond : l\'enrobage de sable ('+n(s.b+t.d+s.h)+' m) dépasse la place sous le dessus ('+n(H-c.e)+' m).</text>';
-  g+='<text x="12" y="'+(Hpx-48)+'">Sable : '+n(s.b)+' m dessous · '+n(s.h)+' m dessus · '+n(s.g)+' m à gauche / '+n(s.d)+' m à droite (au minimum)</text>';
+  g+='<text x="12" y="'+(Hpx-48)+'">Sable autour du tuyau : '+n(s.b)+' m dessous · '+n(s.h)+' m dessus · '+n(s.g)+' m à gauche · '+n(s.d)+' m à droite</text>';
   g+='<text x="12" y="'+(Hpx-28)+'">Par mètre de tranchée : fouille '+n(c.S)+' m³ · sable '+n(c.Sa)+' m³ · remblai '+n(c.Re)+' m³ · déblai foisonné '+n(c.S*F.fois)+' m³</text>';
   g+='<text x="12" y="'+(Hpx-8)+'" fill="#777" font-size="11">Plans DWG — '+echapper(scene?scene.nom:'')+' — '+new Date().toLocaleDateString('fr-FR')+'</text></svg>';
   return g; }
