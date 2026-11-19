@@ -368,12 +368,15 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Classeur – v1 (retour avant FastView)";
+const VERSION = "Plan préparé – v1";
 </script>
 <script>
 "use strict";
 // ================= Chargement du lecteur DWG (intégré, sans internet) =================
 let lecteurPromesse = null;
+const FORMAT_PREPARE=1;
+// Empreinte rapide du fichier (pour savoir si le plan préparé correspond bien au même fichier)
+function empreinte(o){ let h=2166136261>>>0; const pas=Math.max(1,Math.floor(o.length/4096)); for(let i=0;i<o.length;i+=pas){ h^=o[i]; h=Math.imul(h,16777619)>>>0; } return h; }
 function chargerLecteur(){
   if(lecteurPromesse) return lecteurPromesse;
   lecteurPromesse = (async()=>{
@@ -386,7 +389,7 @@ function chargerLecteur(){
   })();
   return lecteurPromesse;
 }
-setTimeout(()=>{ chargerLecteur().catch(()=>{}); }, 50);
+setTimeout(()=>{ chargerLecteur().catch(()=>{}); }, 4000); // préchargé après l'affichage du plan, pour ne pas le ralentir
 
 // ================= Couleurs AutoCAD (ACI) =================
 const ACI = (()=>{
@@ -2377,7 +2380,7 @@ async function basculerPlan(nom){ if(scene && scene.nom===nom) return; const f=a
   if(!f||!f.octets){ $('etat').textContent='⚠ Le plan « '+nom+' » n\'est plus dans l\'appli : rouvrez-le avec ＋.'; classeur.plans=classeur.plans.filter(n=>n!==nom); sauverClasseur(); majOnglets(); return; }
   quitterPlanCourant(); const etat=await Memoire.lire('etat:'+nom);
   const ok=await ouvrirOctets(nom,new Uint8Array(f.octets),etat||{nom:null}); if(ok){ classeur.actif=nom; sauverClasseur(); Memoire.ecrire('plan',f); modifie=!!modifiePlans.get(nom); majBoutonSauver(); majOnglets(); } }
-async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n!==nom); cacheScenes.delete(nom); modifiePlans.delete(nom); await Memoire.effacer('fichier:'+nom); sauverClasseur();
+async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n!==nom); cacheScenes.delete(nom); modifiePlans.delete(nom); await Memoire.effacer('fichier:'+nom); await Memoire.effacer('prepare:'+nom); sauverClasseur();
   $('etat').textContent='« '+nom+' » retiré du classeur. Ses points, mesures et réseaux restent gardés : ils reviendront si vous rouvrez ce plan.';
   if(scene && scene.nom===nom){ if(classeur.plans.length) { const n=classeur.plans[classeur.plans.length-1]; scene=null; await basculerPlan(n); } else location.reload(); } else majOnglets(); }
 // ---- Sauvegarde du classeur entier (un seul fichier) ----
@@ -2442,10 +2445,13 @@ async function ouvrirOctets(nom, octets, etat){
     const enCache=cacheScenes.get(nom);
     if(enCache && enCache.octets && enCache.octets.length===octets.length){ scene=enCache; }
     else {
+    // Plan déjà préparé (lu une première fois) : on évite de relire le DWG, c'est bien plus rapide
+    let db, prepare=false;
+    try{ const pr=await Memoire.lire('prepare:'+nom); if(pr && pr.v===FORMAT_PREPARE && pr.taille===octets.length && pr.debut===empreinte(octets) && pr.db && pr.db.entities){ db=pr.db; prepare=true; } }catch(e){}
+    if(!prepare){
     voile('Préparation du lecteur…'); await attendreAffichage();
     const lib=await chargerLecteur();
     voile('Lecture du plan…'); await attendreAffichage();
-    let db;
     const ow=console.warn; console.warn=()=>{};
     try{
       const dwg=lib.dwg_read_data(estDwg?octets:dxfVersAnsi(octets), estDwg?DwgLib.Dwg_File_Type.DWG:DwgLib.Dwg_File_Type.DXF);
@@ -2454,9 +2460,11 @@ async function ouvrirOctets(nom, octets, etat){
       try{ lib.dwg_free(dwg); }catch(e){}
     } finally { console.warn=ow; }
     if(!db || !db.entities) throw new Error('Le plan a été lu mais il est vide ou illisible.');
+    try{ await Memoire.ecrire('prepare:'+nom,{v:FORMAT_PREPARE, taille:octets.length, debut:empreinte(octets), db}); }catch(e){}
+    }
     voile('Préparation de l\'affichage…'); await attendreAffichage();
     scene=construireScene(db);
-    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF';
+    scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF'; scene.prepare=prepare;
     }
     garderEnMemoire(nom,scene); modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
     mesure={mode:mesure.mode,pts:[]}; visee=null; edition=null; histMes=[]; coinSel=null; coupeMode=false; coupeAB=[]; tnCache=null;
@@ -2472,7 +2480,7 @@ async function ouvrirOctets(nom, octets, etat){
     else cadrer(scene.zone, 0.96);
     remplirCalques(); majPanneau();
     const nbCal=[...scene.calques.values()].filter(c=>c.nb>0).length;
-    $('etat').textContent=`${nom} · ${scene.version} · ${scene.nbObjets} objets · ${nbCal} calques · ${((performance.now()-t0)/1000).toFixed(1)} s`;
+    $('etat').textContent=`${nom} · ${scene.version} · ${scene.nbObjets} objets · ${nbCal} calques · ${((performance.now()-t0)/1000).toFixed(1)} s${scene.prepare?' (plan préparé)':''}`;
     finVoile(); majOnglets();
     return true;
   }catch(err){
