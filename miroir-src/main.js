@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.4";
+const VERSION = "2.5";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -392,7 +392,8 @@ async function nettoyer() {
 async function deconnecter() {
   clearInterval(minuterieEcran);
   // Écran toujours éteint : le téléphone reste éteint en quittant (un appui sur un de ses boutons le rallume)
-  if (reglages.ecranEteint && client && !eteintAuDepart) { try { await touche(TOUCHE.marche); } catch {} }
+  // Touche « Veille » : met le téléphone en veille (verrouillé, tactile inactif) ; ne le rallume jamais s'il dort déjà
+  if (reglages.ecranEteint && client) { try { await touche(TOUCHE.veille); await attendre(300); } catch {} }
   deconnexionTraitee = true;
   await nettoyer();
   afficherAccueil();
@@ -492,7 +493,7 @@ async function glisser(x1, y1, x2, y2, etapes = 10) {
 }
 
 // ---------- Touches ----------
-const TOUCHE = { retour: 4, accueil: 3, recents: 187, marche: 26, reveil: 224, entree: 66, effacer: 67, volPlus: 24, volMoins: 25 };
+const TOUCHE = { veille: 223, retour: 4, accueil: 3, recents: 187, marche: 26, reveil: 224, entree: 66, effacer: 67, volPlus: 24, volMoins: 25 };
 async function touche(code) {
   const ctl = client?.controller; if (!ctl) return;
   await ctl.injectKeyCode({ action: AndroidKeyEventAction.Down, keyCode: code, repeat: 0, metaState: 0 });
@@ -838,6 +839,11 @@ async function activerSansFilParCable() {
   try { window.MiroirApp.activerSansFil(JSON.stringify(await clesPourUsb())); }
   catch (e) { usbEnCours = false; message("Erreur : " + e, "erreur"); }
 }
+// Appli mise en arrière-plan (bouton Accueil de la tablette, autre appli) depuis 30 s :
+// on déconnecte proprement, et le téléphone se met en veille → plus de tactile actif écran noir.
+window.miroirQuitter = () => { if (client) deconnecter().then(() => message("Miroir était en arrière-plan : téléphone déconnecté et mis en veille. Appuie sur Connecter pour reprendre.")); };
+window.miroirRetour = () => { if (!client && !connexionEnCours && reglages.autoConnexion) connecter(false, false); };
+
 window.miroirCableBranche = () => {
   if (!APPLI) return;
   if (client && !modeCable) { bulle("Déjà connecté sans fil"); return; }

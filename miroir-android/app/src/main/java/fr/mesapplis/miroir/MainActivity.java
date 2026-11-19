@@ -375,5 +375,27 @@ public class MainActivity extends Activity {
 
     @Override public void onBackPressed() { if (web != null && web.canGoBack()) web.goBack(); else super.onBackPressed(); }
     @Override protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); if (web != null) web.saveState(o); }
-    @Override protected void onDestroy() { try { unregisterReceiver(recepteurUsb); } catch (Exception ignored) {} if (relais != null) relais.arreter(); if (web != null) web.destroy(); super.onDestroy(); }
+    // ---------- Arrière-plan : au bout de 30 s, Miroir se déconnecte et met le téléphone en veille ----------
+    private final android.os.Handler minuteur = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean deconnecteEnArrierePlan = false;
+    private final Runnable quitter = () -> {
+        deconnecteEnArrierePlan = true;
+        if (web != null) web.evaluateJavascript("window.miroirQuitter && miroirQuitter()", null);
+    };
+
+    @Override protected void onStop() {
+        super.onStop();
+        minuteur.postDelayed(quitter, 30000);
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        minuteur.removeCallbacks(quitter);
+        if (deconnecteEnArrierePlan && web != null) {
+            deconnecteEnArrierePlan = false;
+            web.evaluateJavascript("window.miroirRetour && miroirRetour()", null);
+        }
+    }
+
+    @Override protected void onDestroy() { minuteur.removeCallbacks(quitter); if (web != null) web.evaluateJavascript("window.miroirQuitter && miroirQuitter()", null); try { unregisterReceiver(recepteurUsb); } catch (Exception ignored) {} if (relais != null) relais.arreter(); if (web != null) web.destroy(); super.onDestroy(); }
 }
