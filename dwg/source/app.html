@@ -88,8 +88,8 @@ table.xl td.sup{cursor:pointer}
 #tabMesCour td input{font-size:12px!important;letter-spacing:-0.3px}
 #tbPtsExp td.ffc input{background:#eef4fb}
 #metreBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
-#metreBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
-#metreBoite .tete b{flex:1;font-size:15px}
+#metreBoite .tete,#aideBoite .tete,#coupeTrBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
+#metreBoite .tete b,#aideBoite .tete b,#coupeTrBoite .tete b{flex:1;font-size:15px}
 #tabMetre td{padding:2px 4px;font-size:13.5px}
 #tabPlanning td{padding:2px 4px;font-size:13.5px;vertical-align:middle}
 #tabPlanning input.titre{width:100%;min-width:0;height:32px;border:0;background:#fffbe6;font-size:14px;padding:0 4px}
@@ -107,6 +107,10 @@ table.xl td.sup{cursor:pointer}
 #zoneFouilles select{height:30px;font-size:12.5px;max-width:130px}
 #tabFouilles select.dessus{height:26px;font-size:12px;max-width:118px;margin-top:2px}
 #tabFqTarifs input:not([inputmode]){text-align:left}
+#aideBoite{position:fixed;inset:0;background:#fff;z-index:31;display:none;flex-direction:column}
+#tabAide td{padding:6px 6px;vertical-align:top;height:auto}
+#tabAide td .petit{margin-top:3px;line-height:1.35}
+#tabAide tr.rub td{background:#e9eef6;font-weight:bold;color:#1f5fa8;padding:4px 6px}
 #coupeTrBoite{position:fixed;inset:0;background:#fff;z-index:30;display:none;flex-direction:column}
 #cpDessin{flex:1;overflow:auto;padding:4px}
 #cpDessin svg{max-width:100%;height:auto}
@@ -323,6 +327,12 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="lig"><button class="btn prim" id="bNcCreer">Créer</button><button class="btn" id="bNcAnnuler">Annuler</button></div>
   <div id="ncErreur" style="color:#a11;font-size:13px;margin-top:6px"></div>
 </div></div>
+<div id="aideBoite">
+  <div class="tete"><b>❓ Aide</b><button class="btn" id="aideFermer">✕ Fermer</button></div>
+  <div style="padding:6px 8px"><input id="aideCherche" placeholder="Chercher : talus, chrono, TS11, fusion…" style="width:100%;height:40px;font-size:15px;border:1px solid #9a9a9a;border-radius:4px;padding:0 8px"></div>
+  <div id="aideInfo" class="petit" style="padding:0 8px;color:#d32f2f"></div>
+  <div style="flex:1;overflow:auto;min-height:0"><table class="xl" id="tabAide"><tbody id="tbAide"></tbody></table></div>
+</div>
 <div id="coupeTrBoite">
   <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;font-size:14px">Prof. <input id="cpProf" inputmode="decimal" style="width:60px;height:34px"> m · Largeur <input id="cpLarg" inputmode="decimal" placeholder="auto" style="width:60px;height:34px"> m
@@ -428,6 +438,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <tr><td>Sauvegarde</td><td id="mSauv"></td></tr>
   </tbody></table>
   <div class="boutons">
+    <button class="btn" id="bMenuAide">❓ Aide : trouver une fonction</button>
     <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
     <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
     <button class="btn" id="bMenuClasseur">📚 Enregistrer le classeur (tous les plans)</button>
@@ -460,7 +471,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Fouilles – v3";
+const VERSION = "Aide – v1";
 </script>
 <script>
 "use strict";
@@ -2795,6 +2806,51 @@ function brancherGarde(){
   for(const id of ['metreBoite','mesure','ptsPanel']) if($(id)) $(id).dataset.garde='1';
 }
 
+// ================= Aide =================
+const AIDE=[
+ {r:'Plan', t:'Ouvrir un plan (DWG, DXF)', txt:'📂 en haut à gauche, puis choisissez le fichier. Le plan s\'ouvre tel quel, coordonnées réelles. Il est gardé : il se rouvre tout seul, en moins d\'une seconde la fois suivante.', mots:'ouvrir fichier dwg dxf', go:()=>$('fichier').click(), sansPlan:true},
+ {r:'Plan', t:'Classeur : plusieurs plans ouverts', txt:'Chaque plan ouvert devient un onglet sous la barre (＋ pour en ajouter, ✕ pour le retirer). 3 plans restent en mémoire vive.', mots:'onglet classeur plusieurs'},
+ {r:'Plan', t:'Calques : afficher / masquer', txt:'☰ Calques : cochez ou décochez. Appui sur un nom → fiche du calque : voir seul, geler, verrouiller, supprimer.', mots:'calque masquer geler verrouiller', go:()=>$('calques').classList.add('ouvert')},
+ {r:'Plan', t:'Œil 👁 : à quel calque est ce trait ?', txt:'Glissez le bouton 👁 sur le plan : le nom du calque sous le doigt s\'affiche.', mots:'oeil calque trait'},
+ {r:'Mesure', t:'Mesurer une distance', txt:'📏 Mesure → Distance. Touchez les points : accrochage automatique aux bouts, milieux, intersections et centres. ↶ annule le dernier point. 📌 Garder enregistre la mesure.', mots:'distance longueur accrochage', go:()=>{ choisirOutil('mesure'); choisirMode('dist'); }},
+ {r:'Mesure', t:'Mesurer une surface', txt:'📏 Mesure → Surface, touchez les coins, puis 📌 Garder. ＋ au milieu d\'un côté ajoute un coin ; un coin sélectionné peut être retiré.', mots:'surface aire m2 coin', go:()=>{ choisirOutil('mesure'); choisirMode('surf'); }},
+ {r:'Mesure', t:'Modifier une mesure gardée', txt:'Touchez la mesure sur le plan ou dans la liste → ✎ Modifier, déplacez ou ajoutez des coins → 📌 Remplacer.', mots:'modifier mesure gardée'},
+ {r:'Mesure', t:'Quantités d\'une surface (structure)', txt:'Sur une surface : bouton structure → couches (enrobé, 0/20, 0/80…), épaisseur totale modifiable (le 0/80 bouge), 🔒 pour bloquer une couche. Modèles enregistrables.', mots:'structure enrobé gnt 0/80 0/20 tonnes quantité'},
+ {r:'Mesure', t:'Fond de fouille (FF) et cubage', txt:'Pour chaque coin, tapez la cote finie (Z) et le fond de fouille (FF) : le cubage s\'affiche sous la surface.', mots:'ff fond fouille cubage volume bassin'},
+ {r:'Mesure', t:'Coupe et contrôle PMR d\'une surface', txt:'Sur une surface : ✂ Coupe. Dévers visé 1 % ; cheminement PMR contrôlé en long ; route sans contrôle (dévers ajoutable).', mots:'coupe pmr devers pente'},
+ {r:'Mesure', t:'Vue 3D', txt:'Sur une surface avec cotes : bouton 3D, tournez au doigt, exagération ×1 à ×10.', mots:'3d vue relief'},
+ {r:'Mesure', t:'Terrain naturel → déblai / remblai', txt:'⛰ TN : relevez des points de terrain naturel ; le panneau donne déblai et remblai entre le TN et le projet.', mots:'tn terrain naturel deblai remblai'},
+ {r:'Réseau', t:'Tracer un réseau (regards)', txt:'📏 Mesure → Réseau. Touchez les regards dans le sens de l\'écoulement, tapez tampon et fils d\'eau dans le tableau. ＋ Cote pour un point de cote. 📈 Profil pour le profil en long.', mots:'reseau regard tampon fil eau profil eu ep', go:()=>{ choisirOutil('mesure'); choisirMode('res'); }},
+ {r:'Réseau', t:'Réseau compté dans le métré', txt:'Sous le choix du réseau : 🧾 Tuyau et Regards. Si un article en ml est actif quand vous posez le 1er regard, le réseau s\'y relie tout seul.', mots:'reseau metre tuyau regard automatique'},
+ {r:'Points', t:'Points X / Y / Z pour la TS11', txt:'📍 Points : touchez le plan (X, Y du plan), tapez Z dans le tableau. Calque POINTS_EXPORT par défaut. ⟋ Ligne pour des points espacés sur un trait.', mots:'point ts11 implantation xyz', go:()=>choisirOutil('points')},
+ {r:'Points', t:'Exporter pour la TS11 (DXF + TXT)', txt:'📍 Points → Exporter : fichier DXF de points et texte « nom;X;Y;Z », à copier sur la clé USB.', mots:'export dxf txt cle usb ts11', go:()=>{ choisirOutil('points'); ouvrirExport(); }},
+ {r:'Métré', t:'Coller le devis', txt:'🧾 Métré → 📥 Coller le devis : copiez dans Excel les colonnes Désignation · Unité · Quantité · Prix, collez. Un article (calque DEVIS_…) est créé par ligne. Unité Ft / ens = forfait → tâche.', mots:'devis coller excel article', go:()=>{ ouvrirMetre(); choisirOngletMetre('demande'); }},
+ {r:'Métré', t:'Article actif (bandeau de couleur)', txt:'En Mesure ou Points, le bandeau en haut montre l\'article en cours. Appui → liste (derniers utilisés en haut). Tout ce que vous mesurez va dans cet article.', mots:'article actif bandeau couleur'},
+ {r:'Métré', t:'Demande / Mesuré / En attente', txt:'Demande = tout le devis ; Mesuré = déjà trouvé sur le plan ; En attente = pas encore placé. Appui sur une désignation → retour au plan dans le bon outil.', mots:'demande mesure attente ecart', go:()=>{ ouvrirMetre(); choisirOngletMetre('attente'); }},
+ {r:'Métré', t:'Lots (logements)', txt:'＋ Lot, puis choisissez le lot actif : chaque nouvelle mesure et chaque point y sont rangés. « Afficher » filtre par lot.', mots:'lot logement filtre'},
+ {r:'Fouilles', t:'Fouilles des tranchées', txt:'🧾 Métré → Fouilles : largeur auto selon la profondeur (tapez une largeur pour la forcer), talus au-delà de 1,30 m, sable autour du tuyau, remblai, déblai foisonné. Menu Dessus : espace vert ou structure, non comptés deux fois.', mots:'fouille tranchee largeur talus sable remblai deblai foisonnement dessus espace vert', go:()=>{ ouvrirMetre(); choisirOngletMetre('fouilles'); }},
+ {r:'Fouilles', t:'Coupe de tranchée pour le client', txt:'Fouilles → ✂ sur un tronçon (ou ✂ Coupe d\'un tuyau) : dessin coté, 0,40 / 0,80 / 1,50 m, 💾 Enregistrer l\'image (SVG, à joindre à un mail).', mots:'coupe tranchee image client svg'},
+ {r:'Fouilles', t:'Tarifs d\'achat et règles de calcul', txt:'Fouilles → Tarifs d\'achat : prix et fournisseur, montants calculés. ⚙ Règles : largeurs, talus, sable, foisonnement, coefficients de remblai.', mots:'tarif prix fournisseur regle coefficient'},
+ {r:'Planning', t:'Tâches et planning', txt:'🧾 Métré → Planning : ＋ Tâche, un appui sur l\'état (À faire → En cours → Fait), ▲▼ pour l\'ordre, 📍 pour la placer sur le plan (drapeau).', mots:'tache planning drapeau forfait', go:()=>{ ouvrirMetre(); choisirOngletMetre('planning'); }},
+ {r:'Planning', t:'Chronomètre', txt:'Planning → ＋ ⏱ Chronométrée (ou ▶ Chrono sur une tâche). La pastille sur le plan : appui = pause / reprise, ✅ deux fois = terminée. Un seul chrono à la fois ; il continue appli fermée.', mots:'chrono temps pause reprise minuteur', go:()=>{ ouvrirMetre(); choisirOngletMetre('planning'); }},
+ {r:'Saisie', t:'Remplir les tableaux vite', txt:'Touchez une case et tapez : la case reste active, la page ne bouge pas. Entrée = case du dessous (comme Excel).', mots:'saisie case entree tableau clavier'},
+ {r:'Sauvegarde', t:'Enregistrer (sans toucher au plan d\'origine)', txt:'💾 rond (point rouge = changements non enregistrés) : un appui. ⋮ → Enregistrer sous… pour choisir le fichier. Le plan d\'origine n\'est jamais modifié.', mots:'enregistrer sauvegarde plansdwg', go:()=>$('menu').classList.add('ouvert'), sansPlan:true},
+ {r:'Sauvegarde', t:'Fusionner une sauvegarde', txt:'⋮ → Ouvrir une sauvegarde (fusion) : tout ce qui manque est ajouté, rien n\'est perdu ; un descriptif liste ce qui a été ajouté.', mots:'fusion fusionner sauvegarde descriptif', go:()=>$('menu').classList.add('ouvert'), sansPlan:true},
+ {r:'Sauvegarde', t:'Classeur entier', txt:'⋮ → Enregistrer le classeur : tous les plans ouverts et leur travail dans un seul fichier.', mots:'classeur tous les plans', go:()=>$('menu').classList.add('ouvert'), sansPlan:true},
+ {r:'Appli', t:'Mettre à jour l\'appli', txt:'⋮ → Mettre à jour l\'appli (fichier .html reçu) ; ↩ pour revenir à la version précédente. Installer l\'APK par-dessus garde les données ; désinstaller les efface.', mots:'mise a jour version apk', go:()=>$('menu').classList.add('ouvert'), sansPlan:true}
+];
+const sansAccent=t=>String(t).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+function majAide(){ const q=sansAccent($('aideCherche').value.trim()), tb=$('tbAide'), frag=document.createDocumentFragment(); let rub=null, n=0;
+  for(const a of AIDE){ if(q && !q.split(/\s+/).every(m=>sansAccent(a.t+' '+a.txt+' '+a.mots+' '+a.r).includes(m))) continue; n++;
+    if(a.r!==rub){ rub=a.r; const h=document.createElement('tr'); h.className='rub'; h.innerHTML='<td colspan="2">'+a.r+'</td>'; frag.appendChild(h); }
+    const tr=document.createElement('tr'); const c0=document.createElement('td'); c0.innerHTML='<b>'+echapper(a.t)+'</b><div class="petit">'+echapper(a.txt)+'</div>';
+    const c1=document.createElement('td'); if(a.go){ const b=document.createElement('button'); b.className='btn petitb'; b.textContent='Y aller'; b.onclick=()=>{ if(!scene && !a.sansPlan){ $('aideInfo').textContent='Ouvrez d\'abord un plan (📂).'; return; } $('aideBoite').style.display='none'; $('menu').classList.remove('ouvert'); try{ a.go(); }catch(e){ $('etat').textContent='⚠ '+e.message; } }; c1.appendChild(b); }
+    tr.append(c0,c1); frag.appendChild(tr); }
+  if(!n){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="2" style="color:#777;text-align:center;height:40px">Rien trouvé : essayez un autre mot.</td>'; frag.appendChild(tr); }
+  tb.replaceChildren(frag); $('aideInfo').textContent=''; }
+function ouvrirAide(){ $('menu').classList.remove('ouvert'); $('aideBoite').style.display='flex'; $('aideCherche').value=''; majAide(); }
+function brancherAide(){ $('bMenuAide').onclick=ouvrirAide; $('aideFermer').onclick=()=>{ $('aideBoite').style.display='none'; }; $('aideCherche').oninput=majAide; }
+
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
@@ -3139,7 +3195,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
