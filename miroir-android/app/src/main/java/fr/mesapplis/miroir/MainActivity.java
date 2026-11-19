@@ -299,6 +299,11 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> MainActivity.this.activerSansFil(cles));
         }
 
+        /** Cacher Miroir tout de suite (retour à l'écran d'accueil de la tablette) */
+        @JavascriptInterface public void cacher() { runOnUiThread(() -> moveTaskToBack(true)); }
+        /** Fermer complètement Miroir (après la mise en veille du téléphone) */
+        @JavascriptInterface public void fermer() { runOnUiThread(() -> finishAndRemoveTask()); }
+
         @JavascriptInterface public void pleinEcran(boolean oui) {
             runOnUiThread(() -> { pleinEcran = oui; appliquerPleinEcran(); });
         }

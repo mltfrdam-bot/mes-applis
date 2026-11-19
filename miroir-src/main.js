@@ -430,6 +430,14 @@ async function mettreEnVeille() {
   }
 }
 
+// ✖ Déconnecter = on a fini : Miroir disparaît tout de suite, met le téléphone en veille, puis se ferme
+async function deconnecterEtFermer() {
+  const pont = APPLI ? window.MiroirApp : null;
+  try { pont?.cacher?.(); } catch {}
+  await deconnecter();
+  try { pont?.fermer?.(); } catch {}
+}
+
 async function deconnecter() {
   clearInterval(minuterieEcran);
   // Écran toujours éteint : le téléphone reste éteint en quittant (un appui sur un de ses boutons le rallume)
@@ -819,7 +827,7 @@ const actions = {
   "b-volmoins": () => touche(TOUCHE.volMoins),
   "b-plein": basculerPleinEcran,
   "b-reglages": () => { majBoutonsReglages(); ouvrir("panneau-reglages"); },
-  "b-deconnecter": deconnecter,
+  "b-deconnecter": deconnecterEtFermer,
   "c-valider": deverrouiller,
   "c-effacer": () => { codeSaisi = codeSaisi.slice(0, -1); majCode(); },
   "k-effacer": effacerUn,
