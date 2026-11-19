@@ -294,6 +294,8 @@ async function uneConnexion(tel, nouveau, essai) {
   if (essai !== numeroEssai) { try { await transport.close(); } catch {} throw new Error("annule"); }
   adb = new Adb(transport);
   adb.disconnected.then(() => quandDeconnecte()).catch(() => quandDeconnecte());
+  // Déverrouillage instantané : lancé tout de suite, pendant que l'image se prépare
+  if (reglages.deverrAuto) adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", "input keyevent 224; wm dismiss-keyguard"]).catch(() => {});
   await avecDelai(lancerMiroir(), 25000);
 }
 
@@ -367,20 +369,20 @@ async function telVerrouille() {
 }
 async function deverrouillageAuto() {
   if (!reglages.deverrAuto || !client || !adb) return;
-  await attendre(600);
-  const verrou = await telVerrouille();
-  if (verrou === false) return;            // déjà déverrouillé : on ne touche à rien
+  // Le réveil + retrait du « glisser » a déjà été envoyé dès la connexion ; ici on vérifie seulement
+  if ((await telVerrouille()) === false) return;
   await touche(TOUCHE.reveil);
-  await attendre(400);
   try { await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["wm", "dismiss-keyguard"]), 3000); } catch {}
-  await attendre(800);
   // Verrouillage avec code mémorisé : on le tape seulement si le téléphone est encore verrouillé
-  if (reglages.memoCode && reglages.code && (await telVerrouille()) === true) {
-    await client.controller.injectText(reglages.code);
-    await attendre(200);
-    await touche(TOUCHE.entree);
+  if (reglages.memoCode && reglages.code) {
+    await attendre(400);
+    if ((await telVerrouille()) === true) {
+      await client.controller.injectText(reglages.code);
+      await attendre(200);
+      await touche(TOUCHE.entree);
+    }
   }
-  if (reglages.ecranEteint) { setTimeout(() => ecranTelephone(false).catch(() => {}), 1000); surveillerEcran(); }
+  if (reglages.ecranEteint) { setTimeout(() => ecranTelephone(false).catch(() => {}), 600); surveillerEcran(); }
   bulle("🔓 Déverrouillé");
 }
 
