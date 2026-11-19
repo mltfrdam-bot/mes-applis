@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["seance-evts", "acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -250,7 +250,7 @@ function ligneSeance(c, notes) { const act = c.act || "footing", t = c.debut || 
   return avecRessenti({ id: "s" + idSeance(c), t, act, duree, pompes, resultat: res, alerte: "", source: "", detail: notes.map(detailNote), ref: { c, notes } }, notes.find(n => n.ressenti)); }
 function lignesHistorique(base) { fcProfil(base); const l = [];
   const ech = lireListe(base.reglages["echauffements"]);
-  base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) l.push(avecEchauffement(ligneH10(c, n), echauffementPour(ech, n.h10rec))); else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
+  base.courses.forEach(c => { const reste = []; (c.notes || []).forEach(n => { if (n.h10rec) { const R = n.h10rec, fin = R.debut + ((R.l || []).length ? R.l[R.l.length - 1][0] * 1000 : 0); l.push(avecRavito(avecEchauffement(ligneH10(c, n), echauffementPour(ech, R)), evtsSeance(base, R.debut, fin))); } else reste.push(n); }); if (reste.length) l.push(ligneSeance(c, reste)); });
   Integre.CARNET_POMPES.forEach((x, i) => { const m = x.nom.match(/(\d\d)\/(\d\d) (\d\d):(\d\d)/); const sr = seriesDe(x.tl);
     l.push({ id: "carnet-" + i, t: m ? reunion(2026, Number(m[2]), Number(m[1]), Number(m[3]), Number(m[4])) : 0, act: "pompes", duree: x.tl[x.tl.length - 1], pompes: x.tl.length,
       resultat: nb(x.tl.length) + " · " + pl(sr.length, "série"), alerte: "", source: "Carnet", detail: ["Séance reprise du Carnet d'entraînement — séries " + sr.join("-")], ref: { tl: x.tl } }); });
@@ -653,7 +653,7 @@ function detailLigne(base, idLigne, version) { const x = lignesHistorique(base).
   const T = ["DÉTAIL — " + actInfo(x.act).nom + (x.journee ? " (journée)" : "") + " — " + dateHeure(x.t) + (version ? " (APK " + version + ")" : ""), "Durée " + dureeTxt(x) + " · " + x.resultat + (x.source ? " (" + x.source + ")" : "") + (x.alerte ? " · " + x.alerte : "")];
   if (x.echauf) T.push(echauffementTxt(x.echauf));
   if (x.ressenti) { const ch = chargeRessentie(x.ressenti, x.duree); T.push("Ressenti : " + ressentiTxt(x.ressenti) + (ch != null ? " · charge ressentie " + ch + " (effort × minutes)" : "")); }
-  if (r.n && r.n.h10rec) detailH10(T, r.n.h10rec, impLire(base));
+  if (r.n && r.n.h10rec) { detailH10(T, r.n.h10rec, impLire(base)); if (x.evts) ravitoDetail(T, x.evts, r.n.h10rec); }
   else if (r.tl) tableSeries(T, "Pompes", { tl: r.tl });
   else { const autres = []; (r.notes || []).forEach(n => { const e = n.reps || n.pompes || n.pjour; if (e && e.tl && e.tl.length) tableSeries(T, n.reps ? n.reps.exo : n.pjour ? "Pompes (journée)" : "Pompes", e); else autres.push(detailNote(n)); });
     if (autres.length) { T.push("", "Notes :"); autres.forEach(a => T.push("- " + a)); } }
@@ -730,8 +730,75 @@ function ressentiRegler(n, k, v) { if (!n) return null; const rs = Object.assign
   if (Object.keys(rs).length) n.ressenti = rs; else delete n.ressenti; return rs; }
 const ressentiMot = (Q, v) => Q.r[v].replace(/^\S+\s/, "");
 function ressentiTxt(rs) { if (!rs) return ""; const t = []; RESSENTI.forEach(Q => { if (rs[Q.k] == null || !Q.r[rs[Q.k]]) return; let m = Q.q + " : " + ressentiMot(Q, rs[Q.k]).toLowerCase();
-    if (Q.sous && Array.isArray(rs[Q.sous.k]) && rs[Q.sous.k].length) m += " (" + rs[Q.sous.k].join(", ").toLowerCase() + ")"; t.push(m); }); return t.join(" · "); }
+    if (Q.sous && Array.isArray(rs[Q.sous.k]) && rs[Q.sous.k].length) m += " (" + rs[Q.sous.k].join(", ").toLowerCase() + ")"; t.push(m); }); if (rs.notes) t.push("Notes : " + rs.notes); return t.join(" · "); }
 function chargeRessentie(rs, dureeSec) { return rs && rs.effort != null && EFFORT_CR10[rs.effort] && dureeSec > 0 ? Math.round(EFFORT_CR10[rs.effort] * dureeSec / 60) : null; }
+
+
+/* ===== 🍇 Ravitaillement, eau et 🎾 score pendant la séance (essai 10) =====
+   Événements gardés dans reglages["seance-evts"] : {ts, k, q, n} pour boire / manger, {ts, k:"match", adv, moi}, {ts, k:"jeu", qui:0|1}, {ts, k:"set"}, {ts, k:"stb"}.
+   Ils sont rattachés à une séance par l'heure (comme l'échauffement). */
+const RAVITO = {
+  eau: { nom: "Eau", icone: "💧", unite: "ml", sucre: 0, sel: 0 },
+  erable: { nom: "Boisson érable-sel", icone: "🍁", unite: "ml", sucre: 0.04, sel: 0.001 },   // 60 g de sirop d'érable (≈ 40 g de sucre) et 1 g de sel par litre
+  raisins: { nom: "Raisins secs", icone: "🍇", unite: "g", sucre: 0.66, sel: 0, piece: 0.5 },
+  cacahuetes: { nom: "Cacahuètes", icone: "🥜", unite: "g", sucre: 0.13, sel: 0, piece: 0.7 } };
+const RAVITO_KCAL = { eau: 0, erable: 0.16, raisins: 3.0, cacahuetes: 6.0 };   // kcal par ml ou par g
+function evtsLire(base) { try { const l = JSON.parse(base.reglages["seance-evts"] || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+function evtAjouter(base, e) { const l = evtsLire(base); l.push(e); base.reglages["seance-evts"] = JSON.stringify(l.slice(-4000)); return e; }
+/* enlève le dernier événement d'une des sortes données, depuis « debut » */
+function evtAnnuler(base, debut, sortes) { const l = evtsLire(base); for (let i = l.length - 1; i >= 0; i--) if (l[i].ts >= debut && sortes.includes(l[i].k)) { const e = l.splice(i, 1)[0]; base.reglages["seance-evts"] = JSON.stringify(l); return e; } return null; }
+function evtsSeance(base, debut, fin) { return evtsLire(base).filter(e => e.ts >= debut - 60000 && e.ts <= (fin || Infinity) + 60000).sort((a, b) => a.ts - b.ts); }
+function ravitoTotaux(evts, jusqua) { const o = { eau: 0, sucre: 0, sel: 0, kcal: 0, par: {} };
+  evts.forEach(e => { const R = RAVITO[e.k]; if (!R || (jusqua && e.ts > jusqua)) return; const q = Number(e.q) || 0; if (R.unite === "ml") o.eau += q;
+    o.sucre += q * R.sucre; o.sel += q * R.sel; o.kcal += q * (RAVITO_KCAL[e.k] || 0); const p = o.par[e.k] = o.par[e.k] || { q: 0, n: 0 }; p.q += q; p.n += Number(e.n) || 0; });
+  o.sucre = Math.round(o.sucre); o.sel = Math.round(o.sel * 10) / 10; o.kcal = Math.round(o.kcal); return o; }
+/* Conseil pendant la séance (estimation à partir du cœur, pas une mesure).
+   Dépense : formule de Keytel (homme) × 0,7 (calée sur la COROS du 19/11 : 454 kcal en 52 min à 142).
+   Part du sucre : monte avec l'intensité (≈ 50 % à 75 % de la FC max, ≈ 85 % à 90 %). */
+function ravitoConseil(o) { const sec = Math.max(0, o.sec || 0), h = sec / 3600, fc = o.fcMoy || 0, max = o.fcMax || 185, poids = o.poids || 72, age = o.age || 45, mlH = o.mlH || 700, pris = o.pris || { eau: 0, sucre: 0, sel: 0 };
+  const int = fc ? Math.max(0.4, Math.min(1, fc / max)) : 0.65;
+  const kcalMin = fc ? Math.max(3, (-55.0969 + 0.6309 * fc + 0.1988 * poids + 0.2017 * age) / 4.184 * 0.7) : 6;
+  const kcal = Math.round(kcalMin * sec / 60), partSucre = Math.max(0.25, Math.min(0.9, 0.5 + (int - 0.75) * 2.3)), sucreBrule = Math.round(kcal * partSucre / 4);
+  const k = Math.max(0.8, Math.min(1.3, 0.8 + (int - 0.65) * 2));            // plus c'est intense, plus on transpire
+  const eau = Math.round(mlH * k * h), sel = Math.round(eau / 1000 * 10) / 10;   // 1 g de sel par litre bu
+  const sucre = Math.round(Math.max(30 * h, Math.min(60 * h, sucreBrule * 0.4)));  // on ne remplace qu'une partie : 30 à 60 g par heure
+  const phrases = [], mS = sucre - pris.sucre, mE = eau - pris.eau;
+  if (sec >= 600 && mS >= 6) { const n = Math.max(5, Math.min(15, Math.round(mS / RAVITO.raisins.sucre / RAVITO.raisins.piece / 5) * 5)); phrases.push("🍇 Prends " + n + " raisins secs"); }
+  if (sec >= 600 && mE >= 80) phrases.push("💧 Bois " + Math.max(10, Math.min(30, Math.round(mE / 50) * 5)) + " cl");
+  if (!phrases.length) phrases.push(sec < 600 ? "Début de séance : bois quelques gorgées aux pauses." : "✅ Tu es dans le bon rythme.");
+  const alerte = sec >= 40 * 60 && pris.sucre < sucre * 0.5 ? "⚠️ Risque de coup de barre : ton sucre est en retard." : "";
+  return { kcal, sucreBrule, eau, sucre, sel, phrases, alerte, int: Math.round(int * 100) }; }
+/* Après la séance : (prévu − bu) × 1,5, à boire dans les 1 h 30 */
+function rehydratation(sec, mlBu, mlH) { const manque = (mlH || 700) * sec / 3600 - (mlBu || 0); return manque > 0 ? Math.round(manque * 1.5 / 50) * 50 : 0; }
+/* 🎾 Score : jeux par set ; set gagné à 6 avec 2 d'écart ou à 7 ; super tie-break : 10 points avec 2 d'écart */
+function scoreEtat(evts) { const m = evts.filter(e => e.k === "match").pop(); if (!m) return null; const st = { moi: m.moi || "Moi", adv: m.adv || "Adversaire", sets: [], cur: [0, 0], stb: false, debut: m.ts, jeux: [] };
+  const clore = () => { st.sets.push({ a: st.cur[0], b: st.cur[1], stb: st.stb }); st.cur = [0, 0]; st.stb = false; };
+  evts.forEach(e => { if (e.ts < m.ts) return;
+    if (e.k === "jeu") { st.cur[e.qui ? 1 : 0]++; const [a, b] = st.cur, fini = st.stb ? (a >= 10 || b >= 10) && Math.abs(a - b) >= 2 : ((a >= 6 || b >= 6) && Math.abs(a - b) >= 2) || a === 7 || b === 7;
+      st.jeux.push({ ts: e.ts, qui: e.qui ? 1 : 0, set: st.sets.length + 1, a, b, stb: st.stb }); if (fini) clore(); }
+    else if (e.k === "set") { if (st.cur[0] || st.cur[1]) clore(); }
+    else if (e.k === "stb") st.stb = !st.stb; });
+  return st; }
+function scoreTxt(st) { if (!st) return ""; const t = st.sets.map(x => x.stb ? "[" + x.a + "-" + x.b + "]" : x.a + "-" + x.b); if (st.cur[0] || st.cur[1]) t.push((st.stb ? "[" : "") + st.cur[0] + "-" + st.cur[1] + (st.stb ? "]" : "") + " en cours"); return t.join(" "); }
+function scoreA(st, ts) { if (!st) return ""; let txt = ""; st.jeux.forEach(j => { if (j.ts <= ts) txt = "set " + j.set + " : " + j.a + "-" + j.b + (j.stb ? " (super tie-break)" : ""); }); return txt; }
+function ravitoLigne(evts) { const o = ravitoTotaux(evts), st = scoreEtat(evts), t = [];
+  if (st) t.push("🎾 " + scoreTxt(st) + " contre " + st.adv);
+  if (o.eau || o.sucre) t.push("💧 bu " + (o.eau / 1000).toFixed(2).replace(".", ",") + " L" + (o.sucre ? " · sucre " + o.sucre + " g" : "") + (o.sel ? " · sel " + String(o.sel).replace(".", ",") + " g" : ""));
+  return t; }
+function ravitoDetail(T, evts, R, mlH) { if (!evts.length) return; const st = scoreEtat(evts), o = ravitoTotaux(evts), h = (ts) => { const d = new Date(ts); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  T.push("", "Ravitaillement et score :");
+  if (st) T.push("Match : " + st.moi + " contre " + st.adv + " · score " + scoreTxt(st));
+  if (o.eau || o.sucre) { const p = Object.keys(o.par).map(k => RAVITO[k].nom.toLowerCase() + " " + (RAVITO[k].unite === "ml" ? (o.par[k].q / 10) + " cl" : (o.par[k].n ? o.par[k].n + " (" + Math.round(o.par[k].q) + " g)" : Math.round(o.par[k].q) + " g"))).join(", ");
+    T.push("Pris pendant la séance : " + p + " → eau " + (o.eau / 1000).toFixed(2).replace(".", ",") + " L, sucre " + o.sucre + " g, sel " + String(o.sel).replace(".", ",") + " g, " + o.kcal + " kcal");
+    if (R && R.debut) { const sec = ((R.l || []).length ? R.l[R.l.length - 1][0] : 0); if (sec > 0) T.push("Eau par heure : " + Math.round(o.eau / (sec / 3600)) + " ml/h (objectif " + (mlH || 700) + ")"); } }
+  T.push("Heure | Quoi | Score à ce moment | Total bu / sucre");
+  let cum = []; evts.forEach(e => { if (e.k === "match") { T.push(h(e.ts) + " | début du match contre " + (e.adv || "?") + " | | "); return; } if (e.k === "set" || e.k === "stb") { T.push(h(e.ts) + " | " + (e.k === "set" ? "set suivant" : "super tie-break") + " | " + scoreA(st, e.ts) + " | "); return; }
+    cum.push(e); const R0 = RAVITO[e.k], tot = ravitoTotaux(cum);
+    if (e.k === "jeu") { T.push(h(e.ts) + " | jeu " + (e.qui ? (st ? st.adv : "adversaire") : (st ? st.moi : "moi")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); return; }
+    if (R0) T.push(h(e.ts) + " | " + R0.icone + " " + R0.nom.toLowerCase() + " " + (R0.unite === "ml" ? (e.q / 10) + " cl" : (e.n ? e.n + " (" + Math.round(e.q) + " g)" : Math.round(e.q) + " g")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); }); }
+function avecRavito(x, evts) { if (!evts || !evts.length) return x; x.evts = evts; const l = ravitoLigne(evts); if (l.length) { x.resultat += " · " + l.join(" · "); } return x; }
+/* ✍️ Notes libres du ressenti */
+function ressentiNoter(n, txt) { if (!n) return null; const rs = Object.assign({}, n.ressenti || {}), t = String(txt || "").trim().slice(0, 3000); if (t) rs.notes = t; else delete rs.notes; if (Object.keys(rs).length) n.ressenti = rs; else delete n.ressenti; return rs; }
 
 /* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
 const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
@@ -793,6 +860,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
+  RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,
   DIFF, kg, chargeTxt, chargeVal, MAT_MODELES, MAT_ICONES, matLire, matAjouter, matRegler, matSupprimer, matUsageNoter, matCompteur, matDepasse, matUsageTxt, matNeuf, matPlusTop, matSuggestion, matAlertesNouvelles, matBilan, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,

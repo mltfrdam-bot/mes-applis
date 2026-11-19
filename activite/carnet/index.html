@@ -7731,11 +7731,18 @@ table.pa td.ac { color: var(--accent); }
     function publier() { try { if (!db || state.alimentation === null || typeof waterStatus !== "function") return; var d = todayStr(), ws = waterStatus(), cfg = rythmeCfg();
       A.eauEtat(JSON.stringify({ date: d, ml: ws.ml, goal: ws.goal, pct: ws.pct, gap: ws.gap, lever: cfg.lever, bed: ws.bed, dernier: derniere(d), maj: Date.now() })); } catch (e) {} }
     var enCours = false;
+    /* 🍇 Aliments notés pendant une séance du Journal : favori trouvé par son nom, sinon créé (règle : tout nouvel aliment devient un favori) */
+    var FAV_APK = {
+      erable: { nom: "Boisson érable-sel", re: /erable.*sel|boisson erable/, data: { unite: "ml", par: 100, kcal: 15.6, glucides_g: 4, proteines_g: 0, lipides_g: 0, boisson: true, repas: "Pendant l'effort", note: "60 g de sirop d'érable et 1 g de sel par litre" } },
+      raisins: { nom: "Raisins secs", re: /^raisins? secs?/, data: { unite: "g", par: 100, kcal: 300, glucides_g: 66, proteines_g: 3, lipides_g: 0.5, repas: "Pendant l'effort" } },
+      cacahuetes: { nom: "Cacahuètes", re: /^cacahu/, data: { unite: "g", par: 100, kcal: 600, glucides_g: 13, proteines_g: 25, lipides_g: 49, repas: "Pendant l'effort" } } };
+    async function favApk(ty) { var M = FAV_APK[ty]; if (!M) return null; var ex = (favs || []).find(function (x) { return x.id === "fav-apk-" + ty; }) || (favs || []).find(function (x) { return M.re.test(normTxt(x.nom)); }); if (ex) return ex;
+      var d = Object.assign({ nom: M.nom }, M.data); try { await db.collection("favoris").doc("fav-apk-" + ty).set(d); } catch (e) {} d.id = "fav-apk-" + ty; return d; }
     async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
       try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0;
-          for (var i = 0; i < l.length; i++) { var x = l[i], q = Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
-            var doc = f ? Object.assign({ date: x.date, heure: x.t, repas: repasFor(f, x.t), description: descFor(f, q), fav: f.id, quantite: q, unite: f.unite }, calcFor(f, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
-            doc.saisi = Date.now(); doc.note = "Noté depuis la notification"; await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(doc); n++; }
+          for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau", ff = ty === "eau" ? f : await favApk(ty), q = ff && ff.unite === "g" ? Math.round((Number(x.g) || 0) * 10) / 10 : Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
+            var doc = ff ? Object.assign({ date: x.date, heure: x.t, repas: ty === "eau" ? repasFor(ff, x.t) : (ff.repas || "Pendant l'effort"), description: descFor(ff, q) + (x.n ? " (" + x.n + ")" : ""), fav: ff.id, quantite: q, unite: ff.unite }, calcFor(ff, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
+            doc.saisi = Date.now(); doc.note = x.note || "Noté depuis la notification"; await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(doc); n++; }
           A.eauVider(); if (n) toast("💧 " + n + " boisson" + (n > 1 ? "s" : "") + " de la notification rangée" + (n > 1 ? "s" : "") + " dans le carnet."); } } catch (e) {}
       enCours = false; setTimeout(publier, 1500); }
     setInterval(function () { ranger(); publier(); }, 60000);

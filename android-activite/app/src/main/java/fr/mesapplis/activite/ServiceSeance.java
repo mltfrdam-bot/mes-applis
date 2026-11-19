@@ -466,6 +466,35 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         return prevOn;
     }
 
+    static boolean seanceEnCours() { ServiceSeance s = actif; return s != null && s.enr != null; }
+
+    /** 💧 Une fois par minute : si on est en retard sur l'eau de la séance, vibration (+ voix si choisi). */
+    private void eauSeance(long debut) {
+        try {
+            String t = RappelEau.seanceSuivi(this, debut);
+            if (t == null) return;
+            android.os.Vibrator vb = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (vb != null) vb.vibrate(android.os.VibrationEffect.createWaveform(new long[] { 0, 300, 200, 300, 200, 300 }, -1));
+            if (RappelEau.modeRappelSeance(this) >= 2) { initVoix(); if (voixPrete && voix != null) voix.speak(t, TextToSpeech.QUEUE_ADD, null, "eau"); else aDire = t; }
+        } catch (Exception ignored) {}
+    }
+
+    private void initVoix() {
+        if (voix != null) return;
+        try {
+            voix = new TextToSpeech(this, etat -> {
+                if (etat != TextToSpeech.SUCCESS || voix == null) return;
+                try {
+                    voix.setLanguage(Locale.FRANCE);
+                    voix.setSpeechRate(1.1f);
+                    voix.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+                } catch (Exception ignored) {}
+                voixPrete = true;
+                if (aDire != null) { String x = aDire; aDire = null; try { voix.speak(x, TextToSpeech.QUEUE_ADD, null, "eau"); } catch (Exception ignored) {} }
+            });
+        } catch (Exception e) { voix = null; }
+    }
+
     private void dire(String texte) {
         if (!voixOn) return;
         try {
@@ -609,6 +638,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
             if (v != null && e != null) { Ftms.Mesure m = kickr.frais() ? kickr.mesure() : SANS_MESURE; synchronized (m) { v.seconde((int) ((maintenant - e.debut) / 1000), m); } }
             if (maintenant - dernierTaux >= 2000) { accTaux = (int) Math.round(accCompte * 1000.0 / Math.max(1, maintenant - dernierTaux)); accCompte = 0; dernierTaux = maintenant; }
             if (++compteur % 5 == 0) majNotification(false);
+            if (e != null && compteur % 60 == 0) eauSeance(e.debut);
             // ceinture connectée pour rien (pas de séance, pas de réglage, appli fermée) : on s'arrête au bout de 10 minutes
             if (e == null && !suivi.essaiEnCours() && !MainActivity.visible) {
                 if (inutileDepuis == 0) inutileDepuis = maintenant;

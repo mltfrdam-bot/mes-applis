@@ -142,6 +142,9 @@ const Pont = {
   eauRegler(o) { try { if (A && A.eauRegler) A.eauRegler(JSON.stringify(o)); } catch (e) {} },
   eauPermanente(oui) { try { if (A && A.eauPermanente) A.eauPermanente(!!oui); } catch (e) {} },
   eauTest() { try { return A && A.eauTest ? A.eauTest() : ""; } catch (e) { return ""; } },
+  eauNoter(o) { try { return A && A.eauNoter ? !!A.eauNoter(JSON.stringify(o)) : false; } catch (e) { return false; } },
+  eauAnnuler(ts) { try { return A && A.eauAnnuler ? !!A.eauAnnuler(ts) : false; } catch (e) { return false; } },
+  eauRecup(d, f) { try { return A && A.eauRecup ? JSON.parse(A.eauRecup(d, f) || "null") : null; } catch (e) { return null; } },
   eauVerifier() { try { return A && A.eauVerifier ? A.eauVerifier() : ""; } catch (e) { return ""; } },
   notifier(t, x, n) { try { return A && A.notifier ? !!A.notifier(t, x, n || 0) : false; } catch (e) { return false; } },
   sauvegardesAuto() { try { return A ? JSON.parse(A.sauvegardesAuto() || "[]") : []; } catch (e) { return []; } },
@@ -417,6 +420,8 @@ function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
   { const R = Pont.eauReglages(); if (R) { const c = (k, v, t) => '<button class="chip" data-do="eauR" data-k="' + k + '" data-v="' + v + '" aria-pressed="' + (R[k] === v) + '">' + t + '</button>';
     h += '<h2>💧 Rappels d\'eau</h2><p class="aide">Ça sonne <b>dès que tu passes en retard</b> sur le rythme du 📒 carnet (40 % à midi, 70 % à 16 h, 90 % à 19 h, 100 % une heure avant le coucher). En avance ou à l\'heure : jamais de rappel. Jamais avant ton lever + 30 min, ni dans l\'heure avant ton coucher.</p><table class="milieu"><tbody>' +
       '<tr><td>Rappels</td><td><div class="chips">' + c("on", true, "✅ Oui") + c("on", false, "Non") + '</div></td></tr>' +
+      '<tr><td>Pendant le sport</td><td><div class="chips">' + [500, 600, 700, 750, 900].map(v => c("sport", v, v + " ml/h")).join("") + '</div><div class="gris" style="font-size:13px;margin-top:4px">Après la séance : (prévu − bu) × 1,5 à boire dans les 1 h 30, rappels toutes les 15 min si tu prends du retard.</div></td></tr>' +
+      '<tr><td>Rappel pendant la séance</td><td><div class="chips">' + c("seanceRappel", 2, "🔊 Voix + vibration") + c("seanceRappel", 1, "📳 Vibration") + c("seanceRappel", 0, "Non") + '</div><div class="gris" style="font-size:13px;margin-top:4px">Toutes les 15 min si tu es en retard sur l\'objectif. L\'alarme de la journée se tait pendant une séance.</div></td></tr>' +
       '<tr><td>Son du rappel</td><td><div class="chips">' + c("alarme", false, "🔔 Bip normal") + c("alarme", true, "⏰ Alarme") + '</div><div class="gris" style="font-size:13px;margin-top:4px">Alarme : sonne fort comme un réveil (même en silencieux) pendant ~15 s et affiche un grand écran par-dessus le verrouillage : touche ce que tu bois, c\'est noté et l\'alarme s\'arrête. Essaie avec « 🔔 Tester ».</div></td></tr>' +
       '<tr><td>Si toujours en retard, rappeler toutes les</td><td><div class="chips">' + c("intervalle", 10, "10 min") + c("intervalle", 15, "15 min") + c("intervalle", 30, "30 min") + c("intervalle", 60, "1 h") + '</div></td></tr>' +
       '<tr><td>Rappel : bouton 1</td><td><div class="chips">' + [150, 200, 250].map(v => c("ml1", v, v / 10 + " cl")).join("") + '</div></td></tr>' +
@@ -558,7 +563,7 @@ function vueSeance() { const act = S.enr ? S.enr.act : actCourante(); if (act ==
     '<div class="fant cache" id="sFant"><b id="sFantM"></b><small id="sFantT"></small></div><div class="boiteInfo cache" id="sAlerte"></div><div class="boiteInfo' + (S.gps ? " cache" : "") + '" id="sGps">' + (S.gps ? "" : "🛰 <b>Recherche des satellites…</b> Reste dehors, à ciel ouvert.") + '</div><button class="main" data-do="tour" id="bTour">🚩 Tour</button>' +
     '<table class="milieu"><tbody><tr><td>Tour en cours</td><td class="n" id="sTour" style="font-weight:900;font-size:18px"></td></tr><tr><td>Allure moyenne</td><td class="n" id="sMoy"></td></tr><tr><td>Dernier km</td><td class="n" id="sKm"></td></tr><tr><td>GPS</td><td class="n" id="sGpsL" style="white-space:normal"></td></tr>' +
     '<tr><td>FC moyenne / max</td><td class="n" id="sFcm"></td></tr><tr><td>⚡ Impacts</td><td class="n" id="sImp"></td></tr><tr><td>Ceinture</td><td class="n" id="sLien" style="white-space:normal"></td></tr><tr><td>Coupures de ceinture</td><td class="n" id="sDeco"></td></tr></tbody></table>' +
-    '<p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : le GPS et la ceinture continuent. <b>🚩 Tour</b> marque une section à cet endroit (aussi dans la notification, écran verrouillé).</p><div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button></div></div>' +
+    '<div id="ravB"></div><div id="ravC"></div><p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : le GPS et la ceinture continuent. <b>🚩 Tour</b> marque une section à cet endroit (aussi dans la notification, écran verrouillé).</p><div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button></div></div>' +
     /* 1.13 : écran 2 « Prévision » (glisser le doigt ou toucher l'onglet) */
     '<div id="pg1" class="cache"><div class="grand"><div class="chiffre" id="pTemps">0:00</div><div class="trio"><div><b id="pDist">0,00</b><small>km</small></div><div><b id="pAllure">–</b><small>allure /km</small></div><div class="fc"><b id="pFc">–</b><small>❤️ cardio</small></div></div></div>' +
     '<div class="fant" id="pPrevZ"><small>Arrivée prévue</small><b id="pPrev">–</b><small id="pEcart"></small></div>' +
@@ -570,7 +575,7 @@ function vueSeance() { const act = S.enr ? S.enr.act : actCourante(); if (act ==
     '<table class="milieu"><tbody><tr><td>⚡ Impacts</td><td class="n" id="sImp" style="font-weight:900;font-size:20px">0</td></tr><tr><td>Temps actif</td><td class="n" id="sActif"></td></tr><tr><td>FC moyenne / max</td><td class="n" id="sFcm"></td></tr><tr><td>Enregistré</td><td class="n" id="sEnr"></td></tr>' +
     '<tr><td>Ceinture</td><td class="n" id="sLien" style="white-space:normal"></td></tr><tr><td>Capteur de mouvement</td><td class="n" id="sAcc" style="white-space:normal"></td></tr><tr><td>Coupures de ceinture</td><td class="n" id="sDeco"></td></tr></tbody></table>' +
     (N.impPour(BASE, act).auto ? '<p class="aide">Impacts : réglage automatique de l\'activité ' + esc(N.actInfo(act).nom) + ' (' + esc(N.impTexte({ reglage: N.impPour(BASE, act) })) + ').</p>' : htmlReglage("enreg")) +
-    '<p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : l\'enregistrement continue.</p>' +
+    '<div id="ravB"></div><div id="ravC"></div><p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : l\'enregistrement continue.</p>' +
     '<div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button><button class="sec" data-do="essai">🎯 Régler (N coups)</button></div>';
   majSeance(); }
 const GPS = { ARRET: 0, RECHERCHE: 1, OK: 2, ETEINT: 3, SANS_DROIT: 4, LIMITE: 5 };
@@ -594,7 +599,39 @@ function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage();
     const f = g.f, zf = $("#sFant"); if (zf) { zf.classList.toggle("cache", !f); if (f) { const egal = Math.abs(f.m) < 5; zf.classList.toggle("av", !egal && f.m > 0); zf.classList.toggle("re", !egal && f.m < 0);
       met("#sFantM", "👻 " + (egal ? "à égalité" : (f.m > 0 ? "+" : "−") + Math.abs(f.m) + " m")); met("#sFantT", (egal ? "" : N.secTxt(Math.abs(f.s)) + (f.m > 0 ? " d'avance · " : " de retard · ")) + (f.fini ? "le fantôme est arrivé (" + N.kmTxt(f.total) + " en " + N.chrono(f.temps) + ")" : "le fantôme est à " + N.kmTxt(f.dist) + " sur " + N.kmTxt(f.total))); } } }
   if (g && $("#pTemps")) majPrevision(e, g);
-  const al = $("#sAlerte"); if (al) { al.classList.toggle("cache", !msg); al.innerHTML = msg; } majReglage(); }
+  const al = $("#sAlerte"); if (al) { al.classList.toggle("cache", !msg); al.innerHTML = msg; } majRavito(); majReglage(); }
+/* ===== 🍇 Ravitaillement et 🎾 score pendant la séance (essai 10) ===== */
+function seanceDebut() { const e = S.enr; return e ? (e.debut || Date.now() - (e.ecoule || 0) * 1000) : Date.now(); }
+const gourde = () => BASE.reglages["gourde"] === "eau" ? "eau" : "erable";
+function htmlRavitoBoutons() { const d = seanceDebut(), ev = N.evtsSeance(BASE, d, null), g = gourde(), st = N.scoreEtat(ev), o = N.ravitoTotaux(ev), bt = (k, q, n, t) => '<button class="sec" data-do="rav" data-k="' + k + '" data-q="' + q + '" data-n="' + (n || 0) + '" style="min-height:52px;font-size:17px">' + t + '</button>';
+  let h = '<h2>🍇 Ravitaillement <span class="gris" style="font-size:14px;font-weight:400">— une touche = noté dans le 📒 carnet</span></h2><div class="chips" style="margin-bottom:6px"><span class="gris" style="align-self:center">Ma gourde :</span><button class="chip" data-do="gourde" data-v="erable" aria-pressed="' + (g === "erable") + '">🍁 Érable-sel</button><button class="chip" data-do="gourde" data-v="eau" aria-pressed="' + (g === "eau") + '">💧 Eau</button></div>' +
+    '<div class="ligne">' + bt(g, 100, 0, "+10 cl") + bt(g, 150, 0, "+15 cl") + bt(g, 200, 0, "+20 cl") + '</div><div class="ligne">' + bt("raisins", 2.5, 5, "🍇 +5") + bt("raisins", 5, 10, "🍇 +10") + bt("cacahuetes", 2.1, 3, "🥜 +3") + '<button class="sec petit" data-do="ravAnnuler">↩ Annuler</button></div>' +
+    (o.eau || o.sucre ? '<p class="gris" style="font-size:14px;margin:4px 0">Pris : ' + Object.keys(o.par).map(k => N.RAVITO[k].icone + " " + (N.RAVITO[k].unite === "ml" ? (o.par[k].q / 10) + " cl" : o.par[k].n)).join(" · ") + '</p>' : "");
+  if (!st) h += '<div class="ligne"><button class="sec" data-do="matchDebut">🎾 Noter le score d\'un match</button></div>';
+  else { const cols = st.sets.concat(st.cur[0] || st.cur[1] || !st.sets.length ? [{ a: st.cur[0], b: st.cur[1], stb: st.stb, cours: true }] : []), td = (v, x) => '<td class="n" style="font-size:22px;font-weight:900' + (x.cours ? ";background:#fff6d6" : "") + '">' + v + '</td>';
+    h += '<h2>🎾 Score</h2><table><thead><tr><th></th>' + cols.map((x, i) => '<th class="n">' + (x.stb ? "Super TB" : "Set " + (i + 1)) + '</th>').join("") + '</tr></thead><tbody><tr><td><b>' + esc(st.moi) + '</b></td>' + cols.map(x => td(x.a, x)).join("") + '</tr><tr><td><b>' + esc(st.adv) + '</b></td>' + cols.map(x => td(x.b, x)).join("") + '</tr></tbody></table>' +
+      '<div class="ligne"><button class="main" data-do="jeu" data-q="0" style="min-height:64px;font-size:19px">+1 ' + esc(st.moi) + '</button><button class="main" data-do="jeu" data-q="1" style="min-height:64px;font-size:19px;background:#5a6470">+1 ' + esc(st.adv) + '</button></div>' +
+      '<div class="ligne"><button class="sec petit" data-do="jeuAnnuler">↩ Annuler</button><button class="sec petit" data-do="setSuivant">Set suivant</button><button class="sec petit" data-do="stb" aria-pressed="' + st.stb + '">Super tie-break</button></div>'; }
+  return h; }
+function barreRav(t, pris, cible, txt) { const p = cible > 0 ? Math.min(100, Math.round(pris / cible * 100)) : 0, c = p >= 90 ? "#1f6b43" : p >= 60 ? "#c98a00" : "#c62828";
+  return '<tr><td style="width:22%">' + t + '</td><td><div style="background:#e6e9ee;border-radius:6px;height:18px;position:relative"><div style="width:' + p + '%;background:' + c + ';height:18px;border-radius:6px"></div></div></td><td class="n" style="width:32%">' + txt + '</td></tr>'; }
+function htmlRavitoConseil() { const e = S.enr; if (!e) return ""; const d = seanceDebut(), ev = N.evtsSeance(BASE, d, null), o = N.ravitoTotaux(ev), R = Pont.eauReglages() || {}, prof = N.fcProfil(BASE) || {},
+    c = N.ravitoConseil({ sec: e.ecoule || 0, fcMoy: e.fcMoy, fcMax: prof.max, mlH: R.sport || 700, pris: o }), L = (v) => (v / 1000).toFixed(2).replace(".", ",");
+  return '<div class="boiteInfo" style="background:#f4f8fc"><b style="font-size:18px">' + esc(c.phrases.join(" · ")) + '</b>' + (c.alerte ? '<div style="color:#c62828;font-weight:700;margin-top:4px">' + esc(c.alerte) + '</div>' : "") +
+    '<table class="milieu" style="margin-top:6px"><tbody>' + barreRav("💧 Eau", o.eau, c.eau, L(o.eau) + " / " + L(c.eau) + " L") + barreRav("🍬 Sucre", o.sucre, c.sucre, o.sucre + " / " + c.sucre + " g") + barreRav("🧂 Sel", o.sel, c.sel, String(o.sel).replace(".", ",") + " / " + String(c.sel).replace(".", ",") + " g") + '</tbody></table>' +
+    '<div class="gris" style="font-size:13px">🔥 Dépense estimée ~' + c.kcal + ' kcal, dont ~' + c.sucreBrule + ' g de sucre (estimation d\'après le cœur, intensité ' + c.int + ' % de la FC max). Objectif eau ' + (R.sport || 700) + ' ml/h, ajusté à l\'intensité.</div></div>'; }
+let ravCT = 0;
+function majRavito(force) { const b = $("#ravB"), c = $("#ravC"); if (!b || !c || !S.enr) return; const h = htmlRavitoBoutons(); if (force || b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; }
+  if (force || Date.now() - ravCT > 5000) { ravCT = Date.now(); c.innerHTML = htmlRavitoConseil(); } }
+function ravNoter(b) { const k = b.dataset.k, q = Number(b.dataset.q), n = Number(b.dataset.n) || 0, R = N.RAVITO[k]; if (!R) return; const ts = Date.now(), act = S.enr ? N.actNom(S.enr.act).toLowerCase() : "la séance";
+  N.evtAjouter(BASE, { ts, k, q, n }); sauver();
+  Pont.eauNoter(R.unite === "ml" ? { ts, ml: q, type: k, note: "Pendant " + act } : { ts, g: q, n, type: k, note: "Pendant " + act });
+  Pont.vibrer(30); toast(R.icone + " " + (R.unite === "ml" ? "+" + q / 10 + " cl " + (k === "erable" ? "d'érable-sel" : "d'eau") : "+" + n + " " + R.nom.toLowerCase()) + " noté", 1500); majRavito(true); }
+function ravAnnuler() { const e = N.evtAnnuler(BASE, seanceDebut() - 60000, ["eau", "erable", "raisins", "cacahuetes"]); if (!e) { toast("Rien à annuler."); return; } sauver(); const ok = Pont.eauAnnuler(e.ts);
+  toast("↩ Annulé" + (ok ? "" : " ici (déjà rangé dans le carnet : à retirer aussi là-bas)"), 3000); majRavito(true); }
+function matchDebut() { fenetre('<div class="t">🎾 Match</div><table class="milieu"><tbody><tr><td>Moi</td><td><input id="matchMoi" value="' + esc(BASE.reglages["match-moi"] || "Frédéric") + '" maxlength="30" style="width:100%;font-size:18px"></td></tr><tr><td>Adversaire</td><td><input id="matchAdv" maxlength="30" style="width:100%;font-size:18px" placeholder="Nom"></td></tr></tbody></table><div class="ligne"><button class="main" data-do="matchOk">🎾 Commencer le score</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#matchAdv"); if (i) i.focus(); }, 200); }
+function matchOk() { const moi = ($("#matchMoi").value || "Moi").trim(), adv = ($("#matchAdv").value || "Adversaire").trim(); BASE.reglages["match-moi"] = moi; N.evtAjouter(BASE, { ts: Date.now(), k: "match", moi, adv }); sauver(); fermerFenetre(); majRavito(true); }
+function jeuNoter(qui) { N.evtAjouter(BASE, { ts: Date.now(), k: "jeu", qui }); sauver(); Pont.vibrer(25); majRavito(true); }
 /* 1.13 : écran 2 « Prévision » */
 let PAGE_SEANCE = (() => { try { return Number(localStorage.getItem("seance-page")) || 0; } catch (e) { return 0; } })();
 function pageSeance(n) { if (n != null) { PAGE_SEANCE = n ? 1 : 0; try { localStorage.setItem("seance-page", String(PAGE_SEANCE)); } catch (e) {} }
@@ -628,6 +665,9 @@ function finSeance() { fermerFenetre(); arretEnCours = true; const nom = Pont.se
   if (!nom) { arretEnCours = false; info("⚠️ Séance non terminée", "<p>Le téléphone a refusé d'écrire le fichier. L'enregistrement continue, rien n'est perdu. Réessaie dans un instant.</p>"); return; }
   importerEnregistrements(); const R = lireEnregistrement(nom); arretEnCours = false; seanceVue = false; demarrageT = 0; lireEtat(); majH10();
   if (!R) { aller("historique"); return; } BILAN = N.rapportEnregistrement(R, N.impLire(BASE), Pont.version()); BILAN.R = R;
+  { const ev = N.evtsSeance(BASE, R.debut, Date.now()), l = N.ravitoLigne(ev), rc = Pont.eauRecup(R.debut, Date.now());
+    if (rc && rc.cible > 0) { const f = new Date(rc.fin); l.push("💧 Récupération : bois " + (rc.cible / 1000).toFixed(2).replace(".", ",") + " L d'ici " + String(f.getHours()).padStart(2, "0") + ":" + String(f.getMinutes()).padStart(2, "0") + " (rappels toutes les 15 min si tu prends du retard)"); }
+    BILAN.ravito = l; if (l.length) { BILAN.resume += "\n" + l.join("\n"); BILAN.tout += "\n" + l.join("\n"); } }
   BILAN.mat = matApresSeance(R); if (BILAN.mat.length) { BILAN.resume += "\n" + BILAN.mat.join("\n"); BILAN.tout += "\n" + BILAN.mat.join("\n"); }
   { let l = []; try { l = JSON.parse(BASE.reglages["echauffements"] || "[]"); } catch (e) {} const ech = N.echauffementPour(l, R); if (ech) { BILAN.echauf = N.echauffementTxt(ech); BILAN.resume += "\n🔥 " + BILAN.echauf; BILAN.tout += "\n🔥 " + BILAN.echauf; } }
   BILAN.brut = Pont.brut().find(x => x.nom === "brut-" + R.debut + ".bin" && x.taille > 16) || null; if (BILAN.brut) { const l = "\nMesures brutes : " + BILAN.brut.nom + " (" + mo(BILAN.brut.taille) + ")"; BILAN.resume += l; BILAN.tout += l; }
@@ -652,6 +692,7 @@ function vueBilan() { const B = BILAN; if (!B) { aller("historique"); return; } 
   if (g && g.tours.length) h += '<h2>🚩 Mes tours</h2><table><thead><tr><th>Tour</th><th class="n">Temps</th><th class="n">Distance</th><th class="n">Allure</th><th class="n">❤️ moy</th></tr></thead><tbody>' + g.tours.map(x => '<tr><td><b>' + x.n + '</b>' + (x.fin ? ' <span class="gris">(fin)</span>' : "") + '</td><td class="n">' + N.chrono(x.t) + '</td><td class="n">' + N.kmTxt(x.d) + '</td><td class="n">' + esc(x.allure.replace(" /km", "")) + '</td><td class="n">' + f(x.fcMoy) + '</td></tr>').join("") + '</tbody></table>';
   if (g && g.kms.length) h += '<h2>Km par km</h2><table><thead><tr><th>Km</th><th class="n">Temps</th><th class="n">Allure</th><th class="n">❤️ moy</th><th class="n">❤️ max</th></tr></thead><tbody>' + g.kms.map(x => '<tr><td><b>' + (x.partiel ? '<span class="gris">+ ' + x.d + ' m</span>' : x.n) + '</b></td><td class="n">' + N.chrono(x.t) + '</td><td class="n">' + esc(x.allure.replace(" /km", "")) + '</td><td class="n">' + f(x.fcMoy) + '</td><td class="n">' + f(x.fcMax) + '</td></tr>').join("") + '</tbody></table>';
   if (BILAN.echauf) h += '<p style="font-size:15px">🔥 ' + esc(BILAN.echauf) + '</p>';
+  if (BILAN.ravito && BILAN.ravito.length) h += BILAN.ravito.map(x => '<p style="font-size:16px' + (x.startsWith("💧 Récup") ? ";font-weight:700;color:#1F6FB2" : "") + '">' + esc(x) + '</p>').join("");
   if (BILAN.mat && BILAN.mat.length) h += BILAN.mat.map(x => '<p style="font-size:15px' + (x.startsWith("⚠️") ? ";color:#c62828;font-weight:700" : "") + '">' + esc(x) + '</p>').join("") + '<div class="ligne"><button class="sec petit" data-do="materiel">🧰 Voir le matériel</button></div>';
   h += htmlRessenti("b");
   h += '<div class="ligne"><button class="sec" data-do="copierBilan">📋 Copier le résumé</button><button class="sec" data-do="copierBilanTout">📋 Copier tout</button><button class="sec" data-do="fichierBilan">💾 Fichier</button></div>' + (B.brut ? '<div class="ligne"><button class="sec" data-do="partagerBrut">📤 Envoyer les mesures brutes (Drive)</button></div>' : "") +
@@ -812,9 +853,13 @@ function htmlRessenti(c) { const k = cibleRessenti(c); if (!k) return ""; const 
   return '<div id="ressBloc"><h2>💬 Ton ressenti <span class="gris" style="font-size:14px;font-weight:400">— une touche par question</span></h2><table class="milieu"><tbody>' + N.RESSENTI.map(Q => {
       let h = '<tr><td style="width:30%">' + Q.q + '</td><td><div class="chips">' + Q.r.map((t, i) => bt(Q.k, i, t, rs[Q.k] === i)).join("") + '</div>';
       if (Q.sous && Q.sous.si.includes(rs[Q.k])) { const l = rs[Q.sous.k] || []; h += '<div class="gris" style="font-size:13px;margin:6px 0 4px">' + Q.sous.q + ' (plusieurs possibles)</div><div class="chips">' + Q.sous.r.map(t => bt(Q.sous.k, t, t, l.includes(t))).join("") + '</div>'; }
-      return h + '</td></tr>'; }).join("") + '</tbody></table>' +
+      return h + '</td></tr>'; }).join("") + '<tr><td>✍️ Notes</td><td><textarea id="ressNotes" data-c="' + esc(c) + '" rows="3" maxlength="3000" style="width:100%;font-size:16px;font-family:inherit" placeholder="Écris tes sensations : douleur (où, comment), forme, sommeil, match… Le micro du clavier permet de dicter.">' + esc(rs.notes || "") + '</textarea></td></tr></tbody></table>' +
     (ch ? '<p style="font-size:16px">📊 Charge ressentie : <b>' + ch + '</b> <span class="gris" style="font-size:14px">(effort ' + N.EFFORT_CR10[rs.effort] + '/10 × ' + Math.round(k.duree / 60) + ' min)</span></p>' : "") +
     '<p class="aide">Enregistré à chaque touche. Toucher une réponse choisie l\'enlève. Modifiable plus tard : Historique, touche la séance, « 💬 Ressenti ».</p></div>'; }
+let ressNotesT = null;
+function ressNotesSauver(t) { const k = cibleRessenti(t.dataset.c); if (!k) return; N.ressentiNoter(k.n, t.value); sauver(); }
+document.addEventListener("input", (ev) => { const t = ev.target; if (t && t.id === "ressNotes") { clearTimeout(ressNotesT); ressNotesT = setTimeout(() => ressNotesSauver(t), 800); } });
+document.addEventListener("change", (ev) => { const t = ev.target; if (t && t.id === "ressNotes") { clearTimeout(ressNotesT); ressNotesSauver(t); toast("✍️ Notes enregistrées", 1500); } });
 function ressToucher(b) { const k = cibleRessenti(b.dataset.c); if (!k) return; if (!N.ressentiRegler(k.n, b.dataset.k, b.dataset.v)) return; sauver(); Pont.vibrer(20); const el = $("#ressBloc"); if (el) el.outerHTML = htmlRessenti(b.dataset.c); }
 function ressOuvrir(id) { const h = htmlRessenti(id); if (!h) return; fenetre(h + '<div class="ligne"><button class="main" data-do="fermerRedessiner">OK</button></div>'); }
 function ressLigne(c) { const k = cibleRessenti(c); if (!k || !k.n.ressenti) return ""; const ch = N.chargeRessentie(k.n.ressenti, k.duree); return "\nRessenti : " + N.ressentiTxt(k.n.ressenti) + (ch != null ? " · charge ressentie " + ch : ""); }
@@ -831,6 +876,11 @@ function remettreSeance(t, id) { if (N.restaurer(BASE, t, id)) { sauver(); toast
 
 /* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
 const ACTIONS = {
+  rav: ravNoter, ravAnnuler, matchDebut, matchOk, jeu: (b) => jeuNoter(Number(b.dataset.q) ? 1 : 0),
+  jeuAnnuler: () => { if (N.evtAnnuler(BASE, seanceDebut() - 60000, ["jeu", "set", "stb"])) { sauver(); majRavito(true); } else toast("Rien à annuler."); },
+  setSuivant: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "set" }); sauver(); majRavito(true); },
+  stb: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "stb" }); sauver(); majRavito(true); },
+  gourde: (b) => { BASE.reglages["gourde"] = b.dataset.v; sauver(); majRavito(true); },
   fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct, creerExoFiche, eauPerm: (b) => { const R = Pont.eauReglages() || {}; R.permanente = b.dataset.v === "1"; Pont.eauRegler(R); Pont.eauPermanente(R.permanente); dessiner(); toast(R.permanente ? "💧 Notification permanente activée." : "Notification permanente retirée."); },
   eauR: (b) => { const R = Pont.eauReglages() || {}, v = b.dataset.v; R[b.dataset.k] = v === "true" ? true : v === "false" ? false : Number(v); Pont.eauRegler(R); dessiner(); },
   eauTest: () => { const r = Pont.eauTest(); toast(!r ? "Seulement dans l'APK." : /^Autorise/.test(r) ? r : "Notification envoyée : regarde en haut de l'écran (ou verrouille la tablette pour voir l'écran d'alarme).", 4500); }, eauVerifier: () => { const r = Pont.eauVerifier(); toast(r ? "Maintenant : " + r + "." : "Seulement dans l'APK.", 4500); }, carnet: () => { location.href = "carnet/index.html"; }, materiel: () => { fermerFenetre(); aller("materiel"); }, matOuvrir: (b) => matOuvrir(b.dataset.id), matR, matAjouter: (b) => matAjouter(b.dataset.m),

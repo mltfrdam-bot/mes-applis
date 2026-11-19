@@ -61,6 +61,8 @@ public class RappelEau extends BroadcastReceiver {
             if (!r.has("q2")) r.put("q2", 150);
             if (!r.has("q3")) r.put("q3", 200);
             if (!r.has("alarme")) r.put("alarme", false);
+            if (!r.has("sport")) r.put("sport", 700);
+            if (!r.has("seanceRappel")) r.put("seanceRappel", 2);
         } catch (Exception ignored) {}
         return r;
     }
@@ -69,7 +71,7 @@ public class RappelEau extends BroadcastReceiver {
         try {
             AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
             if (am == null) return;
-            long dans = Math.max(60000L, Math.min(PERIODE, minutesAvantRetard(c) * 60000L));
+            long dans = Math.max(60000L, Math.min(recupActive(c) ? 5 * 60000L : PERIODE, minutesAvantRetard(c) * 60000L));
             PendingIntent pi = PendingIntent.getBroadcast(c, 70, new Intent(c, RappelEau.class).setAction(ACTION_VERIFIER), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + dans, pi);
         } catch (Exception ignored) {}
@@ -113,7 +115,7 @@ public class RappelEau extends BroadcastReceiver {
             JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
             for (int k = 0; k < l.length(); k++) {
                 JSONObject x = l.getJSONObject(k);
-                if (!jour.equals(x.optString("date"))) continue;
+                if (!jour.equals(x.optString("date")) || x.optInt("ml", 0) <= 0) continue;
                 ml += x.optInt("ml", 0);
                 String[] hm = x.optString("t", "00:00").split(":");
                 dernier = Math.max(dernier, Integer.parseInt(hm[0]) * 60 + Integer.parseInt(hm[1]));
@@ -132,7 +134,10 @@ public class RappelEau extends BroadcastReceiver {
         int retard = retardA(maintenant, ml, goal, lever, bed);
         if (!essai) {
             if (!r.optBoolean("on", true)) return "rappels coupés";
+            if (ServiceSeance.seanceEnCours()) return "séance en cours (rappel de séance à la place)";
             if (maintenant < lever + 30 || maintenant >= bed - 60) return "en dehors de la journée";
+            String rc = verifierRecup(c, r);
+            if (rc != null) return rc;
             if (ml >= goal) return "objectif atteint";
             if (retard < SEUIL_RETARD) { prefs(c).edit().putBoolean("enRetard", false).apply(); return retard <= 0 ? "en avance de " + cl(-retard) : "presque à l'heure (" + retard + " ml)"; }
             boolean deja = prefs(c).getBoolean("enRetard", false);
@@ -222,7 +227,8 @@ public class RappelEau extends BroadcastReceiver {
         try {
             Calendar k = Calendar.getInstance();
             JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
-            l.put(new JSONObject().put("date", aujourdhui(k)).put("t", String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE))).put("ml", ml));
+            l.put(new JSONObject().put("date", aujourdhui(k)).put("t", String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE))).put("ml", ml).put("ts", k.getTimeInMillis()));
+            journal(c, k.getTimeInMillis(), ml);
             prefs(c).edit().putString("attente", l.toString()).putLong("dernierRappel", System.currentTimeMillis()).apply();
         } catch (Exception ignored) {}
         annuler(c);
@@ -247,6 +253,122 @@ public class RappelEau extends BroadcastReceiver {
 
     static PendingIntent boissonDiscrete(Context c, int ml, int code) {
         return PendingIntent.getBroadcast(c, code, new Intent(c, RappelEau.class).setAction(ACTION_BOIRE).putExtra("ml", ml).putExtra("discret", true), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    // ---------- 💧 Journal des boissons (avec l'heure exacte) : sert pendant et après la séance ----------
+    static void journal(Context c, long ts, int ml) {
+        if (ml <= 0) return;
+        try {
+            JSONArray l = new JSONArray(prefs(c).getString("journal", "[]")), garde = new JSONArray();
+            long limite = System.currentTimeMillis() - 2 * 86400000L;
+            for (int k = 0; k < l.length(); k++) if (l.getJSONObject(k).optLong("ts") > limite) garde.put(l.getJSONObject(k));
+            garde.put(new JSONObject().put("ts", ts).put("ml", ml));
+            prefs(c).edit().putString("journal", garde.toString()).apply();
+        } catch (Exception ignored) {}
+    }
+
+    static int buEntre(Context c, long a, long b) {
+        int ml = 0;
+        try { JSONArray l = new JSONArray(prefs(c).getString("journal", "[]")); for (int k = 0; k < l.length(); k++) { JSONObject x = l.getJSONObject(k); long t = x.optLong("ts"); if (t >= a && t <= b) ml += x.optInt("ml"); } } catch (Exception ignored) {}
+        return ml;
+    }
+
+    /** Boisson ou aliment noté pendant la séance (🍇 raisins, 🥜 cacahuètes, 🍁 boisson érable-sel) : rangé dans le carnet à sa prochaine ouverture. */
+    static boolean noter(Context c, String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            long ts = o.optLong("ts", System.currentTimeMillis());
+            Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
+            JSONObject x = new JSONObject().put("date", aujourdhui(k)).put("t", String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE))).put("ts", ts);
+            int ml = o.optInt("ml", 0);
+            if (ml > 0) x.put("ml", ml);
+            if (o.has("g")) x.put("g", o.optDouble("g"));
+            if (o.has("n")) x.put("n", o.optInt("n"));
+            x.put("type", o.optString("type", "eau")).put("note", o.optString("note", ""));
+            JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
+            l.put(x);
+            SharedPreferences.Editor ed = prefs(c).edit().putString("attente", l.toString());
+            if (ml > 0) ed.putLong("dernierRappel", System.currentTimeMillis());
+            ed.apply();
+            journal(c, ts, ml);
+            if (ml > 0) annuler(c);
+            rafraichir(c);
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    /** ↩ Annuler pendant la séance : retire la boisson si le carnet ne l'a pas encore rangée. */
+    static boolean annulerNote(Context c, long ts) {
+        boolean trouve = false;
+        try {
+            JSONArray l = new JSONArray(prefs(c).getString("attente", "[]")), g = new JSONArray();
+            for (int k = 0; k < l.length(); k++) { if (!trouve && l.getJSONObject(k).optLong("ts") == ts) { trouve = true; continue; } g.put(l.getJSONObject(k)); }
+            JSONArray j = new JSONArray(prefs(c).getString("journal", "[]")), gj = new JSONArray();
+            for (int k = 0; k < j.length(); k++) if (j.getJSONObject(k).optLong("ts") != ts) gj.put(j.getJSONObject(k));
+            prefs(c).edit().putString("attente", g.toString()).putString("journal", gj.toString()).apply();
+            rafraichir(c);
+        } catch (Exception ignored) {}
+        return trouve;
+    }
+
+    /** Une fois par minute pendant la séance : phrase à dire si on est en retard sur l'objectif (ml par heure), sinon null. */
+    static String seanceSuivi(Context c, long debut) {
+        JSONObject r = reglages(c);
+        if (r.optInt("seanceRappel", 2) == 0) return null;
+        long now = System.currentTimeMillis(), el = now - debut;
+        if (el < 15 * 60000L) return null;
+        int cible = (int) (r.optInt("sport", 700) * el / 3600000L), bu = buEntre(c, debut - 60000L, now), manque = cible - bu;
+        long der = prefs(c).getLong("seanceRappelT", 0);
+        if (manque < 100 || now - der < 15 * 60000L) return null;
+        prefs(c).edit().putLong("seanceRappelT", now).apply();
+        int cl = Math.max(10, Math.min(30, Math.round(manque / 50f) * 5));
+        return "Pense à boire : " + cl + " centilitres.";
+    }
+
+    static int modeRappelSeance(Context c) { return reglages(c).optInt("seanceRappel", 2); }
+
+    /** Fin de séance : (prévu − bu) × 1,5 à boire dans les 1 h 30 (jamais dans l'heure avant le coucher). */
+    static String recupDemarrer(Context c, long debut, long fin) {
+        try {
+            JSONObject r = reglages(c);
+            int bu = buEntre(c, debut - 60000L, fin + 60000L);
+            double manque = r.optInt("sport", 700) * (fin - debut) / 3600000.0 - bu;
+            int cible = manque > 0 ? (int) (Math.round(manque * 1.5 / 50) * 50) : 0;
+            Calendar k = Calendar.getInstance(); k.setTimeInMillis(fin);
+            int[] j = journee(c, aujourdhui(k));
+            Calendar cb = Calendar.getInstance(); cb.setTimeInMillis(fin); cb.set(Calendar.HOUR_OF_DAY, 0); cb.set(Calendar.MINUTE, 0); cb.set(Calendar.SECOND, 0);
+            long limite = cb.getTimeInMillis() + (j[4] - 60) * 60000L, t1 = Math.min(fin + 90 * 60000L, limite);
+            prefs(c).edit().putLong("seanceRappelT", 0).apply();
+            if (cible < 100 || t1 - fin < 20 * 60000L) { prefs(c).edit().remove("recup").apply(); return new JSONObject().put("cible", t1 - fin < 20 * 60000L ? 0 : cible).put("fin", t1).put("bu", bu).toString(); }
+            prefs(c).edit().putString("recup", new JSONObject().put("t0", fin).put("t1", t1).put("cible", cible).toString()).putBoolean("enRetardRecup", false).apply();
+            programmer(c);
+            return new JSONObject().put("cible", cible).put("fin", t1).put("bu", bu).toString();
+        } catch (Exception e) { return "null"; }
+    }
+
+    static boolean recupActive(Context c) {
+        try { JSONObject p = new JSONObject(prefs(c).getString("recup", "{}")); return System.currentTimeMillis() < p.optLong("t1", 0); } catch (Exception e) { return false; }
+    }
+
+    /** Pendant la récupération : rappel dès qu'on prend du retard sur le rattrapage (toutes les 15 min au plus). null = pas de récupération en cours. */
+    static String verifierRecup(Context c, JSONObject r) {
+        try {
+            JSONObject p = new JSONObject(prefs(c).getString("recup", "{}"));
+            long t0 = p.optLong("t0", 0), t1 = p.optLong("t1", 0), now = System.currentTimeMillis();
+            if (now >= t1 || t0 == 0) { if (t0 != 0) prefs(c).edit().remove("recup").apply(); return null; }
+            int cible = p.optInt("cible"), bu = buEntre(c, t0, now), reste = cible - bu;
+            if (reste <= 0) { prefs(c).edit().remove("recup").apply(); return null; }
+            int prevu = (int) (cible * Math.min(1.0, (now - t0) / (double) (t1 - t0))), retard = prevu - bu;
+            if (retard < 50) return "récupération : à l'heure (encore " + cl(reste) + ")";
+            long dr = prefs(c).getLong("dernierRappel", 0);
+            if (prefs(c).getBoolean("enRetardRecup", false) && now - dr < Math.min(15, r.optInt("intervalle", 10)) * 60000L) return "récupération : déjà rappelé";
+            prefs(c).edit().putBoolean("enRetardRecup", true).putLong("dernierRappel", now).apply();
+            Calendar f = Calendar.getInstance(); f.setTimeInMillis(t1);
+            String titre = "💧 Récupération : encore " + cl(Math.round(reste / 50f) * 50) + " d'ici " + String.format(Locale.ROOT, "%02d:%02d", f.get(Calendar.HOUR_OF_DAY), f.get(Calendar.MINUTE));
+            String texte = String.format(Locale.FRANCE, "Après ta séance : %.2f L à boire, %.2f L déjà bus. Une touche pour noter ce que tu bois.", cible / 1000.0, bu / 1000.0);
+            montrer(c, titre, texte, r.optInt("ml1", 250), r.optInt("ml2", 500), r.optBoolean("alarme", false) ? 1 : 0);
+            return "rappel de récupération envoyé";
+        } catch (Exception e) { return null; }
     }
 
     static void plusTard(Context c) { prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).putBoolean("enRetard", true).apply(); annuler(c); }

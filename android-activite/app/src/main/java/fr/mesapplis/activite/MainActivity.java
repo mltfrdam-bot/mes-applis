@@ -776,6 +776,9 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
             return RappelEau.verifier(MainActivity.this, true);
         }
+        @JavascriptInterface public boolean eauNoter(String json) { return RappelEau.noter(MainActivity.this, json); }
+        @JavascriptInterface public boolean eauAnnuler(long ts) { return RappelEau.annulerNote(MainActivity.this, ts); }
+        @JavascriptInterface public String eauRecup(long debut, long fin) { return RappelEau.recupDemarrer(MainActivity.this, debut, fin); }
         @JavascriptInterface public String eauVerifier() { return RappelEau.verifier(MainActivity.this, false); }
         @JavascriptInterface public void eauPermanente(boolean oui) { ServiceEau.choisir(MainActivity.this, oui); }
 
