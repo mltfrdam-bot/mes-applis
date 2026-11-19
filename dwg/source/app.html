@@ -16,6 +16,7 @@ html,body{margin:0;height:100%;background:#fff;color:#1a1a1a;font-family:Arial,H
 .btn.prim:active{background:#174a85}
 .btn[disabled]{opacity:.45}
 #barre .btn.actif{background:#ffe7cc;border-color:#e65c00;color:#8a3a00;font-weight:bold}
+@media (max-width:480px){ #barre{gap:3px;padding:0 3px} #barre .btn{padding:0 6px;font-size:13.5px;min-width:0} }
 #mesure{position:fixed;left:0;right:0;bottom:28px;background:#fff;border-top:2px solid #e65c00;z-index:6;display:none;flex-direction:column}
 body.outil-mesure #mesure{display:flex}
 body.outil-points #ptsPanel{display:flex}
@@ -174,6 +175,10 @@ body.avecOnglets #onglets{display:flex}
 #onglets .onglet.plus{padding:0 14px;font-size:18px;color:#1f5fa8;font-weight:bold}
 body.avecOnglets #zone, body.avecOnglets #accueil, body.avecOnglets #calques{top:88px}
 body.avecOnglets #bOeil{top:96px}
+#bandeauArticle{position:fixed;left:8px;top:58px;max-width:calc(100% - 80px);min-height:34px;display:none;align-items:center;gap:6px;padding:4px 12px;border-radius:17px;border:1px solid #888;font-size:14.5px;z-index:6;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.avecOnglets #bandeauArticle{top:94px}
+#listeArticles{position:fixed;left:8px;right:8px;top:96px;max-height:60vh;overflow:auto;background:#fff;border:1px solid #888;border-radius:8px;padding:6px;z-index:30;display:none;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+body.avecOnglets #listeArticles{top:132px}
 body.avecOnglets #bSauver{top:154px}
 #cv{display:block;width:100%;height:100%;touch-action:none}
 #etat{position:fixed;left:0;right:0;bottom:0;height:28px;line-height:27px;padding:0 8px;background:#f3f3f3;border-top:1px solid #c8c8c8;font-size:12.5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -211,6 +216,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </head>
 <body>
 <div id="onglets"></div>
+<div id="bandeauArticle"></div><div id="listeArticles"></div>
 <div id="barre">
   <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
@@ -394,7 +400,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Métré – v1";
+const VERSION = "Métré – v2";
 </script>
 <script>
 "use strict";
@@ -1035,7 +1041,7 @@ function choisirOutil(o){
   $('bOeil').classList.toggle('actif',outil==='oeil');
   document.body.classList.toggle('outil-mesure',outil==='mesure'); document.body.classList.toggle('outil-points',outil==='points');
   $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points');
-  visee=null; deplace=null; redim(); majPanneau(); if(outil==='points'){ majTablePoints(); majVueLigne(); } demanderDessin(false);
+  visee=null; deplace=null; redim(); majPanneau(); if(outil==='points'){ majTablePoints(); majVueLigne(); } majBandeau(); $('listeArticles').style.display='none'; demanderDessin(false);
 }
 function choisirMode(m){ if(edition) finEdition(); coupeMode=false; coupeAB=[]; $('bCoupe').classList.remove('actif'); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
 
@@ -1179,7 +1185,7 @@ function majListeGardees(){
   $('bEcranMes').style.display=voirGardees?'':'none';
   $('bModifMes').style.display=(voirGardees && selMes!==null && mesuresGardees[selMes])?'':'none';
   $('bAnnulEdit').style.display=edition?'':'none'; $('bVoirGardees').style.display=edition?'none':'';
-  $('bGarder').textContent=edition?'📌 Remplacer':'📌 Garder';
+  $('bGarder').textContent=edition?'📌 Remplacer':'📌 Garder'; majBandeau();
   if(!voirGardees) return;
   const tb=$('tbGardees'), frag=document.createDocumentFragment(); let nbVus=0;
   mesuresGardees.forEach((m,i)=>{ if(filtreEcran && i!==selMes && !mesureSurEcran(m)) return; nbVus++; const tr=document.createElement('tr'); if(i===selMes) tr.className='sel'; tr.dataset.i=i;
@@ -2336,13 +2342,16 @@ function sauverDevis(){ if(scene) Memoire.ecrire(cleDevis(),devis); marquerModif
 // Quantité d'une mesure / d'un point pour un article
 function qteMesure(art,m){ const D=art.devis, k=(Number.isFinite(D.k1)?D.k1:1)*(Number.isFinite(D.k2)?D.k2:1);
   if(D.base==='U') return 1*k;
-  if(D.base==='ml') return (m.type==='dist'?m.valeur:(m.perim||0))*k;
+  if(D.base==='ml'){ const L=(m.type==='dist'?m.valeur:(m.perim||0));
+    if(D.unite==='m³' && !Number.isFinite(D.k2)){ const p=profMoyenne(m); return L*(Number.isFinite(D.k1)?D.k1:1)*(p!==null?p:0); }
+    return L*k; }
   if(D.base==='m2'){ if(m.type!=='surf') return 0;
     if(D.unite==='m³' && !Number.isFinite(D.k1) && !Number.isFinite(D.k2)){ const vf=volumeFF(m.pts.map(q=>({x:+q.x,y:+q.y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN}))); if(vf&&vf.V!==undefined) return vf.V; }
     return m.valeur*k; }
   return 0; }
+function profMoyenne(m){ const P=(m.pts||[]).filter(q=>vOkN(q.z)&&vOkN(q.ff)); if(!m.pts||m.pts.length<2) return null; const a=m.pts[0], b=m.pts[m.pts.length-1]; const ok=q=>vOkN(q.z)&&vOkN(q.ff); if(!ok(a)||!ok(b)) return null; return ((+a.z-+a.ff)+(+b.z-+b.ff))/2; }
 function lignesArticle(art,lot){ const L=[];
-  mesuresGardees.forEach((m,i)=>{ if(m.calque!==art.nom) return; if(lot && (m.lot||'')!==lot) return; L.push({sorte:'m', i, lot:m.lot||'', q:qteMesure(art,m), txt:texteMesure(m)}); });
+  mesuresGardees.forEach((m,i)=>{ if(m.calque!==art.nom) return; if(lot && (m.lot||'')!==lot) return; const pm=(art.devis.base==='ml'&&art.devis.unite==='m³'&&!Number.isFinite(art.devis.k2))?profMoyenne(m):undefined; L.push({sorte:'m', i, lot:m.lot||'', q:qteMesure(art,m), txt:texteMesure(m)+(pm===undefined?'':pm===null?' · ⚠ profondeur inconnue (Z fini / FF aux bouts)':' · prof. moy. '+frN(pm,2)+' m')}); });
   pointsExp.forEach((p,i)=>{ if((p.calque||CALQUE_PTS)!==art.nom) return; if(lot && (p.lot||'')!==lot) return; const prof=vOkN(p.z)&&vOkN(p.ff)?(+p.z-+p.ff):null;
     L.push({sorte:'p', i, lot:p.lot||'', q:art.devis.base==='U'?qteMesure(art,{}):0, txt:'Point '+p.nom+(prof!==null?' · prof. '+frN(prof,2)+' m':'')}); });
   return L; }
@@ -2360,8 +2369,10 @@ function majTableMetre(){
     const qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), ec=qd!==null?q-qd:null, pu=Number.isFinite(dv.pu)?dv.pu:null; if(pu!==null){ avecPrix=true; total+=q*pu; if(qd!==null) totalDevis+=qd*pu; }
     const tr=document.createElement('tr'); tr.className='art';
     const td=(h,c)=>{ const e=document.createElement('td'); if(c) e.className=c; e.innerHTML=h; return e; };
-    const tNom=td('<span style="color:'+art.couleur+'">■</span> '+(metreOuvert.has(art.nom)?'▾ ':'▸ ')+'<b>'+echapper(D.des||art.nom)+'</b> <span class="petit">('+L.length+')</span>');
-    tNom.onclick=()=>{ metreOuvert.has(art.nom)?metreOuvert.delete(art.nom):metreOuvert.add(art.nom); majTableMetre(); };
+    const tNom=td('<span class="fl" style="display:inline-block;min-width:26px;color:'+art.couleur+'">■'+(metreOuvert.has(art.nom)?'▾':'▸')+'</span><b class="des" style="text-decoration:underline dotted">'+echapper(D.des||art.nom)+'</b> <span class="petit">('+L.length+')</span>');
+    tNom.querySelector('.fl').onclick=ev=>{ ev.stopPropagation(); metreOuvert.has(art.nom)?metreOuvert.delete(art.nom):metreOuvert.add(art.nom); majTableMetre(); };
+    tNom.querySelector('.des').onclick=ev=>{ ev.stopPropagation(); $('metreBoite').style.display='none'; choisirArticle(art.nom); $('etat').textContent='🧾 '+D.des+' : '+(D.base==='U'?'touchez le plan pour poser chaque élément.':D.base==='m2'?'posez les coins de la surface puis ✓.':'mesurez puis ✓.'); };
+    tNom.querySelector('.petit').onclick=tNom.querySelector('.fl').onclick;
     const inp=(v,cle)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.value=v!==null&&v!==undefined?frN(v,2):''; e.onchange=()=>{ const n=lireNombre(e.value); if(Number.isNaN(n)){ e.style.background='#ffd6d6'; return; } (devis.arts[art.nom]=devis.arts[art.nom]||{})[cle]=n===null?undefined:n; sauverDevis(); majTableMetre(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; const c=document.createElement('td'); c.appendChild(e); return c; };
     const tEc=td(ec===null?'':(ec>=0?'+':'')+frN(ec,2),'num'); if(ec!==null) tEc.style.color= Math.abs(ec)<=Math.max(0.005,Math.abs(qd)*0.02)?'#2e7d32':(ec<0?'#d32f2f':'#ef8a00');
     tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
@@ -2410,6 +2421,31 @@ function brancherMetre(){
     $('mtInfo').textContent='✓ '+r.n+' article(s) créé(s), '+r.maj+' mis à jour'+(r.ign.length?' · '+r.ign.length+' ligne(s) ignorée(s) (titres ou sans unité)':'')+'.'; };
   $('mtCopier').onclick=async()=>{ const t=texteMetre(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ ok=document.execCommand('copy'); }catch(e2){} ta.remove(); } $('mtInfo').textContent= ok?'✓ Tableau copié (à coller dans Excel).':'⚠ Copie impossible.'; };
 }
+
+// ================= Article actif : bandeau sur le plan (choisi une fois, toutes les mesures y vont) =================
+let articlesRecents=[];
+const articleCourant=()=>{ const n= outil==='points' ? calqueActifPts : calqueActifMes; return articles().find(a=>a.nom===n)||null; };
+function majBandeau(){ const b=$('bandeauArticle'); if(!b) return; const vis=!!scene && (outil==='mesure'||outil==='points') && !edition; b.style.display=vis?'flex':'none'; if(!vis) return;
+  const a=articleCourant(); const lot=devis&&devis.lotActif?' · '+devis.lotActif:'';
+  if(a){ b.style.background=a.couleur; b.style.color='#fff'; b.innerHTML='🧾 <b>'+echapper(a.devis.des)+'</b>'+echapper(lot)+' <span style="opacity:.85">('+a.devis.unite+') ▾</span>'; }
+  else { b.style.background='#fff'; b.style.color='#444'; b.innerHTML='🧾 Article : <b>aucun</b>'+echapper(lot)+' ▾'; }
+  if(outil==='mesure' && !edition) $('bGarder').textContent= a ? '✓ '+a.devis.des : '📌 Garder'; }
+function ouvrirListeArticles(){ const z=$('listeArticles'); z.replaceChildren();
+  const A=articles().slice().sort((x,y)=>{ const ix=articlesRecents.indexOf(x.nom), iy=articlesRecents.indexOf(y.nom); return (ix<0?999:ix)-(iy<0?999:iy) || (x.devis.des||'').localeCompare(y.devis.des||'','fr'); });
+  const bt=(txt,coul,f)=>{ const b=document.createElement('button'); b.className='btn'; b.style.cssText='display:block;width:100%;text-align:left;margin:3px 0;border-left:8px solid '+coul; b.innerHTML=txt; b.onclick=()=>{ z.style.display='none'; f(); }; z.appendChild(b); };
+  bt('Aucun (mesure simple, hors métré)','#bbb',()=>choisirArticle(null));
+  for(const a of A) bt('<b>'+echapper(a.devis.des)+'</b> <span class="petit">('+a.devis.unite+(a.devis.base==='U'?' · un point par élément':a.devis.base==='m2'?' · surface':' · distance')+')</span>',a.couleur,()=>choisirArticle(a.nom));
+  if(!A.length){ const p=document.createElement('div'); p.className='petit'; p.style.padding='6px'; p.textContent='Pas encore d\'article : créez-les dans 🧾 Métré (＋ Article ou 📥 Coller le devis).'; z.appendChild(p); }
+  z.style.display='block'; }
+// Choisir l'article : bon calque + bon outil (U → points, ml → distance, m² / m³ en surface → surface)
+function choisirArticle(nom){ const a=nom?articles().find(x=>x.nom===nom):null;
+  if(!a){ calqueActifMes=CALQUE_MES; calqueActifPts=CALQUE_PTS; sauverCalquesPerso(); remplirSelectsCalques(); majBandeau(); majPanneau(); return; }
+  articlesRecents=[a.nom,...articlesRecents.filter(x=>x!==a.nom)].slice(0,12); Memoire.ecrire('articlesRecents',articlesRecents);
+  calqueActifMes=a.nom; calqueActifPts=a.nom; sauverCalquesPerso(); remplirSelectsCalques();
+  if(a.devis.base==='U'){ if(outil!=='points') choisirOutil('points'); if(typeof choisirModePoints==='function') choisirModePoints('point'); }
+  else { if(outil!=='mesure') choisirOutil('mesure'); const m=a.devis.base==='m2'?'surf':'dist'; if(mesure.mode!==m || voirGardees){ voirGardees=false; selMes=null; choisirMode(m); } }
+  majTablePoints(); majPanneau(); majBandeau(); }
+function brancherBandeau(){ $('bandeauArticle').onclick=ouvrirListeArticles; Memoire.lire('articlesRecents').then(v=>{ if(Array.isArray(v)) articlesRecents=v; }); }
 
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
@@ -2746,15 +2782,15 @@ $('bModifMes').onclick=()=>{ if(selMes!==null) modifierMesure(selMes); };
 $('bAnnulEdit').onclick=annulerEdition;
 $('bVoirGardees').onclick=()=>{ voirGardees=!voirGardees; if(!voirGardees) selMes=null; majListeGardees(); majPanneau(); demanderDessin(false); };
 $('bEcranPts').onclick=basculerFiltreEcran; $('bEcranMes').onclick=basculerFiltreEcran;
-$('selCalquePts').onchange=e=>{ calqueActifPts=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); majInfoPoints(); };
-$('selCalqueMes').onchange=e=>{ if(edition){ edition.calque=e.target.value; return; } calqueActifMes=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); };
+$('selCalquePts').onchange=e=>{ calqueActifPts=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); majInfoPoints(); majBandeau(); };
+$('selCalqueMes').onchange=e=>{ if(edition){ edition.calque=e.target.value; return; } calqueActifMes=e.target.value; sauverCalquesPerso(); remplirSelectsCalques(); majBandeau(); };
 $('bNouveauCalque').onclick=()=>ouvrirNouveauCalque(null);
 $('ncNom').oninput=()=>{ const n=nomCalqueNormalise($('ncNom').value); $('ncApercu').textContent= n ? 'Nom dans le fichier : '+n : ''; $('ncErreur').textContent=''; };
 $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque(); } };
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
