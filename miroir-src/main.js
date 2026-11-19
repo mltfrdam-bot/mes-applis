@@ -422,9 +422,9 @@ async function nettoyer() {
 }
 
 async function mettreEnVeille() {
+  // Une seule commande sur le téléphone : bouton Marche seulement s'il est éveillé (ne le rallume jamais)
   try {
-    const etat = await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", "dumpsys power | grep -m1 mWakefulness="]), 3000);
-    if (/Awake/i.test(etat)) { await touche(TOUCHE.marche); await attendre(400); }
+    await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", "dumpsys power | grep -q 'mWakefulness=Awake' && input keyevent 26; true"]), 2500);
   } catch {
     try { await touche(TOUCHE.veille); await attendre(300); } catch {}
   }
@@ -435,11 +435,12 @@ async function deconnecter() {
   // Écran toujours éteint : le téléphone reste éteint en quittant (un appui sur un de ses boutons le rallume)
   // Touche « Veille » : met le téléphone en veille (verrouillé, tactile inactif) ; ne le rallume jamais s'il dort déjà
   // Comme un appui sur le bouton du téléphone : veille + verrouillage immédiat (si le téléphone est éveillé)
-  if (reglages.ecranEteint && client) { await mettreEnVeille(); }
   deconnexionTraitee = true;
-  await nettoyer();
+  // Fermeture instantanée à l'écran : l'accueil s'affiche tout de suite, la mise en veille se fait derrière
   afficherAccueil();
   message("Déconnecté.");
+  if (reglages.ecranEteint && client) { await mettreEnVeille(); }
+  await nettoyer();
   majBoutonAccueil();
 }
 
