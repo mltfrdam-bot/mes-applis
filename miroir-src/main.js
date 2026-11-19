@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Réglages gardés sur la tablette ----------
-const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "normale", memoCode: false, code: "", autoConnexion: true, adresseTel: "" };
+const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "normale", memoCode: false, code: "", autoConnexion: true, adresseTel: "", deverrAuto: true };
 let reglages = { ...REGLAGES_DEFAUT };
 try { reglages = { ...REGLAGES_DEFAUT, ...JSON.parse(localStorage.getItem("miroir-reglages") || "{}") }; } catch {}
 function sauverReglages() { try { localStorage.setItem("miroir-reglages", JSON.stringify(reglages)); } catch {} }
@@ -352,6 +352,36 @@ async function lancerMiroir() {
   eteintAuDepart = !!reglages.ecranEteint;
   if (reglages.ecranEteint) { ecranTelephone(false).catch(() => {}); setTimeout(() => surveillerEcran(), 300); }
   bulle("Connecté ✔");
+  deverrouillageAuto().catch(() => {});
+}
+
+// Déverrouillage tout seul à l'ouverture : réveil + retrait de l'écran de verrouillage « glisser ».
+// « wm dismiss-keyguard » ne fait rien si le téléphone est déjà déverrouillé (pas de glisser à l'aveugle).
+async function telVerrouille() {
+  try {
+    const t = await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["sh", "-c", "dumpsys window | grep -m1 -oE 'mDreamingLockscreen=(true|false)'"]), 3000);
+    if (/true/.test(t)) return true;
+    if (/false/.test(t)) return false;
+  } catch {}
+  return null; // inconnu
+}
+async function deverrouillageAuto() {
+  if (!reglages.deverrAuto || !client || !adb) return;
+  await attendre(600);
+  const verrou = await telVerrouille();
+  if (verrou === false) return;            // déjà déverrouillé : on ne touche à rien
+  await touche(TOUCHE.reveil);
+  await attendre(400);
+  try { await avecDelai(adb.subprocess.noneProtocol.spawnWaitText(["wm", "dismiss-keyguard"]), 3000); } catch {}
+  await attendre(800);
+  // Verrouillage avec code mémorisé : on le tape seulement si le téléphone est encore verrouillé
+  if (reglages.memoCode && reglages.code && (await telVerrouille()) === true) {
+    await client.controller.injectText(reglages.code);
+    await attendre(200);
+    await touche(TOUCHE.entree);
+  }
+  if (reglages.ecranEteint) { setTimeout(() => ecranTelephone(false).catch(() => {}), 1000); surveillerEcran(); }
+  bulle("🔓 Déverrouillé");
 }
 
 let deconnexionTraitee = false;
@@ -754,6 +784,7 @@ function majBoutonsReglages() {
   $("b-ecran-tel").classList.toggle("actif", reglages.ecranEteint);
   $("r-qualite").value = reglages.qualite;
   $("r-auto").checked = reglages.autoConnexion;
+  $("r-deverr").checked = !!reglages.deverrAuto;
 }
 $("r-qualite").onchange = (e) => { reglages.qualite = e.target.value; sauverReglages(); bulle("Prendra effet à la prochaine connexion"); };
 async function basculerEcranEteint(oui) {
@@ -764,6 +795,7 @@ async function basculerEcranEteint(oui) {
 }
 $("r-ecran").onchange = (e) => basculerEcranEteint(e.target.checked);
 $("r-auto").onchange = (e) => { reglages.autoConnexion = e.target.checked; sauverReglages(); };
+$("r-deverr").onchange = (e) => { reglages.deverrAuto = e.target.checked; sauverReglages(); };
 $("r-oublier-code").onclick = () => { reglages.memoCode = false; reglages.code = ""; sauverReglages(); bulle("Code oublié"); };
 
 // ---------- Boutons ----------
