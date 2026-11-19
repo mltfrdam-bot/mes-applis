@@ -40,6 +40,7 @@ body.outil-points #ptsPanel{display:flex}
 #tabPtsExp tr.sel td{background:#fde4ef}
 #tabPtsExp td.sup{width:28px;text-align:center;font-size:16px;cursor:pointer}
 #mesure,#ptsPanel{height:262px}
+#mesure.modeRes{height:300px}
 body.enOutil #zone{bottom:290px}
 .ligneCalque{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding:3px 8px;font-size:13px;border-bottom:1px solid #e0e0e0;background:#fafafa}
 #lblCalqueMes{white-space:nowrap} #selCalqueMes{max-width:150px}
@@ -66,7 +67,10 @@ table.xl td.sup{cursor:pointer}
 #ligneEcranPts span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .btn.petitb.actif{background:#dce8f7;border-color:#1f5fa8;color:#1f5fa8;font-weight:bold}
 #segMes button{padding:0 8px;font-size:14px}
-#bProfil,#resLigne,#tabResWrap{display:none}
+#bProfil,#resLigne,#tabResWrap,#resArts{display:none}
+#mesure.modeRes #resArts{display:flex;gap:4px;align-items:center;padding:2px 6px;flex-wrap:wrap}
+#resArts select{height:30px;flex:1;min-width:0;font-size:13px}
+#mesure.modeRes #resArts{flex-wrap:nowrap!important}
 #mesure.modeRes #bProfil{display:inline-flex} #mesure.modeRes #bGarder{display:none}
 #mesure.modeRes #resLigne{display:flex} #mesure.modeRes #tabResWrap{display:block;flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
 #mesure.modeRes .ligneCalque:not(#resLigne), #mesure.modeRes #tabPtsWrap{display:none}
@@ -265,6 +269,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div id="resultat"></div>
   <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bTN" title="Terrain naturel : déblai / remblai" style="display:none">⛰ TN</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
+  <div id="resArts">🧾<select id="selArtTuyau"></select><select id="selArtRegard"></select></div>
   <div id="tabResWrap"><table class="xl compact" id="tabRes"><thead><tr><th style="width:52px">Nom</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE arr.</th><th style="text-align:right">FE dép.</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbRes"></tbody></table></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z fini</th><th class="colFF" style="text-align:right">FF</th><th>Accroche</th></tr></thead><tbody id="tbPts"></tbody></table>
     <table class="xl compact" id="tabGardees" style="display:none"><thead><tr><th>Mesure</th><th style="text-align:right">Valeur</th><th>Calque</th><th></th></tr></thead><tbody id="tbGardees"></tbody></table></div>
@@ -319,7 +324,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="afCreer">✓ Créer l'article</button> <span class="petit">Un calque DEVIS_… est créé : mesurez sur ce calque.</span></div>
   <div id="mtCollerZone" style="display:none;padding:6px 8px;background:#f6f9fc;border-bottom:1px solid #dde"><div class="petit">Copiez les lignes du devis dans Excel (colonnes : Désignation · Unité · Quantité · Prix unitaire) et collez-les ici :</div>
     <textarea id="mtTexte" style="width:100%;height:110px;font-size:13px"></textarea><button class="btn prim" id="mtCollerOk">✓ Créer / mettre à jour les articles</button></div>
-  <div style="flex:1;overflow:auto"><table class="xl compact" id="tabMetre"><thead><tr><th>Article</th><th>U</th><th style="text-align:right">Mesuré</th><th style="text-align:right;width:70px">Devis</th><th style="text-align:right">Écart</th><th style="text-align:right;width:64px">PU €</th><th style="text-align:right">Montant</th></tr></thead><tbody id="tbMetre"></tbody></table></div>
+  <div style="flex:1;overflow:auto;min-height:0"><table class="xl compact" id="tabMetre"><thead><tr><th>Article</th><th>U</th><th style="text-align:right">Mesuré</th><th style="text-align:right;width:70px">Devis</th><th style="text-align:right">Écart</th><th style="text-align:right;width:64px">PU €</th><th style="text-align:right">Montant</th></tr></thead><tbody id="tbMetre"></tbody></table></div>
   <div id="mtTotal" style="padding:8px 10px;font-size:14.5px;background:#f6f9fc;border-top:1px solid #dde"></div>
   </div>
   <div id="mtInfo" style="padding:4px 10px 8px;font-size:13px;color:#2e7d32"></div>
@@ -417,7 +422,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Planning – v1";
+const VERSION = "Réseaux métré – v1";
 </script>
 <script>
 "use strict";
@@ -1757,7 +1762,7 @@ function fusionner(d){
   const deja=new Set(mesuresGardees.map(cle));
   for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
   R.resAjout=[]; R.resIdem=0;
-  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; continue; }
+  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; continue; }
     const cp=JSON.parse(JSON.stringify(r)); if(ex){ cp.id='r'+Date.now().toString(36)+reseaux.length; cp.nom=r.nom+' (2)'; } reseaux.push(cp); R.resAjout.push(cp.nom); }
   for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; if(tousCalquesPerso().some(x=>x.nom===c.nom)) continue; calquesPerso.push(c); R.calAjout.push(c.nom); }
   for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); (R.modAjout=R.modAjout||[]).push(m.nom); } } if(R.modAjout) Memoire.ecrire('modelesStructure',modelesPerso);
@@ -1844,6 +1849,7 @@ function poserReseau(v){
     r.noeuds.splice(pr.i,0,{t:'C', nom:'C'+(r.noeuds.filter(n=>n.t==='C').length+1), x:px, y:py, z:null}); noeudSel=pr.i; sauverReseaux(); return; }
   if(pres){ lectureRes={s:pr.s}; return; }
   memoRes(); const z=vOk(v.z)&&v.z!==0?v.z:null;
+  if(!r.artTuyau){ const a=articles().find(a=>a.nom===calqueActifMes); if(a && a.devis.base==='ml'){ r.artTuyau=a.nom; if(!r.lot && devis && devis.lotActif) r.lot=devis.lotActif; } }
   r.noeuds.push({t:'R', nom:prochainNomRegard(), x:xw, y:yw, tampon:z, feArr:null, feDep:null}); noeudSel=r.noeuds.length-1; lectureRes=null; sauverReseaux();
 }
 function infoLecture(r,c,s){ const d=c.dessus(s), f=c.fe(s), p=c.prof(s);
@@ -1861,6 +1867,7 @@ function majReseau(infoSeule){
   else h='Longueur '+fr(c.L,2)+' m · '+regards(r).length+' regard(s). Touchez le tracé pour lire la profondeur · ＋ Cote pour un point de cote.';
   $('resultat').innerHTML='<span class="petit">'+h+'</span>';
   if(infoSeule) return;
+  majArtsReseau();
   // sélecteur de réseau
   const sel=$('selReseau'); sel.replaceChildren(); reseaux.forEach((x,i)=>{ const op=document.createElement('option'); op.value=i; op.textContent=x.nom+' ('+regards(x).length+')'; if(i===resActif) op.selected=true; sel.appendChild(op); });
   $('bCote').classList.toggle('actif',ajoutCote);
@@ -1970,6 +1977,7 @@ function creerPointsProfil(){
 function brancherReseau(){
   $('mRes').onclick=()=>choisirMode('res');
   $('selReseau').onchange=e=>{ resActif=+e.target.value; noeudSel=null; lectureRes=null; majReseau(); demanderDessin(false); };
+  $('selArtTuyau').onchange=e=>lierArtReseau('artTuyau',e.target.value); $('selArtRegard').onchange=e=>lierArtReseau('artRegard',e.target.value);
   $('bNouvRes').onclick=()=>{ memoRes(); reseaux.push({id:'r'+Date.now().toString(36), nom:'Réseau '+(reseaux.length+1), noeuds:[]}); resActif=reseaux.length-1; noeudSel=null; lectureRes=null; sauverReseaux(); majComptesPerso(); majReseau(); demanderDessin(false); renommerRes(); };
   const renommerRes=()=>{ const r=resCourant(), i=$('nomRes'); i.value=r.nom; $('selReseau').style.display='none'; i.style.display=''; i.focus(); i.select(); };
   $('bRenRes').onclick=renommerRes;
@@ -2373,6 +2381,7 @@ function lignesArticle(art,lot){ const L=[];
   mesuresGardees.forEach((m,i)=>{ if(m.calque!==art.nom) return; if(lot && (m.lot||'')!==lot) return; const pm=(art.devis.base==='ml'&&art.devis.unite==='m³'&&!Number.isFinite(art.devis.k2))?profMoyenne(m):undefined; L.push({sorte:'m', i, lot:m.lot||'', q:qteMesure(art,m), txt:texteMesure(m)+(pm===undefined?'':pm===null?' · ⚠ profondeur inconnue (Z fini / FF aux bouts)':' · prof. moy. '+frN(pm,2)+' m')}); });
   pointsExp.forEach((p,i)=>{ if((p.calque||CALQUE_PTS)!==art.nom) return; if(lot && (p.lot||'')!==lot) return; const prof=vOkN(p.z)&&vOkN(p.ff)?(+p.z-+p.ff):null;
     L.push({sorte:'p', i, lot:p.lot||'', q:art.devis.base==='U'?qteMesure(art,{}):0, txt:'Point '+p.nom+(prof!==null?' · prof. '+frN(prof,2)+' m':'')}); });
+  for(const l of lignesReseauArticle(art)) if(!lot || l.lot===lot) L.push(l);
   return L; }
 function ouvrirMetre(){ if(!scene) return; $('metreBoite').style.display='flex'; remplirMetre(); choisirOngletMetre(ongletMetre); }
 function remplirMetre(){
@@ -2399,7 +2408,7 @@ function majTableMetre(){
     else tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
     frag.appendChild(tr);
     if(metreOuvert.has(art.nom)){ if(!L.length){ const r=document.createElement('tr'); r.innerHTML='<td colspan="7" class="petit" style="padding-left:24px;color:#777">Aucune mesure sur ce calque'+(lot?' pour '+echapper(lot):'')+'.</td>'; frag.appendChild(r); }
-      for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯 Voir</button></td>';
+      for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':l.sorte==='r'?'🔧 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯</button></td>';
         r.querySelector('button').onclick=()=>voirLigneMetre(l); frag.appendChild(r); } } }
   tb.replaceChildren(frag);
   $('mtTotal').innerHTML= avecPrix ? 'Total réalisé : <b>'+frN(total,2)+' €</b>'+(!lot&&totalDevis?' · devis : '+frN(totalDevis,2)+' € · écart '+(total-totalDevis>=0?'+':'')+frN(total-totalDevis,2)+' €':'') : '<span class="petit">Tapez les prix unitaires (PU) pour avoir les montants.</span>';
@@ -2407,7 +2416,24 @@ function majTableMetre(){
 function echapper(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function voirLigneMetre(l){ $('metreBoite').style.display='none';
   if(l.sorte==='m'){ const m=mesuresGardees[l.i]; if(outil!=='mesure') choisirOutil('mesure'); voirGardees=true; selectionnerMesure(l.i); majPanneau(); centrerSur(m.pts); }
+  else if(l.sorte==='r'){ const r=reseaux[l.ri]; if(!r) return; if(outil!=='mesure') choisirOutil('mesure'); resActif=l.ri; if(mesure.mode!=='res') choisirMode('res'); const N=l.ni!==undefined?[r.noeuds[l.ni]]:(()=>{ const t=calcReseau(r).tr[l.ti]; return t?[r.noeuds[t.ia],r.noeuds[t.ib]]:r.noeuds; })(); noeudSel=l.ni!==undefined?l.ni:(calcReseau(r).tr[l.ti]||{}).ib??null; majReseau(); centrerSur(N); demanderDessin(false); }
   else { const p=pointsExp[l.i]; if(outil!=='points') choisirOutil('points'); ptSel=l.i; majTablePoints(); centrerSur([p]); demanderDessin(false); } }
+// ===== Réseaux → métré automatique =====
+function lignesReseauArticle(art){ const L=[], D=art.devis, k=(Number.isFinite(D.k1)?D.k1:1)*(Number.isFinite(D.k2)?D.k2:1);
+  reseaux.forEach((r,ri)=>{
+    if(r.artTuyau===art.nom && D.base==='ml'){ const c=calcReseau(r);
+      c.tr.forEach((t,ti)=>{ const a=r.noeuds[t.ia], b=r.noeuds[t.ib], pa=profRegard(a), pb=profRegard(b), pm=(pa!==null&&pb!==null)?(pa+pb)/2:null, tranchee=D.unite==='m³'&&!Number.isFinite(D.k2);
+        const q=tranchee ? t.L*(Number.isFinite(D.k1)?D.k1:1)*(pm!==null?pm:0) : t.L*k;
+        L.push({sorte:'r', ri, ti, lot:r.lot||'', q, txt:a.nom+'→'+b.nom+(reseaux.length>1?' ('+r.nom+')':'')+(vOk(t.pente)?' · '+frN(t.pente,2)+' %':'')+(tranchee?(pm===null?' · ⚠ profondeur inconnue (tampon / FE)':' · prof. moy. '+frN(pm,2)+' m'):'')}); }); }
+    if(r.artRegard===art.nom && D.base==='U'){ r.noeuds.forEach((n,ni)=>{ if(n.t!=='R') return; const p=profRegard(n); L.push({sorte:'r', ri, ni, lot:r.lot||'', q:1*k, txt:n.nom+(reseaux.length>1?' ('+r.nom+')':'')+(p!==null?' · prof. '+frN(p,2)+' m':' · prof. ?')}); }); }
+  }); return L; }
+function profRegard(n){ if(!n||n.t!=='R'||!vOk(n.tampon)) return null; const f=[n.feArr,n.feDep].filter(vOk); return f.length? n.tampon-Math.min(...f) : null; }
+function majArtsReseau(){ if(!scene||!$('selArtTuyau')) return; const r=reseaux[resActif];
+  const remplir=(sel,base,cle)=>{ sel.replaceChildren(); const o=document.createElement('option'); o.value=''; o.textContent=(base==='ml'?'Tuyau':'Regards')+' : hors métré'; sel.appendChild(o);
+    for(const a of articles()) if(a.devis.base===base){ const e=document.createElement('option'); e.value=a.nom; e.textContent=(base==='ml'?'Tuyau : ':'Regards : ')+a.devis.des; sel.appendChild(e); }
+    sel.value=r&&r[cle]&&articles().some(a=>a.nom===r[cle])?r[cle]:''; };
+  remplir($('selArtTuyau'),'ml','artTuyau'); remplir($('selArtRegard'),'U','artRegard'); }
+function lierArtReseau(cle,val){ const r=resCourant(); memoRes(); if(val) r[cle]=val; else delete r[cle]; if(val && !r.lot && devis && devis.lotActif) r.lot=devis.lotActif; sauverReseaux(); majArtsReseau(); $('etat').textContent= val ? '🧾 '+r.nom+' compté dans le métré ('+(cle==='artTuyau'?'tuyau':'regards')+').' : '🧾 '+r.nom+' retiré du métré.'; }
 // Nouvel article
 function creerArticle(des,unite,base,k1,k1lib,k2,k2lib){ des=String(des).trim(); if(!des) return null;
   const nom=nomCalqueNormalise('DEVIS_'+des); let d=calquesPerso.find(x=>x.nom===nom); if(d){ if(!d.devis) d.devis={}; return d; }
@@ -2508,7 +2534,7 @@ function dessinerTaches(c){ if(!scene||!devis||!Array.isArray(devis.taches)) ret
   c.restore(); }
 function textePlanning(){ return ['Planning — '+scene.nom, ['N°','Tâche','État','Date','Fait le'].join('\t'), ...tachesDe().map((t,i)=>[i+1,t.titre,(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1].replace(/^\S+\s/,''),t.date||'',t.fait||''].join('\t'))].join('\n'); }
 function choisirOngletMetre(o){ ongletMetre=o; for(const b of document.querySelectorAll('#mtOnglets button')) b.classList.toggle('on',b.dataset.o===o);
-  const pl=o==='planning'; $('zoneMetre').style.display=pl?'none':''; $('zonePlanning').style.display=pl?'':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else majTableMetre(); }
+  const pl=o==='planning'; $('zoneMetre').style.display=pl?'none':'flex'; $('zonePlanning').style.display=pl?'flex':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else majTableMetre(); }
 function brancherPlanning(){
   for(const b of document.querySelectorAll('#mtOnglets button')) b.onclick=()=>choisirOngletMetre(b.dataset.o);
   $('mtAjTache').onclick=()=>{ tachesDe().push({id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:''}); sauverDevis(); majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } };
