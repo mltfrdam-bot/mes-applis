@@ -571,11 +571,11 @@ function vueSeance() { const act = S.enr ? S.enr.act : actCourante(); if (act ==
     '<div class="ligne"><button class="sec" data-do="voixBascule" id="pVoix">🔊 Voix : oui</button><button class="sec" data-do="prevBascule" id="pPrevB">🧮 Prévision : oui</button></div><button class="main" data-do="tour" style="width:100%">🚩 Tour</button>' +
     '<p class="aide">Prévision : tes 30 dernières secondes comparées au fantôme au même endroit, en gardant ce rythme jusqu\'au bout (ses montées sont comptées). « À tenir maintenant » = l\'allure du fantôme ici, corrigée pour finir à égalité avec lui. Le bouton Tour ne change pas ces calculs.</p></div>';
     pageSeance(); majSeance(); return; }
-  $("#vue").innerHTML = '<div class="grand"><div class="chiffre" id="sTemps">0:00</div><div class="fcGros" id="sFc">❤️ –</div></div><div class="boiteInfo cache" id="sAlerte"></div>' +
+  $("#vue").innerHTML = '<div class="grand"><div class="chiffre" id="sTemps">0:00</div><div class="fcGros" id="sFc">❤️ –</div></div><div class="boiteInfo cache" id="sAlerte"></div><div id="ravB"></div><div id="ravC"></div>' +
     '<table class="milieu"><tbody><tr><td>⚡ Impacts</td><td class="n" id="sImp" style="font-weight:900;font-size:20px">0</td></tr><tr><td>Temps actif</td><td class="n" id="sActif"></td></tr><tr><td>FC moyenne / max</td><td class="n" id="sFcm"></td></tr><tr><td>Enregistré</td><td class="n" id="sEnr"></td></tr>' +
     '<tr><td>Ceinture</td><td class="n" id="sLien" style="white-space:normal"></td></tr><tr><td>Capteur de mouvement</td><td class="n" id="sAcc" style="white-space:normal"></td></tr><tr><td>Coupures de ceinture</td><td class="n" id="sDeco"></td></tr></tbody></table>' +
     (N.impPour(BASE, act).auto ? '<p class="aide">Impacts : réglage automatique de l\'activité ' + esc(N.actInfo(act).nom) + ' (' + esc(N.impTexte({ reglage: N.impPour(BASE, act) })) + ').</p>' : htmlReglage("enreg")) +
-    '<div id="ravB"></div><div id="ravC"></div><p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : l\'enregistrement continue.</p>' +
+    '<p class="aide">Tu peux éteindre l\'écran et ranger le téléphone : l\'enregistrement continue.</p>' +
     '<div class="ligne"><button class="sec" data-do="changerAct">✎ Activité</button><button class="sec" data-do="essai">🎯 Régler (N coups)</button></div>';
   majSeance(); }
 const GPS = { ARRET: 0, RECHERCHE: 1, OK: 2, ETEINT: 3, SANS_DROIT: 4, LIMITE: 5 };
