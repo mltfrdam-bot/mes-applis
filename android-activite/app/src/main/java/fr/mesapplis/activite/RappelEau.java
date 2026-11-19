@@ -23,7 +23,7 @@ import java.util.Locale;
  * Toutes les 30 min (alarme Android, même appli fermée), on vérifie :
  *   - entre lever + 30 min et coucher − 1 h (rien la nuit, rien juste avant de dormir),
  *   - objectif pas atteint,
- *   - rien bu depuis « intervalle » (2 h par défaut), et pas déjà rappelé dans cet intervalle.
+ *   - en retard sur le rythme du carnet (≥ 50 ml), on sonne tout de suite ; si on reste en retard, à nouveau après « intervalle ».
  * Les boutons de la notification (+ 25 cl, + 50 cl) rangent la boisson en attente : le carnet l'ajoute à sa prochaine ouverture.
  */
 public class RappelEau extends BroadcastReceiver {
@@ -69,9 +69,36 @@ public class RappelEau extends BroadcastReceiver {
         try {
             AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
             if (am == null) return;
+            long dans = Math.max(60000L, Math.min(PERIODE, minutesAvantRetard(c) * 60000L));
             PendingIntent pi = PendingIntent.getBroadcast(c, 70, new Intent(c, RappelEau.class).setAction(ACTION_VERIFIER), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + PERIODE, pi);
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + dans, pi);
         } catch (Exception ignored) {}
+    }
+
+    /** Même courbe que le carnet : 0 % au lever, 40 % à midi, 70 % à 16 h, 90 % à 19 h, 100 % une heure avant le coucher. */
+    static double fracA(int m, int lever, int bed) {
+        int[][] p = { { lever, 0 }, { 12 * 60, 40 }, { 16 * 60, 70 }, { 19 * 60, 90 }, { Math.max(bed - 60, 19 * 60 + 1), 100 } };
+        if (m <= p[0][0]) return 0;
+        for (int i = 1; i < p.length; i++) {
+            if (p[i][0] <= p[i - 1][0]) continue;
+            if (m <= p[i][0]) return (p[i - 1][1] + (p[i][1] - p[i - 1][1]) * (double) (m - p[i - 1][0]) / (p[i][0] - p[i - 1][0])) / 100.0;
+        }
+        return 1;
+    }
+
+    /** Retard (ml) à la minute m : ce qui devrait être bu à cette heure − ce qui est bu. */
+    static int retardA(int m, int ml, int goal, int lever, int bed) { return (int) Math.round(goal * fracA(m, lever, bed)) - ml; }
+
+    static final int SEUIL_RETARD = 50;   // en retard dès 5 cl de moins que prévu (comme le carnet, arrondi à 50 ml)
+
+    /** Dans combien de minutes on passera sous la barre (si on ne boit rien). Grand nombre si jamais aujourd'hui. */
+    static int minutesAvantRetard(Context c) {
+        Calendar k = Calendar.getInstance();
+        int maintenant = k.get(Calendar.HOUR_OF_DAY) * 60 + k.get(Calendar.MINUTE);
+        int[] j = journee(c, aujourdhui(k));
+        for (int m = maintenant + 1; m < j[4] - 60; m++)
+            if (m >= j[3] + 30 && retardA(m, j[0], j[2], j[3], j[4]) >= SEUIL_RETARD) return m - maintenant;
+        return 100000;
     }
 
     static String aujourdhui(Calendar k) { return String.format(Locale.ROOT, "%04d-%02d-%02d", k.get(Calendar.YEAR), k.get(Calendar.MONTH) + 1, k.get(Calendar.DAY_OF_MONTH)); }
@@ -102,18 +129,20 @@ public class RappelEau extends BroadcastReceiver {
         int maintenant = k.get(Calendar.HOUR_OF_DAY) * 60 + k.get(Calendar.MINUTE);
         int[] j = journee(c, aujourdhui(k));
         int ml = j[0], dernier = j[1], goal = j[2], lever = j[3], bed = j[4], intervalle = r.optInt("intervalle", 120);
+        int retard = retardA(maintenant, ml, goal, lever, bed);
         if (!essai) {
             if (!r.optBoolean("on", true)) return "rappels coupés";
             if (maintenant < lever + 30 || maintenant >= bed - 60) return "en dehors de la journée";
             if (ml >= goal) return "objectif atteint";
-            int depuis = maintenant - Math.max(dernier, lever);
-            if (depuis < intervalle) return "bu il y a " + depuis + " min";
+            if (retard < SEUIL_RETARD) { prefs(c).edit().putBoolean("enRetard", false).apply(); return retard <= 0 ? "en avance de " + cl(-retard) : "presque à l'heure (" + retard + " ml)"; }
+            boolean deja = prefs(c).getBoolean("enRetard", false);
             long dr = prefs(c).getLong("dernierRappel", 0);
-            if (System.currentTimeMillis() - dr < intervalle * 60000L) return "déjà rappelé";
+            // On sonne dès qu'on passe en retard ; si on reste en retard, on rappelle toutes les « intervalle ».
+            if (deja && System.currentTimeMillis() - dr < intervalle * 60000L) return "en retard, déjà rappelé";
         }
-        int depuis = dernier >= 0 ? maintenant - dernier : -1;
-        String titre = "💧 " + (depuis >= 60 ? "Rien bu depuis " + (depuis / 60) + " h" + (depuis % 60 >= 10 ? String.format(Locale.ROOT, "%02d", depuis % 60) : "") : depuis >= 0 ? "Pense à boire" : "Pas encore d'eau notée aujourd'hui");
-        String texte = String.format(Locale.FRANCE, "%.2f L sur %.1f L (%d %%). Une touche pour noter ce que tu bois.", ml / 1000.0, goal / 1000.0, Math.round(100f * ml / Math.max(1, goal))).replace('.', ',');
+        prefs(c).edit().putBoolean("enRetard", true).apply();
+        String titre = retard >= SEUIL_RETARD ? "💧 En retard de " + cl(Math.round(retard / 50f) * 50) + " d'eau" : "💧 Eau : tu es à l'heure";
+        String texte = String.format(Locale.FRANCE, "Bu %.2f L, prévu à cette heure %.2f L (objectif %.1f L). Une touche pour noter ce que tu bois.", ml / 1000.0, (ml + Math.max(0, retard)) / 1000.0, goal / 1000.0);
         montrer(c, titre, texte, r.optInt("ml1", 250), r.optInt("ml2", 500), r.optBoolean("alarme", false) ? 1 : 0);
         prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).apply();
         return "notification envoyée";
