@@ -35,13 +35,13 @@ public class RappelEau extends BroadcastReceiver {
     static final String CANAL_ALARME = "eau-alarme";
     static final long DUREE_ALARME = 15000L;
     static final int ID_NOTIF = 2001;
-    static final long PERIODE = 30 * 60 * 1000L;
+    static final long PERIODE = 10 * 60 * 1000L;   // vérification au moins toutes les 10 min
 
     @Override
     public void onReceive(Context c, Intent i) {
         String a = i.getAction() == null ? "" : i.getAction();
         if (ACTION_BOIRE.equals(a)) { boire(c, i.getIntExtra("ml", 250), i.getBooleanExtra("discret", false)); return; }
-        if (ACTION_PLUS_TARD.equals(a)) { prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).apply(); annuler(c); return; }
+        if (ACTION_PLUS_TARD.equals(a)) { plusTard(c); return; }
         if (ACTION_VERIFIER.equals(a)) { verifier(c, false); rafraichir(c); }   // aussi : le widget change de jour à minuit
         else ServiceEau.lancerSiVoulu(c);   // redémarrage du téléphone / mise à jour : la notification permanente revient
         programmer(c);   // BOOT_COMPLETED, mise à jour de l'appli, ou vérification : la suivante dans 30 min
@@ -54,7 +54,7 @@ public class RappelEau extends BroadcastReceiver {
         try { r = new JSONObject(prefs(c).getString("reglages", "{}")); } catch (Exception ignored) {}
         try {
             if (!r.has("on")) r.put("on", true);
-            if (!r.has("intervalle")) r.put("intervalle", 120);
+            if (!r.has("intervalle") || r.optInt("intervalle") > 60) r.put("intervalle", 10);
             if (!r.has("ml1")) r.put("ml1", 250);
             if (!r.has("ml2")) r.put("ml2", 500);
             if (!r.has("q1")) r.put("q1", 100);
@@ -169,8 +169,17 @@ public class RappelEau extends BroadcastReceiver {
             nm.createNotificationChannel(a);
             id = CANAL_ALARME;
         }
-        PendingIntent ouvrir = PendingIntent.getActivity(c, 71, new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(c, id)
+        PendingIntent ouvrir;
+        ouvrir = PendingIntent.getActivity(c, 71, new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder nb = new Notification.Builder(c, id);
+        if (mode == 1) {
+            // Écran d'alarme par-dessus le verrouillage : une touche = « j'ai bu » + l'alarme s'arrête.
+            Intent ecran = new Intent(c, AlarmeEau.class).putExtra("titre", titre).putExtra("texte", texte).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            PendingIntent pe = PendingIntent.getActivity(c, 75, ecran, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            nb.setFullScreenIntent(pe, true);
+            ouvrir = pe;
+        }
+        Notification n = nb
                 .setSmallIcon(R.drawable.ic_seance)
                 .setContentTitle(titre)
                 .setContentText(texte)
@@ -184,7 +193,7 @@ public class RappelEau extends BroadcastReceiver {
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "+ " + cl(ml2), boisson(c, ml2, 73)).build())
                 .addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null, "Plus tard", PendingIntent.getBroadcast(c, 74, new Intent(c, RappelEau.class).setAction(ACTION_PLUS_TARD), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
                 .build();
-        if (mode == 1) n.flags |= Notification.FLAG_INSISTENT;   // le son se répète tant qu'on n'a pas répondu
+        if (mode == 1) n.flags |= Notification.FLAG_INSISTENT;   // le son se répète tant que la notification est là   // le son se répète tant qu'on n'a pas répondu
         nm.notify(ID_NOTIF, n);
         if (mode == 1) {
             // Au bout de ~15 s : on remet la même notification, sans son (elle reste affichée avec ses boutons).
@@ -239,6 +248,8 @@ public class RappelEau extends BroadcastReceiver {
     static PendingIntent boissonDiscrete(Context c, int ml, int code) {
         return PendingIntent.getBroadcast(c, code, new Intent(c, RappelEau.class).setAction(ACTION_BOIRE).putExtra("ml", ml).putExtra("discret", true), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
+
+    static void plusTard(Context c) { prefs(c).edit().putLong("dernierRappel", System.currentTimeMillis()).putBoolean("enRetard", true).apply(); annuler(c); }
 
     static void annuler(Context c) {
         NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);

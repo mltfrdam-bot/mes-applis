@@ -765,7 +765,17 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void eauVider() { RappelEau.prefs(MainActivity.this).edit().putString("attente", "[]").apply(); }
         @JavascriptInterface public String eauReglages() { return RappelEau.reglages(MainActivity.this).toString(); }
         @JavascriptInterface public void eauRegler(String json) { RappelEau.prefs(MainActivity.this).edit().putString("reglages", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this); RappelEau.rafraichir(MainActivity.this); }
-        @JavascriptInterface public String eauTest() { return RappelEau.verifier(MainActivity.this, true); }
+        @JavascriptInterface public String eauTest() {
+            // ⏰ Mode alarme : l'écran par-dessus le verrouillage demande l'autorisation « plein écran » (Android 14).
+            try {
+                android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (RappelEau.reglages(MainActivity.this).optBoolean("alarme", false) && android.os.Build.VERSION.SDK_INT >= 34 && nm != null && !nm.canUseFullScreenIntent()) {
+                    startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, android.net.Uri.parse("package:" + getPackageName())));
+                    return "Autorise « notifications en plein écran » pour l'appli, puis touche à nouveau Tester.";
+                }
+            } catch (Exception ignored) {}
+            return RappelEau.verifier(MainActivity.this, true);
+        }
         @JavascriptInterface public String eauVerifier() { return RappelEau.verifier(MainActivity.this, false); }
         @JavascriptInterface public void eauPermanente(boolean oui) { ServiceEau.choisir(MainActivity.this, oui); }
 
