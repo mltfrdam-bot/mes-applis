@@ -105,6 +105,7 @@ table.xl td.sup{cursor:pointer}
 #tabFouilles tr.art td{background:#f1f5fb}
 #zoneFouilles input{height:30px;border:0;background:#fffbe6;font-size:13px;text-align:right;padding:0 3px}
 #zoneFouilles select{height:30px;font-size:12.5px;max-width:130px}
+#tabFouilles select.dessus{height:26px;font-size:12px;max-width:118px;margin-top:2px}
 #tabFqTarifs input:not([inputmode]){text-align:left}
 #coupeTrBoite{position:fixed;inset:0;background:#fff;z-index:30;display:none;flex-direction:column}
 #cpDessin{flex:1;overflow:auto;padding:4px}
@@ -325,7 +326,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <div id="coupeTrBoite">
   <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;font-size:14px">Prof. <input id="cpProf" inputmode="decimal" style="width:60px;height:34px"> m · Largeur <input id="cpLarg" inputmode="decimal" placeholder="auto" style="width:60px;height:34px"> m
-    <span id="cpRapides"><button class="btn petitb">0,40 m</button><button class="btn petitb">0,80 m</button><button class="btn petitb">1,50 m</button></span></div>
+    <select id="cpDessus" style="height:34px;max-width:170px"></select> <span id="cpRapides"><button class="btn petitb">0,40 m</button><button class="btn petitb">0,80 m</button><button class="btn petitb">1,50 m</button></span></div>
   <div id="cpDessin"></div>
   <div style="padding:6px 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #ddd"><button class="btn prim" id="cpEnreg">💾 Enregistrer l'image</button><span id="cpInfo" class="petit"></span></div>
 </div>
@@ -459,7 +460,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Fouilles – v1";
+const VERSION = "Fouilles – v2";
 </script>
 <script>
 "use strict";
@@ -1799,7 +1800,7 @@ function fusionner(d){
   const deja=new Set(mesuresGardees.map(cle));
   for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
   R.resAjout=[]; R.resIdem=0;
-  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; if(r.larg){ ex.larg=ex.larg||{}; for(const [k,v] of Object.entries(r.larg)) if(!Number.isFinite(ex.larg[k])) ex.larg[k]=v; } continue; }
+  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; if(r.dessus){ ex.dessus=ex.dessus||{}; for(const [k,v] of Object.entries(r.dessus)) if(!ex.dessus[k]) ex.dessus[k]=v; } if(r.larg){ ex.larg=ex.larg||{}; for(const [k,v] of Object.entries(r.larg)) if(!Number.isFinite(ex.larg[k])) ex.larg[k]=v; } continue; }
     const cp=JSON.parse(JSON.stringify(r)); if(ex){ cp.id='r'+Date.now().toString(36)+reseaux.length; cp.nom=r.nom+' (2)'; } reseaux.push(cp); R.resAjout.push(cp.nom); }
   for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; if(tousCalquesPerso().some(x=>x.nom===c.nom)) continue; calquesPerso.push(c); R.calAjout.push(c.nom); }
   for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); (R.modAjout=R.modAjout||[]).push(m.nom); } } if(R.modAjout) Memoire.ecrire('modelesStructure',modelesPerso);
@@ -2635,13 +2636,20 @@ function brancherChrono(){
 }
 
 // ================= Fouilles / tranchées =================
-const FOUILLES_DEF={fois:1.25, p1:0.40, l1:0.40, p2:0.80, l2:0.60, l3:0.80, talus:1.30, droit:0.80,
+const FOUILLES_DEF={fois:1.25, ev:0.20, p1:0.40, l1:0.40, p2:0.80, l2:0.60, l3:0.80, talus:1.30, droit:0.80,
   sable:{EDF:{g:0.20,d:0.20,b:0.10,h:0.20,mat:'Sable 0/4 roulé lavé'}, autre:{g:0.10,d:0.10,b:0.05,h:0.20,mat:'Sable 0/6 remblai'}},
   natures:[{nom:'Matériau du site',k:1.10},{nom:'Tout-venant',k:1.15},{nom:'GNT',k:1.20}],
   tarifs:[{mat:'Sable 0/6 remblai',u:'m³',pu:null,four:''},{mat:'Sable 0/4 roulé lavé',u:'m³',pu:null,four:''},{mat:'Tout-venant',u:'m³',pu:null,four:''},{mat:'GNT',u:'m³',pu:null,four:''},{mat:'Évacuation des déblais',u:'m³',pu:null,four:''}],
   tuyaux:{}};
 let F=JSON.parse(JSON.stringify(FOUILLES_DEF)), coupeCourante=null;
 function chargerFouilles(){ return Memoire.lire('fouilles').then(v=>{ if(v&&typeof v==='object'){ F=Object.assign(JSON.parse(JSON.stringify(FOUILLES_DEF)),v); F.sable=Object.assign(JSON.parse(JSON.stringify(FOUILLES_DEF.sable)),v.sable||{}); if(!Array.isArray(F.natures)||!F.natures.length) F.natures=JSON.parse(JSON.stringify(FOUILLES_DEF.natures)); if(!Array.isArray(F.tarifs)) F.tarifs=[]; if(!F.tuyaux) F.tuyaux={}; } }); }
+// « dessus » d'une tranchée : '' (rien), 'EV' (espace vert), 'S:<modèle>' (structure) → épaisseur du haut comptée dans la surface
+function epDessus(v){ if(!v) return 0; if(v==='EV') return Number.isFinite(F.ev)?F.ev:0.20; if(v.startsWith('S:')){ const m=tousModeles().find(x=>x.nom===v.slice(2)); return m?m.couches.reduce((a,c)=>a+(+c.ep||0),0):0; } return 0; }
+function libDessus(v){ return !v?'—':v==='EV'?'Espace vert':v.slice(2); }
+function optionsDessus(sel,v){ sel.replaceChildren(); for(const [k,lb] of [['','Dessus : —'],['EV','Espace vert ('+frN(Number.isFinite(F.ev)?F.ev:0.2,2)+')'],...tousModeles().map(m=>['S:'+m.nom,m.nom+' ('+frN(epDessus('S:'+m.nom),2)+')'])]){ const o=document.createElement('option'); o.value=k; o.textContent=lb; sel.appendChild(o); } sel.value=v||''; }
+// largeur de la fouille à une profondeur y sous le terrain fini
+function largeurA(y,H,W){ const hT=H>F.talus+1e-9?H-F.droit:0; return y<hT? W+2*(hT-y) : W; }
+function bandeHaut(e,H,W){ if(!(e>0)) return 0; e=Math.min(e,H); const hT=H>F.talus+1e-9?H-F.droit:0; if(e<=hT) return e*(W+2*hT)-e*e; return hT*(W+2*hT)-hT*hT + (e-hT)*W; }
 function sauverFouilles(){ Memoire.ecrire('fouilles',F); marquerModifie(); }
 const estTuyau=a=>a&&a.devis&&a.devis.base==='ml'&&a.devis.unite==='ml';
 function infoTuyau(a){ let t=F.tuyaux[a.nom]; if(!t){ const des=a.devis.des||a.nom, m=String(des).match(/(\d{2,4})/); t={d:m?Math.min(+m[1],2000)/1000:0.10, type:/EDF|enedis/i.test(des)?'EDF':'autre', nat:F.natures[0].nom}; F.tuyaux[a.nom]=t; } return t; }
@@ -2649,19 +2657,19 @@ function largeurAuto(H){ return H<=F.p1+1e-9?F.l1 : H<F.p2-1e-9?F.l2 : F.l3; }
 // section de fouille (m²) pour une profondeur H et une largeur au fond W
 function secFouille(H,W){ if(H<=F.talus+1e-9) return W*H; const h=H-F.droit; return W*F.droit+(W+h)*h; }
 // calcul d'une coupe : H = profondeur de fouille (dessus → fond), D diamètre, W largeur
-function coupe(H,D,type,W){ const s=F.sable[type]||F.sable.autre, Wm=D+s.g+s.d; W=Math.max(W,Wm); const hs=Math.min(H,s.b+D+s.h), tube=Math.PI*D*D/4, S=secFouille(H,W), Sa=Math.max(0,W*hs-tube), Re=Math.max(0,S-Sa-tube); return {H,D,W,S,Sa,Re,hs,s,talus:H>F.talus+1e-9}; }
+function coupe(H,D,type,W,e){ e=Math.max(0,Math.min(e||0,H)); const s=F.sable[type]||F.sable.autre, Wm=D+s.g+s.d; W=Math.max(W,Wm); const hs=Math.min(H-e,s.b+D+s.h), tube=Math.PI*D*D/4, Sex=bandeHaut(e,H,W), S=secFouille(H,W)-Sex, Sa=Math.max(0,W*hs-tube), Re=Math.max(0,S-Sa-tube); return {H,D,W,S,Sa,Re,hs,s,e,Sex,talus:H>F.talus+1e-9, court:s.b+D+s.h>H-e+1e-6}; }
 // lignes de fouille : réseaux liés + mesures de distance avec Z fini / FF
 function lignesFouilles(lot){ const L=[];
   reseaux.forEach((r,ri)=>{ const a=articles().find(x=>x.nom===r.artTuyau); if(!estTuyau(a)) return; if(lot && (r.lot||'')!==lot) return; const t=infoTuyau(a), s=F.sable[t.type]||F.sable.autre, c=calcReseau(r);
     c.tr.forEach((tr,ti)=>{ const na=r.noeuds[tr.ia], nb=r.noeuds[tr.ib]; let pa=profRegard(na), pb=profRegard(nb); if(pa===null) pa=pb; if(pb===null) pb=pa;
-      const Ha=pa===null?null:pa+s.b, Hb=pb===null?null:pb+s.b; L.push({src:'r', ri, ti, art:a, t, nom:na.nom+'→'+nb.nom+(reseaux.length>1?' ('+r.nom+')':''), Lg:tr.L, Ha, Hb, forceW:r.larg&&Number.isFinite(r.larg[ti])?r.larg[ti]:null}); }); });
+      const Ha=pa===null?null:pa+s.b, Hb=pb===null?null:pb+s.b; L.push({src:'r', ri, ti, art:a, t, nom:na.nom+'→'+nb.nom+(reseaux.length>1?' ('+r.nom+')':''), Lg:tr.L, Ha, Hb, forceW:r.larg&&Number.isFinite(r.larg[ti])?r.larg[ti]:null, dessus:(r.dessus&&r.dessus[ti])||''}); }); });
   mesuresGardees.forEach((m,mi)=>{ const a=articles().find(x=>x.nom===m.calque); if(!estTuyau(a)||m.type!=='dist') return; if(lot && (m.lot||'')!==lot) return; const t=infoTuyau(a);
     const p0=m.pts[0], p1=m.pts[m.pts.length-1], h=q=>vOkN(q.z)&&vOkN(q.ff)?(+q.z-+q.ff):null; let Ha=h(p0), Hb=h(p1); if(Ha===null) Ha=Hb; if(Hb===null) Hb=Ha;
-    L.push({src:'m', mi, art:a, t, nom:'Mesure '+(mi+1), Lg:m.valeur, Ha, Hb, forceW:Number.isFinite(m.largF)?m.largF:null}); });
+    L.push({src:'m', mi, art:a, t, nom:'Mesure '+(mi+1), Lg:m.valeur, Ha, Hb, forceW:Number.isFinite(m.largF)?m.largF:null, dessus:m.dessus||''}); });
   for(const l of L){ if(l.Ha===null){ l.ok=false; continue; } l.ok=true; const Hm=(l.Ha+l.Hb)/2, W=l.forceW!==null?l.forceW:largeurAuto(Hm); l.W=W; l.Hm=Hm;
-    const ca=coupe(l.Ha,l.t.d,l.t.type,W), cb=coupe(l.Hb,l.t.d,l.t.type,W); l.W=ca.W; l.Vf=(ca.S+cb.S)/2*l.Lg; l.Vs=(ca.Sa+cb.Sa)/2*l.Lg; l.Vr=(ca.Re+cb.Re)/2*l.Lg; l.mat=ca.s.mat; l.talus=ca.talus||cb.talus; }
+    const ep=epDessus(l.dessus), ca=coupe(l.Ha,l.t.d,l.t.type,W,ep), cb=coupe(l.Hb,l.t.d,l.t.type,W,ep); l.W=ca.W; l.ep=ep; l.Vex=(ca.Sex+cb.Sex)/2*l.Lg; l.Vf=(ca.S+cb.S)/2*l.Lg; l.Vs=(ca.Sa+cb.Sa)/2*l.Lg; l.Vr=(ca.Re+cb.Re)/2*l.Lg; l.mat=ca.s.mat; l.talus=ca.talus||cb.talus; l.court=ca.court||cb.court; }
   return L; }
-function totauxFouilles(L){ const T={Vf:0, sable:{}, remblai:{}, nonCalc:0}; for(const l of L){ if(!l.ok){ T.nonCalc++; continue; } T.Vf+=l.Vf; T.sable[l.mat]=(T.sable[l.mat]||0)+l.Vs; T.remblai[l.t.nat]=(T.remblai[l.t.nat]||0)+l.Vr; } T.deblai=T.Vf*F.fois; return T; }
+function totauxFouilles(L){ const T={Vf:0, Vex:0, sable:{}, remblai:{}, nonCalc:0}; for(const l of L){ if(!l.ok){ T.nonCalc++; continue; } T.Vf+=l.Vf; T.Vex+=l.Vex||0; T.sable[l.mat]=(T.sable[l.mat]||0)+l.Vs; T.remblai[l.t.nat]=(T.remblai[l.t.nat]||0)+l.Vr; } T.deblai=T.Vf*F.fois; return T; }
 const prixDe=mat=>{ const t=F.tarifs.find(x=>x.mat===mat); return t&&Number.isFinite(t.pu)?t.pu:null; };
 function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=totauxFouilles(L), z=$('zoneFouilles'); const f2=v=>frN(v,2);
   const champ=(v,cb,w)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.value=v===null||v===undefined?'':frN(v,2); e.style.width=(w||52)+'px'; e.onchange=()=>{ const n=lireNombre(e.value); if(Number.isNaN(n)){ e.style.background='#ffd6d6'; return; } cb(n); sauverFouilles(); majFouilles(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; return e; };
@@ -2673,14 +2681,19 @@ function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=
     const tr=document.createElement('tr'); const td=(h,c)=>{ const e=document.createElement('td'); if(c) e.className=c; e.innerHTML=h; return e; };
     if(!l.ok){ tr.append(td(echapper(l.nom),''), td(f2(l.Lg),'num'), td('<span style="color:#d32f2f">⚠ profondeur ?</span>','')); tr.lastChild.colSpan=6; frag.appendChild(tr); continue; }
     const tW=document.createElement('td'); const iW=champ(l.W,n=>{ if(l.src==='r'){ const r=reseaux[l.ri]; r.larg=r.larg||{}; if(n===null) delete r.larg[l.ti]; else r.larg[l.ti]=n; sauverReseaux(); } else { const m=mesuresGardees[l.mi]; if(n===null) delete m.largF; else m.largF=n; sauverMesuresGardees(); } },46); if(l.forceW!==null) iW.style.fontWeight='bold'; iW.title='Vide = largeur automatique'; tW.appendChild(iW);
-    const bC=document.createElement('button'); bC.className='btn petitb'; bC.textContent='✂'; bC.title='Coupe'; bC.onclick=()=>ouvrirCoupe(l.art, Math.max(l.Ha,l.Hb), l.W, l.nom);
+    const bC=document.createElement('button'); bC.className='btn petitb'; bC.textContent='✂'; bC.title='Coupe'; bC.onclick=()=>ouvrirCoupe(l.art, Math.max(l.Ha,l.Hb), l.W, l.nom, l.dessus);
     const tC=document.createElement('td'); tC.appendChild(bC);
-    tr.append(td(echapper(l.nom)+(l.talus?' <span class="petit" style="color:#e65c00">talus</span>':''),''), td(f2(l.Lg),'num'), td(f2(l.Ha)+(Math.abs(l.Ha-l.Hb)>0.005?'<br>'+f2(l.Hb):''),'num'), tW, td(f2(l.Vf),'num'), td(f2(l.Vs),'num'), td(f2(l.Vr),'num'), tC); frag.appendChild(tr); }
+    const sD=document.createElement('select'); sD.className='dessus'; optionsDessus(sD,l.dessus); sD.onchange=()=>{ const v=sD.value;
+      if(l.src==='r'){ const r=reseaux[l.ri]; r.dessus=r.dessus||{}; const n=calcReseau(r).tr.length; if(v) r.dessus[l.ti]=v; else delete r.dessus[l.ti]; for(let k=l.ti+1;k<n;k++){ if(r.dessus[k]) break; if(v) r.dessus[k]=v; } sauverReseaux(); }
+      else { const m=mesuresGardees[l.mi]; if(v) m.dessus=v; else delete m.dessus; sauverMesuresGardees(); } majFouilles(); };
+    const tN=td(echapper(l.nom)+(l.talus?' <span class="petit" style="color:#e65c00">talus</span>':'')+(l.court?' <span class="petit" style="color:#d32f2f">⚠ peu profond</span>':''),''); tN.appendChild(document.createElement('br')); tN.appendChild(sD);
+    tr.append(tN, td(f2(l.Lg),'num'), td(f2(l.Ha)+(Math.abs(l.Ha-l.Hb)>0.005?'<br>'+f2(l.Hb):''),'num'), tW, td(f2(l.Vf),'num'), td(f2(l.Vs),'num'), td(f2(l.Vr),'num'), tC); frag.appendChild(tr); }
   tb.replaceChildren(frag);
   // 2. totaux et montants
   let h='<table class="xl compact" style="margin-top:6px"><thead><tr><th>Quantité</th><th style="text-align:right">m³</th><th style="text-align:right">Coef</th><th style="text-align:right">À prévoir</th><th style="text-align:right">€</th></tr></thead><tbody>', tot=0;
   const ligne=(nom,v,k,mat)=>{ const q=v*k, pu=mat?prixDe(mat):null; if(pu!==null) tot+=q*pu; h+='<tr><td>'+nom+'</td><td class="num">'+f2(v)+'</td><td class="num">'+(k!==1?'× '+frN(k,2):'')+'</td><td class="num"><b>'+f2(q)+'</b></td><td class="num">'+(pu!==null?f2(q*pu):'')+'</td></tr>'; };
   h+='<tr><td>Fouille en place</td><td class="num">'+f2(T.Vf)+'</td><td></td><td class="num"><b>'+f2(T.Vf)+'</b></td><td></td></tr>';
+  if(T.Vex>0.005) h+='<tr><td class="petit" colspan="5">Non compté ici (haut des tranchées, déjà dans les surfaces : espaces verts, voiries, cheminements) : '+f2(T.Vex)+' m³</td></tr>';
   ligne('Déblai foisonné (évacuation)',T.Vf,F.fois,'Évacuation des déblais');
   for(const [m,v] of Object.entries(T.sable)) ligne(echapper(m),v,1,m);
   for(const [n,v] of Object.entries(T.remblai)){ const nt=F.natures.find(x=>x.nom===n); ligne('Remblai : '+echapper(n),v,nt?nt.k:1,n); }
@@ -2696,7 +2709,7 @@ function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=
   tt.replaceChildren(f3);
   // 4. règles
   const rg=$('tbFqRegles'), f4=document.createDocumentFragment(); const lr=(lib,cle,obj)=>{ const tr=document.createElement('tr'); const a=document.createElement('td'); a.textContent=lib; const b=document.createElement('td'); b.appendChild(champ((obj||F)[cle],n=>{ if(n!==null) (obj||F)[cle]=n; })); tr.append(a,b); f4.appendChild(tr); };
-  lr('Foisonnement du déblai','fois'); lr('Largeur jusqu\'à '+frN(F.p1,2)+' m de prof.','l1'); lr('… prof. limite 1 (m)','p1'); lr('Largeur entre les deux','l2'); lr('… prof. limite 2 (m)','p2'); lr('Largeur au-delà','l3'); lr('Talus 1/1 au-delà de (m)','talus'); lr('Partie droite en bas (m)','droit');
+  lr('Foisonnement du déblai','fois'); lr('Espace vert : haut non compté (m)','ev'); lr('Largeur jusqu\'à '+frN(F.p1,2)+' m de prof.','l1'); lr('… prof. limite 1 (m)','p1'); lr('Largeur entre les deux','l2'); lr('… prof. limite 2 (m)','p2'); lr('Largeur au-delà','l3'); lr('Talus 1/1 au-delà de (m)','talus'); lr('Partie droite en bas (m)','droit');
   for(const [k,lb] of [['EDF','EDF'],['autre','Autres']]){ const s=F.sable[k]; lr('Sable '+lb+' : gauche','g',s); lr('Sable '+lb+' : droite','d',s); lr('Sable '+lb+' : dessous','b',s); lr('Sable '+lb+' : dessus','h',s); }
   for(const n of F.natures) lr('Coef. remblai '+n.nom,'k',n);
   rg.replaceChildren(f4);
@@ -2709,12 +2722,12 @@ function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=
     tr.append(c0,c1,c2,c3,c4); f5.appendChild(tr); });
   ta.replaceChildren(f5); }
 function texteFouilles(){ const L=lignesFouilles($('mtFiltre').value), T=totauxFouilles(L); const n=v=>frN(v,2);
-  const out=['Fouilles — '+scene.nom, ['Article','Tronçon','Longueur','Prof. début','Prof. fin','Largeur','Fouille m³','Sable m³','Remblai m³'].join('\t')];
-  for(const l of L) out.push([l.art.devis.des,l.nom,n(l.Lg),l.ok?n(l.Ha):'?',l.ok?n(l.Hb):'?',l.ok?n(l.W):'',l.ok?n(l.Vf):'',l.ok?n(l.Vs):'',l.ok?n(l.Vr):''].join('\t'));
+  const out=['Fouilles — '+scene.nom, ['Article','Tronçon','Dessus','Longueur','Prof. début','Prof. fin','Largeur','Fouille m³','Sable m³','Remblai m³'].join('\t')];
+  for(const l of L) out.push([l.art.devis.des,l.nom,libDessus(l.dessus),n(l.Lg),l.ok?n(l.Ha):'?',l.ok?n(l.Hb):'?',l.ok?n(l.W):'',l.ok?n(l.Vf):'',l.ok?n(l.Vs):'',l.ok?n(l.Vr):''].join('\t'));
   out.push('', 'Fouille en place\t'+n(T.Vf), 'Déblai foisonné (×'+n(F.fois)+')\t'+n(T.deblai)); for(const [m,v] of Object.entries(T.sable)) out.push(m+'\t'+n(v)); for(const [k,v] of Object.entries(T.remblai)){ const nt=F.natures.find(x=>x.nom===k); out.push('Remblai '+k+' (×'+n(nt?nt.k:1)+')\t'+n(v*(nt?nt.k:1))); }
   return out.join('\n'); }
 // ----- coupe de tranchée (dessin SVG) -----
-function svgCoupe(a,H,Wf){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf:largeurAuto(H), c=coupe(H,t.d,t.type,W0), s=c.s, W=c.W, n=v=>frN(v,2);
+function svgCoupe(a,H,Wf,dessus){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf:largeurAuto(H), c=coupe(H,t.d,t.type,W0,epDessus(dessus)), s=c.s, W=c.W, n=v=>frN(v,2);
   const hT=c.talus?H-F.droit:0, Wh=W+2*hT, marge=0.6, larg=Math.max(Wh+2*marge,1.8), sc=Math.min(560/larg, 420/(H+0.5)), X=v=>40+(v+larg/2)*sc, Y=v=>90+v*sc, Wpx=larg*sc+80, Hpx=(H+0.5)*sc+160;
   const fondG=-W/2, fondD=W/2, yF=H, yD=c.talus?H-F.droit:0;
   const poly=[[-Wh/2,0],[fondG,yD],[fondG,yF],[fondD,yF],[fondD,yD],[Wh/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
@@ -2724,29 +2737,61 @@ function svgCoupe(a,H,Wf){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf
   g+='<line x1="'+X(-larg/2)+'" y1="'+Y(0)+'" x2="'+X(larg/2)+'" y2="'+Y(0)+'" stroke="#6d4c41" stroke-width="3"/><text x="'+X(-larg/2)+'" y="'+(Y(0)-6)+'" fill="#6d4c41">Terrain fini</text>';
   g+='<polygon points="'+poly+'" fill="#e8dccb" stroke="#333" stroke-width="2"/>';
   g+='<rect x="'+X(fondG)+'" y="'+Y(H-c.hs)+'" width="'+(W*sc)+'" height="'+(c.hs*sc)+'" fill="'+sableCoul+'" stroke="#b08900"/>';
+  if(c.e>0){ const e=c.e, pts=[[-largeurA(0,H,W)/2,0],[-largeurA(e,H,W)/2,e],[largeurA(e,H,W)/2,e],[largeurA(0,H,W)/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
+    g+='<polygon points="'+pts+'" fill="'+(dessus==='EV'?'#b9dca0':'#bdbdbd')+'" stroke="#555"/><text x="'+X(0)+'" y="'+(Y(e/2)+5)+'" text-anchor="middle" font-size="12">'+echapper(dessus==='EV'?'Terre végétale':libDessus(dessus))+' '+n(e)+' m (dans la surface)</text>'; }
   g+='<circle cx="'+X(0)+'" cy="'+Y(cy)+'" r="'+Math.max(3,t.d/2*sc)+'" fill="#fff" stroke="#1f5fa8" stroke-width="3"/>';
-  if(c.hs<H-0.02) g+='<text x="'+X(0)+'" y="'+(Y((H-c.hs)/2)+5)+'" text-anchor="middle" fill="#555">Remblai : '+echapper(t.nat)+'</text>';
+  if(c.hs<H-c.e-0.02) g+='<text x="'+X(0)+'" y="'+(Y((H+c.e-c.hs)/2)+5)+'" text-anchor="middle" fill="#555">Remblai : '+echapper(t.nat)+'</text>';
   g+='<text x="'+(X(fondG)-6)+'" y="'+(Y(H-c.hs/2)+4)+'" fill="#8a6d00" text-anchor="end">'+echapper(s.mat)+'</text>';
   // cotes
   const cote=(x1,y1,x2,y2,txt,dx,dy)=>{ g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#d32f2f" stroke-width="1.2"/><text x="'+((x1+x2)/2+(dx||0))+'" y="'+((y1+y2)/2+(dy||0))+'" fill="#d32f2f" text-anchor="middle" font-weight="bold">'+txt+'</text>'; };
   cote(X(fondG),Y(H)+22,X(fondD),Y(H)+22,n(W)+' m',0,16);
   cote(X(-Wh/2)-22,Y(0),X(-Wh/2)-22,Y(H),n(H)+' m',-24,4); if(!c.talus) cote(X(fondD)+20,Y(H-c.hs),X(fondD)+20,Y(H),'sable '+n(c.hs)+' m',40,4);
   if(c.talus){ cote(X(-Wh/2),Y(0)-14,X(Wh/2),Y(0)-14,n(Wh)+' m en haut',0,-6); cote(X(fondD)+20,Y(yD),X(fondD)+20,Y(H),n(F.droit)+' m droit',44,4); g+='<text x="'+X(Wh/2-hT/2+0.1)+'" y="'+Y(hT/2)+'" fill="#e65c00">talus 1/1</text>'; }
+  if(c.court) g+='<text x="12" y="'+(Hpx-68)+'" fill="#d32f2f" font-weight="bold">⚠ Trop peu profond : l\'enrobage de sable ('+n(s.b+t.d+s.h)+' m) dépasse la place sous le dessus ('+n(H-c.e)+' m).</text>';
   g+='<text x="12" y="'+(Hpx-48)+'">Sable : '+n(s.b)+' m dessous · '+n(s.h)+' m dessus · '+n(s.g)+' m à gauche / '+n(s.d)+' m à droite (au minimum)</text>';
   g+='<text x="12" y="'+(Hpx-28)+'">Par mètre de tranchée : fouille '+n(c.S)+' m³ · sable '+n(c.Sa)+' m³ · remblai '+n(c.Re)+' m³ · déblai foisonné '+n(c.S*F.fois)+' m³</text>';
   g+='<text x="12" y="'+(Hpx-8)+'" fill="#777" font-size="11">Plans DWG — '+echapper(scene?scene.nom:'')+' — '+new Date().toLocaleDateString('fr-FR')+'</text></svg>';
   return g; }
-function ouvrirCoupe(a,H,W,nom){ coupeCourante={a,H,W,nom}; $('cpProf').value=frN(H,2); $('cpLarg').value=W!==null&&W!==undefined?frN(W,2):''; $('coupeTrBoite').style.display='flex'; majCoupe(); }
-function majCoupe(){ const c=coupeCourante; if(!c) return; const H=lireNombre($('cpProf').value), W=lireNombre($('cpLarg').value); if(!(H>0)) return; c.H=H; c.W=Number.isFinite(W)&&W>0?W:null; $('cpDessin').innerHTML=svgCoupe(c.a,c.H,c.W); $('cpTitre').textContent='✂ '+c.a.devis.des+(c.nom?' · '+c.nom:''); }
-function enregistrerCoupe(){ const c=coupeCourante; if(!c) return; const svg=svgCoupe(c.a,c.H,c.W), nom=('Coupe_'+c.a.devis.des+'_'+frN(c.H,2)+'m').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')+'.svg';
+function ouvrirCoupe(a,H,W,nom,dessus){ coupeCourante={a,H,W,nom,dessus:dessus||''}; optionsDessus($('cpDessus'),coupeCourante.dessus); $('cpProf').value=frN(H,2); $('cpLarg').value=W!==null&&W!==undefined?frN(W,2):''; $('coupeTrBoite').style.display='flex'; majCoupe(); }
+function majCoupe(){ const c=coupeCourante; if(!c) return; const H=lireNombre($('cpProf').value), W=lireNombre($('cpLarg').value); if(!(H>0)) return; c.H=H; c.W=Number.isFinite(W)&&W>0?W:null; c.dessus=$('cpDessus').value; $('cpDessin').innerHTML=svgCoupe(c.a,c.H,c.W,c.dessus); $('cpTitre').textContent='✂ '+c.a.devis.des+(c.nom?' · '+c.nom:''); }
+function enregistrerCoupe(){ const c=coupeCourante; if(!c) return; const svg=svgCoupe(c.a,c.H,c.W,c.dessus), nom=('Coupe_'+c.a.devis.des+'_'+frN(c.H,2)+'m').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')+'.svg';
   if(APPLI && APPLI.enregistrer){ const r=APPLI.enregistrer(nom,svg,'image/svg+xml'); $('cpInfo').textContent=r?'✓ '+nom+' enregistré dans Téléchargements (s\'ouvre avec Chrome, à joindre à un mail).':'⚠ Enregistrement impossible.'; return; }
   telecharger(nom,svg,'image/svg+xml'); $('cpInfo').textContent='✓ '+nom+' téléchargé.'; }
 function brancherFouilles(){ chargerFouilles();
   $('fqCopier').onclick=async()=>{ let ok=false; try{ await navigator.clipboard.writeText(texteFouilles()); ok=true; }catch(e){} $('mtInfo').textContent=ok?'✓ Fouilles copiées (à coller dans Excel).':'⚠ Copie impossible.'; };
   $('fqAjTarif').onclick=()=>{ F.tarifs.push({mat:'Nouvel achat',u:'m³',pu:null,four:''}); sauverFouilles(); majFouilles(); };
   $('fqVoirRegles').onclick=()=>{ const t=$('tabFqRegles'); t.style.display=t.style.display==='none'?'':'none'; };
-  $('cpFermer').onclick=()=>{ $('coupeTrBoite').style.display='none'; }; $('cpProf').onchange=majCoupe; $('cpLarg').onchange=majCoupe; $('cpEnreg').onclick=enregistrerCoupe;
+  $('cpFermer').onclick=()=>{ $('coupeTrBoite').style.display='none'; }; $('cpProf').onchange=majCoupe; $('cpLarg').onchange=majCoupe; $('cpDessus').onchange=majCoupe; $('cpEnreg').onclick=enregistrerCoupe;
   for(const b of document.querySelectorAll('#cpRapides button')) b.onclick=()=>{ $('cpProf').value=b.textContent.replace(' m',''); $('cpLarg').value=''; majCoupe(); };
+}
+
+// ================= Saisie fluide : la case touchée garde le focus, la page ne saute pas =================
+let focusSuivant=null;
+document.addEventListener('input',e=>{ if(e.target&&e.target.matches&&e.target.matches('input,textarea')) e.target._sale=true; },true);
+const champsDe=c=>[...c.querySelectorAll('input:not([type=hidden]):not([disabled]),select,textarea')].filter(e=>e.offsetParent!==null);
+function garde(fn, conteneur){ let attente=null;
+  const exec=args=>{ const c=conteneur(); if(!c) return fn.apply(null,args);
+    const a=document.activeElement; let idx=-1, val=null, sale=false, sel=null;
+    if(focusSuivant && focusSuivant.c===c){ idx=focusSuivant.idx; focusSuivant=null; }
+    else if(a && c.contains(a) && a.matches('input,select,textarea')){ idx=champsDe(c).indexOf(a); val=a.value; sale=!!a._sale; try{ sel=[a.selectionStart,a.selectionEnd]; }catch(e){} }
+    const scr=[]; let n=c; while(n&&n!==document.body){ if(n.scrollTop) scr.push([n,n.scrollTop]); n=n.parentElement; } for(const e of c.querySelectorAll('div,tbody')) if(e.scrollTop) scr.push([e,e.scrollTop]);
+    const r=fn.apply(null,args);
+    if(idx>=0){ for(const [e,t] of scr) e.scrollTop=t; const b=champsDe(c)[idx]; if(b){ if(sale && b.tagName!=='SELECT') { b.value=val; b._sale=true; } if(document.activeElement!==b) b.focus({preventScroll:true}); if(sel && b.setSelectionRange && sel[0]!==null){ try{ b.setSelectionRange(sel[0],sel[1]); }catch(e){} } else if(b.select && b.tagName==='INPUT' && !sale){ try{ b.select(); }catch(e){} } for(const [e,t] of scr) e.scrollTop=t; } }
+    return r; };
+  return function(...args){ const ev=window.event, t=ev&&ev.type; if(t==='change'||t==='blur'||t==='focusout'||t==='keydown'){ clearTimeout(attente); attente=setTimeout(()=>exec(args),0); return; } return exec(args); }; }
+// Entrée = case suivante (dans les tableaux)
+document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; const a=e.target; if(!a||!a.matches||!a.matches('table.xl input')) return; const c=a.closest('[data-garde]')||a.closest('table');
+  const L=champsDe(c).filter(x=>x.tagName==='INPUT'), i=L.indexOf(a); if(i<0||i+1>=L.length) return;
+  // comme Excel : la case du dessous (même colonne), sinon la suivante
+  let cible=L[i+1]; const td=a.closest('td'), tr=a.closest('tr'); if(td&&tr){ const col=[...tr.children].indexOf(td); let r=tr.nextElementSibling; while(r){ const t=r.children[col]; const x=t&&t.querySelector('input'); if(x&&x.offsetParent!==null&&r.children.length===tr.children.length){ cible=x; break; } r=r.nextElementSibling; } }
+  const idxAll=champsDe(c).indexOf(cible);
+  focusSuivant={c, idx:idxAll}; setTimeout(()=>{ if(focusSuivant&&focusSuivant.c===c){ const b=champsDe(c)[focusSuivant.idx]; focusSuivant=null; if(b){ b.focus({preventScroll:false}); try{ b.select(); }catch(e){} } } },60); },true);
+function brancherGarde(){
+  const reg=(nom,id)=>{ const el=()=>$(id); if(el()) el().dataset.garde='1'; window[nom]=garde(window[nom],el); };
+  majTableMetre=garde(majTableMetre,()=>$('metreBoite')); majPlanning=garde(majPlanning,()=>$('metreBoite')); majFouilles=garde(majFouilles,()=>$('metreBoite'));
+  majReseau=garde(majReseau,()=>$('mesure')); majPanneau=garde(majPanneau,()=>$('mesure')); majTablePoints=garde(majTablePoints,()=>$('ptsPanel'));
+  majTableStructure=garde(majTableStructure,()=>$('tabStruct')&&$('tabStruct').closest('[id]').parentElement);
+  for(const id of ['metreBoite','mesure','ptsPanel']) if($(id)) $(id).dataset.garde='1';
 }
 
 // ================= Gestes au doigt (et souris) =================
@@ -3093,7 +3138,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
