@@ -99,7 +99,16 @@ table.xl td.sup{cursor:pointer}
 #tabPlanning td.act .btn{min-width:38px;padding:0 4px}
 #tabPlanning button.etat{white-space:nowrap;padding:0 6px}
 #tabPlanning tr.fait input.titre{text-decoration:line-through;color:#777;background:#f0f7f0}
-#mtOnglets button{flex:1}
+#mtOnglets button{flex:1;padding:0 2px;font-size:14px}
+#zoneFouilles>*{flex-shrink:0}
+#tabFouilles td{padding:2px 3px;font-size:13px}
+#tabFouilles tr.art td{background:#f1f5fb}
+#zoneFouilles input{height:30px;border:0;background:#fffbe6;font-size:13px;text-align:right;padding:0 3px}
+#zoneFouilles select{height:30px;font-size:12.5px;max-width:130px}
+#tabFqTarifs input:not([inputmode]){text-align:left}
+#coupeTrBoite{position:fixed;inset:0;background:#fff;z-index:30;display:none;flex-direction:column}
+#cpDessin{flex:1;overflow:auto;padding:4px}
+#cpDessin svg{max-width:100%;height:auto}
 #tabMetre tr.art td:first-child{cursor:pointer}
 #tabMetre tr.detail td{background:#fafafa;font-size:12.5px}
 #tabMetre input{width:100%;min-width:56px;height:30px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:13px;padding:0 3px}
@@ -313,16 +322,35 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="lig"><button class="btn prim" id="bNcCreer">Créer</button><button class="btn" id="bNcAnnuler">Annuler</button></div>
   <div id="ncErreur" style="color:#a11;font-size:13px;margin-top:6px"></div>
 </div></div>
+<div id="coupeTrBoite">
+  <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
+  <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;font-size:14px">Prof. <input id="cpProf" inputmode="decimal" style="width:60px;height:34px"> m · Largeur <input id="cpLarg" inputmode="decimal" placeholder="auto" style="width:60px;height:34px"> m
+    <span id="cpRapides"><button class="btn petitb">0,40 m</button><button class="btn petitb">0,80 m</button><button class="btn petitb">1,50 m</button></span></div>
+  <div id="cpDessin"></div>
+  <div style="padding:6px 8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #ddd"><button class="btn prim" id="cpEnreg">💾 Enregistrer l'image</button><span id="cpInfo" class="petit"></span></div>
+</div>
 <div id="metreBoite">
   <div class="tete"><b>🧾 Métré du chantier</b><button class="btn" id="mtFermer">✕ Fermer</button></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #eee;font-size:14px">Lot actif : <select id="mtLot" style="max-width:150px"></select><button class="btn petitb" id="mtAjLot">＋ Lot</button><input id="mtNomLot" style="display:none;height:32px;width:120px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px">
     <span style="flex:1"></span>Afficher : <select id="mtFiltre" style="max-width:150px"></select></div>
   <div id="mtLotInfo" class="petit" style="padding:3px 8px;color:#555"></div>
-  <div id="mtOnglets" class="seg" style="margin:4px 8px;display:flex"><button data-o="demande" class="on">Demande</button><button data-o="mesure">Mesuré</button><button data-o="attente">En attente</button><button data-o="planning">Planning</button></div>
+  <div id="mtOnglets" class="seg" style="margin:4px 8px;display:flex"><button data-o="demande" class="on">Demande</button><button data-o="mesure">Mesuré</button><button data-o="attente">En attente</button><button data-o="fouilles">Fouilles</button><button data-o="planning">Planning</button></div>
   <div id="zonePlanning" style="display:none;flex:1;overflow:auto;flex-direction:column">
     <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="mtAjTache">＋ Tâche</button><button class="btn" id="mtAjChrono">＋ ⏱ Chronométrée</button><button class="btn" id="mtCopierPlanning">📋 Copier</button><span id="mtResumePlanning" class="petit" style="flex:1;text-align:right"></span></div>
     <table class="xl compact" id="tabPlanning"><thead><tr><th>N°</th><th>Tâche</th><th>État</th><th></th></tr></thead><tbody id="tbPlanning"></tbody></table>
     <div class="petit" style="padding:6px 8px;color:#666">État : un appui fait passer À faire → En cours → Fait. 📍 place la tâche sur le plan (drapeau rouge / orange / vert).</div>
+  </div>
+  <div id="zoneFouilles" style="display:none;flex:1;overflow:auto;min-height:0;flex-direction:column">
+    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="fqCopier">📋 Copier</button><span class="petit" style="flex:1">Largeur automatique selon la profondeur ; tapez une largeur pour la forcer.</span></div>
+    <table class="xl compact" id="tabFouilles"><thead><tr><th>Tronçon</th><th style="text-align:right">L m</th><th style="text-align:right">Prof.</th><th style="text-align:right">Larg.</th><th style="text-align:right">Fouille</th><th style="text-align:right">Sable</th><th style="text-align:right">Rembl.</th><th></th></tr></thead><tbody id="tbFouilles"></tbody></table>
+    <div id="fqTotaux"></div>
+    <div class="petit" style="padding:8px 8px 2px;font-weight:bold;color:#333">Tuyaux</div>
+    <table class="xl compact" id="tabFqTuyaux"><thead><tr><th>Article</th><th>Ø mm</th><th>Sable</th><th>Remblai</th><th></th></tr></thead><tbody id="tbFqTuyaux"></tbody></table>
+    <div class="petit" style="padding:8px 8px 2px;font-weight:bold;color:#333">Tarifs d'achat <button class="btn petitb" id="fqAjTarif">＋ Ligne</button></div>
+    <table class="xl compact" id="tabFqTarifs"><thead><tr><th>Matériau</th><th>U</th><th>Prix €</th><th>Fournisseur</th><th></th></tr></thead><tbody id="tbFqTarifs"></tbody></table>
+    <div style="padding:8px"><button class="btn" id="fqVoirRegles">⚙ Règles de calcul</button></div>
+    <table class="xl compact" id="tabFqRegles" style="display:none"><tbody id="tbFqRegles"></tbody></table>
+    <div style="height:30px"></div>
   </div>
   <div id="zoneMetre" style="display:flex;flex-direction:column;flex:1;min-height:0">
   <div style="display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap"><button class="btn" id="mtAjArt">＋ Article</button><button class="btn" id="mtColler">📥 Coller le devis</button><button class="btn" id="mtCopier">📋 Copier</button></div>
@@ -431,7 +459,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Chrono – v1";
+const VERSION = "Fouilles – v1";
 </script>
 <script>
 "use strict";
@@ -1690,7 +1718,7 @@ function contenuSauvegarde(){
   const cs=[...scene.calques.values()], o=scene.origine;
   return JSON.stringify({format:'plansdwg', version:1, appli:VERSION, date:new Date().toISOString(),
     plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null},
-    points:pointsExp, mesures:mesuresGardees, reseaux, devis, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
+    points:pointsExp, mesures:mesuresGardees, reseaux, devis, fouilles:F, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
     reglages:{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)},
     vue:{cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s}});
 }
@@ -1771,7 +1799,7 @@ function fusionner(d){
   const deja=new Set(mesuresGardees.map(cle));
   for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
   R.resAjout=[]; R.resIdem=0;
-  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; continue; }
+  for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; if(r.larg){ ex.larg=ex.larg||{}; for(const [k,v] of Object.entries(r.larg)) if(!Number.isFinite(ex.larg[k])) ex.larg[k]=v; } continue; }
     const cp=JSON.parse(JSON.stringify(r)); if(ex){ cp.id='r'+Date.now().toString(36)+reseaux.length; cp.nom=r.nom+' (2)'; } reseaux.push(cp); R.resAjout.push(cp.nom); }
   for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; if(tousCalquesPerso().some(x=>x.nom===c.nom)) continue; calquesPerso.push(c); R.calAjout.push(c.nom); }
   for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); (R.modAjout=R.modAjout||[]).push(m.nom); } } if(R.modAjout) Memoire.ecrire('modelesStructure',modelesPerso);
@@ -1779,12 +1807,16 @@ function fusionner(d){
   const rg=d.reglages||{};
   for(const n of (rg.supprimes||[])){ const c=scene.calques.get(n); if(c && !c.supprime){ c.supprime=true; c.visible=false; R.supAjout.push(n); } }
   for(const n of (rg.verrous||[])){ const c=scene.calques.get(n); if(c && !c.verrou && !c.supprime){ c.verrou=true; R.verAjout.push(n); } }
+  if(d.fouilles && typeof d.fouilles==='object'){ let ch=false;
+    for(const t of (d.fouilles.tarifs||[])){ if(!t||!t.mat) continue; const e=F.tarifs.find(x=>x.mat===t.mat); if(!e){ F.tarifs.push(t); (R.tarifsAj=R.tarifsAj||[]).push(t.mat); ch=true; } else { if(!Number.isFinite(e.pu)&&Number.isFinite(t.pu)){ e.pu=t.pu; (R.tarifsAj=R.tarifsAj||[]).push(t.mat+' (prix)'); ch=true; } if(!e.four&&t.four){ e.four=t.four; ch=true; } } }
+    for(const [k,v] of Object.entries(d.fouilles.tuyaux||{})) if(!F.tuyaux[k]){ F.tuyaux[k]=v; ch=true; }
+    if(ch) sauverFouilles(); }
   if(d.devis && d.devis.arts){ for(const l of (d.devis.lots||[])) if(!devis.lots.includes(l)){ devis.lots.push(l); (R.lotsAj=R.lotsAj||[]).push(l); }
     for(const [k,v] of Object.entries(d.devis.arts)){ const e=devis.arts[k]=devis.arts[k]||{}; let a=false; if(Number.isFinite(v.qte)&&!Number.isFinite(e.qte)){ e.qte=v.qte; a=true; } if(Number.isFinite(v.pu)&&!Number.isFinite(e.pu)){ e.pu=v.pu; a=true; } if(a){ const cp=calquesPerso.find(x=>x.nom===k); (R.devAj=R.devAj||[]).push(cp&&cp.devis&&cp.devis.des||k.replace(/^DEVIS_/,'')); } }
     if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(!t||!t.id) continue; const ex=T.find(x=>x.id===t.id); if(!ex){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); continue; }
         if(t.chrono&&Array.isArray(t.chrono.sessions)){ const c=chronoDe(ex); let n=0; for(const x of t.chrono.sessions) if(!c.sessions.some(y=>y.d===x.d)){ c.sessions.push(x); n++; } if(n){ c.sessions.sort((a,b)=>a.d-b.d); (R.seancesAj=R.seancesAj||[]).push(ex.titre+' (+'+n+')'); } } } }
     sauverDevis(); }
-  R.total=(R.tachesAj?R.tachesAj.length:0)+(R.seancesAj?R.seancesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
+  R.total=(R.tachesAj?R.tachesAj.length:0)+(R.tarifsAj?R.tarifsAj.length:0)+(R.seancesAj?R.seancesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
   return R;
 }
 function montrerDescriptif(nomFichier,d,R,dejaLa){
@@ -1802,6 +1834,7 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   if(R.calAjout.length) L.push('Calques perso ajoutés : '+R.calAjout.join(', '));
   if(R.lotsAj) L.push('Lots ajoutés : '+R.lotsAj.join(', '));
   if(R.tachesAj) L.push('Tâches ajoutées : '+R.tachesAj.join(', '));
+  if(R.tarifsAj) L.push('Tarifs d\'achat ajoutés : '+R.tarifsAj.join(', '));
   if(R.seancesAj) L.push('Séances de chrono ajoutées : '+R.seancesAj.join(', '));
   if(R.devAj) L.push('Quantités / prix du devis complétés : '+R.devAj.join(', '));
   if(R.modAjout) L.push('Modèles de structure ajoutés : '+R.modAjout.join(', '));
@@ -2464,7 +2497,7 @@ function texteMetre(){ const lot=$('mtFiltre').value; const L=['Métré — '+sc
 function brancherMetre(){
   $('bMetre').onclick=ouvrirMetre; $('mtFermer').onclick=()=>{ $('metreBoite').style.display='none'; };
   $('mtLot').onchange=e=>{ devis.lotActif=e.target.value; sauverDevis(); majTableMetre(); };
-  $('mtFiltre').onchange=majTableMetre;
+  $('mtFiltre').onchange=()=>{ ongletMetre==='fouilles'?majFouilles():majTableMetre(); };
   $('mtAjLot').onclick=()=>{ const b=$('mtNomLot'); b.style.display=''; b.value='Lot '+(devis.lots.length+1); b.focus(); b.select(); };
   $('mtNomLot').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   $('mtNomLot').onblur=()=>{ const v=$('mtNomLot').value.trim(); $('mtNomLot').style.display='none'; if(!v||devis.lots.includes(v)) return; devis.lots.push(v); devis.lotActif=v; sauverDevis(); remplirMetre(); };
@@ -2552,7 +2585,7 @@ function dessinerTaches(c){ if(!scene||!devis||!Array.isArray(devis.taches)) ret
   c.restore(); }
 function textePlanning(){ return ['Planning — '+scene.nom, ['N°','Tâche','État','Date','Fait le','Temps'].join('\t'), ...tachesDe().map((t,i)=>[i+1,t.titre,(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1].replace(/^\S+\s/,''),t.date||'',t.fait||'',tempsTache(t)?hms(tempsTache(t)):''].join('\t'))].join('\n'); }
 function choisirOngletMetre(o){ ongletMetre=o; for(const b of document.querySelectorAll('#mtOnglets button')) b.classList.toggle('on',b.dataset.o===o);
-  const pl=o==='planning'; $('zoneMetre').style.display=pl?'none':'flex'; $('zonePlanning').style.display=pl?'flex':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else majTableMetre(); }
+  const pl=o==='planning', fq=o==='fouilles'; $('zoneMetre').style.display=pl||fq?'none':'flex'; $('zonePlanning').style.display=pl?'flex':'none'; $('zoneFouilles').style.display=fq?'flex':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else if(fq) majFouilles(); else majTableMetre(); }
 function brancherPlanning(){
   for(const b of document.querySelectorAll('#mtOnglets button')) b.onclick=()=>choisirOngletMetre(b.dataset.o);
   $('mtAjTache').onclick=()=>{ tachesDe().push({id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:''}); sauverDevis(); majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } };
@@ -2599,6 +2632,121 @@ function brancherChrono(){
   p.querySelector('.pt').onclick=p.querySelector('.ph').onclick=p.querySelector('.pc').onclick;
   p.querySelector('.pf').onclick=e=>{ e.stopPropagation(); if(!chronoG) return; const b=e.currentTarget; if(b.dataset.conf!=='1'){ b.dataset.conf='1'; b.textContent='Fini ?'; setTimeout(()=>{ b.dataset.conf=''; b.textContent='✅'; },3000); return; } b.dataset.conf=''; b.textContent='✅'; const g=chronoG; terminerChrono(g.plan,g.id).then(()=>{ $('etat').textContent='✅ « '+g.titre+' » terminée.'; }); };
   $('mtAjChrono').onclick=()=>{ const t={id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:new Date().toISOString().slice(0,10)}; tachesDe().push(t); demarrerChrono(t).then(()=>{ majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } }); };
+}
+
+// ================= Fouilles / tranchées =================
+const FOUILLES_DEF={fois:1.25, p1:0.40, l1:0.40, p2:0.80, l2:0.60, l3:0.80, talus:1.30, droit:0.80,
+  sable:{EDF:{g:0.20,d:0.20,b:0.10,h:0.20,mat:'Sable 0/4 roulé lavé'}, autre:{g:0.10,d:0.10,b:0.05,h:0.20,mat:'Sable 0/6 remblai'}},
+  natures:[{nom:'Matériau du site',k:1.10},{nom:'Tout-venant',k:1.15},{nom:'GNT',k:1.20}],
+  tarifs:[{mat:'Sable 0/6 remblai',u:'m³',pu:null,four:''},{mat:'Sable 0/4 roulé lavé',u:'m³',pu:null,four:''},{mat:'Tout-venant',u:'m³',pu:null,four:''},{mat:'GNT',u:'m³',pu:null,four:''},{mat:'Évacuation des déblais',u:'m³',pu:null,four:''}],
+  tuyaux:{}};
+let F=JSON.parse(JSON.stringify(FOUILLES_DEF)), coupeCourante=null;
+function chargerFouilles(){ return Memoire.lire('fouilles').then(v=>{ if(v&&typeof v==='object'){ F=Object.assign(JSON.parse(JSON.stringify(FOUILLES_DEF)),v); F.sable=Object.assign(JSON.parse(JSON.stringify(FOUILLES_DEF.sable)),v.sable||{}); if(!Array.isArray(F.natures)||!F.natures.length) F.natures=JSON.parse(JSON.stringify(FOUILLES_DEF.natures)); if(!Array.isArray(F.tarifs)) F.tarifs=[]; if(!F.tuyaux) F.tuyaux={}; } }); }
+function sauverFouilles(){ Memoire.ecrire('fouilles',F); marquerModifie(); }
+const estTuyau=a=>a&&a.devis&&a.devis.base==='ml'&&a.devis.unite==='ml';
+function infoTuyau(a){ let t=F.tuyaux[a.nom]; if(!t){ const des=a.devis.des||a.nom, m=String(des).match(/(\d{2,4})/); t={d:m?Math.min(+m[1],2000)/1000:0.10, type:/EDF|enedis/i.test(des)?'EDF':'autre', nat:F.natures[0].nom}; F.tuyaux[a.nom]=t; } return t; }
+function largeurAuto(H){ return H<=F.p1+1e-9?F.l1 : H<F.p2-1e-9?F.l2 : F.l3; }
+// section de fouille (m²) pour une profondeur H et une largeur au fond W
+function secFouille(H,W){ if(H<=F.talus+1e-9) return W*H; const h=H-F.droit; return W*F.droit+(W+h)*h; }
+// calcul d'une coupe : H = profondeur de fouille (dessus → fond), D diamètre, W largeur
+function coupe(H,D,type,W){ const s=F.sable[type]||F.sable.autre, Wm=D+s.g+s.d; W=Math.max(W,Wm); const hs=Math.min(H,s.b+D+s.h), tube=Math.PI*D*D/4, S=secFouille(H,W), Sa=Math.max(0,W*hs-tube), Re=Math.max(0,S-Sa-tube); return {H,D,W,S,Sa,Re,hs,s,talus:H>F.talus+1e-9}; }
+// lignes de fouille : réseaux liés + mesures de distance avec Z fini / FF
+function lignesFouilles(lot){ const L=[];
+  reseaux.forEach((r,ri)=>{ const a=articles().find(x=>x.nom===r.artTuyau); if(!estTuyau(a)) return; if(lot && (r.lot||'')!==lot) return; const t=infoTuyau(a), s=F.sable[t.type]||F.sable.autre, c=calcReseau(r);
+    c.tr.forEach((tr,ti)=>{ const na=r.noeuds[tr.ia], nb=r.noeuds[tr.ib]; let pa=profRegard(na), pb=profRegard(nb); if(pa===null) pa=pb; if(pb===null) pb=pa;
+      const Ha=pa===null?null:pa+s.b, Hb=pb===null?null:pb+s.b; L.push({src:'r', ri, ti, art:a, t, nom:na.nom+'→'+nb.nom+(reseaux.length>1?' ('+r.nom+')':''), Lg:tr.L, Ha, Hb, forceW:r.larg&&Number.isFinite(r.larg[ti])?r.larg[ti]:null}); }); });
+  mesuresGardees.forEach((m,mi)=>{ const a=articles().find(x=>x.nom===m.calque); if(!estTuyau(a)||m.type!=='dist') return; if(lot && (m.lot||'')!==lot) return; const t=infoTuyau(a);
+    const p0=m.pts[0], p1=m.pts[m.pts.length-1], h=q=>vOkN(q.z)&&vOkN(q.ff)?(+q.z-+q.ff):null; let Ha=h(p0), Hb=h(p1); if(Ha===null) Ha=Hb; if(Hb===null) Hb=Ha;
+    L.push({src:'m', mi, art:a, t, nom:'Mesure '+(mi+1), Lg:m.valeur, Ha, Hb, forceW:Number.isFinite(m.largF)?m.largF:null}); });
+  for(const l of L){ if(l.Ha===null){ l.ok=false; continue; } l.ok=true; const Hm=(l.Ha+l.Hb)/2, W=l.forceW!==null?l.forceW:largeurAuto(Hm); l.W=W; l.Hm=Hm;
+    const ca=coupe(l.Ha,l.t.d,l.t.type,W), cb=coupe(l.Hb,l.t.d,l.t.type,W); l.W=ca.W; l.Vf=(ca.S+cb.S)/2*l.Lg; l.Vs=(ca.Sa+cb.Sa)/2*l.Lg; l.Vr=(ca.Re+cb.Re)/2*l.Lg; l.mat=ca.s.mat; l.talus=ca.talus||cb.talus; }
+  return L; }
+function totauxFouilles(L){ const T={Vf:0, sable:{}, remblai:{}, nonCalc:0}; for(const l of L){ if(!l.ok){ T.nonCalc++; continue; } T.Vf+=l.Vf; T.sable[l.mat]=(T.sable[l.mat]||0)+l.Vs; T.remblai[l.t.nat]=(T.remblai[l.t.nat]||0)+l.Vr; } T.deblai=T.Vf*F.fois; return T; }
+const prixDe=mat=>{ const t=F.tarifs.find(x=>x.mat===mat); return t&&Number.isFinite(t.pu)?t.pu:null; };
+function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=totauxFouilles(L), z=$('zoneFouilles'); const f2=v=>frN(v,2);
+  const champ=(v,cb,w)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.value=v===null||v===undefined?'':frN(v,2); e.style.width=(w||52)+'px'; e.onchange=()=>{ const n=lireNombre(e.value); if(Number.isNaN(n)){ e.style.background='#ffd6d6'; return; } cb(n); sauverFouilles(); majFouilles(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; return e; };
+  // 1. récapitulatif par tronçon
+  const tb=$('tbFouilles'), frag=document.createDocumentFragment();
+  if(!L.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="8" style="color:#777;text-align:center;height:40px">Aucun tuyau avec profondeur : reliez un réseau à un article tuyau (en ml), ou mesurez une distance avec Z fini et FF aux deux bouts.</td>'; frag.appendChild(tr); }
+  let artPrec=null;
+  for(const l of L){ if(l.art!==artPrec){ artPrec=l.art; const h=document.createElement('tr'); h.className='art'; h.innerHTML='<td colspan="8"><span style="color:'+l.art.couleur+'">■</span> <b>'+echapper(l.art.devis.des)+'</b> <span class="petit">Ø '+frN(l.t.d*1000,0)+' · '+(l.t.type==='EDF'?'EDF':'autre réseau')+' · '+echapper(l.t.nat)+'</span></td>'; frag.appendChild(h); }
+    const tr=document.createElement('tr'); const td=(h,c)=>{ const e=document.createElement('td'); if(c) e.className=c; e.innerHTML=h; return e; };
+    if(!l.ok){ tr.append(td(echapper(l.nom),''), td(f2(l.Lg),'num'), td('<span style="color:#d32f2f">⚠ profondeur ?</span>','')); tr.lastChild.colSpan=6; frag.appendChild(tr); continue; }
+    const tW=document.createElement('td'); const iW=champ(l.W,n=>{ if(l.src==='r'){ const r=reseaux[l.ri]; r.larg=r.larg||{}; if(n===null) delete r.larg[l.ti]; else r.larg[l.ti]=n; sauverReseaux(); } else { const m=mesuresGardees[l.mi]; if(n===null) delete m.largF; else m.largF=n; sauverMesuresGardees(); } },46); if(l.forceW!==null) iW.style.fontWeight='bold'; iW.title='Vide = largeur automatique'; tW.appendChild(iW);
+    const bC=document.createElement('button'); bC.className='btn petitb'; bC.textContent='✂'; bC.title='Coupe'; bC.onclick=()=>ouvrirCoupe(l.art, Math.max(l.Ha,l.Hb), l.W, l.nom);
+    const tC=document.createElement('td'); tC.appendChild(bC);
+    tr.append(td(echapper(l.nom)+(l.talus?' <span class="petit" style="color:#e65c00">talus</span>':''),''), td(f2(l.Lg),'num'), td(f2(l.Ha)+(Math.abs(l.Ha-l.Hb)>0.005?'<br>'+f2(l.Hb):''),'num'), tW, td(f2(l.Vf),'num'), td(f2(l.Vs),'num'), td(f2(l.Vr),'num'), tC); frag.appendChild(tr); }
+  tb.replaceChildren(frag);
+  // 2. totaux et montants
+  let h='<table class="xl compact" style="margin-top:6px"><thead><tr><th>Quantité</th><th style="text-align:right">m³</th><th style="text-align:right">Coef</th><th style="text-align:right">À prévoir</th><th style="text-align:right">€</th></tr></thead><tbody>', tot=0;
+  const ligne=(nom,v,k,mat)=>{ const q=v*k, pu=mat?prixDe(mat):null; if(pu!==null) tot+=q*pu; h+='<tr><td>'+nom+'</td><td class="num">'+f2(v)+'</td><td class="num">'+(k!==1?'× '+frN(k,2):'')+'</td><td class="num"><b>'+f2(q)+'</b></td><td class="num">'+(pu!==null?f2(q*pu):'')+'</td></tr>'; };
+  h+='<tr><td>Fouille en place</td><td class="num">'+f2(T.Vf)+'</td><td></td><td class="num"><b>'+f2(T.Vf)+'</b></td><td></td></tr>';
+  ligne('Déblai foisonné (évacuation)',T.Vf,F.fois,'Évacuation des déblais');
+  for(const [m,v] of Object.entries(T.sable)) ligne(echapper(m),v,1,m);
+  for(const [n,v] of Object.entries(T.remblai)){ const nt=F.natures.find(x=>x.nom===n); ligne('Remblai : '+echapper(n),v,nt?nt.k:1,n); }
+  h+='</tbody></table>'; $('fqTotaux').innerHTML=h+(tot?'<div style="padding:6px 8px;font-size:14.5px">Total achats et évacuation : <b>'+f2(tot)+' €</b></div>':'<div class="petit" style="padding:4px 8px">Remplissez les tarifs d\'achat plus bas pour avoir les montants.</div>')+(T.nonCalc?'<div class="petit" style="padding:4px 8px;color:#d32f2f">⚠ '+T.nonCalc+' tronçon(s) sans profondeur, non comptés.</div>':'');
+  // 3. tuyaux
+  const tt=$('tbFqTuyaux'), f3=document.createDocumentFragment();
+  for(const a of articles().filter(estTuyau)){ const t=infoTuyau(a), tr=document.createElement('tr'); const c0=document.createElement('td'); c0.innerHTML='<span style="color:'+a.couleur+'">■</span> '+echapper(a.devis.des);
+    const c1=document.createElement('td'); c1.appendChild(champ(t.d*1000,n=>{ if(n>0) t.d=n/1000; },54));
+    const c2=document.createElement('td'); const sT=document.createElement('select'); for(const [v,lb] of [['autre','Autre (sable 0/6)'],['EDF','EDF (sable 0/4)']]){ const o=document.createElement('option'); o.value=v; o.textContent=lb; sT.appendChild(o); } sT.value=t.type; sT.onchange=()=>{ t.type=sT.value; sauverFouilles(); majFouilles(); }; c2.appendChild(sT);
+    const c3=document.createElement('td'); const sN=document.createElement('select'); for(const n of F.natures){ const o=document.createElement('option'); o.textContent=n.nom; sN.appendChild(o); } sN.value=t.nat; sN.onchange=()=>{ t.nat=sN.value; sauverFouilles(); majFouilles(); }; c3.appendChild(sN);
+    const c4=document.createElement('td'); const bc=document.createElement('button'); bc.className='btn petitb'; bc.textContent='✂ Coupe'; bc.onclick=()=>ouvrirCoupe(a,0.80,null,''); c4.appendChild(bc);
+    tr.append(c0,c1,c2,c3,c4); f3.appendChild(tr); }
+  tt.replaceChildren(f3);
+  // 4. règles
+  const rg=$('tbFqRegles'), f4=document.createDocumentFragment(); const lr=(lib,cle,obj)=>{ const tr=document.createElement('tr'); const a=document.createElement('td'); a.textContent=lib; const b=document.createElement('td'); b.appendChild(champ((obj||F)[cle],n=>{ if(n!==null) (obj||F)[cle]=n; })); tr.append(a,b); f4.appendChild(tr); };
+  lr('Foisonnement du déblai','fois'); lr('Largeur jusqu\'à '+frN(F.p1,2)+' m de prof.','l1'); lr('… prof. limite 1 (m)','p1'); lr('Largeur entre les deux','l2'); lr('… prof. limite 2 (m)','p2'); lr('Largeur au-delà','l3'); lr('Talus 1/1 au-delà de (m)','talus'); lr('Partie droite en bas (m)','droit');
+  for(const [k,lb] of [['EDF','EDF'],['autre','Autres']]){ const s=F.sable[k]; lr('Sable '+lb+' : gauche','g',s); lr('Sable '+lb+' : droite','d',s); lr('Sable '+lb+' : dessous','b',s); lr('Sable '+lb+' : dessus','h',s); }
+  for(const n of F.natures) lr('Coef. remblai '+n.nom,'k',n);
+  rg.replaceChildren(f4);
+  // 5. tarifs
+  const ta=$('tbFqTarifs'), f5=document.createDocumentFragment();
+  F.tarifs.forEach((t,i)=>{ const tr=document.createElement('tr'); const txt=(v,cb,w)=>{ const e=document.createElement('input'); e.value=v||''; e.style.width=(w||110)+'px'; e.onchange=()=>{ cb(e.value.trim()); sauverFouilles(); majFouilles(); }; return e; };
+    const c0=document.createElement('td'); c0.appendChild(txt(t.mat,v=>{ if(v) t.mat=v; },130)); const c1=document.createElement('td'); c1.appendChild(txt(t.u,v=>t.u=v,40));
+    const c2=document.createElement('td'); c2.appendChild(champ(t.pu,n=>{ t.pu=n; },60)); const c3=document.createElement('td'); c3.appendChild(txt(t.four,v=>t.four=v,90));
+    const c4=document.createElement('td'); const b=document.createElement('button'); b.className='btn petitb'; b.textContent='🗑'; b.onclick=()=>{ if(b.dataset.c!=='1'){ b.dataset.c='1'; b.textContent='Sûr ?'; setTimeout(()=>{ b.dataset.c=''; b.textContent='🗑'; },3000); return; } F.tarifs.splice(i,1); sauverFouilles(); majFouilles(); }; c4.appendChild(b);
+    tr.append(c0,c1,c2,c3,c4); f5.appendChild(tr); });
+  ta.replaceChildren(f5); }
+function texteFouilles(){ const L=lignesFouilles($('mtFiltre').value), T=totauxFouilles(L); const n=v=>frN(v,2);
+  const out=['Fouilles — '+scene.nom, ['Article','Tronçon','Longueur','Prof. début','Prof. fin','Largeur','Fouille m³','Sable m³','Remblai m³'].join('\t')];
+  for(const l of L) out.push([l.art.devis.des,l.nom,n(l.Lg),l.ok?n(l.Ha):'?',l.ok?n(l.Hb):'?',l.ok?n(l.W):'',l.ok?n(l.Vf):'',l.ok?n(l.Vs):'',l.ok?n(l.Vr):''].join('\t'));
+  out.push('', 'Fouille en place\t'+n(T.Vf), 'Déblai foisonné (×'+n(F.fois)+')\t'+n(T.deblai)); for(const [m,v] of Object.entries(T.sable)) out.push(m+'\t'+n(v)); for(const [k,v] of Object.entries(T.remblai)){ const nt=F.natures.find(x=>x.nom===k); out.push('Remblai '+k+' (×'+n(nt?nt.k:1)+')\t'+n(v*(nt?nt.k:1))); }
+  return out.join('\n'); }
+// ----- coupe de tranchée (dessin SVG) -----
+function svgCoupe(a,H,Wf){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf:largeurAuto(H), c=coupe(H,t.d,t.type,W0), s=c.s, W=c.W, n=v=>frN(v,2);
+  const hT=c.talus?H-F.droit:0, Wh=W+2*hT, marge=0.6, larg=Math.max(Wh+2*marge,1.8), sc=Math.min(560/larg, 420/(H+0.5)), X=v=>40+(v+larg/2)*sc, Y=v=>90+v*sc, Wpx=larg*sc+80, Hpx=(H+0.5)*sc+160;
+  const fondG=-W/2, fondD=W/2, yF=H, yD=c.talus?H-F.droit:0;
+  const poly=[[-Wh/2,0],[fondG,yD],[fondG,yF],[fondD,yF],[fondD,yD],[Wh/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
+  const cy=H-s.b-t.d/2, sableCoul=t.type==='EDF'?'#f3d27a':'#f7e3a6';
+  let g='<svg xmlns="http://www.w3.org/2000/svg" width="'+Math.round(Wpx)+'" height="'+Math.round(Hpx)+'" viewBox="0 0 '+Math.round(Wpx)+' '+Math.round(Hpx)+'" font-family="Arial" font-size="13">';
+  g+='<rect width="100%" height="100%" fill="#fff"/><text x="12" y="22" font-size="16" font-weight="bold">Coupe type de tranchée — '+echapper(a.devis.des)+'</text><text x="12" y="42" fill="#555">Profondeur '+n(H)+' m · Ø '+frN(t.d*1000,0)+' mm · '+(t.type==='EDF'?'câble EDF, '+echapper(s.mat):echapper(s.mat))+'</text>';
+  g+='<line x1="'+X(-larg/2)+'" y1="'+Y(0)+'" x2="'+X(larg/2)+'" y2="'+Y(0)+'" stroke="#6d4c41" stroke-width="3"/><text x="'+X(-larg/2)+'" y="'+(Y(0)-6)+'" fill="#6d4c41">Terrain fini</text>';
+  g+='<polygon points="'+poly+'" fill="#e8dccb" stroke="#333" stroke-width="2"/>';
+  g+='<rect x="'+X(fondG)+'" y="'+Y(H-c.hs)+'" width="'+(W*sc)+'" height="'+(c.hs*sc)+'" fill="'+sableCoul+'" stroke="#b08900"/>';
+  g+='<circle cx="'+X(0)+'" cy="'+Y(cy)+'" r="'+Math.max(3,t.d/2*sc)+'" fill="#fff" stroke="#1f5fa8" stroke-width="3"/>';
+  if(c.hs<H-0.02) g+='<text x="'+X(0)+'" y="'+(Y((H-c.hs)/2)+5)+'" text-anchor="middle" fill="#555">Remblai : '+echapper(t.nat)+'</text>';
+  g+='<text x="'+(X(fondG)-6)+'" y="'+(Y(H-c.hs/2)+4)+'" fill="#8a6d00" text-anchor="end">'+echapper(s.mat)+'</text>';
+  // cotes
+  const cote=(x1,y1,x2,y2,txt,dx,dy)=>{ g+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#d32f2f" stroke-width="1.2"/><text x="'+((x1+x2)/2+(dx||0))+'" y="'+((y1+y2)/2+(dy||0))+'" fill="#d32f2f" text-anchor="middle" font-weight="bold">'+txt+'</text>'; };
+  cote(X(fondG),Y(H)+22,X(fondD),Y(H)+22,n(W)+' m',0,16);
+  cote(X(-Wh/2)-22,Y(0),X(-Wh/2)-22,Y(H),n(H)+' m',-24,4); if(!c.talus) cote(X(fondD)+20,Y(H-c.hs),X(fondD)+20,Y(H),'sable '+n(c.hs)+' m',40,4);
+  if(c.talus){ cote(X(-Wh/2),Y(0)-14,X(Wh/2),Y(0)-14,n(Wh)+' m en haut',0,-6); cote(X(fondD)+20,Y(yD),X(fondD)+20,Y(H),n(F.droit)+' m droit',44,4); g+='<text x="'+X(Wh/2-hT/2+0.1)+'" y="'+Y(hT/2)+'" fill="#e65c00">talus 1/1</text>'; }
+  g+='<text x="12" y="'+(Hpx-48)+'">Sable : '+n(s.b)+' m dessous · '+n(s.h)+' m dessus · '+n(s.g)+' m à gauche / '+n(s.d)+' m à droite (au minimum)</text>';
+  g+='<text x="12" y="'+(Hpx-28)+'">Par mètre de tranchée : fouille '+n(c.S)+' m³ · sable '+n(c.Sa)+' m³ · remblai '+n(c.Re)+' m³ · déblai foisonné '+n(c.S*F.fois)+' m³</text>';
+  g+='<text x="12" y="'+(Hpx-8)+'" fill="#777" font-size="11">Plans DWG — '+echapper(scene?scene.nom:'')+' — '+new Date().toLocaleDateString('fr-FR')+'</text></svg>';
+  return g; }
+function ouvrirCoupe(a,H,W,nom){ coupeCourante={a,H,W,nom}; $('cpProf').value=frN(H,2); $('cpLarg').value=W!==null&&W!==undefined?frN(W,2):''; $('coupeTrBoite').style.display='flex'; majCoupe(); }
+function majCoupe(){ const c=coupeCourante; if(!c) return; const H=lireNombre($('cpProf').value), W=lireNombre($('cpLarg').value); if(!(H>0)) return; c.H=H; c.W=Number.isFinite(W)&&W>0?W:null; $('cpDessin').innerHTML=svgCoupe(c.a,c.H,c.W); $('cpTitre').textContent='✂ '+c.a.devis.des+(c.nom?' · '+c.nom:''); }
+function enregistrerCoupe(){ const c=coupeCourante; if(!c) return; const svg=svgCoupe(c.a,c.H,c.W), nom=('Coupe_'+c.a.devis.des+'_'+frN(c.H,2)+'m').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')+'.svg';
+  if(APPLI && APPLI.enregistrer){ const r=APPLI.enregistrer(nom,svg,'image/svg+xml'); $('cpInfo').textContent=r?'✓ '+nom+' enregistré dans Téléchargements (s\'ouvre avec Chrome, à joindre à un mail).':'⚠ Enregistrement impossible.'; return; }
+  telecharger(nom,svg,'image/svg+xml'); $('cpInfo').textContent='✓ '+nom+' téléchargé.'; }
+function brancherFouilles(){ chargerFouilles();
+  $('fqCopier').onclick=async()=>{ let ok=false; try{ await navigator.clipboard.writeText(texteFouilles()); ok=true; }catch(e){} $('mtInfo').textContent=ok?'✓ Fouilles copiées (à coller dans Excel).':'⚠ Copie impossible.'; };
+  $('fqAjTarif').onclick=()=>{ F.tarifs.push({mat:'Nouvel achat',u:'m³',pu:null,four:''}); sauverFouilles(); majFouilles(); };
+  $('fqVoirRegles').onclick=()=>{ const t=$('tabFqRegles'); t.style.display=t.style.display==='none'?'':'none'; };
+  $('cpFermer').onclick=()=>{ $('coupeTrBoite').style.display='none'; }; $('cpProf').onchange=majCoupe; $('cpLarg').onchange=majCoupe; $('cpEnreg').onclick=enregistrerCoupe;
+  for(const b of document.querySelectorAll('#cpRapides button')) b.onclick=()=>{ $('cpProf').value=b.textContent.replace(' m',''); $('cpLarg').value=''; majCoupe(); };
 }
 
 // ================= Gestes au doigt (et souris) =================
@@ -2695,7 +2843,7 @@ async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n
 async function contenuPlanDepuisMemoire(nom){ const f=await Memoire.lire('fichier:'+nom); if(!f) return null; const e=await Memoire.lire('etat:'+nom), rg=await Memoire.lire('reglagesCalques:'+nom)||{};
   return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, devis:await Memoire.lire('devis:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
     reglages:{supprimes:rg.supprimes||[], verrous:rg.verrous||[]}, vue:e&&e.s>0?{cx:e.cx,cy:e.cy,s:e.s}:null}; }
-async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, devis:d.devis, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
+async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, devis:d.devis, fouilles:d.fouilles, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
   return JSON.stringify({format:'plansdwg', version:2, type:'classeur', appli:VERSION, date:new Date().toISOString(), actif:scene?scene.nom:null, calquesPerso, modelesStructure:modelesPerso, typesProfil, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes}, plans:L}); }
 function nomClasseurDefaut(){ const d=new Date(); return 'Classeur_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.plansdwg'; }
 let attenteClasseur=false;
@@ -2945,7 +3093,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
