@@ -87,6 +87,15 @@ table.xl td.sup{cursor:pointer}
 #metreBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #metreBoite .tete b{flex:1;font-size:15px}
 #tabMetre td{padding:2px 4px;font-size:13.5px}
+#tabPlanning td{padding:2px 4px;font-size:13.5px;vertical-align:middle}
+#tabPlanning input.titre{width:100%;min-width:0;height:32px;border:0;background:#fffbe6;font-size:14px;padding:0 4px}
+#tabPlanning input[type=date]{height:32px;font-size:13px;border:1px solid #ccc;border-radius:4px}
+#tabPlanning{width:100%;table-layout:auto}
+#tabPlanning td.act{display:grid;grid-template-columns:1fr 1fr;gap:3px;border:0}
+#tabPlanning td.act .btn{min-width:38px;padding:0 4px}
+#tabPlanning button.etat{white-space:nowrap;padding:0 6px}
+#tabPlanning tr.fait input.titre{text-decoration:line-through;color:#777;background:#f0f7f0}
+#mtOnglets button{flex:1}
 #tabMetre tr.art td:first-child{cursor:pointer}
 #tabMetre tr.detail td{background:#fafafa;font-size:12.5px}
 #tabMetre input{width:100%;min-width:56px;height:30px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:13px;padding:0 3px}
@@ -295,16 +304,24 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #eee;font-size:14px">Lot actif : <select id="mtLot" style="max-width:150px"></select><button class="btn petitb" id="mtAjLot">＋ Lot</button><input id="mtNomLot" style="display:none;height:32px;width:120px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px">
     <span style="flex:1"></span>Afficher : <select id="mtFiltre" style="max-width:150px"></select></div>
   <div id="mtLotInfo" class="petit" style="padding:3px 8px;color:#555"></div>
+  <div id="mtOnglets" class="seg" style="margin:4px 8px;display:flex"><button data-o="demande" class="on">Demande</button><button data-o="mesure">Mesuré</button><button data-o="attente">En attente</button><button data-o="planning">Planning</button></div>
+  <div id="zonePlanning" style="display:none;flex:1;overflow:auto;flex-direction:column">
+    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="mtAjTache">＋ Tâche</button><button class="btn" id="mtCopierPlanning">📋 Copier</button><span id="mtResumePlanning" class="petit" style="flex:1;text-align:right"></span></div>
+    <table class="xl compact" id="tabPlanning"><thead><tr><th>N°</th><th>Tâche</th><th>État</th><th></th></tr></thead><tbody id="tbPlanning"></tbody></table>
+    <div class="petit" style="padding:6px 8px;color:#666">État : un appui fait passer À faire → En cours → Fait. 📍 place la tâche sur le plan (drapeau rouge / orange / vert).</div>
+  </div>
+  <div id="zoneMetre" style="display:flex;flex-direction:column;flex:1;min-height:0">
   <div style="display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap"><button class="btn" id="mtAjArt">＋ Article</button><button class="btn" id="mtColler">📥 Coller le devis</button><button class="btn" id="mtCopier">📋 Copier</button></div>
   <div id="mtForm" style="display:none;padding:6px 8px;background:#f6f9fc;border-top:1px solid #dde;border-bottom:1px solid #dde;font-size:14px;line-height:2.2">
     Désignation <input id="afDes" placeholder="ex. PVC 200" style="width:170px"><br>
-    Mesuré par <select id="afBase"><option value="ml">Distance (ml)</option><option value="m2">Surface (m²)</option><option value="U">Points (U)</option></select> Unité <select id="afUnite"><option>ml</option><option>m²</option><option>m³</option><option>U</option></select><br>
+    Mesuré par <select id="afBase"><option value="ml">Distance (ml)</option><option value="m2">Surface (m²)</option><option value="U">Points (U)</option><option value="F">Forfait (tâche)</option></select> Unité <select id="afUnite"><option>ml</option><option>m²</option><option>m³</option><option>U</option><option>Ft</option></select><br>
     × <input id="afK1lib" placeholder="ex. hauteur" style="width:90px"> <input id="afK1" inputmode="decimal" placeholder="1,20" style="width:64px"> × <input id="afK2lib" placeholder="ex. épaisseur" style="width:90px"> <input id="afK2" inputmode="decimal" placeholder="0,40" style="width:64px"> <span class="petit">(facultatif)</span><br>
     <button class="btn prim" id="afCreer">✓ Créer l'article</button> <span class="petit">Un calque DEVIS_… est créé : mesurez sur ce calque.</span></div>
   <div id="mtCollerZone" style="display:none;padding:6px 8px;background:#f6f9fc;border-bottom:1px solid #dde"><div class="petit">Copiez les lignes du devis dans Excel (colonnes : Désignation · Unité · Quantité · Prix unitaire) et collez-les ici :</div>
     <textarea id="mtTexte" style="width:100%;height:110px;font-size:13px"></textarea><button class="btn prim" id="mtCollerOk">✓ Créer / mettre à jour les articles</button></div>
   <div style="flex:1;overflow:auto"><table class="xl compact" id="tabMetre"><thead><tr><th>Article</th><th>U</th><th style="text-align:right">Mesuré</th><th style="text-align:right;width:70px">Devis</th><th style="text-align:right">Écart</th><th style="text-align:right;width:64px">PU €</th><th style="text-align:right">Montant</th></tr></thead><tbody id="tbMetre"></tbody></table></div>
   <div id="mtTotal" style="padding:8px 10px;font-size:14.5px;background:#f6f9fc;border-top:1px solid #dde"></div>
+  </div>
   <div id="mtInfo" style="padding:4px 10px 8px;font-size:13px;color:#2e7d32"></div>
 </div>
 <div id="structBoite">
@@ -400,7 +417,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Métré – v2";
+const VERSION = "Planning – v1";
 </script>
 <script>
 "use strict";
@@ -816,7 +833,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); }
   majLoupe();
 }
 function rendreScene(c){
@@ -1750,8 +1767,9 @@ function fusionner(d){
   for(const n of (rg.verrous||[])){ const c=scene.calques.get(n); if(c && !c.verrou && !c.supprime){ c.verrou=true; R.verAjout.push(n); } }
   if(d.devis && d.devis.arts){ for(const l of (d.devis.lots||[])) if(!devis.lots.includes(l)){ devis.lots.push(l); (R.lotsAj=R.lotsAj||[]).push(l); }
     for(const [k,v] of Object.entries(d.devis.arts)){ const e=devis.arts[k]=devis.arts[k]||{}; let a=false; if(Number.isFinite(v.qte)&&!Number.isFinite(e.qte)){ e.qte=v.qte; a=true; } if(Number.isFinite(v.pu)&&!Number.isFinite(e.pu)){ e.pu=v.pu; a=true; } if(a){ const cp=calquesPerso.find(x=>x.nom===k); (R.devAj=R.devAj||[]).push(cp&&cp.devis&&cp.devis.des||k.replace(/^DEVIS_/,'')); } }
+    if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(t&&t.id&&!T.some(x=>x.id===t.id)){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); } } }
     sauverDevis(); }
-  R.total=(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
+  R.total=(R.tachesAj?R.tachesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+R.calAjout.length+R.supAjout.length+R.verAjout.length;
   return R;
 }
 function montrerDescriptif(nomFichier,d,R,dejaLa){
@@ -1768,6 +1786,7 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   if(R.resAjout.length||R.resIdem) L.push('Réseaux ajoutés : '+R.resAjout.length+(R.resAjout.length?' ('+R.resAjout.join(', ')+')':'')+' · déjà identiques : '+R.resIdem);
   if(R.calAjout.length) L.push('Calques perso ajoutés : '+R.calAjout.join(', '));
   if(R.lotsAj) L.push('Lots ajoutés : '+R.lotsAj.join(', '));
+  if(R.tachesAj) L.push('Tâches ajoutées : '+R.tachesAj.join(', '));
   if(R.devAj) L.push('Quantités / prix du devis complétés : '+R.devAj.join(', '));
   if(R.modAjout) L.push('Modèles de structure ajoutés : '+R.modAjout.join(', '));
   if(R.supAjout.length) L.push('Calques supprimés repris : '+lim(R.supAjout));
@@ -2355,7 +2374,7 @@ function lignesArticle(art,lot){ const L=[];
   pointsExp.forEach((p,i)=>{ if((p.calque||CALQUE_PTS)!==art.nom) return; if(lot && (p.lot||'')!==lot) return; const prof=vOkN(p.z)&&vOkN(p.ff)?(+p.z-+p.ff):null;
     L.push({sorte:'p', i, lot:p.lot||'', q:art.devis.base==='U'?qteMesure(art,{}):0, txt:'Point '+p.nom+(prof!==null?' · prof. '+frN(prof,2)+' m':'')}); });
   return L; }
-function ouvrirMetre(){ if(!scene) return; $('metreBoite').style.display='flex'; remplirMetre(); }
+function ouvrirMetre(){ if(!scene) return; $('metreBoite').style.display='flex'; remplirMetre(); choisirOngletMetre(ongletMetre); }
 function remplirMetre(){
   const sel=$('mtLot'); sel.replaceChildren(); const o0=document.createElement('option'); o0.value=''; o0.textContent='(aucun lot)'; sel.appendChild(o0);
   for(const l of devis.lots){ const o=document.createElement('option'); o.value=l; o.textContent=l; if(l===devis.lotActif) o.selected=true; sel.appendChild(o); }
@@ -2364,10 +2383,11 @@ function remplirMetre(){
   majTableMetre(); }
 function majTableMetre(){
   const lot=$('mtFiltre').value, tb=$('tbMetre'), frag=document.createDocumentFragment(); let total=0, totalDevis=0, avecPrix=false;
-  const A=articles(); if(!A.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">Aucun article : ＋ Article ou 📥 Coller le devis</td>'; frag.appendChild(tr); }
-  for(const art of A){ const D=art.devis, dv=devis.arts[art.nom]||{}, L=lignesArticle(art,lot), q=L.reduce((s,x)=>s+x.q,0);
-    const qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), ec=qd!==null?q-qd:null, pu=Number.isFinite(dv.pu)?dv.pu:null; if(pu!==null){ avecPrix=true; total+=q*pu; if(qd!==null) totalDevis+=qd*pu; }
-    const tr=document.createElement('tr'); tr.className='art';
+  const A=articles().filter(a=>{ if(ongletMetre==='demande') return true; const nb=estForfait(a)?0:lignesArticle(a,lot).length; return ongletMetre==='mesure' ? nb>0 : (nb===0 && !estForfait(a)); }); if(!A.length && ongletMetre!=='demande'){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">'+(ongletMetre==='mesure'?'Aucun article mesuré pour l\'instant.':'Rien en attente : tout le devis a été trouvé sur le plan 👍')+'</td>'; frag.appendChild(tr); }
+  else if(!A.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">Aucun article : ＋ Article ou 📥 Coller le devis</td>'; frag.appendChild(tr); }
+  for(const art of A){ const D=art.devis, dv=devis.arts[art.nom]||{}, L=estForfait(art)?[]:lignesArticle(art,lot), fo=estForfait(art), q=fo?(Number.isFinite(dv.qte)?dv.qte:1):L.reduce((s,x)=>s+x.q,0);
+    const qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), ec=qd!==null?q-qd:null, pu=Number.isFinite(dv.pu)?dv.pu:null, tf=fo?tachesDe().find(x=>x.art===art.nom):null, faitF=!fo||(tf&&tf.etat==='fait'); if(pu!==null){ avecPrix=true; if(faitF) total+=q*pu; if(qd!==null) totalDevis+=qd*pu; }
+    const tr=document.createElement('tr'); tr.className='art'+(fo?' forfait':'');
     const td=(h,c)=>{ const e=document.createElement('td'); if(c) e.className=c; e.innerHTML=h; return e; };
     const tNom=td('<span class="fl" style="display:inline-block;min-width:26px;color:'+art.couleur+'">■'+(metreOuvert.has(art.nom)?'▾':'▸')+'</span><b class="des" style="text-decoration:underline dotted">'+echapper(D.des||art.nom)+'</b> <span class="petit">('+L.length+')</span>');
     tNom.querySelector('.fl').onclick=ev=>{ ev.stopPropagation(); metreOuvert.has(art.nom)?metreOuvert.delete(art.nom):metreOuvert.add(art.nom); majTableMetre(); };
@@ -2375,13 +2395,14 @@ function majTableMetre(){
     tNom.querySelector('.petit').onclick=tNom.querySelector('.fl').onclick;
     const inp=(v,cle)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.value=v!==null&&v!==undefined?frN(v,2):''; e.onchange=()=>{ const n=lireNombre(e.value); if(Number.isNaN(n)){ e.style.background='#ffd6d6'; return; } (devis.arts[art.nom]=devis.arts[art.nom]||{})[cle]=n===null?undefined:n; sauverDevis(); majTableMetre(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; const c=document.createElement('td'); c.appendChild(e); return c; };
     const tEc=td(ec===null?'':(ec>=0?'+':'')+frN(ec,2),'num'); if(ec!==null) tEc.style.color= Math.abs(ec)<=Math.max(0.005,Math.abs(qd)*0.02)?'#2e7d32':(ec<0?'#d32f2f':'#ef8a00');
-    tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
+    if(fo){ const t=tachesDe().find(x=>x.art===art.nom), et=t?(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]:'⬜ À faire'; tEc.textContent=''; tr.append(tNom, td('Ft',''), td('<span class="petit">'+et+'</span>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?(faitF?'':'<span class="petit">(à faire)</span> ')+frN(q*pu,2):'','num')); tNom.querySelector('.petit').textContent=''; tNom.querySelector('.fl').onclick=null; tNom.querySelector('.des').onclick=ev=>{ ev.stopPropagation(); choisirOngletMetre('planning'); }; }
+    else tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
     frag.appendChild(tr);
     if(metreOuvert.has(art.nom)){ if(!L.length){ const r=document.createElement('tr'); r.innerHTML='<td colspan="7" class="petit" style="padding-left:24px;color:#777">Aucune mesure sur ce calque'+(lot?' pour '+echapper(lot):'')+'.</td>'; frag.appendChild(r); }
       for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯 Voir</button></td>';
         r.querySelector('button').onclick=()=>voirLigneMetre(l); frag.appendChild(r); } } }
   tb.replaceChildren(frag);
-  $('mtTotal').innerHTML= avecPrix ? 'Total mesuré : <b>'+frN(total,2)+' €</b>'+(!lot&&totalDevis?' · devis : '+frN(totalDevis,2)+' € · écart '+(total-totalDevis>=0?'+':'')+frN(total-totalDevis,2)+' €':'') : '<span class="petit">Tapez les prix unitaires (PU) pour avoir les montants.</span>';
+  $('mtTotal').innerHTML= avecPrix ? 'Total réalisé : <b>'+frN(total,2)+' €</b>'+(!lot&&totalDevis?' · devis : '+frN(totalDevis,2)+' € · écart '+(total-totalDevis>=0?'+':'')+frN(total-totalDevis,2)+' €':'') : '<span class="petit">Tapez les prix unitaires (PU) pour avoir les montants.</span>';
   $('mtLotInfo').textContent= devis.lotActif ? 'Les nouvelles mesures et les nouveaux points iront dans « '+devis.lotActif+' ».' : 'Les nouvelles mesures ne sont rangées dans aucun lot.'; }
 function echapper(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function voirLigneMetre(l){ $('metreBoite').style.display='none';
@@ -2392,13 +2413,13 @@ function creerArticle(des,unite,base,k1,k1lib,k2,k2lib){ des=String(des).trim();
   const nom=nomCalqueNormalise('DEVIS_'+des); let d=calquesPerso.find(x=>x.nom===nom); if(d){ if(!d.devis) d.devis={}; return d; }
   const prises=new Set(tousCalquesPerso().map(x=>x.couleur)); const c=COULEURS_PERSO.find(x=>!prises.has(x[0]))||COULEURS_PERSO[articles().length%COULEURS_PERSO.length];
   d={nom, couleur:c[0], aci:c[1], devis:{des, unite, base, k1, k1lib, k2, k2lib}}; calquesPerso.push(d); sauverCalquesPerso(); installerCalquesPerso(null); majComptesPerso(); majVisibles(); remplirCalques(); return d; }
-function baseDeUnite(u){ u=String(u||'').toLowerCase().replace('2','²').replace('3','³'); if(/^m?l$|^ml$|^m$/.test(u)) return ['ml','ml']; if(u==='m²') return ['m²','m2']; if(u==='m³') return ['m³','m2']; return ['U','U']; }
+function baseDeUnite(u){ u=String(u||'').toLowerCase().replace('2','²').replace('3','³'); if(/^(ft|f|ff|fft|ens|forfait|forf\.?)$/.test(u.trim())) return ['Ft','F']; if(/^m?l$|^ml$|^m$/.test(u)) return ['ml','ml']; if(u==='m²') return ['m²','m2']; if(u==='m³') return ['m³','m2']; return ['U','U']; }
 function collerDevis(txt){ let n=0, maj=0; const ign=[];
   for(const ligne of txt.split(/\r?\n/)){ const c=ligne.split('\t').map(x=>x.trim()); if(c.length<2 || !c[0]) continue;
     const q=lireNombre(c[2]||''), pu=lireNombre(c[3]||''); if(!c[1] || (c[2]&&Number.isNaN(q))){ ign.push(c[0]); continue; }
     const [u,b]=baseDeUnite(c[1]); const avant=articles().length; const art=creerArticle(c[0],u,b); if(!art) continue; if(articles().length>avant) n++; else maj++;
     const e=devis.arts[art.nom]=devis.arts[art.nom]||{}; if(Number.isFinite(q)) e.qte=q; if(Number.isFinite(pu)) e.pu=pu; }
-  sauverDevis(); remplirSelectsCalques(); return {n,maj,ign}; }
+  tachesDesForfaits(); sauverDevis(); remplirSelectsCalques(); return {n,maj,ign}; }
 function texteMetre(){ const lot=$('mtFiltre').value; const L=['Métré — '+scene.nom+(lot?' — '+lot:' — tout le chantier'), ['Article','Unité','Mesuré','Devis','Écart','PU','Montant'].join('\t')];
   for(const art of articles()){ const dv=devis.arts[art.nom]||{}, q=lignesArticle(art,lot).reduce((s,x)=>s+x.q,0), qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), pu=Number.isFinite(dv.pu)?dv.pu:null;
     L.push([art.devis.des||art.nom, art.devis.unite, frN(q,2), qd!==null?frN(qd,2):'', qd!==null?frN(q-qd,2):'', pu!==null?frN(pu,2):'', pu!==null?frN(q*pu,2):''].join('\t')); }
@@ -2411,10 +2432,11 @@ function brancherMetre(){
   $('mtNomLot').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   $('mtNomLot').onblur=()=>{ const v=$('mtNomLot').value.trim(); $('mtNomLot').style.display='none'; if(!v||devis.lots.includes(v)) return; devis.lots.push(v); devis.lotActif=v; sauverDevis(); remplirMetre(); };
   $('mtAjArt').onclick=()=>{ $('mtForm').style.display=$('mtForm').style.display==='none'?'':'none'; $('afDes').focus(); };
-  $('afBase').onchange=()=>{ const b=$('afBase').value; $('afUnite').value= b==='ml'?'ml':b==='m2'?'m²':'U'; };
+  $('afBase').onchange=()=>{ const b=$('afBase').value; $('afUnite').value= b==='ml'?'ml':b==='m2'?'m²':b==='F'?'Ft':'U'; };
   $('afCreer').onclick=()=>{ const des=$('afDes').value.trim(); if(!des){ $('afDes').focus(); return; } const k=id=>{ const v=lireNombre($(id).value); return Number.isFinite(v)?v:undefined; };
     const art=creerArticle(des,$('afUnite').value,$('afBase').value,k('afK1'),$('afK1lib').value.trim()||undefined,k('afK2'),$('afK2lib').value.trim()||undefined);
     if(art){ calqueActifMes=art.nom; if(art.devis.base==='U') calqueActifPts=art.nom; sauverCalquesPerso(); remplirSelectsCalques(); }
+    tachesDesForfaits();
     for(const id of ['afDes','afK1','afK1lib','afK2','afK2lib']) $(id).value=''; $('mtForm').style.display='none'; majTableMetre(); };
   $('mtColler').onclick=()=>{ $('mtCollerZone').style.display=$('mtCollerZone').style.display==='none'?'':'none'; $('mtTexte').focus(); };
   $('mtCollerOk').onclick=()=>{ const r=collerDevis($('mtTexte').value); $('mtTexte').value=''; $('mtCollerZone').style.display='none'; majTableMetre();
@@ -2431,7 +2453,7 @@ function majBandeau(){ const b=$('bandeauArticle'); if(!b) return; const vis=!!s
   else { b.style.background='#fff'; b.style.color='#444'; b.innerHTML='🧾 Article : <b>aucun</b>'+echapper(lot)+' ▾'; }
   if(outil==='mesure' && !edition) $('bGarder').textContent= a ? '✓ '+a.devis.des : '📌 Garder'; }
 function ouvrirListeArticles(){ const z=$('listeArticles'); z.replaceChildren();
-  const A=articles().slice().sort((x,y)=>{ const ix=articlesRecents.indexOf(x.nom), iy=articlesRecents.indexOf(y.nom); return (ix<0?999:ix)-(iy<0?999:iy) || (x.devis.des||'').localeCompare(y.devis.des||'','fr'); });
+  const A=articles().filter(a=>!estForfait(a)).slice().sort((x,y)=>{ const ix=articlesRecents.indexOf(x.nom), iy=articlesRecents.indexOf(y.nom); return (ix<0?999:ix)-(iy<0?999:iy) || (x.devis.des||'').localeCompare(y.devis.des||'','fr'); });
   const bt=(txt,coul,f)=>{ const b=document.createElement('button'); b.className='btn'; b.style.cssText='display:block;width:100%;text-align:left;margin:3px 0;border-left:8px solid '+coul; b.innerHTML=txt; b.onclick=()=>{ z.style.display='none'; f(); }; z.appendChild(b); };
   bt('Aucun (mesure simple, hors métré)','#bbb',()=>choisirArticle(null));
   for(const a of A) bt('<b>'+echapper(a.devis.des)+'</b> <span class="petit">('+a.devis.unite+(a.devis.base==='U'?' · un point par élément':a.devis.base==='m2'?' · surface':' · distance')+')</span>',a.couleur,()=>choisirArticle(a.nom));
@@ -2446,6 +2468,52 @@ function choisirArticle(nom){ const a=nom?articles().find(x=>x.nom===nom):null;
   else { if(outil!=='mesure') choisirOutil('mesure'); const m=a.devis.base==='m2'?'surf':'dist'; if(mesure.mode!==m || voirGardees){ voirGardees=false; selMes=null; choisirMode(m); } }
   majTablePoints(); majPanneau(); majBandeau(); }
 function brancherBandeau(){ $('bandeauArticle').onclick=ouvrirListeArticles; Memoire.lire('articlesRecents').then(v=>{ if(Array.isArray(v)) articlesRecents=v; }); }
+
+// ================= Métré : onglets Demande / Mesuré / En attente / Planning (forfaits → tâches) =================
+let ongletMetre='demande', placementTache=null;
+const estForfait=a=>a&&a.devis&&a.devis.base==='F';
+const ETATS=[['afaire','⬜ À faire'],['encours','🔄 En cours'],['fait','✅ Fait']];
+function tachesDe(){ if(!Array.isArray(devis.taches)) devis.taches=[]; return devis.taches; }
+function idTache(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+// chaque forfait a sa tâche (créée une seule fois)
+function tachesDesForfaits(){ const T=tachesDe(); let n=0; for(const a of articles()) if(estForfait(a) && !T.some(t=>t.art===a.nom)){ T.push({id:idTache(), titre:a.devis.des, art:a.nom, etat:'afaire', date:''}); n++; } if(n) sauverDevis(); return n; }
+function majPlanning(){ const T=tachesDe(), tb=$('tbPlanning'), frag=document.createDocumentFragment();
+  if(!T.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center;height:40px">Aucune tâche : ＋ Tâche, ou collez un devis avec des forfaits (Ft).</td>'; frag.appendChild(tr); }
+  T.forEach((t,i)=>{ const tr=document.createElement('tr'); if(t.etat==='fait') tr.className='fait';
+    const td=()=>document.createElement('td');
+    const c0=td(); c0.className='num'; c0.textContent=i+1;
+    const c1=td(); const it=document.createElement('input'); it.value=t.titre; it.className='titre'; it.onchange=()=>{ t.titre=it.value.trim()||t.titre; sauverDevis(); demanderDessin(false); }; c1.appendChild(it);
+    if(t.art){ const a=calquesPerso.find(x=>x.nom===t.art); if(a){ const s=document.createElement('div'); s.className='petit'; s.innerHTML='<span style="color:'+a.couleur+'">■</span> forfait du devis'; c1.appendChild(s); } }
+    const c2=td(); const be=document.createElement('button'); be.className='btn petitb etat'; be.textContent=(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]; be.onclick=()=>{ const k=ETATS.findIndex(e=>e[0]===t.etat); t.etat=ETATS[(k+1)%3][0]; if(t.etat==='fait' && !t.fait) t.fait=new Date().toISOString().slice(0,10); sauverDevis(); majPlanning(); demanderDessin(false); }; c2.appendChild(be);
+    const ld=document.createElement('div'); ld.className='petit'; ld.textContent='Date : '; const id=document.createElement('input'); id.type='date'; id.value=t.date||''; id.onchange=()=>{ t.date=id.value; sauverDevis(); }; ld.appendChild(id); c1.appendChild(ld);
+    const c4=td(); c4.className='act';
+    const b=(txt,titre,f)=>{ const x=document.createElement('button'); x.className='btn petitb'; x.textContent=txt; x.title=titre; x.onclick=f; c4.appendChild(x); };
+    b('▲','Monter',()=>{ if(i>0){ [T[i-1],T[i]]=[T[i],T[i-1]]; sauverDevis(); majPlanning(); } });
+    b('▼','Descendre',()=>{ if(i<T.length-1){ [T[i+1],T[i]]=[T[i],T[i+1]]; sauverDevis(); majPlanning(); } });
+    b(t.x!==undefined?'🎯':'📍', t.x!==undefined?'Voir sur le plan (appui long : déplacer)':'Placer sur le plan', ()=>{ if(t.x!==undefined){ $('metreBoite').style.display='none'; centrerSur([{x:t.x,y:t.y}]); demanderDessin(false); } else placerTache(t); });
+    if(t.x!==undefined) b('↔','Déplacer sur le plan',()=>placerTache(t));
+    b('🗑','Supprimer',()=>{ if(t.art && !confirmerSuppr(tr)) return; T.splice(i,1); sauverDevis(); majPlanning(); demanderDessin(false); });
+    tr.append(c0,c1,c2,c4); frag.appendChild(tr); });
+  tb.replaceChildren(frag);
+  const n=k=>T.filter(t=>t.etat===k).length; $('mtResumePlanning').textContent=n('afaire')+' à faire · '+n('encours')+' en cours · '+n('fait')+' faite(s)'; }
+function confirmerSuppr(tr){ if(tr.dataset.conf==='1') return true; tr.dataset.conf='1'; const b=tr.querySelector('button[title="Supprimer"]'); b.textContent='Sûr ?'; b.style.background='#d32f2f'; b.style.color='#fff'; setTimeout(()=>{ tr.dataset.conf=''; b.textContent='🗑'; b.style.background=''; b.style.color=''; },3000); return false; }
+function placerTache(t){ placementTache=t.id; $('metreBoite').style.display='none'; if(outil) choisirOutil(outil); $('etat').textContent='📍 Touchez le plan pour placer « '+t.titre+' ».'; }
+function poserTache(sx,sy){ const t=tachesDe().find(x=>x.id===placementTache); placementTache=null; if(!t) return; const [lx,ly]=versPlan(sx,sy), o=scene.origine; t.x=lx+o.x; t.y=ly+o.y; sauverDevis(); demanderDessin(false); $('etat').textContent='📍 « '+t.titre+' » placée sur le plan.'; }
+function dessinerTaches(c){ if(!scene||!devis||!Array.isArray(devis.taches)) return; const o=scene.origine; c.save(); c.font='bold 12px Arial';
+  devis.taches.forEach((t,i)=>{ if(t.x===undefined) return; const [x,y]=versEcran(t.x-o.x,t.y-o.y); if(x<-50||y<-50||x>W+50||y>H+50) return;
+    const coul=t.etat==='fait'?'#2e7d32':t.etat==='encours'?'#ef8a00':'#d32f2f';
+    c.strokeStyle='#333'; c.lineWidth=1.5; c.beginPath(); c.moveTo(x,y); c.lineTo(x,y-24); c.stroke();
+    c.fillStyle=coul; c.beginPath(); c.moveTo(x,y-24); c.lineTo(x+16,y-19); c.lineTo(x,y-14); c.closePath(); c.fill();
+    const txt=(i+1)+'. '+t.titre+(t.etat==='fait'?' ✓':''); const w=c.measureText(txt).width; c.fillStyle='rgba(255,255,255,0.88)'; c.fillRect(x+18,y-30,w+6,16); c.fillStyle=coul; c.fillText(txt,x+21,y-18); });
+  c.restore(); }
+function textePlanning(){ return ['Planning — '+scene.nom, ['N°','Tâche','État','Date','Fait le'].join('\t'), ...tachesDe().map((t,i)=>[i+1,t.titre,(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1].replace(/^\S+\s/,''),t.date||'',t.fait||''].join('\t'))].join('\n'); }
+function choisirOngletMetre(o){ ongletMetre=o; for(const b of document.querySelectorAll('#mtOnglets button')) b.classList.toggle('on',b.dataset.o===o);
+  const pl=o==='planning'; $('zoneMetre').style.display=pl?'none':''; $('zonePlanning').style.display=pl?'':'none'; if(pl){ tachesDesForfaits(); majPlanning(); } else majTableMetre(); }
+function brancherPlanning(){
+  for(const b of document.querySelectorAll('#mtOnglets button')) b.onclick=()=>choisirOngletMetre(b.dataset.o);
+  $('mtAjTache').onclick=()=>{ tachesDe().push({id:idTache(), titre:'Nouvelle tâche', etat:'afaire', date:''}); sauverDevis(); majPlanning(); const L=document.querySelectorAll('#tbPlanning input.titre'); const e=L[L.length-1]; if(e){ e.focus(); e.select(); } };
+  $('mtCopierPlanning').onclick=async()=>{ const t=textePlanning(); let ok=false; try{ await navigator.clipboard.writeText(t); ok=true; }catch(e){} $('mtInfo').textContent= ok?'✓ Planning copié.':'⚠ Copie impossible.'; };
+}
 
 // ================= Gestes au doigt (et souris) =================
 const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dernierTap=null;
@@ -2468,6 +2536,7 @@ const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.po
   if(pointeurs.size){ debutGeste(); return; }
   const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
   if(outil==='mesure' && prendreSurface && !visee){ if(tap && surfaceDuPlan(appui.x,appui.y)){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); } }
+  else if(!outil && placementTache && tap){ poserTache(appui.x,appui.y); }
   else if(!outil){ if(tap){ let t=traitSousDoigt(appui.x,appui.y);
       // 2e appui au même endroit : on passe au fond (hachure) qui est dessous, puis on revient au trait
       if(ficheSel && dernierTap && Math.hypot(appui.x-dernierTap.x,appui.y-dernierTap.y)<14){ const [lx,ly]=versPlan(appui.x,appui.y); if(!ficheSel.fond){ const f=fondSousDoigt(lx,ly); if(f) t=f; } }
@@ -2790,7 +2859,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
