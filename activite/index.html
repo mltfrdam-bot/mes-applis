@@ -142,6 +142,9 @@ const Pont = {
   eauRegler(o) { try { if (A && A.eauRegler) A.eauRegler(JSON.stringify(o)); } catch (e) {} },
   eauPermanente(oui) { try { if (A && A.eauPermanente) A.eauPermanente(!!oui); } catch (e) {} },
   eauTest() { try { return A && A.eauTest ? A.eauTest() : ""; } catch (e) { return ""; } },
+  santeLire() { try { return A && A.santeLire ? JSON.parse(A.santeLire() || "{}") : {}; } catch (e) { return {}; } },
+  santeNoter(o) { try { return A && A.santeNoter ? !!A.santeNoter(JSON.stringify(o)) : false; } catch (e) { return false; } },
+  attente() { try { return A && A.eauEnAttente ? JSON.parse(A.eauEnAttente() || "[]") : []; } catch (e) { return []; } },
   eauNoter(o) { try { return A && A.eauNoter ? !!A.eauNoter(JSON.stringify(o)) : false; } catch (e) { return false; } },
   eauAnnuler(ts) { try { return A && A.eauAnnuler ? !!A.eauAnnuler(ts) : false; } catch (e) { return false; } },
   eauRecup(d, f) { try { return A && A.eauRecup ? JSON.parse(A.eauRecup(d, f) || "null") : null; } catch (e) { return null; } },
@@ -219,7 +222,7 @@ function dessiner() { const e = ECRAN, o = ONGLETS.includes(e.nom) ? e.nom : (e.
   document.querySelectorAll("#onglets button").forEach(b => { if (b.dataset.o === o) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   $("#onglets").classList.toggle("cache", e.nom === "reps"); if (e.nom !== "reps") Pont.ecranAllume(false);
   $("#pied").classList.toggle("cache", e.nom !== "activites" && e.nom !== "seance"); $("#bDemarrer").classList.toggle("cache", e.nom !== "activites"); $("#bArreter").classList.toggle("cache", e.nom !== "seance");
-  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif, seance: vueSeance, bilan: vueBilan, essai: vueEssai, sas: vueSas, materiel: vueMateriel, depart: vueDepart, reps: vueReps, bilanReps: vueBilanReps })[e.nom]();
+  ({ activites: vueActivites, historique: vueHistorique, bilans: vueBilans, aide: vueAide, fiche: vueFiche, reglages: vueReglages, descriptif: vueDescriptif, seance: vueSeance, bilan: vueBilan, essai: vueEssai, sas: vueSas, materiel: vueMateriel, sante: vueSante, rapport: vueRapport, depart: vueDepart, reps: vueReps, bilanReps: vueBilanReps })[e.nom]();
   majAlerte(); }
 function titre(t, sous) { $("#hTitre").textContent = t; $("#hSous").textContent = sous || ""; }
 /* bouton Retour du téléphone : appelé par la partie Android. Renvoie false quand il n'y a plus rien à fermer. */
@@ -234,9 +237,37 @@ function vueActivites() { const lg = N.lignesHistorique(BASE), der = N.derniereP
   titre("Journal d'activité", N.jourCourt(Date.now()));
   $("#vue").innerHTML = '<div class="tuiles">' + N.actsVisibles(BASE).map(a => { const i = N.actInfo(a);
     return '<button class="tuile" data-do="act" data-a="' + esc(a) + '" aria-pressed="' + (a === cur) + '"><span class="ic">' + i.icone + '</span><span class="nom">' + esc(i.nom) + '</span><span class="sous">' + (der[a] ? "dernière : " + N.jourCourt(der[a]) : "aucune séance") + '</span></button>'; }).join("") +
-    '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>' + (S.enr || REPS ? "" : htmlFantome(cur)) + htmlMaterielAccueil() + '<div class="ligne"><button class="sec" data-do="carnet">📒 Carnet (alimentation, santé, recettes…)</button></div>';
+    '<button class="tuile plus" data-do="nouvelle"><span class="ic">➕</span><span class="nom">Nouvelle</span><span class="sous">créer une activité</span></button></div>' + (S.enr || REPS ? "" : htmlFantome(cur)) + htmlMaterielAccueil() + '<div class="ligne"><button class="sec" data-do="sante">🩺 Santé (tension, douleurs)</button><button class="sec" data-do="rapport">📋 Rapport pour Claude</button></div><div class="ligne"><button class="sec" data-do="carnet">📒 Carnet (alimentation, santé, recettes…)</button></div>';
   majDemarrer(); }
 /* ===== 🧰 Suivi du matériel (1.19) ===== */
+/* ===== 🩺 Santé et 📋 rapport (essai 12) : les mesures sont rangées dans le 📒 carnet (une seule base) ===== */
+const ZONES = ["Dent", "Épaule droite", "Pied", "Genou", "Dos", "Tête"];
+function vueSante() { titre("🩺 Santé", "tension et douleurs — gardées dans le 📒 carnet"); const S = Pont.santeLire(), att = Pont.attente().filter(x => x.type === "tension" || x.type === "douleur"), M = N.santeMesures(S).slice(0, 40), DA = N.douleursActives(S);
+  let h = '<div class="ligne"><button class="main" data-do="tensionNoter">🩺 Noter ma tension</button><button class="main" data-do="douleurNoter">😣 Noter une douleur</button></div>';
+  if (att.length) h += '<div class="boiteInfo">⏳ ' + att.length + ' mesure' + (att.length > 1 ? "s" : "") + ' en cours de rangement dans le carnet : ' + att.map(x => esc(x.type === "tension" ? x.t + " " + x.sys + "/" + x.dia : x.t + " " + (x.zone || "douleur") + " " + x.niveau + "/10")).join(" · ") + '</div>';
+  h += '<h2>😣 Douleurs en cours</h2>' + (DA.length ? '<table><thead><tr><th>Zone</th><th class="n">Dernière note</th><th>Depuis</th></tr></thead><tbody>' + DA.map(d => '<tr class="ligneH" data-do="douleurNoter" data-id="' + esc(d.id) + '" data-z="' + esc(d.zone) + '"><td><b>' + esc(d.zone) + '</b>' + (d.cause ? '<div class="gris" style="font-size:13px">' + esc(d.cause) + '</div>' : "") + '</td><td class="n">' + (d.dernier ? d.dernier.niveau + "/10 <span class=\"gris\">" + esc(N.isoJour ? d.dernier.date.slice(8) + "/" + d.dernier.date.slice(5, 7) : "") + "</span>" : esc(d.intensite || "–")) + '</td><td>' + esc(d.debut ? d.debut.slice(8) + "/" + d.debut.slice(5, 7) : "") + '</td></tr>').join("") + '</tbody></table><p class="aide">Touche une ligne pour noter où elle en est (ou qu\'elle a disparu).</p>' : '<p class="gris">Aucune douleur en cours.</p>');
+  h += '<h2>🩺 Tension (30 derniers jours)</h2>' + (M.length ? '<table><thead><tr><th>Jour</th><th>Heure</th><th class="n">Tension</th><th class="n">Pouls</th><th>Repère</th></tr></thead><tbody>' + M.map(m => '<tr><td>' + m.date.slice(8) + "/" + m.date.slice(5, 7) + '</td><td>' + esc(m.heure) + '</td><td class="n"><b>' + m.sys + "/" + m.dia + '</b></td><td class="n">' + (m.pouls || "") + '</td><td style="color:' + m.niv.c + ';font-weight:700">' + m.niv.t + '</td></tr>').join("") + '</tbody></table>' : '<p class="gris">Pas encore de mesure.</p>');
+  h += '<p class="aide">Repères : moins de 130/85 normale · 130-139 / 85-89 à surveiller · 140/90 ou plus élevée. Mesure au calme, assis depuis 5 min, pas juste après le sport : après un match ou avec une douleur (dent…), la tension monte souvent un peu. Plusieurs jours à 140/90 ou plus : parles-en à ton médecin. 180/110 ou plus avec mal de tête, douleur dans la poitrine ou trouble de la vue : appelle le 15.</p>' +
+    (S.jours ? "" : '<p class="aide">Les mesures déjà notées dans le 📒 carnet apparaissent ici une fois le carnet chargé (quelques secondes après l\'ouverture de l\'appli).</p>');
+  $("#vue").innerHTML = h + '<div class="ligne"><button class="sec" data-do="retour">← Retour</button></div>'; }
+function tensionNoter() { const h = new Date(); fenetre('<div class="t">🩺 Ma tension</div><table class="milieu"><tbody><tr><td>Haute (sys)</td><td><input id="tSys" type="number" inputmode="numeric" style="width:100%;font-size:22px"></td></tr><tr><td>Basse (dia)</td><td><input id="tDia" type="number" inputmode="numeric" style="width:100%;font-size:22px"></td></tr><tr><td>Pouls</td><td><input id="tPouls" type="number" inputmode="numeric" style="width:100%;font-size:22px"></td></tr><tr><td>Heure</td><td><input id="tHeure" type="time" value="' + String(h.getHours()).padStart(2, "0") + ":" + String(h.getMinutes()).padStart(2, "0") + '" style="width:100%;font-size:18px"></td></tr><tr><td>Note</td><td><input id="tNote" maxlength="200" style="width:100%;font-size:16px" placeholder="ex. : mal de dents, après le tennis…"></td></tr></tbody></table><div class="ligne"><button class="main" data-do="tensionOk">Enregistrer</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#tSys"); if (i) i.focus(); }, 200); }
+function tensionOk() { const sys = Number($("#tSys").value), dia = Number($("#tDia").value), pouls = Number($("#tPouls").value) || null;
+  if (!(sys >= 70 && sys <= 260) || !(dia >= 40 && dia <= 160)) { toast("Indique les deux chiffres de la tension (ex. 128 et 82)."); return; }
+  const nv = N.tensionNiveau(sys, dia); Pont.santeNoter({ type: "tension", sys, dia, pouls, heure: $("#tHeure").value, note: $("#tNote").value.trim() }); fermerFenetre();
+  toast("🩺 " + sys + "/" + dia + " notée : " + nv.t + (nv.n >= 2 ? ". Refais-la au calme dans 5 min pour confirmer." : "."), 4500); setTimeout(() => { if (ECRAN.nom === "sante") dessiner(); }, 2500); dessiner(); }
+let DOUL = null;
+function douleurNoter(b) { const id = b && b.dataset && b.dataset.id || "", z = b && b.dataset && b.dataset.z || ""; DOUL = { id, zone: z, niv: null };
+  fenetre('<div class="t">😣 ' + (id ? esc(z) : "Nouvelle douleur") + '</div>' + (id ? "" : '<div class="chips">' + ZONES.map(x => '<button class="chip" data-do="doulZone" data-v="' + esc(x) + '">' + esc(x) + '</button>').join("") + '</div><input id="dZone" maxlength="60" style="width:100%;font-size:18px;margin:6px 0" placeholder="Où ? (ex. : dent du bas à droite)">') +
+    '<p style="margin:8px 0 4px">Note de 0 (rien) à 10 (insupportable) :</p><div class="chips">' + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => '<button class="chip" data-do="doulNiv" data-v="' + n + '" style="min-width:44px">' + n + '</button>').join("") + '</div>' +
+    '<input id="dNote" maxlength="300" style="width:100%;font-size:16px;margin-top:8px" placeholder="Comment ? (ex. : élancements en mâchant, gêne au lacet…)">' + (id ? '<label style="display:block;margin-top:8px;font-size:17px"><input type="checkbox" id="dFini"> ✅ Elle a disparu</label>' : "") +
+    '<div class="ligne"><button class="main" data-do="douleurOk">Enregistrer</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
+function douleurOk() { if (!DOUL) return; const zone = DOUL.id ? DOUL.zone : ($("#dZone").value || "").trim(); if (!zone) { toast("Indique où tu as mal."); return; } if (DOUL.niv === null) { toast("Touche une note de 0 à 10."); return; }
+  const fini = !!($("#dFini") && $("#dFini").checked); Pont.santeNoter({ type: "douleur", id: DOUL.id || "", zone, niveau: DOUL.niv, note: $("#dNote").value.trim(), fini }); fermerFenetre();
+  toast("😣 " + zone + " " + DOUL.niv + "/10 notée" + (fini ? " · disparue ✅" : ""), 3000); DOUL = null; setTimeout(() => { if (ECRAN.nom === "sante") dessiner(); }, 2500); dessiner(); }
+let RAPPORT_NB = 7;
+function vueRapport() { titre("📋 Rapport pour Claude", "à copier et coller dans la conversation"); const t = N.rapportPeriode(BASE, Pont.santeLire(), RAPPORT_NB);
+  $("#vue").innerHTML = ('<div class="chips"><button class="chip" data-do="rapportNb" data-v="1" aria-pressed="' + (RAPPORT_NB === 1) + '">Aujourd\'hui</button><button class="chip" data-do="rapportNb" data-v="7" aria-pressed="' + (RAPPORT_NB === 7) + '">7 derniers jours</button><button class="chip" data-do="rapportNb" data-v="14" aria-pressed="' + (RAPPORT_NB === 14) + '">14 jours</button></div>' +
+    '<div class="ligne"><button class="main" data-do="rapportCopier">📋 Copier le rapport</button></div><pre style="white-space:pre-wrap;font-size:14px;background:#f6f7f9;border:1px solid #d8dde3;border-radius:10px;padding:10px">' + esc(t) + '</pre>') + '<div class="ligne"><button class="sec" data-do="retour">← Retour</button></div>'; }
 function htmlMaterielAccueil() { const l = N.matLire(BASE); if (!l.length) return '<div class="ligne"><button class="sec" data-do="materiel">🧰 Suivi du matériel (cordage, balles, baskets…)</button></div>';
   const L = N.lignesHistorique(BASE), al = l.map(e => ({ e, c: N.matCompteur(BASE, e, L) })).filter(x => N.matDepasse(x.e, x.c));
   return al.map(x => '<div class="boiteInfo" data-do="materiel" style="border-color:#c62828;background:#fdecea">⚠️ <b>' + esc(x.e.icone + " " + x.e.nom) + '</b> : ' + esc(N.matUsageTxt(x.e, x.c)) + '</div>').join("") + '<div class="ligne"><button class="sec" data-do="materiel">🧰 Matériel (' + l.length + ')</button></div>'; }
@@ -876,6 +907,11 @@ function remettreSeance(t, id) { if (N.restaurer(BASE, t, id)) { sauver(); toast
 
 /* ===== Tous les appuis passent par ici (un appui simple, jamais d'appui long) ===== */
 const ACTIONS = {
+  sante: () => aller("sante"), rapport: () => aller("rapport"), tensionNoter, tensionOk, douleurNoter, douleurOk,
+  doulZone: (b) => { $("#dZone").value = b.dataset.v; document.querySelectorAll('[data-do="doulZone"]').forEach(x => x.setAttribute("aria-pressed", x === b)); },
+  doulNiv: (b) => { DOUL.niv = Number(b.dataset.v); document.querySelectorAll('[data-do="doulNiv"]').forEach(x => x.setAttribute("aria-pressed", x === b)); },
+  rapportNb: (b) => { RAPPORT_NB = Number(b.dataset.v) || 7; dessiner(); },
+  rapportCopier: () => copie(N.rapportPeriode(BASE, Pont.santeLire(), RAPPORT_NB), "Rapport"),
   rav: ravNoter, ravAnnuler, matchDebut, matchOk, jeu: (b) => jeuNoter(Number(b.dataset.q) ? 1 : 0),
   jeuAnnuler: () => { if (N.evtAnnuler(BASE, seanceDebut() - 60000, ["jeu", "set", "stb"])) { sauver(); majRavito(true); } else toast("Rien à annuler."); },
   setSuivant: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "set" }); sauver(); majRavito(true); },

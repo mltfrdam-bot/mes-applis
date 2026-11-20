@@ -7729,7 +7729,29 @@ table.pa td.ac { color: var(--accent); }
   (function apkEau() { var A = window.AndroidApp; if (!A || !A.eauEtat) return;
     function derniere(d) { var m = -1; (state.alimentation || []).forEach(function (e) { if (e && e.date === d && (num(e.boisson_ml) || 0) > 0) { var x = hmMin(String(e.heure || "").slice(0, 5), -1); if (x > m) m = x; } }); return m; }
     function publier() { try { if (!db || state.alimentation === null || typeof waterStatus !== "function") return; var d = todayStr(), ws = waterStatus(), cfg = rythmeCfg();
-      A.eauEtat(JSON.stringify({ date: d, ml: ws.ml, goal: ws.goal, pct: ws.pct, gap: ws.gap, lever: cfg.lever, bed: ws.bed, dernier: derniere(d), maj: Date.now() })); } catch (e) {} }
+      A.eauEtat(JSON.stringify({ date: d, ml: ws.ml, goal: ws.goal, pct: ws.pct, gap: ws.gap, lever: cfg.lever, bed: ws.bed, dernier: derniere(d), maj: Date.now() })); } catch (e) {} publierSante(); }
+    /* 🩺 Santé et eau des 30 derniers jours, pour le Journal (écran Santé et 📋 rapport) */
+    var dernierSante = "";
+    function publierSante() { try { if (!A.santeEtat || !db) return; var j = [], now = new Date();
+      for (var k = 0; k < 30; k++) { var dt = new Date(now.getTime() - k * 86400000), ds = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0"); j.push({ date: ds, eau: waterToday(ds), objectif: waterGoal(ds) }); }
+      var lim = j[j.length - 1].date;
+      var sa = (state.sante || []).filter(function (e) { return e && e.date >= lim; }).map(function (e) { return { date: e.date, mesures: e.mesures_tension || (e.tension_sys ? [{ heure: "", sys: e.tension_sys, dia: e.tension_dia, pouls: e.pouls_soir || null }] : []), poids: e.poids_kg || null, siestes: (e.siestes || []).map(function (x) { return x.duree_min; }) }; });
+      var dl = (pains || []).map(function (p) { var ep = episodesOf(p), der = ep[ep.length - 1] || {}; return { id: p.id, zone: p.zone, intensite: p.intensite || "", cause: p.cause || "", debut: p.debut || der.debut || "", fin: der.fin || p.fin || null, note: p.note || "", suivi: (p.suivi || []).filter(function (x) { return x.date >= lim; }) }; });
+      var t = JSON.stringify({ jours: j, sante: sa, douleurs: dl });
+      if (t !== dernierSante) { dernierSante = t; A.santeEtat(t); } } catch (e) {} }
+    async function rangerSante(x) { var d = x.date, h = x.t;
+      if (x.type === "tension") { var ref = db.collection("sante").doc(dayId(d)), snap = await ref.get(), cur = snap.exists ? Object.assign({}, snap.data()) : { date: d };
+        cur.tension_sys = x.sys; cur.tension_dia = x.dia; if (x.pouls) cur.pouls_soir = x.pouls;
+        cur.mesures_tension = (cur.mesures_tension || []).concat([{ heure: h, sys: x.sys, dia: x.dia, pouls: x.pouls || null }]);
+        cur.note = (cur.note ? cur.note + " " : "") + "Tension à " + h + " : " + x.sys + "/" + x.dia + (x.pouls ? ", pouls " + x.pouls : "") + "." + (x.note ? " " + x.note : "") + " (Journal)";
+        await ref.set(cur); return; }
+      if (x.type === "douleur") { var niv = Number(x.niveau) || 0, intens = niv >= 7 ? "Forte" : niv >= 4 ? "Moyenne" : "Légère", ligne = { date: d, heure: h, niveau: niv, note: x.note || null };
+        var p = x.id ? (pains || []).find(function (q) { return q.id === x.id; }) : null;
+        if (p) { var dd = Object.assign({}, p); delete dd.id; dd.suivi = (Array.isArray(p.suivi) ? p.suivi.slice() : []).concat([ligne]); dd.intensite = intens;
+          if (x.fini) { var eps = episodesOf(p).map(function (e) { return Object.assign({}, e); }); eps[eps.length - 1].fin = d; dd.episodes = eps; dd.fin = d; }
+          await db.collection("douleurs").doc(p.id).set(dd); return; }
+        var doc = { zone: x.zone || "Douleur", debut: d, intensite: intens, episodes: [{ debut: d }], suivi: [ligne] }; if (x.cause) doc.cause = x.cause; if (x.note) doc.note = x.note;
+        await db.collection("douleurs").add(doc); } }
     var enCours = false;
     /* 🍇 Aliments notés pendant une séance du Journal : favori trouvé par son nom, sinon créé (règle : tout nouvel aliment devient un favori) */
     var FAV_APK = {
@@ -7740,7 +7762,9 @@ table.pa td.ac { color: var(--accent); }
       var d = Object.assign({ nom: M.nom }, M.data); try { await db.collection("favoris").doc("fav-apk-" + ty).set(d); } catch (e) {} d.id = "fav-apk-" + ty; return d; }
     async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
       try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0;
-          for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau", ff = ty === "eau" ? f : await favApk(ty), q = ff && ff.unite === "g" ? Math.round((Number(x.g) || 0) * 10) / 10 : Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
+          for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau";
+            if (ty === "tension" || ty === "douleur") { try { await rangerSante(x); } catch (e) {} continue; }
+            var ff = ty === "eau" ? f : await favApk(ty), q = ff && ff.unite === "g" ? Math.round((Number(x.g) || 0) * 10) / 10 : Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
             var doc = ff ? Object.assign({ date: x.date, heure: x.t, repas: ty === "eau" ? repasFor(ff, x.t) : (ff.repas || "Pendant l'effort"), description: descFor(ff, q) + (x.n ? " (" + x.n + ")" : ""), fav: ff.id, quantite: q, unite: ff.unite }, calcFor(ff, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
             doc.saisi = Date.now(); doc.note = x.note || "Noté depuis la notification"; await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(doc); n++; }
           A.eauVider(); if (n) toast("💧 " + n + " boisson" + (n > 1 ? "s" : "") + " de la notification rangée" + (n > 1 ? "s" : "") + " dans le carnet."); } } catch (e) {}

@@ -800,6 +800,46 @@ function avecRavito(x, evts) { if (!evts || !evts.length) return x; x.evts = evt
 /* ✍️ Notes libres du ressenti */
 function ressentiNoter(n, txt) { if (!n) return null; const rs = Object.assign({}, n.ressenti || {}), t = String(txt || "").trim().slice(0, 3000); if (t) rs.notes = t; else delete rs.notes; if (Object.keys(rs).length) n.ressenti = rs; else delete n.ressenti; return rs; }
 
+
+/* ===== 🩺 Santé (données du 📒 carnet) et 📋 rapport du jour / de la semaine (essai 12) ===== */
+/* Repères de tension (société européenne d'hypertension) : < 130/85 normale, 130-139 / 85-89 à surveiller, ≥ 140/90 élevée, ≥ 180/110 très élevée ; < 90/60 basse */
+function tensionNiveau(sys, dia) { sys = Number(sys) || 0; dia = Number(dia) || 0;
+  if (sys >= 180 || dia >= 110) return { n: 3, t: "très élevée", c: "#b71c1c" }; if (sys >= 140 || dia >= 90) return { n: 2, t: "élevée", c: "#c62828" };
+  if (sys >= 130 || dia >= 85) return { n: 1, t: "à surveiller", c: "#c98a00" }; if (sys && (sys < 90 || dia < 60)) return { n: 1, t: "basse", c: "#c98a00" }; return { n: 0, t: "normale", c: "#1f6b43" }; }
+const JOURS_C = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+function isoJour(ms) { const d = new Date(ms); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function jourTxt(iso) { const [a, m, j] = iso.split("-").map(Number), d = new Date(a, m - 1, j); return JOURS_C[d.getDay()] + " " + String(j).padStart(2, "0") + "/" + String(m).padStart(2, "0"); }
+function hhmm(ms) { const d = new Date(ms); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function santeMesures(sante, jours) { const l = []; ((sante && sante.sante) || []).forEach(e => { if (jours && !jours.includes(e.date)) return; (e.mesures || []).forEach(m => { if (m && m.sys) l.push({ date: e.date, heure: m.heure || "", sys: m.sys, dia: m.dia, pouls: m.pouls || null, niv: tensionNiveau(m.sys, m.dia) }); }); });
+  return l.sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure)); }
+function douleursActives(sante) { return ((sante && sante.douleurs) || []).filter(d => !d.fin).map(d => { const s = (d.suivi || []).slice().sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure)), der = s[s.length - 1]; return Object.assign({}, d, { dernier: der || null }); }); }
+function chargeLigne(x) { const R = x && x.ref && x.ref.n && x.ref.n.h10rec; const c = R ? chargeR(R) : null; return c == null ? 0 : Math.round(c); }
+function rapportPeriode(base, sante, nb, maintenant) { const now = maintenant || Date.now(), jours = []; for (let k = 0; k < nb; k++) jours.push(isoJour(now - k * 86400000));
+  const S = sante || {}, toutes = lignesHistorique(base), L = toutes.filter(x => jours.includes(isoJour(x.t))), T = [];
+  T.push("📋 RAPPORT — " + (nb === 1 ? "aujourd'hui, " + jourTxt(jours[0]) : nb + " derniers jours (" + jourTxt(jours[nb - 1]) + " → " + jourTxt(jours[0]) + ")") + " — Journal d'activité");
+  /* Synthèse */
+  const ch = L.reduce((a, x) => a + chargeLigne(x), 0), dur = L.reduce((a, x) => a + (x.duree || 0), 0);
+  T.push("", "SYNTHÈSE", "Séances : " + L.length + " · durée " + dureeCourte(dur) + " · charge totale " + ch);
+  { const s7 = toutes.filter(x => now - x.t < 7 * 864e5).reduce((a, x) => a + chargeLigne(x), 0), s28 = toutes.filter(x => now - x.t < 28 * 864e5).reduce((a, x) => a + chargeLigne(x), 0);
+    if (s28 > 0) T.push("Charge 7 jours : " + s7 + " · moyenne d'une semaine sur 4 semaines : " + Math.round(s28 / 4) + " · rapport " + (s7 / (s28 / 4)).toFixed(2).replace(".", ",") + " (≈ 0,8 à 1,3 = normal, > 1,5 = forte hausse)"); }
+  const J = (S.jours || []).filter(j => jours.includes(j.date));
+  if (J.length) { const ok = J.filter(j => j.objectif && j.eau >= j.objectif).length; T.push("Eau : objectif atteint " + ok + " jour" + (ok > 1 ? "s" : "") + " sur " + J.length + " · moyenne " + (J.reduce((a, j) => a + j.eau, 0) / J.length / 1000).toFixed(2).replace(".", ",") + " L/jour"); }
+  const M = santeMesures(S, jours); if (M.length) { const ms = Math.round(M.reduce((a, m) => a + m.sys, 0) / M.length), md = Math.round(M.reduce((a, m) => a + m.dia, 0) / M.length), hautes = M.filter(m => m.niv.n >= 2).length;
+    T.push("Tension : " + M.length + " mesure" + (M.length > 1 ? "s" : "") + " · moyenne " + ms + "/" + md + " (" + tensionNiveau(ms, md).t + ")" + (hautes ? " · " + hautes + " élevée" + (hautes > 1 ? "s" : "") : "")); }
+  const DA = douleursActives(S); if (DA.length) T.push("Douleurs en cours : " + DA.map(d => d.zone + (d.dernier ? " " + d.dernier.niveau + "/10 (" + jourTxt(d.dernier.date) + ")" : d.intensite ? " (" + d.intensite.toLowerCase() + ")" : "")).join(" · "));
+  { const P = ((S.sante) || []).filter(e => e.poids && jours.includes(e.date)).sort((a, b) => a.date.localeCompare(b.date)); if (P.length) T.push("Poids : " + P.map(e => jourTxt(e.date) + " " + String(e.poids).replace(".", ",") + " kg").join(" · ")); }
+  /* Jour par jour */
+  jours.forEach(d => { const lj = L.filter(x => isoJour(x.t) === d).sort((a, b) => a.t - b.t), jj = J.find(j => j.date === d), mj = M.filter(m => m.date === d).reverse(),
+      dj = ((S.douleurs) || []).map(x => ({ zone: x.zone, s: (x.suivi || []).filter(v => v.date === d) })).filter(x => x.s.length), sj = ((S.sante) || []).find(e => e.date === d);
+    if (!lj.length && !mj.length && !dj.length && !(jj && jj.eau)) return;
+    T.push("", "▸ " + jourTxt(d).toUpperCase());
+    lj.forEach(x => { T.push("- " + hhmm(x.t) + " " + actNom(x.act) + " · " + dureeCourte(x.duree || 0) + " · " + x.resultat); const rs = x.ref && x.ref.n && x.ref.n.ressenti; if (rs) T.push("  Ressenti : " + ressentiTxt(rs)); });
+    if (jj) T.push("- 💧 Eau : " + (jj.eau / 1000).toFixed(2).replace(".", ",") + " L / " + (jj.objectif / 1000).toFixed(1).replace(".", ",") + " L (" + Math.round(jj.eau / Math.max(1, jj.objectif) * 100) + " %)");
+    mj.forEach(m => T.push("- 🩺 Tension " + (m.heure ? m.heure + " " : "") + m.sys + "/" + m.dia + (m.pouls ? " · pouls " + m.pouls : "") + " (" + m.niv.t + ")"));
+    dj.forEach(x => x.s.forEach(v => T.push("- 😣 " + x.zone + " " + v.niveau + "/10" + (v.heure ? " à " + v.heure : "") + (v.note ? " · " + v.note : ""))));
+    if (sj && sj.siestes && sj.siestes.length) T.push("- 😴 Sieste : " + sj.siestes.map(m => m + " min").join(", ")); });
+  return T.join("\n"); }
+
 /* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
 const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
 function veloResume(V) { const t = []; if (V.pMoy != null) t.push("⚡ " + V.pMoy + " W moy · max " + V.pMax); if (V.cadMoy != null) t.push(V.cadMoy + " tr/min"); if (V.dist) t.push(kmTxt(V.dist)); if (V.kj) t.push(V.kj + " kJ"); return t.length ? t : ["home-trainer : aucune mesure"]; }
@@ -860,6 +900,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
+  tensionNiveau, isoJour, santeMesures, douleursActives, rapportPeriode,
   RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,
   DIFF, kg, chargeTxt, chargeVal, MAT_MODELES, MAT_ICONES, matLire, matAjouter, matRegler, matSupprimer, matUsageNoter, matCompteur, matDepasse, matUsageTxt, matNeuf, matPlusTop, matSuggestion, matAlertesNouvelles, matBilan, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,

@@ -279,12 +279,13 @@ public class RappelEau extends BroadcastReceiver {
             JSONObject o = new JSONObject(json);
             long ts = o.optLong("ts", System.currentTimeMillis());
             Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
-            JSONObject x = new JSONObject().put("date", aujourdhui(k)).put("t", String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE))).put("ts", ts);
+            JSONObject x = new JSONObject(json).put("date", aujourdhui(k)).put("t", String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE))).put("ts", ts);
             int ml = o.optInt("ml", 0);
             if (ml > 0) x.put("ml", ml);
             if (o.has("g")) x.put("g", o.optDouble("g"));
             if (o.has("n")) x.put("n", o.optInt("n"));
             x.put("type", o.optString("type", "eau")).put("note", o.optString("note", ""));
+            if (o.optString("heure", "").matches("\\d{2}:\\d{2}")) x.put("t", o.getString("heure"));
             JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
             l.put(x);
             SharedPreferences.Editor ed = prefs(c).edit().putString("attente", l.toString());

@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
         if (!dossier.exists()) dossier.mkdirs();
         try { sauvegardeDuJour(); } catch (Exception ignored) {}
         reprendreSeance();
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(this::preparerCarnet, 4000);
         RappelEau.programmer(this);   // 💧 la vérification de l'eau tourne toutes les 30 min
         ServiceEau.lancerSiVoulu(this);   // 💧 notification permanente (si choisie) : garde aussi l'appli active
 
@@ -176,13 +177,18 @@ public class MainActivity extends Activity {
         return v0;
     }
 
+    /** Le carnet est chargé en arrière-plan quelques secondes après l'ouverture : l'eau et la santé notées depuis le Journal y sont rangées tout de suite. */
+    void preparerCarnet() {
+        if (cadre == null || webCarnet != null) return;
+        webCarnet = creerVue();
+        webCarnet.setVisibility(View.GONE);
+        cadre.addView(webCarnet, 0, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        webCarnet.loadUrl(URL_CARNET);
+    }
+
     void montrerCarnet() {
         if (cadre == null) return;
-        if (webCarnet == null) {
-            webCarnet = creerVue();
-            cadre.addView(webCarnet, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            webCarnet.loadUrl(URL_CARNET);
-        }
+        preparerCarnet();
         webCarnet.setVisibility(View.VISIBLE);
         web.setVisibility(View.GONE);
         webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null);
@@ -761,6 +767,9 @@ public class MainActivity extends Activity {
             RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this);
             if (json != null && !sansMaj(json).equals(sansMaj(avant))) RappelEau.rafraichir(MainActivity.this);   // widget et notification permanente
         }
+        @JavascriptInterface public void santeEtat(String json) { RappelEau.prefs(MainActivity.this).edit().putString("sante", json).apply(); }
+        @JavascriptInterface public String santeLire() { return RappelEau.prefs(MainActivity.this).getString("sante", "{}"); }
+        @JavascriptInterface public boolean santeNoter(String json) { boolean ok = RappelEau.noter(MainActivity.this, json); if (webCarnet != null) runOnUiThread(() -> webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null)); return ok; }
         @JavascriptInterface public String eauEnAttente() { return RappelEau.prefs(MainActivity.this).getString("attente", "[]"); }
         @JavascriptInterface public void eauVider() { RappelEau.prefs(MainActivity.this).edit().putString("attente", "[]").apply(); }
         @JavascriptInterface public String eauReglages() { return RappelEau.reglages(MainActivity.this).toString(); }
