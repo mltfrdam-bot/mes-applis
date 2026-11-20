@@ -431,7 +431,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </div>
 <div id="calagePanel">
   <div class="outils"><b style="flex:1;font-size:15px">📐 Caler le plan</b><button class="btn prim" id="cgAppliquer" disabled>✓ Appliquer</button><button class="btn" id="cgFermer">✕</button></div>
-  <div class="cgL"><span>Échelle :</span><span class="seg"><button id="cgEchCalc" class="on">Calculée</button><button id="cgEch1">Garder 1</button></span><button class="btn petitb" id="cgPlus">＋ Point</button><button class="btn petitb" id="cgRetirer" style="display:none">↩ Retirer le calage</button></div>
+  <div class="cgL"><span class="seg"><button id="cgModePts" class="on">Par points</button><button id="cgModeFac">Angle + façade</button></span><span id="cgEchZone">Échelle : <span class="seg"><button id="cgEchCalc" class="on">Calculée</button><button id="cgEch1">Garder 1</button></span></span><button class="btn petitb" id="cgPlus">＋ Point</button><button class="btn petitb" id="cgRetirer" style="display:none">↩ Retirer le calage</button></div>
   <table class="xl compact" id="tabCalage"><thead><tr><th>N°</th><th>Sur le plan (touché)</th><th style="text-align:right">X relevé</th><th style="text-align:right">Y relevé</th><th style="text-align:right">Écart</th><th></th></tr></thead><tbody id="tbCalage"></tbody></table>
   <div id="cgRes"></div>
 </div>
@@ -575,7 +575,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Tronçon – v1";
+const VERSION = "Calage – v4";
 </script>
 <script>
 "use strict";
@@ -2324,6 +2324,7 @@ const GUIDE={
  bSignal:{t:'💬 Signaler', x:'Glissez l\'épingle sur l\'endroit, ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (ou 📋 Copier).', a:'💬 Signaler'},
  bMenu:{t:'⋮ Menu', x:'Enregistrer, classeur, fusion, 📐 calage, ❓ aide, mise à jour de l\'appli.'},
  bMenuCaler:{t:'📐 Caler', x:'Touchez un angle sur le plan, tapez X et Y relevés, puis un 2e angle (un 3e pour contrôler). ✓ Appliquer. ↩ Retirer pour revenir.', a:'📐 Caler'},
+ cgModeFac:{t:'Angle + façade', x:'Touchez l\'angle (X / Y relevés), puis un 2e point sur le même mur : la façade est prolongée. Tapez X / Y d\'un point relevé n\'importe où sur cette façade : il se raccroche sur la ligne à la bonne distance. Échelle gardée à 1.'},
  cgEchCalc:{t:'Échelle calculée', x:'Le plan est agrandi / réduit pour coller aux distances relevées.'},
  cgEch1:{t:'Garder l\'échelle à 1', x:'Seulement déplacement + rotation : l\'écart de distance reste visible dans la colonne Écart.'},
  cgPlus:{t:'＋ Point', x:'Ajoute un point de contrôle : son écart s\'affiche en cm (rouge au-delà de 2 cm).'},
@@ -2372,25 +2373,55 @@ function helmert(L,avecEchelle){ const n=L.length; if(!n) return null; let xc=0,
   let a=1,b=0; if(n>=2){ let sxx=0,sa=0,sb=0; for(const p of L){ const dx=p.px-xc, dy=p.py-yc, dX=p.vx-Xc, dY=p.vy-Yc; sxx+=dx*dx+dy*dy; sa+=dx*dX+dy*dY; sb+=dx*dY-dy*dX; } if(sxx<1e-12) return null; a=sa/sxx; b=sb/sxx; if(!avecEchelle){ const k=Math.hypot(a,b); a/=k; b/=k; } }
   const S=[a,b,-b,a,Xc-(a*xc-b*yc),Yc-(b*xc+a*yc)]; const ec=L.map(p=>{ const [x,y]=appliquerS(S,p.px,p.py); return Math.hypot(x-p.vx,y-p.vy); });
   return {S, ech:Math.hypot(a,b), rot:Math.atan2(b,a)*180/Math.PI, ec}; }
-function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); fermerBulle(); calageSaisie={pts:[{},{}], ligne:0, echelle:calageSaisie?calageSaisie.echelle:true}; outil='calage'; document.body.classList.add('outil-calage'); redim(); majCalage(); demanderDessin(false); }
+function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); fermerBulle(); const mode=calageSaisie?calageSaisie.mode:'pts'; calageSaisie={pts:mode==='fac'?[{},{},{}]:[{},{}], ligne:0, echelle:calageSaisie?calageSaisie.echelle:true, mode}; outil='calage'; document.body.classList.add('outil-calage'); redim(); majCalage(); demanderDessin(false); }
+function changerModeCalage(m){ if(!calageSaisie||calageSaisie.mode===m) return; calageSaisie.mode=m; calageSaisie.pts=m==='fac'?[{},{},{}]:[{},{}]; calageSaisie.ligne=0; majCalage(); demanderDessin(false); }
 function fermerCalage(){ calageSaisie=null; outil=null; document.body.classList.remove('outil-calage'); visee=null; redim(); demanderDessin(false); }
-function poserCalage(v){ const o=scene.origine, k=calageSaisie.ligne, p=calageSaisie.pts[k]; p.px=v.x+o.x; p.py=v.y+o.y; majCalage(); demanderDessin(false); const i=$('cg'+k+'X'); if(i) setTimeout(()=>i.focus(),50); }
-function calageCalcule(){ const L=calageSaisie.pts.filter(p=>[p.px,p.py,p.vx,p.vy].every(Number.isFinite)); if(!L.length) return null; const h=helmert(L,calageSaisie.echelle && L.length>=2); if(!h) return null;
+// rôle d'une ligne : 'pt' (touché + X/Y), 'dir' (touché seulement : direction de la façade), 'fac' (X/Y seulement : point relevé sur la façade)
+const roleCal=k=>calageSaisie.mode!=='fac'?'pt':k===1?'dir':k===2?'fac':'pt';
+function poserCalage(v){ const o=scene.origine, k=calageSaisie.ligne, p=calageSaisie.pts[k], r=roleCal(k);
+  if(r==='fac'){ $('etat').textContent='Le point 2 se place tout seul sur la ligne de façade : tapez seulement ses X et Y relevés.'; return; }
+  p.px=v.x+o.x; p.py=v.y+o.y;
+  if(r==='dir'){ calageSaisie.ligne=2; majCalage(); demanderDessin(false); setTimeout(()=>{ const i=$('cg2X'); if(i) i.focus(); },50); return; }
+  majCalage(); demanderDessin(false); const i=$('cg'+k+'X'); if(i) setTimeout(()=>i.focus(),50); }
+function calageCalcule(){ const P=calageSaisie.pts, ok=p=>[p.px,p.py,p.vx,p.vy].every(Number.isFinite);
+  if(calageSaisie.mode==='fac'){ const A=P[0], D=P[1], B=P[2]; if(!ok(A)||![D.px,D.py,B.vx,B.vy].every(Number.isFinite)) return null;
+    const ux=D.px-A.px, uy=D.py-A.py, lu=Math.hypot(ux,uy); if(lu<1e-6) return null; const dv=Math.hypot(B.vx-A.vx,B.vy-A.vy); if(dv<1e-6) return null;
+    const rot=Math.atan2(B.vy-A.vy,B.vx-A.vx)-Math.atan2(uy,ux), a=Math.cos(rot), b=Math.sin(rot);
+    const S=[a,b,-b,a,A.vx-(a*A.px-b*A.py),A.vy-(b*A.px+a*A.py)];
+    const Bp={x:A.px+ux/lu*dv, y:A.py+uy/lu*dv}; const ctl=P.slice(3).filter(ok);
+    const ec=ctl.map(p=>{ const [x,y]=appliquerS(S,p.px,p.py); return Math.hypot(x-p.vx,y-p.vy); });
+    return {S, ech:1, rot:rot*180/Math.PI, L:[A,B,...ctl], ctl, ec, Bp, dFac:dv, fac:true}; }
+  const L=P.filter(ok); if(!L.length) return null; const h=helmert(L,calageSaisie.echelle && L.length>=2); if(!h) return null;
   h.L=L; if(L.length>=2){ let i0=0,i1=1,dm=0; for(let i=0;i<L.length;i++) for(let j=i+1;j<L.length;j++){ const d=Math.hypot(L[j].px-L[i].px,L[j].py-L[i].py); if(d>dm){ dm=d; i0=i; i1=j; } } h.dPlan=dm; h.dVrai=Math.hypot(L[i1].vx-L[i0].vx,L[i1].vy-L[i0].vy); } return h; }
-function majCalage(){ if(!calageSaisie) return; const P=calageSaisie.pts, f=v=>Number.isFinite(v)?frN(v,3):'—', c=calageCalcule(), tb=$('tbCalage'); tb.replaceChildren();
-  P.forEach((p,k)=>{ const tr=document.createElement('tr'); if(calageSaisie.ligne===k) tr.className='sel'; const i=c?c.L.indexOf(p):-1, e=i>=0&&c.L.length>=2?c.ec[i]:null;
-    tr.innerHTML='<td>'+(k+1)+'</td><td>'+(Number.isFinite(p.px)?f(p.px)+' ; '+f(p.py):(calageSaisie.ligne===k?'👆 touchez le plan':'—'))+'</td><td><input id="cg'+k+'X" inputmode="decimal" placeholder="X"></td><td><input id="cg'+k+'Y" inputmode="decimal" placeholder="Y"></td><td style="text-align:right">'+(e===null?'':'<b style="color:'+(e>0.02?'#d32f2f':'#2e7d32')+'">'+frN(e*100,1)+' cm</b>')+'</td><td class="sup">'+(P.length>1?'🗑':'')+'</td>';
-    tr.onclick=ev=>{ if(ev.target.tagName==='INPUT'||ev.target.classList.contains('sup')) return; calageSaisie.ligne=k; majCalage(); };
-    tr.querySelector('.sup').onclick=()=>{ if(P.length<2) return; P.splice(k,1); calageSaisie.ligne=Math.min(calageSaisie.ligne,P.length-1); majCalage(); demanderDessin(false); };
-    for(const a of ['X','Y']){ const inp=tr.querySelector('#cg'+k+a); inp.value=Number.isFinite(p['v'+a.toLowerCase()])?frN(p['v'+a.toLowerCase()],3):'';
+function majCalage(){ if(!calageSaisie) return; const P=calageSaisie.pts, f=v=>Number.isFinite(v)?frN(v,3):'—', c=calageCalcule(), tb=$('tbCalage'), fac=calageSaisie.mode==='fac'; tb.replaceChildren();
+  P.forEach((p,k)=>{ const r=roleCal(k), tr=document.createElement('tr'); if(calageSaisie.ligne===k) tr.className='sel';
+    let e=null; if(c){ if(c.fac){ const j=c.ctl.indexOf(p); if(j>=0) e=c.ec[j]; } else { const i=c.L.indexOf(p); if(i>=0&&c.L.length>=2) e=c.ec[i]; } }
+    const num=fac?(k===0?'1 · angle':k===1?'→ façade':k===2?'2 · façade':(k)+' · contrôle'):String(k+1);
+    let plan; if(r==='fac') plan=c&&c.fac?'sur la ligne, à <b>'+frN(c.dFac,3)+' m</b> de l\'angle':'<i>se place tout seul</i>';
+      else plan=Number.isFinite(p.px)?f(p.px)+' ; '+f(p.py):(calageSaisie.ligne===k?(r==='dir'?'👆 touchez un point du même mur':'👆 touchez le plan'):'—');
+    const xy=r==='dir'?'<td colspan="2" style="color:#888;font-size:12px;text-align:center">direction seulement</td>':'<td><input id="cg'+k+'X" inputmode="decimal" placeholder="X"></td><td><input id="cg'+k+'Y" inputmode="decimal" placeholder="Y"></td>';
+    const sup=(fac?k>=3:P.length>1)?'🗑':'';
+    tr.innerHTML='<td style="white-space:nowrap;font-size:12.5px">'+num+'</td><td>'+plan+'</td>'+xy+'<td style="text-align:right">'+(e===null?'':'<b style="color:'+(e>0.02?'#d32f2f':'#2e7d32')+'">'+frN(e*100,1)+' cm</b>')+'</td><td class="sup">'+sup+'</td>';
+    tr.onclick=ev=>{ if(ev.target.tagName==='INPUT'||ev.target.classList.contains('sup')) return; calageSaisie.ligne=k; majCalage(); demanderDessin(false); };
+    tr.querySelector('.sup').onclick=()=>{ if(!sup) return; P.splice(k,1); calageSaisie.ligne=Math.min(calageSaisie.ligne,P.length-1); majCalage(); demanderDessin(false); };
+    if(r!=='dir') for(const a of ['X','Y']){ const inp=tr.querySelector('#cg'+k+a); inp.value=Number.isFinite(p['v'+a.toLowerCase()])?frN(p['v'+a.toLowerCase()],3):'';
       inp.onfocus=()=>{ calageSaisie.ligne=k; tb.querySelectorAll('tr').forEach((t,j)=>t.classList.toggle('sel',j===k)); demanderDessin(false); };
-      inp.onchange=()=>{ const v=lireNombre(inp.value); if(Number.isNaN(v)){ inp.style.background='#ffd6d6'; return; } p['v'+a.toLowerCase()]=v===null?NaN:v; majCalageRes(); };
-      inp.onkeydown=e=>{ if(e.key!=='Enter') return; e.preventDefault(); e.stopPropagation(); inp.onchange(); if(a==='X') $('cg'+k+'Y').focus(); else { inp.blur(); if(k+1>=P.length) P.push({}); calageSaisie.ligne=k+1; majCalage(); $('etat').textContent='👆 Touchez le point '+(k+2)+' sur le plan.'; } }; }
+      inp.onchange=()=>{ const v=lireNombre(inp.value); if(Number.isNaN(v)){ inp.style.background='#ffd6d6'; return; } p['v'+a.toLowerCase()]=v===null?NaN:v; majCalageRes(); demanderDessin(false); if(r==='fac') majCalagePlanFac(); };
+      inp.onkeydown=e=>{ if(e.key!=='Enter') return; e.preventDefault(); e.stopPropagation(); inp.onchange(); if(a==='X'){ $('cg'+k+'Y').focus(); return; } inp.blur();
+        if(k+1>=P.length) P.push({}); calageSaisie.ligne=k+1; majCalage(); demanderDessin(false);
+        $('etat').textContent=roleCal(k+1)==='dir'?'👆 Touchez un 2e point sur le même mur (direction de la façade).':roleCal(k+1)==='fac'?'Tapez X et Y du point relevé sur la façade.':'👆 Touchez le point '+(k+2)+' sur le plan (contrôle).';
+        if(roleCal(k+1)==='fac') setTimeout(()=>{ const i=$('cg'+(k+1)+'X'); if(i) i.focus(); },50); }; }
     tb.appendChild(tr); });
-  $('cgEchCalc').classList.toggle('on',calageSaisie.echelle); $('cgEch1').classList.toggle('on',!calageSaisie.echelle);
+  $('cgEchCalc').classList.toggle('on',calageSaisie.echelle); $('cgEch1').classList.toggle('on',!calageSaisie.echelle); $('cgEchZone').style.display=fac?'none':'';
+  $('cgModePts').classList.toggle('on',!fac); $('cgModeFac').classList.toggle('on',fac);
   majCalageRes(); Memoire.lire('calage:'+scene.nom).then(x=>{ $('cgRetirer').style.display = x ? '' : 'none'; }); }
-function majCalageRes(){ const c=calageCalcule(); $('cgAppliquer').disabled=!c;
-  if(!c){ $('cgRes').innerHTML='Touchez l\'angle 1 du bâtiment sur le plan, tapez ses X et Y relevés au théodolite (Entrée = case suivante), puis l\'angle 2 (le plus loin possible). Un 3e point sert de contrôle. Le fichier d\'origine n\'est jamais modifié.'; return; }
+function majCalagePlanFac(){ const c=calageCalcule(), td=$('tbCalage').children[2]; if(td) td.children[1].innerHTML=c&&c.fac?'sur la ligne, à <b>'+frN(c.dFac,3)+' m</b> de l\'angle':'<i>se place tout seul</i>'; }
+function majCalageRes(){ const c=calageCalcule(); $('cgAppliquer').disabled=!c; const fac=calageSaisie.mode==='fac';
+  if(!c){ $('cgRes').innerHTML=fac?'1) Touchez l\'<b>angle</b> sur le plan et tapez ses X / Y relevés. 2) Touchez un 2e point <b>sur le même mur</b> : la façade est prolongée en pointillés. 3) Tapez X / Y d\'un point relevé <b>n\'importe où sur cette façade</b> : il se raccroche sur la ligne à la bonne distance. Échelle gardée à 1.':'Touchez l\'angle 1 du bâtiment sur le plan, tapez ses X et Y relevés au théodolite (Entrée = case suivante), puis l\'angle 2 (le plus loin possible). Un 3e point sert de contrôle. Le fichier d\'origine n\'est jamais modifié.'; return; }
+  if(c.fac){ let t='Rotation <b>'+frN(c.rot,3)+'°</b> · point de façade à <b>'+frN(c.dFac,3)+' m</b> de l\'angle (repère ② sur le plan : vérifiez qu\'il tombe sur le bon alignement) · échelle gardée à 1.';
+    if(c.ctl.length){ const em=Math.max(...c.ec); t+='<br>Contrôle : écart maxi <b style="color:'+(em>0.02?'#d32f2f':'#2e7d32')+'">'+frN(em*100,1)+' cm</b>'+(em>0.02?' — vérifiez les points.':' ✓'); }
+    else t+='<br><span style="color:#ef6c00">Conseil : ＋ Point pour un point de contrôle ailleurs sur le bâtiment.</span>';
+    $('cgRes').innerHTML=t; return; }
   const n=c.L.length, emax=n>=2?Math.max(...c.ec):0, ecartE=Math.abs(c.ech-1);
   let t=n===1?'1 point : le plan sera seulement <b>déplacé</b> (ni rotation, ni échelle).':'Rotation <b>'+frN(c.rot,3)+'°</b> · distance plan '+frN(c.dPlan,3)+' m → relevée <b>'+frN(c.dVrai,3)+' m</b> (écart '+frN((c.dVrai-c.dPlan)*100,1)+' cm)';
   if(n>=2) t+='<br>Échelle '+(calageSaisie.echelle?'appliquée : <b>× '+frN(c.ech,5)+'</b>':'gardée à 1 (calculée : × '+frN(helmert(c.L,true).ech,5)+')');
@@ -2422,12 +2453,16 @@ async function accorderCalage(nom,d,dejaLa){ const loc=await Memoire.lire('calag
   if(!loc){ await Memoire.ecrire('calage:'+nom,ent); cacheScenes.delete(nom); if(dejaLa) await transformerMemoire(nom,ent); return '📐 '+nom+' : calage de la sauvegarde repris.'; }
   transformerDonneesObjet(d, mul(loc, inverseS(ent||[1,0,0,1,0,0]))); return '📐 '+nom+' : données de la sauvegarde remises dans votre calage.'; }
 function dessinerCalage(c){ if(outil!=='calage'||!calageSaisie) return; const o=scene.origine; c.save();
-  calageSaisie.pts.forEach((p,k)=>{ if(!Number.isFinite(p.px)) return; const [x,y]=versEcran(p.px-o.x,p.py-o.y), sel=calageSaisie.ligne===k; c.strokeStyle=sel?'#d32f2f':'#6a1b9a'; c.lineWidth=2.5; c.beginPath(); c.arc(x,y,9,0,DEUXPI); c.stroke(); c.beginPath(); c.moveTo(x-14,y); c.lineTo(x+14,y); c.moveTo(x,y-14); c.lineTo(x,y+14); c.stroke(); c.font='bold 14px Arial'; c.fillStyle=c.strokeStyle; c.fillText(String(k+1),x+11,y-10); });
+  if(calageSaisie.mode==='fac'){ const A=calageSaisie.pts[0], D=calageSaisie.pts[1]; if(Number.isFinite(A.px)&&Number.isFinite(D.px)){ const ux=D.px-A.px, uy=D.py-A.py, l=Math.hypot(ux,uy); if(l>1e-6){
+      const [x0,y0]=versEcran(A.px-o.x,A.py-o.y), [x1,y1]=versEcran(A.px+ux/l*100-o.x,A.py+uy/l*100-o.y); c.strokeStyle='#6a1b9a'; c.lineWidth=2; c.setLineDash([10,6]); c.beginPath(); c.moveTo(x0,y0); c.lineTo(x1,y1); c.stroke(); c.setLineDash([]);
+      const k=calageCalcule(); if(k&&k.Bp){ const [bx,by]=versEcran(k.Bp.x-o.x,k.Bp.y-o.y); c.fillStyle='#2e7d32'; c.beginPath(); c.arc(bx,by,8,0,DEUXPI); c.fill(); c.fillStyle='#fff'; c.font='bold 12px Arial'; c.textAlign='center'; c.textBaseline='middle'; c.fillText('2',bx,by+1); c.textAlign='left'; c.textBaseline='alphabetic'; } } } }
+  calageSaisie.pts.forEach((p,k)=>{ if(!Number.isFinite(p.px)) return; const [x,y]=versEcran(p.px-o.x,p.py-o.y), sel=calageSaisie.ligne===k; c.strokeStyle=sel?'#d32f2f':'#6a1b9a'; c.lineWidth=2.5; c.beginPath(); c.arc(x,y,9,0,DEUXPI); c.stroke(); c.beginPath(); c.moveTo(x-14,y); c.lineTo(x+14,y); c.moveTo(x,y-14); c.lineTo(x,y+14); c.stroke(); c.font='bold 14px Arial'; c.fillStyle=c.strokeStyle; c.fillText(calageSaisie.mode==='fac'?(k===0?'1':k===1?'→':String(k)):String(k+1),x+11,y-10); });
   c.restore(); }
 function brancherCalage(){
   $('bMenuCaler').onclick=()=>{ $('menu').classList.remove('ouvert'); if(!scene){ $('etat').textContent='Ouvrez d\'abord un plan.'; return; } ouvrirCalage(); };
   $('cgFermer').onclick=fermerCalage; $('cgAppliquer').onclick=appliquerCalage; $('cgRetirer').onclick=retirerCalage;
   $('cgPlus').onclick=()=>{ calageSaisie.pts.push({}); calageSaisie.ligne=calageSaisie.pts.length-1; majCalage(); };
+  $('cgModePts').onclick=()=>changerModeCalage('pts'); $('cgModeFac').onclick=()=>changerModeCalage('fac');
   $('cgEchCalc').onclick=()=>{ calageSaisie.echelle=true; majCalage(); }; $('cgEch1').onclick=()=>{ calageSaisie.echelle=false; majCalage(); }; }
 // ================= ✋ Modifier vos points d'un simple toucher =================
 let mainSel=null, mainPrise=null, histMain=[];
@@ -3471,6 +3506,7 @@ const AIDE=[
  {r:'Appli', t:'💬 Signaler une modification à Claude', txt:'💬 en haut : glissez l\'épingle sur l\'endroit (plan, bouton, case…), ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (dépôt GitHub retours-hub, clé à régler une fois avec 🔑) ou 📋 Copier pour coller dans la conversation. 📋 Liste : tous vos signalements.', mots:'signaler claude epingle demande modification bug github copier', go:()=>ouvrirEpingle(), sansPlan:true},
  {r:'Appli', t:'💡 Guide : une bulle sur chaque bouton', txt:'💡 en haut : allumé (jaune), chaque bouton touché marche normalement et affiche une bulle « à quoi il sert / comment faire », puis des conseils pendant le travail (ex. « touchez le point d\'arrivée »). « Ne plus me le montrer » cache une bulle ; éteindre et rallumer 💡 les remontre toutes.', mots:'guide aide interactive bulle bouton explication conseil', go:()=>{ if(!guideOn) $('bGuide').click(); }, sansPlan:true},
  {r:'Points', t:'📏 Tronçon : points, cotes et désignation en une fois', txt:'📍 Points → 📏 Tronçon, touchez un trait. Pas en m (Par côté / Continu, ou Égal = même distance partout), désignation (PVC 200, cheminement…), type de réseau (= calque), Z fini et FE des 2 bouts : les Z de chaque point sont calculés. ✓ Créer. La liste : désignation modifiable dans sa case, ✎ pour changer la ligne (points recalculés sauf ceux corrigés à la main), 🗑. À l\'export : Z = cote finie ou fil d\'eau.', mots:'troncon points pas egal designation cote finie fil eau interpoler implantation', go:()=>{ if(outil!=='points') choisirOutil('points'); choisirModePoints('troncon'); }},
+ {r:'Plan', t:'📐 Calage « Angle + façade »', txt:'⋮ → 📐 Caler → Angle + façade. 1) Touchez l\'angle précis, tapez ses X / Y. 2) Touchez un 2e point sur le même mur : la façade est prolongée en pointillés. 3) Tapez X / Y d\'un point relevé n\'importe où sur cette façade : il se place sur la ligne à la bonne distance (repère ②). Rotation calculée, échelle 1. ＋ Point pour un contrôle (écart en cm).', mots:'calage angle facade direction alignement mur theodolite', go:()=>{ ouvrirCalage(); changerModeCalage('fac'); }},
  {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
  {r:'Plan', t:'✋ Modifier un de vos points', txt:'✋ en haut : glissez un regard, un point d\'export ou un coin de mesure pour le déplacer (accrochage et loupe) ; glissez le trait d\'une mesure pour la déplacer entière. Un appui : nom, Z, état, 🗑 Supprimer, 🏷 Étiquette. ↶ annule.', mots:'main modifier deplacer supprimer point regard mesure coin selection toucher', go:()=>{ if(outil!=='main') choisirOutil('main'); }},
  {r:'Réseau', t:'🔁 Transformer des traits du plan en réseau', txt:'Mesure → Réseau → 🔁 Du plan. Touchez les traits des tuyaux (⬚ Zone : rectangle, même calque que le 1er trait touché), puis ✓ Convertir. Chaque bout à moins de 0,50 m d\'un regard du plan va au centre du regard ; les bouts communs ne font qu\'un point ; ↶ annule tout.', mots:'convertir traits plan reseau selection zone regard centre axe points', go:()=>{ choisirOutil('mesure'); choisirMode('res'); ouvrirConversion(); }},
