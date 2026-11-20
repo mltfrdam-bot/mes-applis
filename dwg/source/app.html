@@ -383,13 +383,14 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <div id="lfInfo"></div>
     <div class="lfl"><span class="lb">Pas</span><input id="lfPas" inputmode="decimal"><span>m</span><span class="seg"><button id="lfA" class="on">Par côté</button><button id="lfB">Continu</button><button id="lfE" title="Même distance entre tous les points">Égal</button></span></div>
     <div class="lfl"><span class="lb">Déport</span><input id="lfDep" inputmode="decimal"><span>m</span><span class="seg"><button id="lfG" class="on">◀ Gauche</button><button id="lfD">Droite ▶</button></span></div>
-    <div class="lfl lfTr"><span class="lb">Désignation</span><input id="lfDes" list="dlDesignations" placeholder="PVC 200, cheminement…" style="width:170px;text-align:left"><select id="lfRes" title="Type de réseau = calque des points"></select></div>
+    <div class="lfl lfTr"><span class="lb">Désignation</span><input id="lfDes" list="dlDesignations" placeholder="PVC 200, cheminement…" style="width:190px;text-align:left"></div>
+    <div class="lfl lfTr"><span class="lb">Calque</span><select id="lfRes" title="Calque des points du tronçon (type de réseau)" style="height:34px;min-width:160px;font-weight:bold"></select></div>
     <div class="lfl"><span class="lb">Z départ</span><input id="lfZ0" inputmode="decimal" placeholder="—"><button class="btn petitb sugg" id="lfZ0s"></button></div>
     <div class="lfl"><span class="lb">Z arrivée</span><input id="lfZ1" inputmode="decimal" placeholder="—"><button class="btn petitb sugg" id="lfZ1s"></button></div>
     <div class="lfl lfTr"><span class="lb">FE départ</span><input id="lfF0" inputmode="decimal" placeholder="—"><span class="lb" style="width:auto">FE arrivée</span><input id="lfF1" inputmode="decimal" placeholder="—"></div>
     <div class="lfl"><span class="lb">Préfixe</span><input id="lfPre" placeholder="(aucun)" autocapitalize="characters"><button class="btn petitb" id="lfInv">⇄ Inverser le sens</button></div>
   </div>
-  <div id="tronconsListe" style="display:none;flex:1;overflow:auto"><table class="xl compact" id="tabTroncons"><thead><tr><th>Désignation</th><th>Réseau</th><th style="text-align:right">Long.</th><th style="text-align:right">Pts</th><th style="text-align:right">Pente</th><th></th><th></th></tr></thead><tbody id="tbTroncons"></tbody></table><div class="petit" style="padding:6px 8px;color:#666">Touchez un trait du plan pour créer un tronçon. ✎ change la ligne (pas, cotes) : les points recalculés, sauf ceux corrigés à la main. La désignation se change dans sa case.</div></div>
+  <div id="tronconsListe" style="display:none;flex:1;overflow:auto"><table class="xl compact" id="tabTroncons"><thead><tr><th>Désignation</th><th>Calque</th><th style="text-align:right">Long.</th><th style="text-align:right">Pts</th><th style="text-align:right">Pente</th><th></th><th></th></tr></thead><tbody id="tbTroncons"></tbody></table><div class="petit" style="padding:6px 8px;color:#666">Touchez un trait du plan pour créer un tronçon. ✎ change la ligne (pas, cotes) : les points recalculés, sauf ceux corrigés à la main. La désignation se change dans sa case.</div></div>
   <div class="ligneCalque" id="ligneEcranPts"><button class="btn petitb" id="bEcranPts">👁 À l'écran</button><button class="btn petitb" id="bImporter" title="Importer un fichier de points (TS11)">📥 Importer</button><input type="file" id="fichierPts" accept=".txt,.csv,.asc,.xyz,text/plain" style="display:none"><label style="white-space:nowrap;font-size:13px"><input type="checkbox" id="cbFF" style="width:18px;height:18px;vertical-align:middle"> Afficher FF</label><span style="font-size:12px;color:#666">Appui court sur un point = le sélectionner · glisser = le déplacer</span></div>
   <div id="tabPtsWrap2" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table class="xl compact" id="tabPtsExp"><thead><tr><th style="width:44px">Nom</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right;width:58px">Z fini</th><th style="text-align:right;width:54px">FF</th><th></th></tr></thead><tbody id="tbPtsExp"></tbody></table></div>
 </div>
@@ -575,7 +576,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Calage – v4";
+const VERSION = "Tronçon – v2";
 </script>
 <script>
 "use strict";
@@ -1575,7 +1576,7 @@ window.dossierChoisi=function(nomD){
 };
 
 // ================= Points sur une ligne (ligne, polyligne, arc du plan) =================
-let ptsMode='point', ligneSel=null, ligneParams={pas:1, modePas:'A', dep:0, cote:'g', z0:null, z1:null, fe0:null, fe1:null, pre:'', inverse:false, des:'', res:'EP'};
+let ptsMode='point', ligneSel=null, ligneParams={pas:1, modePas:'A', dep:0, cote:'g', z0:null, z1:null, fe0:null, fe1:null, pre:'', inverse:false, des:'', res:null};
 const modeLigne=()=>ptsMode==='ligne'||ptsMode==='troncon';
 const elLong=e=> e.t==='L' ? Math.hypot(e.x2-e.x1,e.y2-e.y1) : e.r*Math.abs(e.sw);
 function elPt(e,t){ if(e.t==='L') return [e.x1+(e.x2-e.x1)*t, e.y1+(e.y2-e.y1)*t]; const a=e.a0+e.sw*t; return [e.cx+e.r*Math.cos(a), e.cy+e.r*Math.sin(a)]; }
@@ -1653,7 +1654,7 @@ function suggestionZ(xw,yw){ const o=scene.origine; return coteProche(xw-o.x,yw-
 // ---- Interface ----
 function choisirModePoints(m){ ptsMode=m; $('pmPoint').classList.toggle('on',m==='point'); $('pmLigne').classList.toggle('on',m==='ligne'); $('pmTroncon').classList.toggle('on',m==='troncon'); majModeTroncon(); if(m==='point') ligneSel=null; majVueLigne(); demanderDessin(false); }
 function selectionnerObjet(obj){
-  ligneSel=obj; ligneParams.inverse=false; ligneParams.z0=null; ligneParams.z1=null; ligneParams.fe0=null; ligneParams.fe1=null;
+  ligneSel=obj; ligneParams.inverse=false; ligneParams.z0=null; ligneParams.z1=null; ligneParams.fe0=null; ligneParams.fe1=null; ligneParams.res=calqueTronconDefaut||calqueActifPts;
   // Z proposés : Z du trait (3D) sinon cote écrite proche des bouts
   remplirFormLigne(); majVueLigne();
 }
@@ -1666,7 +1667,7 @@ function remplirFormLigne(){
   const p=ligneParams;
   $('lfPas').value=frN(p.pas,2); $('lfDep').value=frN(p.dep,2); $('lfPre').value=p.pre;
   $('lfZ0').value=p.z0===null?'':frN(p.z0,3); $('lfZ1').value=p.z1===null?'':frN(p.z1,3);
-  $('lfF0').value=p.fe0===null||p.fe0===undefined?'':frN(p.fe0,3); $('lfF1').value=p.fe1===null||p.fe1===undefined?'':frN(p.fe1,3); $('lfDes').value=p.des||''; $('lfRes').value=p.res||'EP';
+  $('lfF0').value=p.fe0===null||p.fe0===undefined?'':frN(p.fe0,3); $('lfF1').value=p.fe1===null||p.fe1===undefined?'':frN(p.fe1,3); $('lfDes').value=p.des||''; remplirChoixCalqueTr($('lfRes'), p.res||calqueTronconDefaut);
   for(const [id,on] of [['lfE',p.modePas==='C'],['lfA',p.modePas==='A'],['lfB',p.modePas==='B'],['lfG',p.cote==='g'],['lfD',p.cote==='d']]) $(id).classList.toggle('on',on);
   majSuggestionsZ(); majInfoLigne();
 }
@@ -1688,7 +1689,7 @@ function lireFormLigne(){
   const dep=v('lfDep'); p.dep = Number.isFinite(dep)&&dep>=0 ? dep : 0;
   const z0=v('lfZ0'), z1=v('lfZ1'); p.z0=Number.isFinite(z0)?z0:null; p.z1=Number.isFinite(z1)?z1:null;
   p.pre=$('lfPre').value.trim().replace(/\s+/g,'');
-  const f0=v('lfF0'), f1=v('lfF1'); p.fe0=Number.isFinite(f0)?f0:null; p.fe1=Number.isFinite(f1)?f1:null; p.des=$('lfDes').value.trim(); p.res=$('lfRes').value;
+  const f0=v('lfF0'), f1=v('lfF1'); p.fe0=Number.isFinite(f0)?f0:null; p.fe1=Number.isFinite(f1)?f1:null; p.des=$('lfDes').value.trim(); p.res=$('lfRes').value||calqueTronconDefaut||calqueActifPts;
 }
 function apercuLigne(){ return ligneSel ? genererPointsLigne(elsLigne(),ligneParams) : []; }
 function majInfoLigne(){
@@ -1698,7 +1699,7 @@ function majInfoLigne(){
   if(Number.isFinite(ligneParams.z0)&&Number.isFinite(ligneParams.z1)&&L>0){ const dz=ligneParams.z1-ligneParams.z0; h+=' · ΔZ '+(dz>=0?'+':'')+frN(dz,2)+' m · pente <b>'+(dz>=0?'+':'')+frN(dz/L*100,2)+' %</b>'; }
   if(ptsMode==='troncon'){ if(Number.isFinite(ligneParams.fe0)&&Number.isFinite(ligneParams.fe1)&&L>0){ const df=ligneParams.fe1-ligneParams.fe0; h+=' · FE pente <b>'+(df>=0?'+':'')+frN(df/L*100,2)+' %</b>'; }
     if(ligneParams.modePas==='C' && pts.length>1) h+=' · tous les <b>'+frN(L/(pts.length-1),3)+' m</b>';
-    const pre=prefixeTroncon(); h+='<br>Noms : '+pre+'1 → '+pre+pts.length+' · calque '+ligneParams.res+(ligneSel.trId?' · <b>modification</b> du tronçon':'');
+    const pre=prefixeTroncon(); h+='<br>Noms : '+pre+'1 → '+pre+pts.length+' · calque <b>'+echapper(ligneParams.res||calqueTronconDefaut||calqueActifPts)+'</b> (choix « Calque » plus bas)'+(ligneSel.trId?' · <b>modification</b> du tronçon':'');
     $('lfInfo').innerHTML=h; $('lfCreer').textContent=(ligneSel.trId?'✓ Mettre à jour (':'✓ Créer le tronçon (')+pts.length+' pts)'; return; }
   if(ligneParams.modePas==='C' && pts.length>1) h+=' · tous les <b>'+frN(L/(pts.length-1),3)+' m</b>';
   const n=prochainNomPrefixe(ligneParams.pre); h+='<br>Noms : '+(ligneParams.pre||'')+n+' → '+(ligneParams.pre||'')+(n+Math.max(0,pts.length-1))+' · calque '+calqueActifPts;
@@ -1753,8 +1754,9 @@ function brancherLigne(){
   $('lfB').onclick=()=>{ ligneParams.modePas='B'; remplirFormLigne(); demanderDessin(false); };
   $('lfE').onclick=()=>{ ligneParams.modePas='C'; remplirFormLigne(); demanderDessin(false); };
   $('pmTroncon').onclick=()=>choisirModePoints('troncon');
-  for(const id of ['lfF0','lfF1','lfDes']){ $(id).oninput=maj; $(id).onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } }; } $('lfRes').onchange=maj;
-  { const sr=$('lfRes'); for(const t of TYPES_RES){ const o=document.createElement('option'); o.value=t; o.textContent=t; sr.appendChild(o); } }
+  for(const id of ['lfF0','lfF1','lfDes']){ $(id).oninput=maj; $(id).onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } }; }
+  $('lfRes').onchange=()=>{ calqueTronconDefaut=$('lfRes').value; Memoire.ecrire('trCalque',calqueTronconDefaut); maj(); };
+  Memoire.lire('trCalque').then(v=>{ if(v) calqueTronconDefaut=v; });
   $('lfG').onclick=()=>{ ligneParams.cote='g'; remplirFormLigne(); demanderDessin(false); };
   $('lfD').onclick=()=>{ ligneParams.cote='d'; remplirFormLigne(); demanderDessin(false); };
   $('lfInv').onclick=()=>{ lireFormLigne(); ligneParams.inverse=!ligneParams.inverse; const z=ligneParams.z0; ligneParams.z0=ligneParams.z1; ligneParams.z1=z; remplirFormLigne(); demanderDessin(false); };
@@ -2240,12 +2242,17 @@ function placerBulle(){ if(!bulleReg) return; const b=$('bulleReg'); const e=eti
 // ================= 📏 Tronçon : un trait du plan → points, cotes (fini + fil d'eau), désignation, en une fois =================
 const TYPES_RES=['EP','EU','AEP','EDF','TELECOM','ECLAIRAGE','GAZ','CHEMINEMENT','BORDURE','AUTRE'];
 const DESIGNATIONS=['Cheminement','Bordure T2','Bordure P1','Caniveau CS1','Câble EDF','Fourreau TPC 63','Fourreau TPC 90','Fourreau TPC 110','Fourreau TPC 160','Gaine Télécom 42/45','PEHD AEP 63','PEHD AEP 90'];
-let troncons=[];
+let troncons=[], calqueTronconDefaut=null;
+// Choix du calque d'un tronçon : calques existants (sauf mesures / réseaux) + types de réseau
+function remplirChoixCalqueTr(sel,val){ val=val||calqueActifPts; const vus=new Set(), L=[];
+  const aj=(n,neuf)=>{ if(!n||vus.has(n)) return; vus.add(n); L.push([n,neuf]); };
+  aj(val,false); for(const c of tousCalquesPerso()) if(c.nom!==CALQUE_MES && !c.devis) aj(c.nom,false); for(const t of TYPES_RES) aj(t,!tousCalquesPerso().some(c=>c.nom===t));
+  sel.replaceChildren(); for(const [n,neuf] of L){ const o=document.createElement('option'); o.value=n; o.textContent=(neuf?'＋ ':'■ ')+n; if(!neuf) o.style.color=couleurCalque(n); sel.appendChild(o); } sel.value=val; sel.style.color=couleurCalque(val); }
 const cleTrPlan=()=>'troncons:'+(scene?scene.nom:'');
 async function chargerTroncons(){ const r=await Memoire.lire(cleTrPlan()); troncons=Array.isArray(r)?r:[]; }
 function sauverTroncons(){ Memoire.ecrire(cleTrPlan(),troncons); marquerModifie(); }
 function majModeTroncon(){ document.body.classList.toggle('modeTroncon', ptsMode==='troncon'); const dl=$('dlDesignations'); if(dl && !dl.children.length){ for(const t of [...DESIGNATIONS,...TUYAUX_BASE]){ const o=document.createElement('option'); o.value=t; dl.appendChild(o); } } }
-function prefixeTroncon(){ if(ligneSel&&ligneSel.trId){ const t=troncons.find(x=>x.id===ligneSel.trId); if(t) return t.pre; } const res=ligneParams.res||'EP'; let n=1; while(troncons.some(t=>t.pre===res+n+'-')) n++; return res+n+'-'; }
+function prefixeTroncon(){ if(ligneSel&&ligneSel.trId){ const t=troncons.find(x=>x.id===ligneSel.trId); if(t) return t.pre; } const r0=ligneParams.res||calqueTronconDefaut||calqueActifPts, res=TYPES_RES.includes(r0)?r0:(r0===CALQUE_PTS?'T':r0.replace(/[^A-Za-z0-9]/g,'').slice(0,4).toUpperCase()||'T'); let n=1; while(troncons.some(t=>t.pre===res+n+'-')) n++; return res+n+'-'; }
 function calqueReseauType(nom){ if(tousCalquesPerso().some(c=>c.nom===nom)) return nom;
   const prises=new Set(tousCalquesPerso().map(x=>x.couleur)); const c=COULEURS_PERSO.find(x=>!prises.has(x[0]))||COULEURS_PERSO[calquesPerso.length%COULEURS_PERSO.length];
   calquesPerso.push({nom, couleur:c[0], aci:c[1]}); sauverCalquesPerso(); installerCalquesPerso(null); majComptesPerso(); majVisibles(); remplirCalques(); return nom; }
@@ -2266,9 +2273,11 @@ function creerTroncon(){ const pts=apercuLigne(); if(!pts.length||!ligneSel) ret
 function modifierTroncon(t){ ligneSel={type:'TRONCON', calque:t.calque, els:t.els, trId:t.id}; Object.assign(ligneParams, JSON.parse(JSON.stringify(t.p)), {inverse:false, des:t.des, res:t.res}); remplirFormLigne(); majVueLigne(); demanderDessin(false); }
 function majTableTroncons(){ const tb=$('tbTroncons'); tb.replaceChildren();
   for(const t of troncons){ const tr=document.createElement('tr'), np=pointsExp.filter(p=>p.tr===t.id).length, nm=pointsExp.filter(p=>p.tr===t.id&&p.manu).length, pz=(Number.isFinite(t.p.z0)&&Number.isFinite(t.p.z1)&&t.L>0)?(t.p.z1-t.p.z0)/t.L*100:(Number.isFinite(t.p.fe0)&&Number.isFinite(t.p.fe1)&&t.L>0?(t.p.fe1-t.p.fe0)/t.L*100:null);
-    tr.innerHTML='<td><input></td><td style="font-size:12px;font-weight:bold;color:'+couleurCalque(t.calque)+'">'+echapper(t.res)+'</td><td class="num">'+frN(t.L,2)+'</td><td class="num">'+np+(nm?' <small title="corrigés à la main">('+nm+'✋)</small>':'')+'</td><td class="num">'+(pz===null?'—':frN(pz,2)+' %')+'</td><td><button class="btn petitb">✎</button></td><td class="sup">🗑</td>';
+    tr.innerHTML='<td><input></td><td style="padding:0 2px"><select class="trCal" style="height:32px;max-width:130px;font-size:12.5px;font-weight:bold"></select></td><td class="num">'+frN(t.L,2)+'</td><td class="num">'+np+(nm?' <small title="corrigés à la main">('+nm+'✋)</small>':'')+'</td><td class="num">'+(pz===null?'—':frN(pz,2)+' %')+'</td><td><button class="btn petitb">✎</button></td><td class="sup">🗑</td>';
     const i=tr.querySelector('input'); i.value=t.des||''; i.setAttribute('list','dlDesignations'); i.placeholder='Désignation';
     i.onchange=()=>{ t.des=i.value.trim(); t.p.des=t.des; sauverTroncons(); demanderDessin(false); }; i.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); i.blur(); } };
+    const sc=tr.querySelector('.trCal'); remplirChoixCalqueTr(sc,t.calque);
+    sc.onchange=()=>{ memoriserPourAnnuler(); const cal=calqueReseauType(sc.value); t.res=sc.value; t.p.res=sc.value; t.calque=cal; for(const q of pointsExp) if(q.tr===t.id) q.calque=cal; sauverTroncons(); sauverPoints(); majCompteCalque(); remplirCalques(); majTableTroncons(); demanderDessin(false); $('ptsInfo').textContent='Tronçon et ses points passés sur le calque '+cal+'.'; };
     tr.querySelector('button').onclick=()=>modifierTroncon(t);
     tr.children[2].onclick=()=>{ const P=pointsExp.filter(p=>p.tr===t.id); if(P.length) centrerSur(P); demanderDessin(false); };
     const sp=tr.querySelector('.sup'); sp.onclick=()=>{ if(sp.dataset.c!=='1'){ sp.dataset.c='1'; sp.textContent='Sûr ?'; sp.style.background='#d32f2f'; sp.style.color='#fff'; return; } memoriserPourAnnuler(); pointsExp=pointsExp.filter(p=>p.tr!==t.id); troncons=troncons.filter(x=>x!==t); sauverTroncons(); sauverPoints(); majCompteCalque(); majTableTroncons(); remplirCalques(); demanderDessin(false); };
@@ -3505,7 +3514,7 @@ const AIDE=[
  {r:'Réseau', t:'Travaux à faire / en cours / faits', txt:'Bouton ⬜ À faire : un appui → 🔄 En cours → ✅ Fait. Sur les tronçons (tableau ou bulle), les regards (bulle) et les mesures gardées (📋 Gardées). Sur le plan : vert = fait, orange pointillé = en cours.', mots:'travaux etat fait en cours a faire avancement'},
  {r:'Appli', t:'💬 Signaler une modification à Claude', txt:'💬 en haut : glissez l\'épingle sur l\'endroit (plan, bouton, case…), ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (dépôt GitHub retours-hub, clé à régler une fois avec 🔑) ou 📋 Copier pour coller dans la conversation. 📋 Liste : tous vos signalements.', mots:'signaler claude epingle demande modification bug github copier', go:()=>ouvrirEpingle(), sansPlan:true},
  {r:'Appli', t:'💡 Guide : une bulle sur chaque bouton', txt:'💡 en haut : allumé (jaune), chaque bouton touché marche normalement et affiche une bulle « à quoi il sert / comment faire », puis des conseils pendant le travail (ex. « touchez le point d\'arrivée »). « Ne plus me le montrer » cache une bulle ; éteindre et rallumer 💡 les remontre toutes.', mots:'guide aide interactive bulle bouton explication conseil', go:()=>{ if(!guideOn) $('bGuide').click(); }, sansPlan:true},
- {r:'Points', t:'📏 Tronçon : points, cotes et désignation en une fois', txt:'📍 Points → 📏 Tronçon, touchez un trait. Pas en m (Par côté / Continu, ou Égal = même distance partout), désignation (PVC 200, cheminement…), type de réseau (= calque), Z fini et FE des 2 bouts : les Z de chaque point sont calculés. ✓ Créer. La liste : désignation modifiable dans sa case, ✎ pour changer la ligne (points recalculés sauf ceux corrigés à la main), 🗑. À l\'export : Z = cote finie ou fil d\'eau.', mots:'troncon points pas egal designation cote finie fil eau interpoler implantation', go:()=>{ if(outil!=='points') choisirOutil('points'); choisirModePoints('troncon'); }},
+ {r:'Points', t:'📏 Tronçon : points, cotes et désignation en une fois', txt:'📍 Points → 📏 Tronçon, touchez un trait. Pas en m (Par côté / Continu, ou Égal = même distance partout), désignation (PVC 200, cheminement…), calque (choix « Calque » : vos calques ou un type de réseau, modifiable aussi dans la liste), Z fini et FE des 2 bouts : les Z de chaque point sont calculés. ✓ Créer. La liste : désignation modifiable dans sa case, ✎ pour changer la ligne (points recalculés sauf ceux corrigés à la main), 🗑. À l\'export : Z = cote finie ou fil d\'eau.', mots:'troncon points pas egal designation cote finie fil eau interpoler implantation', go:()=>{ if(outil!=='points') choisirOutil('points'); choisirModePoints('troncon'); }},
  {r:'Plan', t:'📐 Calage « Angle + façade »', txt:'⋮ → 📐 Caler → Angle + façade. 1) Touchez l\'angle précis, tapez ses X / Y. 2) Touchez un 2e point sur le même mur : la façade est prolongée en pointillés. 3) Tapez X / Y d\'un point relevé n\'importe où sur cette façade : il se place sur la ligne à la bonne distance (repère ②). Rotation calculée, échelle 1. ＋ Point pour un contrôle (écart en cm).', mots:'calage angle facade direction alignement mur theodolite', go:()=>{ ouvrirCalage(); changerModeCalage('fac'); }},
  {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
  {r:'Plan', t:'✋ Modifier un de vos points', txt:'✋ en haut : glissez un regard, un point d\'export ou un coin de mesure pour le déplacer (accrochage et loupe) ; glissez le trait d\'une mesure pour la déplacer entière. Un appui : nom, Z, état, 🗑 Supprimer, 🏷 Étiquette. ↶ annule.', mots:'main modifier deplacer supprimer point regard mesure coin selection toucher', go:()=>{ if(outil!=='main') choisirOutil('main'); }},
