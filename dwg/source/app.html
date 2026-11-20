@@ -101,6 +101,16 @@ body.outil-main #mainBar{display:block}
 #mainBar .mL{display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:14px}
 #mainBar input{height:34px;width:90px;border:1px solid #9a9a9a;border-radius:4px;padding:0 6px;font-size:15px}
 #barre .btn#bMain.actif{background:#efe0f7;border-color:#6a1b9a;color:#4a148c}
+body.outil-calage #zone{bottom:300px}
+#calagePanel{position:fixed;left:0;right:0;bottom:0;height:300px;background:#fff;border-top:3px solid #6a1b9a;z-index:6;display:none;flex-direction:column;overflow:auto}
+body.outil-calage #calagePanel{display:flex}
+#calagePanel .outils{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f6f0f9;border-bottom:1px solid #ddd}
+#calagePanel .cgL{display:flex;align-items:center;gap:6px;padding:5px 8px;flex-wrap:wrap;font-size:14px}
+#tabCalage td{height:36px}
+#tabCalage tr.sel td{background:#efe2f5}
+#tabCalage input{width:100%;min-width:88px;height:32px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:14px;padding:0 4px}
+#tabCalage td:nth-child(2),#tabCalage td:nth-child(5){font-family:Consolas,'Courier New',monospace;font-size:12.5px}
+#cgRes{padding:6px 8px;font-size:13.5px;line-height:1.45}
 #calqueBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:31;padding:16px}
 #calqueBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px}
 #calqueBoite h3{margin:0 0 8px;font-size:17px}
@@ -408,6 +418,12 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <table class="xl compact" id="tabSig"><thead><tr><th>N°</th><th>Écrit le</th><th>Endroit</th><th>Demande</th><th>État</th><th></th></tr></thead><tbody id="tbSig"></tbody></table>
   </div>
 </div>
+<div id="calagePanel">
+  <div class="outils"><b style="flex:1;font-size:15px">📐 Caler le plan</b><button class="btn prim" id="cgAppliquer" disabled>✓ Appliquer</button><button class="btn" id="cgFermer">✕</button></div>
+  <div class="cgL"><span>Échelle :</span><span class="seg"><button id="cgEchCalc" class="on">Calculée</button><button id="cgEch1">Garder 1</button></span><button class="btn petitb" id="cgPlus">＋ Point</button><button class="btn petitb" id="cgRetirer" style="display:none">↩ Retirer le calage</button></div>
+  <table class="xl compact" id="tabCalage"><thead><tr><th>N°</th><th>Sur le plan (touché)</th><th style="text-align:right">X relevé</th><th style="text-align:right">Y relevé</th><th style="text-align:right">Écart</th><th></th></tr></thead><tbody id="tbCalage"></tbody></table>
+  <div id="cgRes"></div>
+</div>
 <div id="roleBoite"><div class="boite"><div id="roleTexte"></div><div class="lig" id="roleBoutons"></div></div></div>
 <div id="coupeTrBoite">
   <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
@@ -515,6 +531,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   </tbody></table>
   <div class="boutons">
     <button class="btn" id="bMenuAide">❓ Aide : trouver une fonction</button>
+    <button class="btn" id="bMenuCaler">📐 Caler le plan sur le théodolite (points X/Y)</button>
     <button class="btn prim" id="bMenuSauver">💾 Enregistrer</button>
     <button class="btn" id="bMenuSauverSous">💾 Enregistrer sous…</button>
     <button class="btn" id="bMenuClasseur">📚 Enregistrer le classeur (tous les plans)</button>
@@ -547,7 +564,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Main – v1";
+const VERSION = "Calage – v3";
 </script>
 <script>
 "use strict";
@@ -668,7 +685,7 @@ function nettoieMtext(s){
 const ctxMesure = document.createElement('canvas').getContext('2d');
 ctxMesure.font = '100px Arial, Helvetica, sans-serif';
 
-function construireScene(db){
+function construireScene(db, calage){
   const t0=performance.now();
   const calques = new Map();
   for(const l of (db.tables.LAYER?.entries||[])){
@@ -717,7 +734,8 @@ function construireScene(db){
   function elemsDe(e,Me){
     const miroir=Me[0]<0; const P=(x,y)=>[Me[0]*x+Me[2]*y+Me[4], Me[1]*x+Me[3]*y+Me[5]];
     const L=(a,b,za,zb)=>{ const A=P(a.x,a.y),B=P(b.x,b.y); return {t:'L',x1:A[0],y1:A[1],z1:za,x2:B[0],y2:B[1],z2:zb}; };
-    const Arc=(cx,cy,r,a0,sw,za,zb)=>{ const C=P(cx,cy); return miroir?{t:'A',cx:C[0],cy:C[1],r,a0:Math.PI-a0,sw:-sw,z1:za,z2:zb}:{t:'A',cx:C[0],cy:C[1],r,a0,sw,z1:za,z2:zb}; };
+    const detM=Me[0]*Me[3]-Me[1]*Me[2], kM=Math.sqrt(Math.abs(detM));
+    const Arc=(cx,cy,r,a0,sw,za,zb)=>{ const C=P(cx,cy), S=P(cx+r*Math.cos(a0),cy+r*Math.sin(a0)); return {t:'A',cx:C[0],cy:C[1],r:r*kM,a0:Math.atan2(S[1]-C[1],S[0]-C[0]),sw:detM<0?-sw:sw,z1:za,z2:zb}; };
     const bulge=(a,b,bg,za,zb)=>{ if(!bg||Math.abs(bg)<1e-9) return L(a,b,za,zb);
       const th=4*Math.atan(bg), dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy); if(d<1e-12) return null;
       const h=(d/2)/Math.tan(th/2), cx=(a.x+b.x)/2-dy/d*h, cy=(a.y+b.y)/2+dx/d*h;
@@ -861,7 +879,7 @@ function construireScene(db){
     }
   }
 
-  const M0=[1,0,0,1,0,0];
+  const M0=calage||[1,0,0,1,0,0];
   for(const e of racine){
     const c=calque(e.layer||'0'); c.nb++;
     traiter(e, M0, e.layer||'0', e.layer||'0', null, 0, 0, false);
@@ -966,7 +984,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerConv(ctx); dessinerMain(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerConv(ctx); dessinerMain(ctx); dessinerCalage(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
   majLoupe();
 }
 function rendreScene(c){
@@ -1176,6 +1194,7 @@ function majPanneau(){
 }
 function poserPoint(){
   if(outil==='oeil') return;
+  if(outil==='calage'){ const v=pointVise(); if(v) poserCalage(v); return; }
   if(outil==='mesure' && coupeMode){ const v=pointVise(); if(v) poserCoupe(v); return; }
   if(outil==='mesure' && mesure.mode==='res'){ const v=pointVise(); if(v) poserReseau(v); return; }
   const v=pointVise(); if(!v) return;
@@ -1186,6 +1205,7 @@ function poserPoint(){
   mesure.pts.push({x:v.x,y:v.y,z:v.z,ff:v.ff,t:v.t,nom:v.nom});
 }
 function choisirOutil(o){
+  if(outil==='calage' && o!=='calage'){ calageSaisie=null; document.body.classList.remove('outil-calage'); outil=null; }
   outil = (outil===o) ? null : o; if(outil && outil!=='oeil') fermerFiche();
   document.body.classList.toggle('enOutil',outil==='mesure'||outil==='points'); document.body.classList.toggle('outil-oeil',outil==='oeil');
   $('bOeil').classList.toggle('actif',outil==='oeil');
@@ -1820,7 +1840,7 @@ function deBase64(b){ const s=atob(b), u=new Uint8Array(s.length); for(let i=0;i
 function contenuSauvegarde(){
   const cs=[...scene.calques.values()], o=scene.origine;
   return JSON.stringify({format:'plansdwg', version:1, appli:VERSION, date:new Date().toISOString(),
-    plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null},
+    plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null}, calage:scene.calage||null,
     points:pointsExp, mesures:mesuresGardees, reseaux, devis, fouilles:F, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
     reglages:{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)},
     vue:{cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s}});
@@ -1869,11 +1889,12 @@ async function ouvrirSauvegarde(nomFichier, octets){
   const planOct=deBase64(d.plan.octets), nom=d.plan.nom; if(scene && scene.nom!==nom) quitterPlanCourant();
   const etatAvant=await Memoire.lire('etat');
   const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom));
+  const noteCal=await accorderCalage(nom,d,dejaLa);
   enChargement=true;
   const ok=await ouvrirOctets(nom, planOct, (etatAvant&&etatAvant.nom===nom)?etatAvant:{nom:null});
   if(!ok){ enChargement=false; return; }
   Memoire.ecrire('plan',{nom, octets:planOct.slice().buffer, date:Date.now()}); await ajouterAuClasseur(nom,planOct);
-  const R=fusionner(d);
+  const R=fusionner(d); if(noteCal) R.noteCal=noteCal;
   if(!dejaLa && d.vue && d.vue.s>0){ const o=scene.origine; vue.s=d.vue.s; vue.tx=W/2-(d.vue.cx-o.x)*vue.s; vue.ty=H/2+(d.vue.cy-o.y)*vue.s; }
   enChargement=false;
   sauverPointsMaintenant(); sauverMesuresGardees(); Memoire.ecrire(cleResPlan(), reseaux); sauverCalquesPerso(); sauverReglagesCalques(); majComptesPerso(); majVisibles(); remplirSelectsCalques(); remplirCalques(); majTablePoints(); majPanneau(); demanderDessin(); sauverEtatBientot();
@@ -1927,6 +1948,7 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   const lim=(a)=>a.length>12?a.slice(0,12).join(', ')+'… (+'+(a.length-12)+')':a.join(', ');
   const L=[];
   L.push('Sauvegarde : '+nomFichier+(d.date?' (du '+new Date(d.date).toLocaleString('fr-FR')+')':''));
+  if(R.noteCal) L.push(R.noteCal);
   L.push('Plan : '+d.plan.nom+(dejaLa?' — fusion avec ce qui était déjà dans l\'appli':' — ouvert tel quel'));
   L.push('Points ajoutés : '+R.ptsAjout.length+(R.ptsAjout.length?' ('+lim(R.ptsAjout)+')':''));
   if(R.ptsZ.length) L.push('Z complétés : '+R.ptsZ.length+' ('+lim(R.ptsZ)+')');
@@ -2183,6 +2205,73 @@ function placerBulle(){ if(!bulleReg) return; const b=$('bulleReg'); const e=eti
   left=Math.max(4,Math.min(Wf-bw-4,left)); b.style.left=left+'px'; b.style.top=top+'px'; }
 
 
+
+// ================= 📐 Calage du plan sur des points relevés (théodolite) =================
+// 1 point : déplacement · 2 points ou plus : déplacement + rotation (+ échelle si « Calculée »), moindres carrés, écart par point
+let calageSaisie=null;
+const appliquerS=(S,x,y)=>[S[0]*x+S[2]*y+S[4], S[1]*x+S[3]*y+S[5]];
+function inverseS(S){ const det=S[0]*S[3]-S[1]*S[2]; const a=S[3]/det, b=-S[1]/det, c=-S[2]/det, d=S[0]/det; return [a,b,c,d,-(a*S[4]+c*S[5]),-(b*S[4]+d*S[5])]; }
+const egalS=(A,B)=>{ A=A||[1,0,0,1,0,0]; B=B||[1,0,0,1,0,0]; return A.every((v,i)=>Math.abs(v-B[i])<1e-9); };
+function helmert(L,avecEchelle){ const n=L.length; if(!n) return null; let xc=0,yc=0,Xc=0,Yc=0; for(const p of L){ xc+=p.px; yc+=p.py; Xc+=p.vx; Yc+=p.vy; } xc/=n; yc/=n; Xc/=n; Yc/=n;
+  let a=1,b=0; if(n>=2){ let sxx=0,sa=0,sb=0; for(const p of L){ const dx=p.px-xc, dy=p.py-yc, dX=p.vx-Xc, dY=p.vy-Yc; sxx+=dx*dx+dy*dy; sa+=dx*dX+dy*dY; sb+=dx*dY-dy*dX; } if(sxx<1e-12) return null; a=sa/sxx; b=sb/sxx; if(!avecEchelle){ const k=Math.hypot(a,b); a/=k; b/=k; } }
+  const S=[a,b,-b,a,Xc-(a*xc-b*yc),Yc-(b*xc+a*yc)]; const ec=L.map(p=>{ const [x,y]=appliquerS(S,p.px,p.py); return Math.hypot(x-p.vx,y-p.vy); });
+  return {S, ech:Math.hypot(a,b), rot:Math.atan2(b,a)*180/Math.PI, ec}; }
+function ouvrirCalage(){ if(!scene) return; if(outil) choisirOutil(outil); fermerBulle(); calageSaisie={pts:[{},{}], ligne:0, echelle:calageSaisie?calageSaisie.echelle:true}; outil='calage'; document.body.classList.add('outil-calage'); redim(); majCalage(); demanderDessin(false); }
+function fermerCalage(){ calageSaisie=null; outil=null; document.body.classList.remove('outil-calage'); visee=null; redim(); demanderDessin(false); }
+function poserCalage(v){ const o=scene.origine, k=calageSaisie.ligne, p=calageSaisie.pts[k]; p.px=v.x+o.x; p.py=v.y+o.y; majCalage(); demanderDessin(false); const i=$('cg'+k+'X'); if(i) setTimeout(()=>i.focus(),50); }
+function calageCalcule(){ const L=calageSaisie.pts.filter(p=>[p.px,p.py,p.vx,p.vy].every(Number.isFinite)); if(!L.length) return null; const h=helmert(L,calageSaisie.echelle && L.length>=2); if(!h) return null;
+  h.L=L; if(L.length>=2){ let i0=0,i1=1,dm=0; for(let i=0;i<L.length;i++) for(let j=i+1;j<L.length;j++){ const d=Math.hypot(L[j].px-L[i].px,L[j].py-L[i].py); if(d>dm){ dm=d; i0=i; i1=j; } } h.dPlan=dm; h.dVrai=Math.hypot(L[i1].vx-L[i0].vx,L[i1].vy-L[i0].vy); } return h; }
+function majCalage(){ if(!calageSaisie) return; const P=calageSaisie.pts, f=v=>Number.isFinite(v)?frN(v,3):'—', c=calageCalcule(), tb=$('tbCalage'); tb.replaceChildren();
+  P.forEach((p,k)=>{ const tr=document.createElement('tr'); if(calageSaisie.ligne===k) tr.className='sel'; const i=c?c.L.indexOf(p):-1, e=i>=0&&c.L.length>=2?c.ec[i]:null;
+    tr.innerHTML='<td>'+(k+1)+'</td><td>'+(Number.isFinite(p.px)?f(p.px)+' ; '+f(p.py):(calageSaisie.ligne===k?'👆 touchez le plan':'—'))+'</td><td><input id="cg'+k+'X" inputmode="decimal" placeholder="X"></td><td><input id="cg'+k+'Y" inputmode="decimal" placeholder="Y"></td><td style="text-align:right">'+(e===null?'':'<b style="color:'+(e>0.02?'#d32f2f':'#2e7d32')+'">'+frN(e*100,1)+' cm</b>')+'</td><td class="sup">'+(P.length>1?'🗑':'')+'</td>';
+    tr.onclick=ev=>{ if(ev.target.tagName==='INPUT'||ev.target.classList.contains('sup')) return; calageSaisie.ligne=k; majCalage(); };
+    tr.querySelector('.sup').onclick=()=>{ if(P.length<2) return; P.splice(k,1); calageSaisie.ligne=Math.min(calageSaisie.ligne,P.length-1); majCalage(); demanderDessin(false); };
+    for(const a of ['X','Y']){ const inp=tr.querySelector('#cg'+k+a); inp.value=Number.isFinite(p['v'+a.toLowerCase()])?frN(p['v'+a.toLowerCase()],3):'';
+      inp.onfocus=()=>{ calageSaisie.ligne=k; tb.querySelectorAll('tr').forEach((t,j)=>t.classList.toggle('sel',j===k)); demanderDessin(false); };
+      inp.onchange=()=>{ const v=lireNombre(inp.value); if(Number.isNaN(v)){ inp.style.background='#ffd6d6'; return; } p['v'+a.toLowerCase()]=v===null?NaN:v; majCalageRes(); };
+      inp.onkeydown=e=>{ if(e.key!=='Enter') return; e.preventDefault(); e.stopPropagation(); inp.onchange(); if(a==='X') $('cg'+k+'Y').focus(); else { inp.blur(); if(k+1>=P.length) P.push({}); calageSaisie.ligne=k+1; majCalage(); $('etat').textContent='👆 Touchez le point '+(k+2)+' sur le plan.'; } }; }
+    tb.appendChild(tr); });
+  $('cgEchCalc').classList.toggle('on',calageSaisie.echelle); $('cgEch1').classList.toggle('on',!calageSaisie.echelle);
+  majCalageRes(); Memoire.lire('calage:'+scene.nom).then(x=>{ $('cgRetirer').style.display = x ? '' : 'none'; }); }
+function majCalageRes(){ const c=calageCalcule(); $('cgAppliquer').disabled=!c;
+  if(!c){ $('cgRes').innerHTML='Touchez l\'angle 1 du bâtiment sur le plan, tapez ses X et Y relevés au théodolite (Entrée = case suivante), puis l\'angle 2 (le plus loin possible). Un 3e point sert de contrôle. Le fichier d\'origine n\'est jamais modifié.'; return; }
+  const n=c.L.length, emax=n>=2?Math.max(...c.ec):0, ecartE=Math.abs(c.ech-1);
+  let t=n===1?'1 point : le plan sera seulement <b>déplacé</b> (ni rotation, ni échelle).':'Rotation <b>'+frN(c.rot,3)+'°</b> · distance plan '+frN(c.dPlan,3)+' m → relevée <b>'+frN(c.dVrai,3)+' m</b> (écart '+frN((c.dVrai-c.dPlan)*100,1)+' cm)';
+  if(n>=2) t+='<br>Échelle '+(calageSaisie.echelle?'appliquée : <b>× '+frN(c.ech,5)+'</b>':'gardée à 1 (calculée : × '+frN(helmert(c.L,true).ech,5)+')');
+  if(n>=2 && calageSaisie.echelle && ecartE>0.02) t+='<br><b style="color:#d32f2f">⚠ Échelle très différente de 1 (> 2 %) : vérifiez les points ou l\'échelle du plan.</b>';
+  if(n===2) t+='<br><span style="color:#ef6c00">Avec 2 points, une erreur ne se voit pas : ajoutez un 3e point de contrôle si possible.</span>';
+  if(n>=3) t+='<br>Écart maxi : <b style="color:'+(emax>0.02?'#d32f2f':'#2e7d32')+'">'+frN(emax*100,1)+' cm</b>'+(emax>0.02?' — un point semble faux (le plus grand écart en rouge).':' ✓');
+  $('cgRes').innerHTML=t; }
+// Transforme les données gardées d'un plan (points, mesures, réseaux, drapeaux de tâches) avec S
+function transformerDonneesObjet(d,S){ const ech=Math.hypot(S[0],S[1]); const t=o=>{ if(!o||!Number.isFinite(+o.x)||!Number.isFinite(+o.y)) return; const [x,y]=appliquerS(S,+o.x,+o.y); o.x=x; o.y=y; };
+  for(const p of (d.points||[])) t(p);
+  for(const m of (d.mesures||[])){ for(const q of (m.pts||[])) t(q); if(Math.abs(ech-1)>1e-12 && typeof recalcMesure==='function') recalcMesure(m); }
+  for(const r of (d.reseaux||[])) for(const n of (r.noeuds||[])) t(n);
+  if(d.devis && Array.isArray(d.devis.taches)) for(const k of d.devis.taches) if(k.x!==undefined) t(k); }
+async function transformerMemoire(nom,S){ const d={points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[], devis:await Memoire.lire('devis:'+nom)||null};
+  transformerDonneesObjet(d,S); await Memoire.ecrire('points:'+nom,d.points); await Memoire.ecrire('mesures:'+nom,d.mesures); await Memoire.ecrire('reseaux:'+nom,d.reseaux); if(d.devis) await Memoire.ecrire('devis:'+nom,d.devis); await Memoire.effacer('etat:'+nom); }
+async function appliquerCalage(){ const c=calageCalcule(); if(!c) return; const nom=scene.nom, ancien=await Memoire.lire('calage:'+nom);
+  sauverPointsMaintenant(); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
+  await Memoire.ecrire('calage:'+nom, mul(c.S, ancien||[1,0,0,1,0,0])); await transformerMemoire(nom,c.S);
+  fermerCalage(); await rouvrirPlanCourant(); marquerModifie();
+  $('etat').textContent='📐 Plan calé ('+c.L.length+' point'+(c.L.length>1?'s':'')+(c.L.length>=2?', rotation '+frN(c.rot,2)+'°, échelle × '+frN(c.ech,5):'')+'). Vos points sont dans le repère du théodolite. ⋮ → Caler pour retirer.'; }
+async function retirerCalage(){ const nom=scene.nom, M=await Memoire.lire('calage:'+nom); if(!M) return;
+  sauverPointsMaintenant(); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
+  await transformerMemoire(nom,inverseS(M)); await Memoire.effacer('calage:'+nom);
+  fermerCalage(); await rouvrirPlanCourant(); marquerModifie(); $('etat').textContent='Calage retiré : le plan et vos points sont revenus aux coordonnées d\'origine.'; }
+async function rouvrirPlanCourant(){ const nom=scene.nom, oct=scene.octets; cacheScenes.delete(nom); scene=null; await ouvrirOctets(nom, oct, {nom:null}); }
+// Fusion : met les données entrantes et locales dans le même repère
+async function accorderCalage(nom,d,dejaLa){ const loc=await Memoire.lire('calage:'+nom)||null, ent=d.calage||null; if(egalS(loc,ent)) return '';
+  if(!loc){ await Memoire.ecrire('calage:'+nom,ent); cacheScenes.delete(nom); if(dejaLa) await transformerMemoire(nom,ent); return '📐 '+nom+' : calage de la sauvegarde repris.'; }
+  transformerDonneesObjet(d, mul(loc, inverseS(ent||[1,0,0,1,0,0]))); return '📐 '+nom+' : données de la sauvegarde remises dans votre calage.'; }
+function dessinerCalage(c){ if(outil!=='calage'||!calageSaisie) return; const o=scene.origine; c.save();
+  calageSaisie.pts.forEach((p,k)=>{ if(!Number.isFinite(p.px)) return; const [x,y]=versEcran(p.px-o.x,p.py-o.y), sel=calageSaisie.ligne===k; c.strokeStyle=sel?'#d32f2f':'#6a1b9a'; c.lineWidth=2.5; c.beginPath(); c.arc(x,y,9,0,DEUXPI); c.stroke(); c.beginPath(); c.moveTo(x-14,y); c.lineTo(x+14,y); c.moveTo(x,y-14); c.lineTo(x,y+14); c.stroke(); c.font='bold 14px Arial'; c.fillStyle=c.strokeStyle; c.fillText(String(k+1),x+11,y-10); });
+  c.restore(); }
+function brancherCalage(){
+  $('bMenuCaler').onclick=()=>{ $('menu').classList.remove('ouvert'); if(!scene){ $('etat').textContent='Ouvrez d\'abord un plan.'; return; } ouvrirCalage(); };
+  $('cgFermer').onclick=fermerCalage; $('cgAppliquer').onclick=appliquerCalage; $('cgRetirer').onclick=retirerCalage;
+  $('cgPlus').onclick=()=>{ calageSaisie.pts.push({}); calageSaisie.ligne=calageSaisie.pts.length-1; majCalage(); };
+  $('cgEchCalc').onclick=()=>{ calageSaisie.echelle=true; majCalage(); }; $('cgEch1').onclick=()=>{ calageSaisie.echelle=false; majCalage(); }; }
 // ================= ✋ Modifier vos points d'un simple toucher =================
 let mainSel=null, mainPrise=null, histMain=[];
 function pointMainSousDoigt(sx,sy){ if(!scene) return null; const o=scene.origine; let best=null; const essai=(d,h)=>{ if(d<=RAYON_PRISE && (!best||d<best.d)) best={...h,d}; };
@@ -3189,7 +3278,7 @@ function garde(fn, conteneur){ let attente=null;
     return r; };
   return function(...args){ const ev=window.event, t=ev&&ev.type; if(t==='change'||t==='blur'||t==='focusout'||t==='keydown'){ clearTimeout(attente); attente=setTimeout(()=>exec(args),0); return; } return exec(args); }; }
 // Entrée = case suivante (dans les tableaux)
-document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; const a=e.target; if(!a||!a.matches||!a.matches('table.xl input')) return; const c=a.closest('[data-garde]')||a.closest('table');
+document.addEventListener('keydown',e=>{ if(e.key!=='Enter') return; const a=e.target; if(!a||!a.matches||!a.matches('table.xl input')||a.closest('#tabCalage')) return; const c=a.closest('[data-garde]')||a.closest('table');
   const L=champsDe(c).filter(x=>x.tagName==='INPUT'), i=L.indexOf(a); if(i<0||i+1>=L.length) return;
   // comme Excel : la case du dessous (même colonne), sinon la suivante
   let cible=L[i+1]; const td=a.closest('td'), tr=a.closest('tr'); if(td&&tr){ const col=[...tr.children].indexOf(td); let r=tr.nextElementSibling; while(r){ const t=r.children[col]; const x=t&&t.querySelector('input'); if(x&&x.offsetParent!==null&&r.children.length===tr.children.length){ cible=x; break; } r=r.nextElementSibling; } }
@@ -3223,6 +3312,7 @@ const AIDE=[
  {r:'Réseau', t:'Type de tuyau d\'un tronçon', txt:'Dans le tableau du réseau, ligne ↓ du tronçon : case Tuyau (PVC 125, Annelé 90…), ou dans la bulle du regard. Un nouveau tronçon reprend le tuyau du précédent. Un type tapé à la main est retenu.', mots:'tuyau diametre pvc annele tronçon type'},
  {r:'Réseau', t:'Travaux à faire / en cours / faits', txt:'Bouton ⬜ À faire : un appui → 🔄 En cours → ✅ Fait. Sur les tronçons (tableau ou bulle), les regards (bulle) et les mesures gardées (📋 Gardées). Sur le plan : vert = fait, orange pointillé = en cours.', mots:'travaux etat fait en cours a faire avancement'},
  {r:'Appli', t:'💬 Signaler une modification à Claude', txt:'💬 en haut : glissez l\'épingle sur l\'endroit (plan, bouton, case…), ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (dépôt GitHub retours-hub, clé à régler une fois avec 🔑) ou 📋 Copier pour coller dans la conversation. 📋 Liste : tous vos signalements.', mots:'signaler claude epingle demande modification bug github copier', go:()=>ouvrirEpingle(), sansPlan:true},
+ {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
  {r:'Plan', t:'✋ Modifier un de vos points', txt:'✋ en haut : glissez un regard, un point d\'export ou un coin de mesure pour le déplacer (accrochage et loupe) ; glissez le trait d\'une mesure pour la déplacer entière. Un appui : nom, Z, état, 🗑 Supprimer, 🏷 Étiquette. ↶ annule.', mots:'main modifier deplacer supprimer point regard mesure coin selection toucher', go:()=>{ if(outil!=='main') choisirOutil('main'); }},
  {r:'Réseau', t:'🔁 Transformer des traits du plan en réseau', txt:'Mesure → Réseau → 🔁 Du plan. Touchez les traits des tuyaux (⬚ Zone : rectangle, même calque que le 1er trait touché), puis ✓ Convertir. Chaque bout à moins de 0,50 m d\'un regard du plan va au centre du regard ; les bouts communs ne font qu\'un point ; ↶ annule tout.', mots:'convertir traits plan reseau selection zone regard centre axe points', go:()=>{ choisirOutil('mesure'); choisirMode('res'); ouvrirConversion(); }},
  {r:'Réseau', t:'Arrivée n° ou départ', txt:'Quand un tronçon touche un regard d\'un autre réseau, l\'appli demande : Arrivée 1, 2, 3… ou Départ. Le réseau est retourné si besoin (plus de « remonte » à tort). ⇄ inverse un réseau à la main.', mots:'arrivee depart sens inverser rang regard partage'},
@@ -3365,7 +3455,7 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='oeil' && !sequenceMulti){ oeilViser(p); }
   else if(outil==='mesure' && (voirGardees||prendreSurface) && !coupeMode && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
-  else if(outil && outil!=='main' && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
+  else if(outil && outil!=='main' && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (outil==='calage' ? null : mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
     if(outil==='mesure' && coupeMode) deplace=null;
     if(outil==='mesure' && deplace===null && !coupeMode){ const k=coteSousDoigt(p.x,p.y); if(k!==null){ memoMes(); const a=mesure.pts[k], b=mesure.pts[(k+1)%mesure.pts.length]; mesure.pts.splice(k+1,0,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(Number.isFinite(a.z)&&Number.isFinite(b.z))?(a.z+b.z)/2:NaN,t:0}); deplace=k+1; mesure.insere=true; } }
     appui={x:p.x,y:p.y,bouge:false}; if(outil==='mesure'&&mesure.mode==='res'&&deplace===null&&!coupeMode){ const a=noeudProcheTous(p.x,p.y,RAYON_PRISE); if(a&&a.ri!==resActif) appui.autre=a; } viser(p); }
@@ -3455,9 +3545,9 @@ async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n
   if(scene && scene.nom===nom){ if(classeur.plans.length) { const n=classeur.plans[classeur.plans.length-1]; scene=null; await basculerPlan(n); } else location.reload(); } else majOnglets(); }
 // ---- Sauvegarde du classeur entier (un seul fichier) ----
 async function contenuPlanDepuisMemoire(nom){ const f=await Memoire.lire('fichier:'+nom); if(!f) return null; const e=await Memoire.lire('etat:'+nom), rg=await Memoire.lire('reglagesCalques:'+nom)||{};
-  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, devis:await Memoire.lire('devis:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
+  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, calage:await Memoire.lire('calage:'+nom)||null, devis:await Memoire.lire('devis:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
     reglages:{supprimes:rg.supprimes||[], verrous:rg.verrous||[]}, vue:e&&e.s>0?{cx:e.cx,cy:e.cy,s:e.s}:null}; }
-async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, devis:d.devis, fouilles:d.fouilles, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
+async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, calage:d.calage, devis:d.devis, fouilles:d.fouilles, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
   return JSON.stringify({format:'plansdwg', version:2, type:'classeur', appli:VERSION, date:new Date().toISOString(), actif:scene?scene.nom:null, calquesPerso, modelesStructure:modelesPerso, typesProfil, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes}, plans:L}); }
 function nomClasseurDefaut(){ const d=new Date(); return 'Classeur_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.plansdwg'; }
 let attenteClasseur=false;
@@ -3476,6 +3566,7 @@ async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+
   let total=0;
   for(const p of (d.plans||[])){ if(!p.plan||!p.plan.octets) continue; const nom=p.plan.nom, oct=deBase64(p.plan.octets);
     const dejaLa = !!(await Memoire.lire('points:'+nom)) || !!(await Memoire.lire('mesures:'+nom)) || classeur.plans.includes(nom);
+    const noteCal=await accorderCalage(nom,p,dejaLa); if(noteCal) lignes.push(noteCal);
     enChargement=true; const ok=await ouvrirOctets(nom,oct,(await Memoire.lire('etat:'+nom))||{nom:null}); if(!ok){ enChargement=false; lignes.push('⚠ '+nom+' : illisible'); continue; }
     await ajouterAuClasseur(nom,oct); const R=fusionner({...p, calquesPerso:[], modelesStructure:[]});
     if(!dejaLa && p.vue && p.vue.s>0){ const o=scene.origine; vue.s=p.vue.s; vue.tx=W/2-(p.vue.cx-o.x)*vue.s; vue.ty=H/2+(p.vue.cy-o.y)*vue.s; }
@@ -3533,7 +3624,7 @@ async function ouvrirOctets(nom, octets, etat){
     try{ await Memoire.ecrire('prepare:'+nom,{v:FORMAT_PREPARE, taille:octets.length, debut:empreinte(octets), db}); }catch(e){}
     }
     voile('Préparation de l\'affichage…'); await attendreAffichage();
-    scene=construireScene(db);
+    const cal=await Memoire.lire('calage:'+nom); scene=construireScene(db, cal||null); scene.calage=cal||null;
     scene.nom=nom; scene.octets=octets; scene.version=estDwg?versionDwg(entete):'DXF'; scene.prepare=prepare;
     }
     garderEnMemoire(nom,scene); modifie=false; if(typeof majBoutonSauver==='function') majBoutonSauver();
@@ -3707,7 +3798,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherCalage(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
