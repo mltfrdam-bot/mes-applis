@@ -389,6 +389,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <div class="lfl"><span class="lb">Z arrivée</span><input id="lfZ1" inputmode="decimal" placeholder="—"><button class="btn petitb sugg" id="lfZ1s"></button></div>
     <div class="lfl lfTr"><span class="lb">FE départ</span><input id="lfF0" inputmode="decimal" placeholder="—"><span class="lb" style="width:auto">FE arrivée</span><input id="lfF1" inputmode="decimal" placeholder="—"></div>
     <div class="lfl"><span class="lb">Préfixe</span><input id="lfPre" placeholder="(aucun)" autocapitalize="characters"><button class="btn petitb" id="lfInv">⇄ Inverser le sens</button></div>
+    <div class="lfl"><label style="font-size:14px"><input type="checkbox" id="lfChaine" checked> 🔗 Toute la ligne (morceaux du même calque bout à bout)</label></div>
   </div>
   <div id="tronconsListe" style="display:none;flex:1;overflow:auto"><table class="xl compact" id="tabTroncons"><thead><tr><th>Désignation</th><th>Calque</th><th style="text-align:right">Long.</th><th style="text-align:right">Pts</th><th style="text-align:right">Pente</th><th></th><th></th></tr></thead><tbody id="tbTroncons"></tbody></table><div class="petit" style="padding:6px 8px;color:#666">Touchez un trait du plan pour créer un tronçon. ✎ change la ligne (pas, cotes) : les points recalculés, sauf ceux corrigés à la main. La désignation se change dans sa case.</div></div>
   <div class="ligneCalque" id="ligneEcranPts"><button class="btn petitb" id="bEcranPts">👁 À l'écran</button><button class="btn petitb" id="bImporter" title="Importer un fichier de points (TS11)">📥 Importer</button><input type="file" id="fichierPts" accept=".txt,.csv,.asc,.xyz,text/plain" style="display:none"><label style="white-space:nowrap;font-size:13px"><input type="checkbox" id="cbFF" style="width:18px;height:18px;vertical-align:middle"> Afficher FF</label><span style="font-size:12px;color:#666">Appui court sur un point = le sélectionner · glisser = le déplacer</span></div>
@@ -576,7 +577,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Tronçon – v2";
+const VERSION = "Tronçon – v3";
 </script>
 <script>
 "use strict";
@@ -1653,8 +1654,34 @@ function coteProche(lx,ly,rayon){
 function suggestionZ(xw,yw){ const o=scene.origine; return coteProche(xw-o.x,yw-o.y,4); }
 // ---- Interface ----
 function choisirModePoints(m){ ptsMode=m; $('pmPoint').classList.toggle('on',m==='point'); $('pmLigne').classList.toggle('on',m==='ligne'); $('pmTroncon').classList.toggle('on',m==='troncon'); majModeTroncon(); if(m==='point') ligneSel=null; majVueLigne(); demanderDessin(false); }
+// 🔗 Ligne entière : enchaîne les morceaux du même calque (pointillés, coupures aux poteaux…) bout à bout
+let chainerLigne=true;
+function boutsEls(els){ const a=elPt(els[0],0), b=elPt(els[els.length-1],1); return {a, b, ta:elTan(els[0],0), tb:elTan(els[els.length-1],1)}; }
+function chainerObjet(obj){ const cal=obj.calque, cand=[];
+  for(const o of scene.objets){ if(o===obj||o.calque!==cal||!o.els.length) continue; const B=boutsEls(o.els); if(Math.hypot(B.a[0]-B.b[0],B.a[1]-B.b[1])<0.01) continue; cand.push({o,B,pris:false}); }
+  if(!cand.length) return null;
+  const GMAX=1.2, ANG=Math.cos(25*Math.PI/180), LAT=0.15; let els=obj.els.slice(), n=0;
+  const etendre=(fin)=>{ for(let tour=0;tour<5000;tour++){ const B=boutsEls(els), P=fin?B.b:B.a, T=fin?B.tb:[-B.ta[0],-B.ta[1]]; let best=null, bd=GMAX;
+      for(const c of cand){ if(c.pris) continue; for(const debut of [true,false]){ const Q=debut?c.B.a:c.B.b, dx=Q[0]-P[0], dy=Q[1]-P[1], d=Math.hypot(dx,dy); if(d>bd) continue;
+          const tq=debut?c.B.ta:[-c.B.tb[0],-c.B.tb[1]]; // direction du morceau en partant de ce bout
+          const dot=tq[0]*T[0]+tq[1]*T[1];
+          if(d>0.05){ const pr=(dx*T[0]+dy*T[1]), lat=Math.abs(dx*T[1]-dy*T[0]); if(pr<=0||lat>LAT) continue; if(dot<ANG) continue; } else if(dot<0.5) continue; // bout à bout : virage de 60° maxi
+          bd=d; best={c,debut,Q}; } }
+      if(!best) return; best.c.pris=true; n++;
+      let ce=best.debut?best.c.o.els:inverserEls(best.c.o.els); // orienté en partant du bout touché
+      if(fin){ if(bd>0.001) els.push({t:'L',x1:P[0],y1:P[1],z1:0,x2:best.Q[0],y2:best.Q[1],z2:0}); els=els.concat(ce); }
+      else { ce=inverserEls(ce); if(bd>0.001) ce=ce.concat([{t:'L',x1:best.Q[0],y1:best.Q[1],z1:0,x2:P[0],y2:P[1],z2:0}]); els=ce.concat(els); } } };
+  etendre(true); etendre(false);
+  if(!n) return null;
+  // morceaux alignés (pointillés, coupures aux poteaux) → un seul segment : pas de points parasites aux coupures
+  const M=[]; for(const e of els){ const q=M[M.length-1];
+    if(q && q.t==='L' && e.t==='L'){ const ux=q.x2-q.x1, uy=q.y2-q.y1, vx=e.x2-e.x1, vy=e.y2-e.y1, lu=Math.hypot(ux,uy), lv=Math.hypot(vx,vy);
+      if(lu>1e-9 && lv>1e-9 && Math.abs(ux*vy-uy*vx)/(lu*lv)<0.02 && ux*vx+uy*vy>0){ q.x2=e.x2; q.y2=e.y2; q.z2=e.z2; continue; } }
+    M.push({...e}); }
+  return {type:obj.type, calque:cal, els:M, morceaux:n+1}; }
 function selectionnerObjet(obj){
-  ligneSel=obj; ligneParams.inverse=false; ligneParams.z0=null; ligneParams.z1=null; ligneParams.fe0=null; ligneParams.fe1=null; ligneParams.res=calqueTronconDefaut||calqueActifPts;
+  const orig=obj.objOrig||obj; obj=orig; if(chainerLigne){ const ch=chainerObjet(orig); if(ch){ obj=ch; obj.objOrig=orig; } } else if(obj!==orig) obj=orig;
+  ligneSel=obj; if(obj.morceaux && ligneParams.modePas==='A') ligneParams.modePas='B'; ligneParams.inverse=false; ligneParams.z0=null; ligneParams.z1=null; ligneParams.fe0=null; ligneParams.fe1=null; ligneParams.res=calqueTronconDefaut||calqueActifPts;
   // Z proposés : Z du trait (3D) sinon cote écrite proche des bouts
   remplirFormLigne(); majVueLigne();
 }
@@ -1695,7 +1722,7 @@ function apercuLigne(){ return ligneSel ? genererPointsLigne(elsLigne(),lignePar
 function majInfoLigne(){
   if(!ligneSel){ return; }
   const els=elsLigne(), L=els.reduce((a,e)=>a+elLong(e),0), pts=apercuLigne();
-  let h='Longueur <b>'+frN(L,2)+' m</b> · '+els.length+' élément'+(els.length>1?'s':'')+' · <b>'+pts.length+' points</b>';
+  let h='Longueur <b>'+frN(L,2)+' m</b> · '+(ligneSel.morceaux?'🔗 '+ligneSel.morceaux+' morceaux réunis':els.length+' élément'+(els.length>1?'s':''))+' · <b>'+pts.length+' points</b>';
   if(Number.isFinite(ligneParams.z0)&&Number.isFinite(ligneParams.z1)&&L>0){ const dz=ligneParams.z1-ligneParams.z0; h+=' · ΔZ '+(dz>=0?'+':'')+frN(dz,2)+' m · pente <b>'+(dz>=0?'+':'')+frN(dz/L*100,2)+' %</b>'; }
   if(ptsMode==='troncon'){ if(Number.isFinite(ligneParams.fe0)&&Number.isFinite(ligneParams.fe1)&&L>0){ const df=ligneParams.fe1-ligneParams.fe0; h+=' · FE pente <b>'+(df>=0?'+':'')+frN(df/L*100,2)+' %</b>'; }
     if(ligneParams.modePas==='C' && pts.length>1) h+=' · tous les <b>'+frN(L/(pts.length-1),3)+' m</b>';
@@ -1759,6 +1786,8 @@ function brancherLigne(){
   Memoire.lire('trCalque').then(v=>{ if(v) calqueTronconDefaut=v; });
   $('lfG').onclick=()=>{ ligneParams.cote='g'; remplirFormLigne(); demanderDessin(false); };
   $('lfD').onclick=()=>{ ligneParams.cote='d'; remplirFormLigne(); demanderDessin(false); };
+  $('lfChaine').onchange=e=>{ chainerLigne=e.target.checked; Memoire.ecrire('chainerLigne',chainerLigne); if(ligneSel && !ligneSel.trId && ligneSel.type!=='MESURE'){ selectionnerObjet(ligneSel.objOrig||ligneSel); demanderDessin(false); } };
+  Memoire.lire('chainerLigne').then(v=>{ if(v===false){ chainerLigne=false; $('lfChaine').checked=false; } });
   $('lfInv').onclick=()=>{ lireFormLigne(); ligneParams.inverse=!ligneParams.inverse; const z=ligneParams.z0; ligneParams.z0=ligneParams.z1; ligneParams.z1=z; remplirFormLigne(); demanderDessin(false); };
   $('lfCreer').onclick=creerPointsLigne;
   $('lfAnn').onclick=()=>{ ligneSel=null; majVueLigne(); demanderDessin(false); };
