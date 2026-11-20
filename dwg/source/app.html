@@ -62,6 +62,7 @@ body.ligneOuverte.enOutil #zone{bottom:378px}
 #bulleReg input.bDe{width:52px;text-align:left;font-family:Arial}
 #bulleReg input.faux{background:#ffd6d6}
 #bulleReg .bSeg button{height:34px;padding:0 8px;font-size:13px}
+#bulleReg b.rang{display:inline-block;min-width:18px;text-align:center;background:#1f5fa8;color:#fff;border-radius:9px;font-size:12px;margin-right:2px}
 #bulleReg .bPentes{padding:4px 6px;color:#333;line-height:1.5}
 .btnEtat{height:30px;padding:0 5px;border:1px solid;border-radius:4px;background:#fff;font-size:12px;font-weight:bold;white-space:nowrap}
 #tabRes td.tdTuy,#tabRes td.tdEtat{padding:0 2px}
@@ -85,6 +86,16 @@ body.ligneOuverte.enOutil #zone{bottom:378px}
 #sigCleForm input{flex:1;height:36px;border:1px solid #9a9a9a;border-radius:4px;padding:0 6px;font-size:14px}
 #sigInfo{padding:4px 8px;color:#1f5fa8}
 #tabSig td{vertical-align:top;font-size:13px;white-space:normal}
+#convPanel{display:none;flex-direction:column;gap:3px;padding:4px 6px;background:#fdf1fa;border-top:1px solid #e2b3d4;border-bottom:1px solid #e2b3d4}
+#convPanel.ouvert{display:flex}
+#convInfo{font-size:13px;color:#7b1fa2}
+#convPanel .convL{display:flex;gap:5px;align-items:center;flex-wrap:wrap;font-size:13px}
+#convPanel select{height:30px;max-width:150px;font-size:13px}
+#convPanel .btn.actif{background:#7b1fa2;color:#fff;border-color:#7b1fa2}
+#roleBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:33;padding:16px}
+#roleBoite .boite{background:#fff;border:2px solid #1f5fa8;border-radius:6px;max-width:440px;width:100%;padding:14px;font-size:15px;line-height:1.4}
+#roleBoite .lig{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+#roleBoite .lig .btn{flex:1 1 40%}
 #calqueBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:31;padding:16px}
 #calqueBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px}
 #calqueBoite h3{margin:0 0 8px;font-size:17px}
@@ -326,8 +337,9 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   </div>
   <div id="resultat"></div>
   <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bTN" title="Terrain naturel : déblai / remblai" style="display:none">⛰ TN</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
-  <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
-  <div id="resArts">🧾<select id="selArtTuyau"></select><select id="selArtRegard"></select></div>
+  <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><button class="btn petitb" id="bInvRes" title="Inverser le sens du réseau">⇄</button><button class="btn petitb" id="bConv" title="Transformer des traits du plan en réseau">🔁 Du plan</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
+  <div id="convPanel"><div id="convInfo"></div><div class="convL"><button class="btn petitb" id="convZone">⬚ Zone</button><label><input type="checkbox" id="convMil"> Point au milieu</label><select id="convCalque" title="Calque des points"></select><span style="flex:1"></span><button class="btn petitb" id="convVider">Vider</button><button class="btn petitb" id="convAnn">✕</button><button class="btn prim petitb" id="convOk">✓ Convertir</button></div></div>
+  <div id="resArts">🧾<select id="selArtTuyau"></select><select id="selArtRegard"></select><select id="selCalqueRes" title="Calque des points de ce réseau (export)"></select></div>
   <div id="tabResWrap"><table class="xl compact" id="tabRes"><thead><tr><th style="width:52px">Nom</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE arr.</th><th style="text-align:right">FE dép.</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbRes"></tbody></table></div>
   <div id="tabPtsWrap"><table class="xl compact" id="tabMesCour"><thead><tr><th>Pt</th><th style="text-align:right">X</th><th style="text-align:right">Y</th><th style="text-align:right">Z fini</th><th class="colFF" style="text-align:right">FF</th><th>Accroche</th></tr></thead><tbody id="tbPts"></tbody></table>
     <table class="xl compact" id="tabGardees" style="display:none"><thead><tr><th>Mesure</th><th style="text-align:right">Valeur</th><th>Travaux</th><th>Calque</th><th></th></tr></thead><tbody id="tbGardees"></tbody></table></div>
@@ -390,6 +402,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <table class="xl compact" id="tabSig"><thead><tr><th>N°</th><th>Écrit le</th><th>Endroit</th><th>Demande</th><th>État</th><th></th></tr></thead><tbody id="tbSig"></tbody></table>
   </div>
 </div>
+<div id="roleBoite"><div class="boite"><div id="roleTexte"></div><div class="lig" id="roleBoutons"></div></div></div>
 <div id="coupeTrBoite">
   <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;font-size:14px">Prof. <input id="cpProf" inputmode="decimal" style="width:60px;height:34px"> m · Largeur <input id="cpLarg" inputmode="decimal" placeholder="auto" style="width:60px;height:34px"> m
@@ -528,7 +541,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Regards – v1";
+const VERSION = "Du plan – v1";
 </script>
 <script>
 "use strict";
@@ -693,6 +706,8 @@ function construireScene(db){
   }
   // Objets sélectionnables (traits de premier niveau) : géométrie exacte en coordonnées réelles
   const OBJETS=[]; let objCourant=-1;
+  const SYMBOLES=[]; let boiteIns=null; // symboles (blocs et cercles de premier niveau) : centre = axe de l'objet
+  const boiteAj=p=>{ if(!boiteIns) return; for(let i=0;i<p.length;i+=2){ const x=p[i],y=p[i+1]; if(x<boiteIns[0]) boiteIns[0]=x; if(y<boiteIns[1]) boiteIns[1]=y; if(x>boiteIns[2]) boiteIns[2]=x; if(y>boiteIns[3]) boiteIns[3]=y; } };
   function elemsDe(e,Me){
     const miroir=Me[0]<0; const P=(x,y)=>[Me[0]*x+Me[2]*y+Me[4], Me[1]*x+Me[3]*y+Me[5]];
     const L=(a,b,za,zb)=>{ const A=P(a.x,a.y),B=P(b.x,b.y); return {t:'L',x1:A[0],y1:A[1],z1:za,x2:B[0],y2:B[1],z2:zb}; };
@@ -718,8 +733,8 @@ function construireScene(db){
     return els.filter(x=>x && (x.t==='A' ? x.r*Math.abs(x.sw)>1e-6 : Math.hypot(x.x2-x.x1,x.y2-x.y1)>1e-6));
   }
   function appliquer(M,pts){ const o=new Array(pts.length); for(let i=0;i<pts.length;i+=2){const x=pts[i],y=pts[i+1]; o[i]=M[0]*x+M[2]*y+M[4]; o[i+1]=M[1]*x+M[3]*y+M[5];} return o; }
-  function ajTrait(L,M,pts,ferme){ if(pts.length<4) return; const p=appliquer(M,pts); if(ferme){p.push(p[0],p[1]);} L.traits.push(p); L.objs.push(objCourant); if(tousX.length<400000){ for(let i=0;i<p.length;i+=2){tousX.push(p[i]); tousY.push(p[i+1]);} } }
-  function ajRempli(L,M,anneaux,alpha){ const a=anneaux.filter(r=>r.length>=6).map(r=>appliquer(M,r)); if(a.length) L.remplis.push({a,alpha}); }
+  function ajTrait(L,M,pts,ferme){ if(pts.length<4) return; const p=appliquer(M,pts); if(ferme){p.push(p[0],p[1]);} boiteAj(p); L.traits.push(p); L.objs.push(objCourant); if(tousX.length<400000){ for(let i=0;i<p.length;i+=2){tousX.push(p[i]); tousY.push(p[i+1]);} } }
+  function ajRempli(L,M,anneaux,alpha){ const a=anneaux.filter(r=>r.length>=6).map(r=>appliquer(M,r)); for(const r of a) boiteAj(r); if(a.length) L.remplis.push({a,alpha}); }
 
   function ajTexte(e, M, haut, eff, couleur, brut, estM){
     let x,y,h,ang,ha,va,lignes,larg=1;
@@ -784,7 +799,7 @@ function construireScene(db){
         for(let i=1;i<v.length;i++) ptsBulge(v[i-1].x,v[i-1].y,v[i].x,v[i].y,v[i-1].bulge||0,p);
         if(ferme) ptsBulge(v[v.length-1].x,v[v.length-1].y,v[0].x,v[0].y,v[v.length-1].bulge||0,p);
         ajTrait(L(),Me,p); if(!ns) accrochePoly(L(),Me,v,ferme,q=>zz(e.type==='POLYLINE3D'?q.z:(e.elevation??q.z))); break; }
-      case 'CIRCLE': { const p=[]; ptsArc(e.center.x,e.center.y,e.radius,0,DEUXPI,p); ajTrait(L(),Me,p); A(L(),Me,e.center.x,e.center.y,zz(e.center.z),3); break; }
+      case 'CIRCLE': { const p=[]; ptsArc(e.center.x,e.center.y,e.radius,0,DEUXPI,p); if(prof===0){ boiteIns=[Infinity,Infinity,-Infinity,-Infinity]; } ajTrait(L(),Me,p); if(prof===0){ const b=boiteIns; boiteIns=null; if(b[0]<=b[2]) SYMBOLES.push({nom:'cercle', calque:e.layer||'0', cx:(b[0]+b[2])/2, cy:(b[1]+b[3])/2, b}); } A(L(),Me,e.center.x,e.center.y,zz(e.center.z),3); break; }
       case 'ARC': { const p=[]; ptsArc(e.center.x,e.center.y,e.radius,e.startAngle,e.endAngle,p); ajTrait(L(),Me,p);
         const c=e.center, z=zz(c.z); let da=e.endAngle-e.startAngle; while(da<=0) da+=DEUXPI; const am=e.startAngle+da/2;
         A(L(),Me,c.x,c.y,z,3); A(L(),Me,p[0],p[1],z,1); A(L(),Me,p[p.length-2],p[p.length-1],z,1); A(L(),Me,c.x+e.radius*Math.cos(am),c.y+e.radius*Math.sin(am),z,2); break; }
@@ -818,7 +833,7 @@ function construireScene(db){
       case 'MTEXT': ajTexte(e,Me,haut,eff,coul,e.text,true); break;
       case 'INSERT': {
         if(prof>12) break;
-        const b=blocs.get(e.name);
+        const b=blocs.get(e.name); const ins0=prof===0 && !boiteIns; if(ins0) boiteIns=[Infinity,Infinity,-Infinity,-Infinity];
         if(b && b.entities && b.entities.length){
           const bp=b.basePoint||{x:0,y:0}, ip=e.insertionPoint||{x:0,y:0};
           const nc=Math.max(1,e.columnCount||1), nr=Math.max(1,e.rowCount||1);
@@ -828,6 +843,7 @@ function construireScene(db){
             for(const se of b.entities) if(se.type!=='ATTDEF' && se.type!=='ATTRIB') traiter(se, Mi, haut, eff, coul, prof+1, (prof>0?z0:0)+(ip.z||0), ns);
           }
         }
+        if(ins0){ const bx=boiteIns; boiteIns=null; if(bx[0]<=bx[2] && Math.max(bx[2]-bx[0],bx[3]-bx[1])<30) SYMBOLES.push({nom:e.name||'bloc', calque:e.layer||'0', cx:(bx[0]+bx[2])/2, cy:(bx[1]+bx[3])/2, b:bx}); }
         const at=attribsPar.get(e.handle);
         if(at) for(const a of at){ if(a.flags&1) continue; const ea=a.layer==='0'?eff:a.layer; ajTexte(a, M, haut, ea, couleurDe(a,ea,coul), null, false); }
         break; }
@@ -885,7 +901,7 @@ function construireScene(db){
     for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++){ const c=cle(i,j); let a=gS.get(c); if(!a){a=[];gS.set(c,a);} a.push(k); }
   }
   const zone=zonePrincipale(tousX,tousY,ox,oy,emprise) || empL;
-  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, msConstr:performance.now()-t0};
+  return {calques, lots:listeLots, fonds:FONDS, textes, cotes, objets:OBJETS, symboles:SYMBOLES, origine:{x:ox,y:oy}, emprise:empL, zone, acc:{pts,segs,gP,gS,taille,cle}, nbObjets:racine.length, msConstr:performance.now()-t0};
 }
 // Zone qui contient le plus de dessin (le chantier, sans la légende éloignée)
 function zonePrincipale(X,Y,ox,oy,E){
@@ -944,7 +960,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
+  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerReseaux(ctx); dessinerConv(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
   majLoupe();
 }
 function rendreScene(c){
@@ -1204,7 +1220,7 @@ function majComptesPerso(){
   const plus=n=>{ const c=scene.calques.get(n); if(c) c.nbPerso=(c.nbPerso||0)+1; };
   for(const p of pointsExp) plus(p.calque||CALQUE_PTS);
   for(const m of mesuresGardees) plus(m.calque||CALQUE_MES);
-  for(const r of (typeof reseaux!=='undefined'?reseaux:[])) plus('RESEAUX');
+  for(const r of (typeof reseaux!=='undefined'?reseaux:[])) plus(r.calque||'RESEAUX');
 }
 function remplirSelectsCalques(){
   for(const [id,actif] of [['selCalquePts',calqueActifPts],['selCalqueMes',edition?edition.calque:calqueActifMes]]){
@@ -1429,7 +1445,8 @@ function annulerPoints(){ const h=historiquePts.pop(); if(!h) return; pointsExp=
 function nomExportDefaut(){ const b=(scene?scene.nom:'PLAN').replace(/\.[^.]*$/,''); return (b.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'').toUpperCase().slice(0,20)||'PLAN')+'_PTS'; }
 const f3=v=>(Math.round(v*1000)/1000).toFixed(3);
 let calquesExport=null;
-const pointsAExporter=()=>pointsExp.filter(p=>!calquesExport || calquesExport.has(calqueDe(p)));
+const tousPointsExport=()=>[...pointsExp, ...(typeof pointsReseaux==='function'?pointsReseaux():[])];
+const pointsAExporter=()=>tousPointsExport().filter(p=>!calquesExport || calquesExport.has(calqueDe(p)));
 function texteTS11(pts){ pts=pts||pointsAExporter(); return pts.map(p=>[p.nom, f3(p.x), f3(p.y), (p.z===null||p.z===undefined)?'':f3(p.z)].join(';')).join('\r\n')+'\r\n'; }
 function dxfPoints(pts){
   // DXF R12 (le plus simple et le plus lu) : un POINT par point sur son calque, son nom en TEXTE sur <calque>_NOMS
@@ -1462,15 +1479,25 @@ function majDossierExport(){
   if(peut){ const d=APPLI.nomDossier(); $('expDossier').textContent = d || 'à choisir au 1er enregistrement'; }
 }
 function ouvrirExport(){
-  if(!pointsExp.length){ $('ptsInfo').innerHTML='⚠ Aucun point à exporter : touchez le plan pour en placer.'; return; }
+  const tous=tousPointsExport();
+  if(!tous.length){ $('ptsInfo').innerHTML='⚠ Aucun point à exporter : touchez le plan pour en placer.'; return; }
   $('expNom').value=nomExportDefaut(); $('exportResultat').innerHTML='';
-  const cals=[...new Set(pointsExp.map(calqueDe))];
-  if(!calquesExport) calquesExport=new Set(cals);
+  const cals=[...new Set(tous.map(calqueDe))];
+  if(!calquesExport) calquesExport=new Set(cals); else for(const n of cals) if(!calquesExport.vus||!calquesExport.vus.has(n)) calquesExport.add(n);
+  calquesExport.vus=new Set(cals);
   const z=$('expCalques'); z.replaceChildren();
-  for(const n of cals){ const nb=pointsExp.filter(p=>calqueDe(p)===n).length;
-    const l=document.createElement('label'); l.innerHTML=`<input type="checkbox"><span style="color:${couleurCalque(n)};font-weight:bold"></span><span style="color:#666">(${nb} pt${nb>1?'s':''})</span>`;
-    l.children[1].textContent=n; const cb=l.children[0]; cb.checked=calquesExport.has(n);
+  const tete=document.createElement('div'); tete.style.cssText='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px';
+  tete.innerHTML='<button class="btn petitb" data-t="1">☑ Tout</button><button class="btn petitb" data-t="0">☐ Aucun</button>'+(tous.some(p=>p.reg)?'<span style="font-size:13px">Z des regards :</span><select id="expZReg" style="height:32px"><option value="tampon">Tampon</option><option value="fe">Fil d\'eau (plus bas)</option></select><button class="btn petitb" id="expRegards">📋 Tableau des regards</button>':'');
+  z.appendChild(tete);
+  const cases=[];
+  for(const n of cals){ const L=tous.filter(p=>calqueDe(p)===n), nb=L.filter(p=>!p.reg).length, nr=L.filter(p=>p.reg&&!p.mil).length, nm=L.filter(p=>p.mil).length;
+    const l=document.createElement('label'); l.innerHTML=`<input type="checkbox"><span style="color:${couleurCalque(n)};font-weight:bold"></span><span style="color:#666"></span>`;
+    l.children[1].textContent=n; l.children[2].textContent='('+[nb?nb+' pt'+(nb>1?'s':''):'', nr?nr+' regard'+(nr>1?'s':''):'', nm?nm+' milieu'+(nm>1?'x':''):''].filter(Boolean).join(' · ')+')';
+    const cb=l.children[0]; cb.checked=calquesExport.has(n); cases.push([cb,n]);
     cb.onchange=()=>{ if(cb.checked) calquesExport.add(n); else calquesExport.delete(n); }; z.appendChild(l); }
+  tete.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ const on=b.dataset.t==='1'; for(const [cb,n] of cases){ cb.checked=on; if(on) calquesExport.add(n); else calquesExport.delete(n); } });
+  const zs=tete.querySelector('#expZReg'); if(zs){ zs.value=zRegards; zs.onchange=()=>{ zRegards=zs.value; Memoire.ecrire('zRegards',zRegards); }; }
+  const tr=tete.querySelector('#expRegards'); if(tr) tr.onclick=async()=>{ const ok=await copierTexte(texteRegards()); $('exportResultat').innerHTML=ok?'📋 Tableau des regards copié (Nom, X, Y, Tampon, FE, Prof.) : à coller dans Excel.':'⚠ Copie impossible.'; };
   majDossierExport();
   $('exportBoite').style.display='flex';
 }
@@ -1975,7 +2002,9 @@ function noeudSousDoigt(sx,sy){ if(!reseaux.length||!calqueVisible(CALQUE_RES)) 
 // Appui en mode Réseau (v = point visé, coordonnées locales)
 function poserReseau(v){
   const r=resCourant(), o=scene.origine, xw=v.x+o.x, yw=v.y+o.y;
-  if(deplace!==null){ memoRes(); const n=r.noeuds[deplace], m=maitre(n); n.x=xw; n.y=yw;
+  if(deplace!==null){ memoRes(); const n=r.noeuds[deplace], m=maitre(n);
+    if(n.t==='R'){ const autre=regardAutreReseau(v,r); if(autre && autre!==m){ fusionnerRegard(r,deplace,autre); noeudSel=deplace; sauverReseaux(); $('etat').textContent='🔗 Les deux points ne font plus qu\'un : '+autre.nom+'.'; setTimeout(()=>demanderRolePour(r,n),50); return; } }
+    n.x=xw; n.y=yw;
     if(n.t==='R'){ m.x=xw; m.y=yw; if(m.id) for(const r2 of reseaux) for(const q of r2.noeuds) if(q.lien===m.id){ q.x=xw; q.y=yw; } }
     noeudSel=deplace; sauverReseaux(); return; }
   const c=calcReseau(r), pr=r.noeuds.length>1?projReseau(r,c,xw,yw):null, pres = pr && pr.d*vue.s<=RAYON_ACC;
@@ -1990,7 +2019,7 @@ function poserReseau(v){
   const autre=regardAutreReseau(v,r);
   if(autre){ if(r.noeuds.some(q=>q.lien===idRegard(autre))){ $('etat').textContent=autre.nom+' est déjà dans ce réseau.'; histRes.pop(); return; }
     r.noeuds.push({t:'R', nom:autre.nom, lien:idRegard(autre), x:autre.x, y:autre.y, ...herite});
-    $('etat').textContent='🔗 '+autre.nom+' : regard partagé avec un autre réseau. Touchez son étiquette pour taper le FE de cette arrivée.'; }
+    $('etat').textContent='🔗 '+autre.nom+' : regard partagé avec un autre réseau.'; const nd=r.noeuds[r.noeuds.length-1]; setTimeout(()=>demanderRolePour(r,nd),50); }
   else r.noeuds.push({t:'R', id:idRegard({}), nom:prochainNomRegard(), x:xw, y:yw, tampon:z, feArr:null, feDep:null, ...herite});
   noeudSel=r.noeuds.length-1; lectureRes=null; sauverReseaux();
 }
@@ -2029,6 +2058,7 @@ function majReseau(infoSeule){
         tr.querySelector('.tdTuy').appendChild(champTuyau(n.tuyau, v=>{ memoRes(); if(v) n.tuyau=v; else delete n.tuyau; sauverReseaux(); majReseau(); demanderDessin(false); }));
         tr.querySelector('.tdEtat').appendChild(boutonEtat(n.etatTr, ()=>{ memoRes(); const e=etatSuivant(n.etatTr||''); if(e) n.etatTr=e; else delete n.etatTr; sauverReseaux(); majReseau(); demanderDessin(false); }));
         frag.appendChild(tr); } }
+    if(n.t==='P') return; // simple coude du tracé : pas de ligne
     const tr=document.createElement('tr'); tr.dataset.i=i; if(i===noeudSel) tr.className='sel'; if(n.t==='C') tr.classList.add('cote');
     const m=n.t==='R'?maitre(n):n, lie=m!==n;
     const tdN=document.createElement('td'); const iN=document.createElement('input'); iN.value=m.nom; if(lie){ iN.title='Regard partagé avec un autre réseau'; iN.style.fontStyle='italic'; }
@@ -2058,7 +2088,7 @@ function majReseau(infoSeule){
 function dessinerReseaux(c){
   etiqRes=[]; if(!scene||!reseaux.length||!calqueVisible(CALQUE_RES)) return; const o=scene.origine, enRes=outil==='mesure'&&mesure.mode==='res';
   c.save();
-  reseaux.forEach((r,ir)=>{ const N=r.noeuds.map(n=>({...n}));
+  reseaux.forEach((r,ir)=>{ if(r.calque && !calqueVisible(r.calque)) return; const N=r.noeuds.map(n=>({...n}));
     if(enRes && ir===resActif && visee && deplace!==null){ const v=pointVise(); if(v){ N[deplace].x=v.x+o.x; N[deplace].y=v.y+o.y; } }
     if(!N.length) return; const actif=ir===resActif && enRes; const E=N.map(n=>versEcran(n.x-o.x,n.y-o.y));
     c.beginPath(); E.forEach((e,i)=>i?c.lineTo(e[0],e[1]):c.moveTo(e[0],e[1])); c.strokeStyle=actif?BLEU_RES:'rgba(2,119,189,0.6)'; c.lineWidth=actif?3:2; c.stroke();
@@ -2071,6 +2101,7 @@ function dessinerReseaux(c){
       if(actif){ const txt=fr(t.L,2)+' m · '+fr(t.pente,2)+' %'+(t.tuyau?' · '+t.tuyau:''); c.font='bold 11px Arial'; const w=c.measureText(txt).width+8; c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(mx-w/2,my+8,w,15); c.fillStyle=BLEU_RES; c.textAlign='center'; c.textBaseline='middle'; c.fillText(txt,mx,my+15.5); } }
     N.forEach((n,i)=>{ const [x,y]=E[i]; if(x<-30||y<-30||x>W+30||y>H+30) return;
       if(actif && i===noeudSel){ c.beginPath(); c.arc(x,y,14,0,DEUXPI); c.fillStyle='rgba(31,95,168,0.25)'; c.fill(); }
+      if(n.t==='P'){ if(actif && i===noeudSel){ c.beginPath(); c.arc(x,y,5,0,DEUXPI); c.fillStyle=BLEU_RES; c.fill(); } return; }
       const m=n.t==='R'?maitre(r.noeuds[i]):n, ce=n.t==='R'&&m.etat?ETATS_TX[m.etat].c:BLEU_RES;
       if(n.t==='R'){ c.beginPath(); c.arc(x,y,7,0,DEUXPI); c.fillStyle=m.etat==='fait'?'#c8e6c9':m.etat==='encours'?'#ffe0b2':'#fff'; c.fill(); c.strokeStyle=ce; c.lineWidth=2.5; c.stroke(); c.beginPath(); c.arc(x,y,2.5,0,DEUXPI); c.fillStyle=ce; c.fill(); }
       else { c.beginPath(); c.moveTo(x,y-6); c.lineTo(x+6,y); c.lineTo(x,y+6); c.lineTo(x-6,y); c.closePath(); c.fillStyle='#fff'; c.fill(); c.strokeStyle='#6d4c41'; c.lineWidth=2; c.stroke(); }
@@ -2100,12 +2131,13 @@ function construireBulle(){ const b=$('bulleReg'), m=bulleReg.m, P=placesRegard(
   h+='<tr class="bSous"><td colspan="4">Arrivées (fil d\'eau · tuyau · travaux)</td></tr>';
   const lignes=[]; // {lab, lire, ecrire, tuy:{lire,ecrire}, etat:{lire,ecrire}, sup?}
   for(const p of P){ const prev=regardPrecedent(p.r,p.ni); if(!prev) continue; const ar=arriveeDe(p.r,p.ni); if(!ar) continue; const nd=p.n;
-    lignes.push({lab:'de '+ar.de+(plusieurs&&P.length>1?' <small>('+echapper(p.r.nom)+')</small>':''), lire:ar.lire, ecrire:ar.ecrire, tuy:{lire:()=>nd.tuyau||'', ecrire:v=>{ if(v) nd.tuyau=v; else delete nd.tuyau; }}, etat:{lire:()=>nd.etatTr||'', ecrire:v=>{ if(v) nd.etatTr=v; else delete nd.etatTr; }}}); }
+    lignes.push({rang:nd.rangArr, lab:'de '+ar.de+(plusieurs&&P.length>1?' <small>('+echapper(p.r.nom)+')</small>':''), lire:ar.lire, ecrire:ar.ecrire, tuy:{lire:()=>nd.tuyau||'', ecrire:v=>{ if(v) nd.tuyau=v; else delete nd.tuyau; }}, etat:{lire:()=>nd.etatTr||'', ecrire:v=>{ if(v) nd.etatTr=v; else delete nd.etatTr; }}}); }
   const prisDe=new Set(lignes.map(l=>l.lab.replace(/^de /,'').replace(/ <small>.*$/,'')));
   if(!regardPrecedent(chez.r,chez.ni) && vOk(m.feArr)) lignes.push({lab:'arrivée', lire:()=>m.feArr, ecrire:v=>{ m.feArr=v; }});
   (m.arrAutres||[]).forEach((a,ia)=>{ if(prisDe.has(a.de) && a.de) return;
-    lignes.push({libre:a, lire:()=>a.fe, ecrire:v=>{ a.fe=v; }, tuy:{lire:()=>a.tuyau||'', ecrire:v=>{ if(v) a.tuyau=v; else delete a.tuyau; }}, etat:{lire:()=>a.etat||'', ecrire:v=>{ if(v) a.etat=v; else delete a.etat; }}, sup:()=>{ m.arrAutres.splice(ia,1); if(!m.arrAutres.length) delete m.arrAutres; }}); });
-  lignes.forEach((l,k)=>{ h+='<tr data-l="'+k+'"><td>'+(l.libre?'de <input class="bDe" data-de="'+k+'" list="dlRegards" placeholder="?" autocapitalize="characters">':l.lab)+'</td><td><input data-fe="'+k+'" inputmode="decimal" placeholder="FE"></td><td class="bTuy"></td><td class="bEt">'+(l.sup?'':'')+'</td></tr>'; });
+    lignes.push({rang:a.rang, libre:a, lire:()=>a.fe, ecrire:v=>{ a.fe=v; }, tuy:{lire:()=>a.tuyau||'', ecrire:v=>{ if(v) a.tuyau=v; else delete a.tuyau; }}, etat:{lire:()=>a.etat||'', ecrire:v=>{ if(v) a.etat=v; else delete a.etat; }}, sup:()=>{ m.arrAutres.splice(ia,1); if(!m.arrAutres.length) delete m.arrAutres; }}); });
+  lignes.sort((a,b)=>(a.rang||99)-(b.rang||99));
+  lignes.forEach((l,k)=>{ h+='<tr data-l="'+k+'"><td>'+(l.rang?'<b class="rang">'+l.rang+'</b> ':'')+(l.libre?'de <input class="bDe" data-de="'+k+'" list="dlRegards" placeholder="?" autocapitalize="characters">':l.lab)+'</td><td><input data-fe="'+k+'" inputmode="decimal" placeholder="FE"></td><td class="bTuy"></td><td class="bEt">'+(l.sup?'':'')+'</td></tr>'; });
   if(!lignes.length) h+='<tr><td colspan="4" class="petit" style="color:#777">Aucune arrivée (tête de réseau).</td></tr>';
   h+='<tr><td colspan="4"><button class="btn petitb" data-act="plusArr">＋ Arrivée</button> <span class="petit" style="color:#666">ex. A2 qui arrive d\'un autre réseau</span></td></tr>';
   h+='<tr class="bSous"><td colspan="4">Départ</td></tr><tr><td>FE dép.</td><td><input data-k="feDep" inputmode="decimal" placeholder="FE"></td><td colspan="2" class="bProf"></td></tr>';
@@ -2139,6 +2171,130 @@ function placerBulle(){ if(!bulleReg) return; const b=$('bulleReg'); const e=eti
   const r=cv.getBoundingClientRect(), bw=b.offsetWidth, bh=b.offsetHeight, Wf=window.innerWidth, Hf=window.innerHeight;
   let left=r.left+e.x0, top=r.top+e.y1+4; if(top+bh>Hf-4){ const haut=r.top+e.y0-bh-4; top = haut>=56 ? haut : Math.max(56,Hf-bh-4); }
   left=Math.max(4,Math.min(Wf-bw-4,left)); b.style.left=left+'px'; b.style.top=top+'px'; }
+
+// ================= 🔁 Traits du plan → réseau (regards au centre des symboles, points partagés) =================
+let convSel=null, convCalque=CALQUE_RES, convMilieux=false;
+const TOL_REGARD=0.50, TOL_JOINT=0.05; // m : bout de trait → regard · bouts confondus
+function ouvrirConversion(){ if(convSel){ fermerConversion(); return; } fermerBulle(); convSel={traits:new Set(), symb:new Set(), zone:false, rect:null}; majConv(); demanderDessin(false); }
+function fermerConversion(){ convSel=null; majConv(); demanderDessin(false); }
+function aireB(b){ return (b[2]-b[0])*(b[3]-b[1]); }
+function symboleSousDoigt(sx,sy){ if(!scene||!scene.symboles) return null; const [lx,ly]=versPlan(sx,sy), o=scene.origine, x=lx+o.x, y=ly+o.y, m=6/vue.s; let best=null;
+  for(const q of scene.symboles){ const b=q.b; if(x<b[0]-m||x>b[2]+m||y<b[1]-m||y>b[3]+m||!calqueVisible(q.calque)) continue; if(!best||aireB(b)<aireB(best.b)) best=q; } return best; }
+function basculerSel(sx,sy){ const sy0=symboleSousDoigt(sx,sy); const o=objetSousDoigt(sx,sy);
+  if(sy0 && (!o || Math.max(sy0.b[2]-sy0.b[0],sy0.b[3]-sy0.b[1])<=3)){ convSel.symb.has(sy0)?convSel.symb.delete(sy0):convSel.symb.add(sy0); }
+  else if(o){ convSel.traits.has(o)?convSel.traits.delete(o):convSel.traits.add(o); }
+  else $('etat').textContent='Aucun trait ici.';
+  majConv(); demanderDessin(false); }
+function boiteEls(els){ let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity; for(const e of els){ const P=e.t==='L'?[[e.x1,e.y1],[e.x2,e.y2]]:[elPt(e,0),elPt(e,0.5),elPt(e,1)]; for(const q of P){ a=Math.min(a,q[0]); b=Math.min(b,q[1]); c=Math.max(c,q[0]); d=Math.max(d,q[1]); } } return [a,b,c,d]; }
+function selZone(){ const R=convSel.rect, o=scene.origine; const [x1,y1]=versPlan(Math.min(R[0],R[2]),Math.max(R[1],R[3])), [x2,y2]=versPlan(Math.max(R[0],R[2]),Math.min(R[1],R[3]));
+  const X1=x1+o.x, Y1=y1+o.y, X2=x2+o.x, Y2=y2+o.y; const dedans=b=>b[0]>=X1&&b[2]<=X2&&b[1]>=Y1&&b[3]<=Y2;
+  const cals=new Set([...convSel.traits].map(t=>t.calque).concat([...convSel.symb].map(q=>q.calque))); const ok=c=>cals.size?cals.has(c):calqueVisible(c);
+  let n=0; for(const t of scene.objets){ if(n>3000) break; if(!ok(t.calque)||convSel.traits.has(t)) continue; if(dedans(boiteEls(t.els))){ convSel.traits.add(t); n++; } }
+  for(const q of (scene.symboles||[])){ if(!ok(q.calque)||convSel.symb.has(q)) continue; if(dedans(q.b)){ convSel.symb.add(q); n++; } }
+  convSel.zone=false; $('etat').textContent='⬚ '+n+' objet(s) ajouté(s)'+(cals.size?' (calque'+(cals.size>1?'s ':' ')+[...cals].join(', ')+')':'')+'.'; majConv(); demanderDessin(false); }
+function majConv(){ const P=$('convPanel'); if(!P) return; P.classList.toggle('ouvert',!!convSel); $('bConv').classList.toggle('actif',!!convSel); if(!convSel) return;
+  const nt=convSel.traits.size, ns=convSel.symb.size;
+  $('convInfo').innerHTML= (nt||ns) ? '🔁 Sélection : <b>'+nt+' trait(s)</b>'+(ns?' · <b>'+ns+' objet(s)</b> (point au centre)':'')+'. Touchez pour ajouter / retirer.' : '🔁 Touchez les traits des tuyaux (et les regards seuls si besoin), ou ⬚ Zone après avoir touché un trait du bon calque.';
+  $('convZone').classList.toggle('actif',convSel.zone); $('convMil').checked=convMilieux;
+  const sc=$('convCalque'); sc.replaceChildren(); for(const c of tousCalquesPerso()){ if(c.nom===CALQUE_PTS||c.nom===CALQUE_MES||c.nom==='POINTS_TN') continue; const op=document.createElement('option'); op.value=c.nom; op.textContent='📍 '+c.nom; sc.appendChild(op); } sc.value=convCalque; if(sc.value!==convCalque){ convCalque=CALQUE_RES; sc.value=CALQUE_RES; } }
+function dessinerConv(c){ if(!convSel||!scene) return; const o=scene.origine; c.save(); c.strokeStyle='rgba(156,39,176,0.55)'; c.lineWidth=7; c.lineCap='round'; c.lineJoin='round';
+  for(const t of convSel.traits){ c.beginPath(); let deb=true; for(const e of t.els){ const n=e.t==='L'?1:Math.max(2,Math.ceil(Math.abs(e.sw)/0.2)); for(let k=0;k<=n;k++){ const q=e.t==='L'?(k?[e.x2,e.y2]:[e.x1,e.y1]):elPt(e,k/n); const [x,y]=versEcran(q[0]-o.x,q[1]-o.y); if(deb){ c.moveTo(x,y); deb=false; } else c.lineTo(x,y); } } c.stroke(); }
+  c.lineWidth=3; for(const q of convSel.symb){ const [a,b]=versEcran(q.b[0]-o.x,q.b[3]-o.y), [d,e]=versEcran(q.b[2]-o.x,q.b[1]-o.y); c.strokeRect(a-3,b-3,d-a+6,e-b+6); }
+  if(convSel.rect){ const R=convSel.rect; c.setLineDash([6,4]); c.lineWidth=2; c.strokeStyle='#7b1fa2'; c.fillStyle='rgba(156,39,176,0.08)'; c.fillRect(Math.min(R[0],R[2]),Math.min(R[1],R[3]),Math.abs(R[2]-R[0]),Math.abs(R[3]-R[1])); c.strokeRect(Math.min(R[0],R[2]),Math.min(R[1],R[3]),Math.abs(R[2]-R[0]),Math.abs(R[3]-R[1])); c.setLineDash([]); }
+  c.restore(); }
+// Polyligne (réelle) d'un trait : arcs découpés tous les 10°
+function polyTrait(t){ const P=[]; for(const e of t.els){ if(e.t==='L'){ if(!P.length) P.push([e.x1,e.y1]); P.push([e.x2,e.y2]); } else { const n=Math.max(2,Math.ceil(Math.abs(e.sw)/(Math.PI/18))); for(let k=P.length?1:0;k<=n;k++) P.push(elPt(e,k/n)); } }
+  return P.filter((q,i)=>i===0||Math.hypot(q[0]-P[i-1][0],q[1]-P[i-1][1])>0.005); }
+const inverserChaine=ch=>({v:ch.v.slice().reverse(), seg:ch.seg.slice().reverse().map(m=>m.slice().reverse())});
+async function convertir(){ if(!convSel) return; const T=[...convSel.traits], S=[...convSel.symb];
+  if(!T.length && !S.length){ $('etat').textContent='Sélectionnez d\'abord des traits.'; return; }
+  histRes.push(JSON.stringify({__conv:1, reseaux, points:pointsExp})); if(histRes.length>60) histRes.shift();
+  const existants=[]; for(const r of reseaux) for(const n of r.noeuds) if(n.t==='R'&&!n.lien) existants.push(n);
+  const symbs=(scene.symboles||[]).filter(q=>calqueVisible(q.calque) && Math.max(q.b[2]-q.b[0],q.b[3]-q.b[1])<=3);
+  const distB=(b,x,y)=>Math.hypot(Math.max(b[0]-x,0,x-b[2]),Math.max(b[1]-y,0,y-b[3]));
+  const V=[];
+  const sommet=(x,y)=>{ let best=null, bd=TOL_REGARD; for(const n of existants){ const d=Math.hypot(n.x-x,n.y-y); if(d<=bd){ bd=d; best=n; } }
+    if(best){ let v=V.find(q=>q.ex===best); if(!v){ v={x:best.x,y:best.y,ex:best,sym:null}; V.push(v); } return v; }
+    let bs=null; bd=TOL_REGARD; for(const q of symbs){ const d=distB(q.b,x,y); if(d<bd-1e-9 || (d<=bd && bs && d===0 && aireB(q.b)<aireB(bs.b))){ bd=d; bs=q; } }
+    if(bs){ let v=V.find(q=>q.sym===bs); if(!v){ v={x:bs.cx,y:bs.cy,ex:null,sym:bs}; V.push(v); } return v; }
+    let v=V.find(q=>!q.ex&&!q.sym&&Math.hypot(q.x-x,q.y-y)<=TOL_JOINT); if(!v){ v={x,y,ex:null,sym:null}; V.push(v); } return v; };
+  const E=[]; for(const t of T){ const P=polyTrait(t); if(P.length<2) continue; const a=sommet(P[0][0],P[0][1]), b=sommet(P[P.length-1][0],P[P.length-1][1]); if(a===b) continue; E.push({a,b,mid:P.slice(1,-1),used:false}); }
+  for(const v of V) v.E=[]; for(const e of E){ e.a.E.push(e); e.b.E.push(e); }
+  const coupe=v=>v.E.length!==2||!!v.ex;
+  const marcher=(v0,e0)=>{ const ch={v:[v0],seg:[]}; let v=v0, e=e0; const sensDessin=e0.a===v0;
+    for(;;){ e.used=true; const av=e.a===v, nx=av?e.b:e.a; ch.seg.push(av?e.mid:e.mid.slice().reverse()); ch.v.push(nx); v=nx; if(coupe(v)||v===v0) break; const e2=v.E.find(x=>!x.used); if(!e2) break; e=e2; }
+    return sensDessin?ch:inverserChaine(ch); };
+  let ch=[]; for(const v of V) if(coupe(v)) for(const e of v.E) if(!e.used) ch.push(marcher(v,e)); for(const e of E) if(!e.used) ch.push(marcher(e.a,e));
+  // À un embranchement : on continue tout droit (les deux tronçons les plus alignés forment un seul réseau)
+  const dirBout=(c,debut)=>{ const v=debut?c.v[0]:c.v[c.v.length-1]; const q=debut?(c.seg[0].length?c.seg[0][0]:[c.v[1].x,c.v[1].y]):(c.seg[c.seg.length-1].length?c.seg[c.seg.length-1][c.seg[c.seg.length-1].length-1]:[c.v[c.v.length-2].x,c.v[c.v.length-2].y]); const dx=q[0]-v.x, dy=q[1]-v.y, l=Math.hypot(dx,dy)||1; return [dx/l,dy/l]; };
+  for(const v of V){ if(v.ex||v.E.length<3) continue; for(;;){ const bouts=[]; ch.forEach(c=>{ if(c.v[0]===v) bouts.push({c,d:true}); if(c.v[c.v.length-1]===v) bouts.push({c,d:false}); });
+      let best=null; for(let i=0;i<bouts.length;i++) for(let j=i+1;j<bouts.length;j++){ if(bouts[i].c===bouts[j].c) continue; const a=dirBout(bouts[i].c,bouts[i].d), b=dirBout(bouts[j].c,bouts[j].d), dot=a[0]*b[0]+a[1]*b[1]; if(dot<-0.87 && (!best||dot<best.dot)) best={i,j,dot}; }
+      if(!best) break; let A=bouts[best.i], B=bouts[best.j]; if(!A.d && B.d){} else if(A.d && !B.d){ [A,B]=[B,A]; } else if(A.d && B.d){ A={c:inverserChaine(A.c),d:false}; ch=ch.map(c=>c===bouts[best.i].c?A.c:c); } else { B={c:inverserChaine(B.c),d:true}; ch=ch.map(c=>c===bouts[best.j].c?B.c:c); }
+      const J={v:A.c.v.concat(B.c.v.slice(1)), seg:A.c.seg.concat(B.c.seg)}; ch=ch.filter(c=>c!==A.c&&c!==B.c); ch.push(J); } }
+  // Création des réseaux
+  const art=(()=>{ const a=articles().find(a=>a.nom===calqueActifMes); return a&&a.devis.base==='ml'?a.nom:null; })();
+  reseaux=reseaux.filter(r=>r.noeuds.length); // un réseau vide est remplacé
+  const maitreDe=new Map(), nouv=[], usage=new Map(); let nReg=0;
+  for(const c of ch) for(const v of c.v) usage.set(v,(usage.get(v)||0)+1);
+  for(const c of ch){ const r={id:'r'+Date.now().toString(36)+reseaux.length, nom:'Réseau '+(reseaux.length+1), noeuds:[]}; if(convCalque!==CALQUE_RES) r.calque=convCalque; if(convMilieux) r.milieux=true; if(art){ r.artTuyau=art; if(devis&&devis.lotActif) r.lot=devis.lotActif; }
+    reseaux.push(r); nouv.push(r);
+    c.v.forEach((v,k)=>{ if(k>0) for(const q of c.seg[k-1]) r.noeuds.push({t:'P', nom:'', x:q[0], y:q[1]});
+      const m=v.ex||maitreDe.get(v);
+      if(m) r.noeuds.push({t:'R', nom:m.nom, lien:idRegard(m), x:m.x, y:m.y});
+      else { const n={t:'R', id:idRegard({}), nom:prochainNomRegard(), x:v.x, y:v.y, tampon:null, feArr:null, feDep:null}; r.noeuds.push(n); maitreDe.set(v,n); nReg++; } }); }
+  // Objets sélectionnés qui ne sont pas devenus des regards : un point à leur centre
+  let nPts=0; const pris=new Set(V.map(v=>v.sym).filter(Boolean)); for(const q of S){ if(pris.has(q)) continue; pointsExp.push({nom:'P'+prochainNomPrefixe('P'), x:q.cx, y:q.cy, z:null, calque:convCalque}); nPts++; }
+  resActif=nouv.length?reseaux.indexOf(nouv[0]):resActif; noeudSel=null; convSel=null; majConv();
+  sauverReseaux(); if(nPts) sauverPoints(); majComptesPerso(); remplirCalques(); majReseau(); demanderDessin(false);
+  const nLien=V.filter(v=>v.ex).length;
+  $('etat').textContent='🔁 '+nouv.length+' réseau(x) · '+nReg+' regard(s)'+(nLien?' · '+nLien+' raccordé(s) à des regards existants':'')+(nPts?' · '+nPts+' point(s) au centre':'')+'. ↶ pour tout annuler.';
+  // Regards partagés : arrivée n° ? ou départ ?
+  for(const r of nouv){ const iR=r.noeuds.map((n,i)=>n.t==='R'?i:-1).filter(i=>i>=0); for(const i of [iR[0], iR[iR.length-1]]){ const n=r.noeuds[i], m=maitre(n); if(placesRegard(m).length>1) await demanderRolePour(r,n); } }
+}
+// Inverser le sens d'un réseau (le tuyau / l'état des tronçons suivent, FE arrivée ↔ départ)
+function inverserReseau(r){ const N=r.noeuds, iR=N.map((n,i)=>n.t==='R'?i:-1).filter(i=>i>=0), m=iR.length, data=[];
+  for(let k=1;k<m;k++){ const b=N[iR[k]]; data.push({tuyau:b.tuyau, etatTr:b.etatTr}); }
+  for(const i of iR){ delete N[i].tuyau; delete N[i].etatTr; }
+  N.reverse(); const jR=N.map((n,i)=>n.t==='R'?i:-1).filter(i=>i>=0);
+  data.forEach((d,k)=>{ const b=N[jR[m-1-k]]; if(d.tuyau) b.tuyau=d.tuyau; if(d.etatTr) b.etatTr=d.etatTr; });
+  for(const i of jR){ const n=N[i]; if(!n.lien){ const a=n.feArr; n.feArr=n.feDep; n.feDep=a; } }
+  if(jR.length) delete N[jR[0]].rangArr; }
+// Deux regards n'en font plus qu'un : le nœud i du réseau r devient un lien vers « autre »
+function fusionnerRegard(r,i,autre){ const n=r.noeuds[i], mn=maitre(n);
+  if(mn===n){ for(const k of ['tampon','feDep','etat']) if((autre[k]===null||autre[k]===undefined) && n[k]!==null && n[k]!==undefined) autre[k]=n[k];
+    if(n.arrAutres) autre.arrAutres=(autre.arrAutres||[]).concat(n.arrAutres);
+    const p=regardPrecedent(r,i); if(vOk(n.feArr)) (autre.arrAutres=autre.arrAutres||[]).push({de:p?maitre(p).nom:'', fe:n.feArr});
+    for(const r2 of reseaux) for(const q of r2.noeuds){ if(n.id && q.lien===n.id){ q.lien=idRegard(autre); q.nom=autre.nom; q.x=autre.x; q.y=autre.y; } if(q.arrAutres) for(const a of q.arrAutres) if(a.de===n.nom) a.de=autre.nom; }
+    for(const k of ['tampon','feArr','feDep','arrAutres','etat','id']) delete n[k]; }
+  n.lien=idRegard(autre); n.nom=autre.nom; n.x=autre.x; n.y=autre.y; }
+// Question : ce tronçon arrive (arrivée n°…) ou part de ce regard ?
+function demanderRolePour(r,nd){ return new Promise(fin=>{
+  const i=r.noeuds.indexOf(nd); if(i<0||nd.t!=='R'){ fin(); return; } const m=maitre(nd);
+  const iR=r.noeuds.map((n,k)=>n.t==='R'?k:-1).filter(k=>k>=0), debut=i===iR[0], finR=i===iR[iR.length-1]; if(!debut&&!finR){ fin(); return; }
+  const voisin=r.noeuds[debut?iR[1]:iR[iR.length-2]]; if(!voisin){ fin(); return; }
+  let nArr=0; for(const p of placesRegard(m)){ if(p.n===nd) continue; if(regardPrecedent(p.r,p.ni)) nArr++; } nArr+=(m.arrAutres||[]).filter(a=>!a.de||!placesRegard(m).some(p=>{ const pr=regardPrecedent(p.r,p.ni); return pr&&maitre(pr).nom===a.de; })).length;
+  $('roleTexte').innerHTML='Regard <b>'+echapper(m.nom)+'</b> (plusieurs réseaux).<br>Le tronçon <b>'+echapper(maitre(voisin).nom)+' – '+echapper(m.nom)+'</b>'+(reseaux.length>1?' ('+echapper(r.nom)+')':'')+' est :';
+  const z=$('roleBoutons'); z.replaceChildren(); const choix=[]; for(let k=1;k<=Math.min(nArr+1,6);k++) choix.push(['A'+k,'⬇ Arrivée '+k]); choix.push(['D','⬆ Départ']); choix.push(['','Plus tard']);
+  for(const [v,t] of choix){ const b=document.createElement('button'); b.className='btn'+(v==='A'+(nArr+1)?' prim':''); b.textContent=t; b.onclick=()=>{ $('roleBoite').style.display='none'; if(v) appliquerRole(r,nd,v); fin(); }; z.appendChild(b); }
+  $('roleBoite').style.display='flex'; }); }
+function appliquerRole(r,nd,v){ const iR=()=>r.noeuds.map((n,k)=>n.t==='R'?k:-1).filter(k=>k>=0); let L=iR(); const i=r.noeuds.indexOf(nd), debut=i===L[0];
+  if(v==='D'){ if(!debut){ inverserReseau(r); $('etat').textContent='⇄ '+r.nom+' retourné : il part de '+maitre(nd).nom+'.'; } delete nd.rangArr; }
+  else { if(debut){ inverserReseau(r); $('etat').textContent='⇄ '+r.nom+' retourné : il arrive dans '+maitre(nd).nom+'.'; } numeroterArrivees(maitre(nd),nd,+v.slice(1)); }
+  sauverReseaux(); if(outil==='mesure'&&mesure.mode==='res') majReseau(); if(bulleReg) construireBulle(); demanderDessin(false); }
+// Numéros des arrivées d'un regard : celle choisie prend k, les autres gardent leur ordre et prennent les numéros restants
+function numeroterArrivees(m,nd,k){ const A=[]; // {get,set}
+  for(const p of placesRegard(m)){ if(p.n===nd||!regardPrecedent(p.r,p.ni)) continue; const q=p.n; A.push({r:q.rangArr, set:x=>{ q.rangArr=x; }}); }
+  for(const a of (m.arrAutres||[])){ if(a.de && placesRegard(m).some(p=>{ const pr=regardPrecedent(p.r,p.ni); return pr&&maitre(pr).nom===a.de; })) continue; A.push({r:a.rang, set:x=>{ a.rang=x; }}); }
+  A.sort((a,b)=>(a.r||99)-(b.r||99)); nd.rangArr=k; let n=1; for(const a of A){ if(n===k) n++; a.set(n++); } }
+// Points des réseaux pour l'export (regards = 1 point chacun, milieux si demandé)
+let zRegards='tampon';
+function pointsReseaux(){ const L=[], vus=new Set(); for(const r of reseaux){ const cal=r.calque||CALQUE_RES, c=calcReseau(r);
+    for(const n of r.noeuds){ if(n.t!=='R'||n.lien||vus.has(n)) continue; vus.add(n); const f=fesRegard(n); const z=zRegards==='fe'?(f.length?Math.min(...f):null):(vOk(n.tampon)?n.tampon:null); L.push({nom:n.nom, x:n.x, y:n.y, z, calque:cal, reg:true}); }
+    if(r.milieux) for(const t of c.tr){ const sm=(t.s1+t.s2)/2, q=ptAbscisse(r,c,sm), z=zRegards==='fe'?c.fe(sm):c.dessus(sm); L.push({nom:maitre(r.noeuds[t.ia]).nom+'-'+maitre(r.noeuds[t.ib]).nom, x:q[0], y:q[1], z:vOk(z)?Math.round(z*1000)/1000:null, calque:cal, reg:true, mil:true}); } }
+  return L; }
+function texteRegards(){ const L=[['Nom','X','Y','Tampon','FE (plus bas)','Prof.','Réseau'].join('\t')], vus=new Set();
+  for(const r of reseaux) for(const n of r.noeuds){ if(n.t!=='R'||n.lien||vus.has(n)) continue; vus.add(n); const f=fesRegard(n), p=profRegard(n), v=x=>vOk(x)?frN(x,2):'';
+    L.push([n.nom, frN(n.x,3), frN(n.y,3), v(n.tampon), f.length?frN(Math.min(...f),2):'', v(p), r.nom].join('\t')); } return L.join('\n'); }
 // ---- Profil en long (fenêtre plein écran) ----
 let profilCurseur=null;
 function ouvrirProfil(){ const r=resCourant(); if(regards(r).length<2){ $('etat').textContent='Il faut au moins 2 regards pour le profil.'; return; } $('profilBoite').style.display='flex'; $('pfTitre').textContent='Profil en long — '+r.nom; profilCurseur=null; setTimeout(()=>{ dessinerProfil(); majTableProfil(); },30); }
@@ -2199,6 +2355,14 @@ function brancherReseau(){
   $('nomRes').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   $('nomRes').onblur=()=>{ const r=resCourant(), v=$('nomRes').value.trim(); if(v && v!==r.nom){ memoRes(); r.nom=v; sauverReseaux(); } $('nomRes').style.display='none'; $('selReseau').style.display=''; majReseau(); demanderDessin(false); };
   $('bCote').onclick=()=>{ ajoutCote=!ajoutCote; majReseau(); };
+  $('bConv').onclick=ouvrirConversion; $('convAnn').onclick=fermerConversion; $('convOk').onclick=convertir;
+  $('convVider').onclick=()=>{ if(convSel){ convSel.traits.clear(); convSel.symb.clear(); majConv(); demanderDessin(false); } };
+  $('convZone').onclick=()=>{ if(!convSel) return; convSel.zone=!convSel.zone; majConv(); $('etat').textContent=convSel.zone?'⬚ Glissez le doigt pour tracer le rectangle.':''; };
+  $('convMil').onchange=e=>{ convMilieux=e.target.checked; Memoire.ecrire('convMilieux',convMilieux); };
+  $('convCalque').onchange=e=>{ convCalque=e.target.value; Memoire.ecrire('convCalque',convCalque); };
+  Memoire.lire('convMilieux').then(v=>{ convMilieux=!!v; }); Memoire.lire('convCalque').then(v=>{ if(v) convCalque=v; }); Memoire.lire('zRegards').then(v=>{ if(v) zRegards=v; });
+  $('bInvRes').onclick=()=>{ const r=resCourant(); if(regards(r).length<2) return; memoRes(); inverserReseau(r); sauverReseaux(); majReseau(); demanderDessin(false); $('etat').textContent='⇄ '+r.nom+' : sens inversé.'; };
+  $('selCalqueRes').onchange=e=>{ const r=resCourant(); memoRes(); if(e.target.value===CALQUE_RES) delete r.calque; else r.calque=e.target.value; sauverReseaux(); majComptesPerso(); remplirCalques(); demanderDessin(false); };
   $('bProfil').onclick=ouvrirProfil;
   $('pfFermer').onclick=()=>{ $('profilBoite').style.display='none'; if(profilCurseur!==null){ lectureRes={s:profilCurseur}; majReseau(); demanderDessin(false); } };
   $('pfPas').oninput=majTableProfil;
@@ -2657,7 +2821,8 @@ function majArtsReseau(){ if(!scene||!$('selArtTuyau')) return; const r=reseaux[
   const remplir=(sel,base,cle)=>{ sel.replaceChildren(); const o=document.createElement('option'); o.value=''; o.textContent=(base==='ml'?'Tuyau':'Regards')+' : hors métré'; sel.appendChild(o);
     for(const a of articles()) if(a.devis.base===base){ const e=document.createElement('option'); e.value=a.nom; e.textContent=(base==='ml'?'Tuyau : ':'Regards : ')+a.devis.des; sel.appendChild(e); }
     sel.value=r&&r[cle]&&articles().some(a=>a.nom===r[cle])?r[cle]:''; };
-  remplir($('selArtTuyau'),'ml','artTuyau'); remplir($('selArtRegard'),'U','artRegard'); }
+  remplir($('selArtTuyau'),'ml','artTuyau'); remplir($('selArtRegard'),'U','artRegard');
+  const sc=$('selCalqueRes'); if(sc){ sc.replaceChildren(); for(const c of tousCalquesPerso()){ if(c.nom===CALQUE_PTS||c.nom===CALQUE_MES||c.nom==='POINTS_TN') continue; const op=document.createElement('option'); op.value=c.nom; op.textContent='📍 '+c.nom; sc.appendChild(op); } sc.value=(r&&r.calque)||CALQUE_RES; if(!sc.value) sc.value=CALQUE_RES; } }
 function lierArtReseau(cle,val){ const r=resCourant(); memoRes(); if(val) r[cle]=val; else delete r[cle]; if(val && !r.lot && devis && devis.lotActif) r.lot=devis.lotActif; sauverReseaux(); majArtsReseau(); $('etat').textContent= val ? '🧾 '+r.nom+' compté dans le métré ('+(cle==='artTuyau'?'tuyau':'regards')+').' : '🧾 '+r.nom+' retiré du métré.'; }
 // Nouvel article
 function creerArticle(des,unite,base,k1,k1lib,k2,k2lib){ des=String(des).trim(); if(!des) return null;
@@ -2995,6 +3160,10 @@ const AIDE=[
  {r:'Réseau', t:'Type de tuyau d\'un tronçon', txt:'Dans le tableau du réseau, ligne ↓ du tronçon : case Tuyau (PVC 125, Annelé 90…), ou dans la bulle du regard. Un nouveau tronçon reprend le tuyau du précédent. Un type tapé à la main est retenu.', mots:'tuyau diametre pvc annele tronçon type'},
  {r:'Réseau', t:'Travaux à faire / en cours / faits', txt:'Bouton ⬜ À faire : un appui → 🔄 En cours → ✅ Fait. Sur les tronçons (tableau ou bulle), les regards (bulle) et les mesures gardées (📋 Gardées). Sur le plan : vert = fait, orange pointillé = en cours.', mots:'travaux etat fait en cours a faire avancement'},
  {r:'Appli', t:'💬 Signaler une modification à Claude', txt:'💬 en haut : glissez l\'épingle sur l\'endroit (plan, bouton, case…), ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (dépôt GitHub retours-hub, clé à régler une fois avec 🔑) ou 📋 Copier pour coller dans la conversation. 📋 Liste : tous vos signalements.', mots:'signaler claude epingle demande modification bug github copier', go:()=>ouvrirEpingle(), sansPlan:true},
+ {r:'Réseau', t:'🔁 Transformer des traits du plan en réseau', txt:'Mesure → Réseau → 🔁 Du plan. Touchez les traits des tuyaux (⬚ Zone : rectangle, même calque que le 1er trait touché), puis ✓ Convertir. Chaque bout à moins de 0,50 m d\'un regard du plan va au centre du regard ; les bouts communs ne font qu\'un point ; ↶ annule tout.', mots:'convertir traits plan reseau selection zone regard centre axe points', go:()=>{ choisirOutil('mesure'); choisirMode('res'); ouvrirConversion(); }},
+ {r:'Réseau', t:'Arrivée n° ou départ', txt:'Quand un tronçon touche un regard d\'un autre réseau, l\'appli demande : Arrivée 1, 2, 3… ou Départ. Le réseau est retourné si besoin (plus de « remonte » à tort). ⇄ inverse un réseau à la main.', mots:'arrivee depart sens inverser rang regard partage'},
+ {r:'Réseau', t:'Réunir deux points en un', txt:'En mode Réseau, glissez un regard sur le regard d\'un autre réseau : les deux ne font plus qu\'un (tampon et fils d\'eau gardés).', mots:'fusion reunir deux points un seul regard glisser'},
+ {r:'Points', t:'Regards dans l\'export DXF / TS11', txt:'Chaque regard est un point (calque du réseau, choisi par 📍 à côté de 🧾). Dans 📤 Export : ☑ Tout / ☐ Aucun, Z des regards (tampon ou fil d\'eau), 📋 Tableau des regards (Nom, X, Y, Tampon, FE, Prof.). Option « Point au milieu » des tronçons.', mots:'export regards dxf ts11 calque reseau milieu tableau'},
  {r:'Réseau', t:'Réseau compté dans le métré', txt:'Sous le choix du réseau : 🧾 Tuyau et Regards. Si un article en ml est actif quand vous posez le 1er regard, le réseau s\'y relie tout seul.', mots:'reseau metre tuyau regard automatique'},
  {r:'Points', t:'Points X / Y / Z pour la TS11', txt:'📍 Points : touchez le plan (X, Y du plan), tapez Z dans le tableau. Calque POINTS_EXPORT par défaut. ⟋ Ligne pour des points espacés sur un trait.', mots:'point ts11 implantation xyz', go:()=>choisirOutil('points')},
  {r:'Points', t:'Exporter pour la TS11 (DXF + TXT)', txt:'📍 Points → Exporter : fichier DXF de points et texte « nom;X;Y;Z », à copier sur la clé USB.', mots:'export dxf txt cle usb ts11', go:()=>{ choisirOutil('points'); ouvrirExport(); }},
@@ -3123,6 +3292,8 @@ const pointeurs=new Map(); let geste=null, sequenceMulti=false, appui=null, dern
 function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX-r.left, y:ev.clientY-r.top}; }
 function viser(p){ const enLigne=outil==='points'&&ptsMode==='ligne'; visee={sx:p.x, sy:p.y, acc:enLigne?null:accrocher(p.x,p.y), obj:enLigne?objetSousDoigt(p.x,p.y):null}; if(outil==='points') majInfoPoints(); else majPanneau(); demanderDessin(false); }
 cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(ev.pointerId); const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
+  // Sélection de traits pour 🔁 Du plan : appui = prendre / rendre, ⬚ Zone = rectangle
+  if(convSel && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,conv:true}; if(convSel.zone) convSel.rect=[p.x,p.y,p.x,p.y]; else debutGeste(); return; }
   // Étiquette d'un regard touchée (ou bulle ouverte) : un appui ouvre / ferme la bulle, un glissé déplace le plan
   if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y); if(e||bulleReg){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
@@ -3135,12 +3306,14 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   else { if(!outil && !sequenceMulti) appui={x:p.x,y:p.y,bouge:false}; debutGeste(); } });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(appui && !appui.bouge && Math.hypot(p.x-appui.x,p.y-appui.y)>SEUIL_TAP) appui.bouge=true;
+  if(appui && appui.conv && convSel && convSel.rect && pointeurs.size===1){ convSel.rect[2]=p.x; convSel.rect[3]=p.y; demanderDessin(false); return; }
   if(visee && visee.modeOeil && pointeurs.size===1){ oeilViser(p); return; }
   if(visee && pointeurs.size===1){ if(deplace!==null && !appui?.bouge) return; viser(p); } else suiteGeste(); });
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
   const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
-  if(appui && appui.bulle && !visee){ if(tap){ if(appui.etiq) ouvrirBulle(appui.etiq); else fermerBulle(); } }
+  if(appui && appui.conv){ if(convSel){ if(convSel.rect && appui.bouge && !sequenceMulti) selZone(); else if(tap) basculerSel(appui.x,appui.y); convSel.rect=null; } }
+  else if(appui && appui.bulle && !visee){ if(tap){ if(appui.etiq) ouvrirBulle(appui.etiq); else fermerBulle(); } }
   else if(outil==='mesure' && prendreSurface && !visee){ if(tap && surfaceDuPlan(appui.x,appui.y)){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); } }
   else if(!outil && placementTache && tap){ poserTache(appui.x,appui.y); }
   else if(!outil){ if(tap){ let t=traitSousDoigt(appui.x,appui.y);
@@ -3400,7 +3573,7 @@ $('bMesure').onclick=()=>choisirOutil('mesure');
 $('bPoints').onclick=()=>choisirOutil('points');
 $('mDist').onclick=()=>choisirMode('dist');
 $('mSurf').onclick=()=>choisirMode('surf');
-$('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h){ fermerBulle(); reseaux=JSON.parse(h); resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); noeudSel=null; sauverReseaux(); } } else { const h=histMes.pop(); coinSel=null; if(h!==undefined) mesure.pts=JSON.parse(h).map(q=>({...q,z:q.z===null?NaN:q.z,ff:vOkN(q.ff)?q.ff:NaN})); else mesure.pts.pop(); } majPanneau(); demanderDessin(false); };
+$('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h){ fermerBulle(); const d=JSON.parse(h); if(d && d.__conv){ reseaux=d.reseaux; pointsExp=d.points; sauverPoints(); majComptesPerso(); remplirCalques(); $('etat').textContent='↶ Conversion annulée.'; } else reseaux=d; resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); noeudSel=null; sauverReseaux(); } } else { const h=histMes.pop(); coinSel=null; if(h!==undefined) mesure.pts=JSON.parse(h).map(q=>({...q,z:q.z===null?NaN:q.z,ff:vOkN(q.ff)?q.ff:NaN})); else mesure.pts.pop(); } majPanneau(); demanderDessin(false); };
 $('bEffacer').onclick=()=>{ if(mesure.mode==='res'){ const r=resCourant(); if(!r.noeuds.length) return; memoRes(); const i=noeudSel!==null&&noeudSel<r.noeuds.length?noeudSel:r.noeuds.length-1; promouvoirLien(r.noeuds[i]); r.noeuds.splice(i,1); noeudSel=null; lectureRes=null; sauverReseaux(); $('etat').textContent='Point retiré du réseau (↶ pour annuler).'; } else if(coinSel!==null && coinSel<mesure.pts.length){ memoMes(); mesure.pts.splice(coinSel,1); $('etat').textContent='Point '+(coinSel+1)+' retiré (↶ pour annuler).'; coinSel=null; } else { if(mesure.pts.length) memoMes(); mesure.pts=[]; } majPanneau(); demanderDessin(false); };
 // ================= Menu, appli Android, mise à jour =================
 const APPLI = (window.AndroidApp && AndroidApp.estAppli && AndroidApp.estAppli()) ? window.AndroidApp : null;
