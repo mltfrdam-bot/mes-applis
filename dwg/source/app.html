@@ -541,7 +541,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Du plan – v1";
+const VERSION = "Du plan – v2";
 </script>
 <script>
 "use strict";
@@ -1999,6 +1999,10 @@ function projReseau(r,c,xw,yw){ const N=r.noeuds; let best=null;
     const d=Math.hypot(a.x+t*dx-xw,a.y+t*dy-yw); if(!best||d<best.d) best={i, t, s:c.s[i-1]+t*Math.sqrt(l2), d}; } return best; }
 function noeudSousDoigt(sx,sy){ if(!reseaux.length||!calqueVisible(CALQUE_RES)) return null; const r=resCourant(), o=scene.origine; let k=null, dm=RAYON_PRISE;
   r.noeuds.forEach((n,i)=>{ const [x,y]=versEcran(n.x-o.x,n.y-o.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
+// Nœud le plus proche du doigt, tous réseaux visibles (réseau actif en priorité à distance égale)
+function noeudProcheTous(sx,sy,rayon){ if(!scene||!reseaux.length||!calqueVisible(CALQUE_RES)) return null; const o=scene.origine; let best=null;
+  reseaux.forEach((r,ri)=>{ if(r.calque && !calqueVisible(r.calque)) return; r.noeuds.forEach((n,ni)=>{ const [x,y]=versEcran(n.x-o.x,n.y-o.y), d=Math.hypot(x-sx,y-sy)-(ri===resActif?0.5:0); if(d<=rayon && (!best||d<best.d)) best={ri,ni,d}; }); });
+  return best; }
 // Appui en mode Réseau (v = point visé, coordonnées locales)
 function poserReseau(v){
   const r=resCourant(), o=scene.origine, xw=v.x+o.x, yw=v.y+o.y;
@@ -2108,7 +2112,7 @@ function dessinerReseaux(c){
       if(n.lien && m!==r.noeuds[i]) return; // regard partagé : une seule étiquette (celle du regard d'origine)
       const ouvert=bulleReg && n.t==='R' && bulleReg.m===m;
       c.font='bold 12px Arial'; c.textAlign='left'; c.textBaseline='bottom'; const t=m.nom; const w=c.measureText(t).width; c.fillStyle=ouvert?'#1f5fa8':'rgba(255,255,255,0.85)'; c.fillRect(x+8,y-22,w+5,15); c.fillStyle=ouvert?'#fff':n.t==='R'?ce:'#6d4c41'; c.fillText(t,x+10,y-8);
-      if(n.t==='R') etiqRes.push({ri:ir, ni:i, m, x0:x+2, y0:y-32, x1:x+w+22, y1:y-3}); });
+      if(n.t==='R') etiqRes.push({ri:ir, ni:i, m, x0:x+7, y0:y-32, x1:x+w+22, y1:y-8}); });
     if(actif && lectureRes){ const p=ptAbscisse(r,cr,lectureRes.s), [x,y]=versEcran(p[0]-o.x,p[1]-o.y), pf=cr.prof(lectureRes.s);
       c.beginPath(); c.arc(x,y,6,0,DEUXPI); c.fillStyle='#ffeb3b'; c.fill(); c.strokeStyle='#000'; c.lineWidth=1.5; c.stroke();
       const txt='prof. '+(vOk(pf)?fr(pf,2)+' m':'?'); c.font='bold 13px Arial'; const w=c.measureText(txt).width+10; c.fillStyle='#000'; c.fillRect(x-w/2,y-30,w,19); c.fillStyle='#ffeb3b'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(txt,x,y-20.5); }
@@ -3295,19 +3299,20 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   // Sélection de traits pour 🔁 Du plan : appui = prendre / rendre, ⬚ Zone = rectangle
   if(convSel && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,conv:true}; if(convSel.zone) convSel.rect=[p.x,p.y,p.x,p.y]; else debutGeste(); return; }
   // Étiquette d'un regard touchée (ou bulle ouverte) : un appui ouvre / ferme la bulle, un glissé déplace le plan
-  if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y); if(e||bulleReg){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
+  if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y), surNoeud=outil==='mesure'&&mesure.mode==='res'&&noeudProcheTous(p.x,p.y,16); if(surNoeud && bulleReg) fermerBulle(); if(!surNoeud && (e||bulleReg)){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='oeil' && !sequenceMulti){ oeilViser(p); }
   else if(outil==='mesure' && (voirGardees||prendreSurface) && !coupeMode && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
   else if(outil && !sequenceMulti && ev.button!==2){ deplace = outil==='points' ? (ptsMode==='ligne'?null:pointExportSousDoigt(p.x,p.y)) : (mesure.mode==='res' ? noeudSousDoigt(p.x,p.y) : pointSousDoigt(p.x,p.y));
     if(outil==='mesure' && coupeMode) deplace=null;
     if(outil==='mesure' && deplace===null && !coupeMode){ const k=coteSousDoigt(p.x,p.y); if(k!==null){ memoMes(); const a=mesure.pts[k], b=mesure.pts[(k+1)%mesure.pts.length]; mesure.pts.splice(k+1,0,{x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(Number.isFinite(a.z)&&Number.isFinite(b.z))?(a.z+b.z)/2:NaN,t:0}); deplace=k+1; mesure.insere=true; } }
-    appui={x:p.x,y:p.y,bouge:false}; viser(p); }
+    appui={x:p.x,y:p.y,bouge:false}; if(outil==='mesure'&&mesure.mode==='res'&&deplace===null&&!coupeMode){ const a=noeudProcheTous(p.x,p.y,RAYON_PRISE); if(a&&a.ri!==resActif) appui.autre=a; } viser(p); }
   else { if(!outil && !sequenceMulti) appui={x:p.x,y:p.y,bouge:false}; debutGeste(); } });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(appui && !appui.bouge && Math.hypot(p.x-appui.x,p.y-appui.y)>SEUIL_TAP) appui.bouge=true;
   if(appui && appui.conv && convSel && convSel.rect && pointeurs.size===1){ convSel.rect[2]=p.x; convSel.rect[3]=p.y; demanderDessin(false); return; }
   if(visee && visee.modeOeil && pointeurs.size===1){ oeilViser(p); return; }
+  if(appui && appui.autre && appui.bouge && deplace===null && visee){ resActif=appui.autre.ri; deplace=appui.autre.ni; noeudSel=deplace; lectureRes=null; $('etat').textContent='Déplacement de '+maitre(reseaux[resActif].noeuds[deplace]).nom+' ('+reseaux[resActif].nom+')'; majReseau(); }
   if(visee && pointeurs.size===1){ if(deplace!==null && !appui?.bouge) return; viser(p); } else suiteGeste(); });
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
