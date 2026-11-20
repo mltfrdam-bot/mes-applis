@@ -135,6 +135,13 @@ body.outil-axe #axePanel{display:flex}
 #axeProfilBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
 #axeProfilBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
 #axeProfilBoite .tete b{flex:1;font-size:15px}
+#axeTravBoite{position:fixed;inset:0;background:#fff;z-index:25;display:none;flex-direction:column}
+#axeTravBoite .tete{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#f3f3f3;border-bottom:1px solid #c8c8c8}
+#axeTravBoite .tete b{flex:1;font-size:15px}
+#axeTravBoite .atL{display:flex;align-items:center;gap:5px;padding:4px 8px;flex-wrap:wrap;font-size:13.5px}
+#axeTravBoite .atL input[inputmode]{width:62px;height:32px;border:1px solid #9a9a9a;border-radius:4px;text-align:right;padding:0 4px;font-size:14px;background:#fffbe6}
+#tabTrav tr.sel td{background:#fff3e0}
+#tabTrav td{height:30px;font-size:13px}
 #calqueBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:31;padding:16px}
 #calqueBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px}
 #calqueBoite h3{margin:0 0 8px;font-size:17px}
@@ -459,11 +466,19 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="outils"><b style="font-size:15px">🛤</b><select id="selAxe" style="height:34px;max-width:150px"></select><button class="btn petitb" id="axNouv" title="Nouvel axe">＋</button><button class="btn petitb" id="axRen" title="Renommer">✎</button>
     <span class="seg"><button id="axPmr" class="on">PMR</button><button id="axVoie">Voie</button><button id="axEv">🌿 Esp. vert</button></span><span class="seg" id="axTalusZone"><button id="axT32" class="on">3/2</button><button id="axT11">1/1</button></span><span style="font-size:13px">L.</span><input id="axLarg" inputmode="decimal" style="width:54px;height:32px;border:1px solid #9a9a9a;border-radius:4px;text-align:right;padding:0 4px"><span style="font-size:13px">m</span>
     <span style="flex:1"></span><button class="btn" id="axRetour" title="Annuler">↶</button><button class="btn" id="axSup" title="Retirer le point choisi">🗑</button><button class="btn" id="axFermer">✕</button></div>
-  <div class="axL"><button class="btn prim petitb" id="axProfil">📈 Profil</button><button class="btn petitb" id="axDuPlan" title="Prendre un trait du plan comme axe">🔗 Du plan</button><button class="btn petitb" id="axCopier">📋 Copier</button><button class="btn petitb" id="axPoints">⟋ Points</button><button class="btn petitb" id="axSuppAxe" style="color:#b00020">🗑 Axe</button></div>
+  <div class="axL"><button class="btn prim petitb" id="axProfil">📈 Profil</button><button class="btn prim petitb" id="axTravers">📐 Travers</button><button class="btn petitb" id="axDuPlan" title="Prendre un trait du plan comme axe">🔗 Du plan</button><button class="btn petitb" id="axCopier">📋 Copier</button><button class="btn petitb" id="axPoints">⟋ Points</button><button class="btn petitb" id="axSuppAxe" style="color:#b00020">🗑 Axe</button></div>
   <div id="axResume"></div>
   <div id="axTabWrap"><table class="xl compact" id="tabAxe"><thead><tr><th style="width:40px">N°</th><th style="text-align:right">Abs. (m)</th><th style="text-align:right">Z fini</th><th>Pente vers le suivant</th></tr></thead><tbody id="tbAxe"></tbody></table></div>
 </div>
 <div id="axeProfilBoite"><div class="tete"><b id="apTitre">Profil en long</b><span class="seg"><button id="apx1">×1</button><button id="apx5" class="on">×5</button><button id="apx10">×10</button></span><button class="btn" id="apEnreg">💾 Image</button><button class="btn" id="apFermer">✕ Fermer</button></div><div style="flex:1;position:relative;overflow:auto"><canvas id="apCanvas"></canvas></div><div id="apLegende" class="petit" style="padding:4px 8px"></div></div>
+<div id="axeTravBoite"><div class="tete"><b id="atTitre">Profils en travers</b><button class="btn" id="atFermer">✕ Fermer</button></div>
+  <div class="atL"><span>Pas</span><input id="atPas" inputmode="decimal"><span>m</span><label><input type="checkbox" id="atAuxPts"> + aux points de l'axe</label><span>Gauche</span><input id="atG" inputmode="decimal"><span>Droite</span><input id="atD" inputmode="decimal"><span>m</span></div>
+  <div class="atL"><span>Dévers</span><input id="atDev" inputmode="decimal"><span>%</span><span class="seg"><button id="atSensD">pente → droite</button><button id="atSensG">← gauche</button><button id="atToit">toit ⌃</button></span><span>Structure</span><select id="atModele" style="height:32px;max-width:170px"></select></div>
+  <div class="atL"><button class="btn petitb" id="atPrec">◀</button><b id="atNum" style="min-width:150px;text-align:center"></b><button class="btn petitb" id="atSuiv">▶</button><span style="flex:1"></span><button class="btn petitb" id="atImg">💾 Image</button><button class="btn petitb" id="atCopier">📋 Copier</button></div>
+  <div style="position:relative;height:42%;min-height:220px;border-top:1px solid #ddd;border-bottom:1px solid #ddd"><canvas id="atCanvas"></canvas></div>
+  <div id="atResume" class="petit" style="padding:4px 8px"></div>
+  <div style="flex:1;overflow:auto"><table class="xl compact" id="tabTrav"><thead><tr><th>N°</th><th style="text-align:right">Abs.</th><th style="text-align:right">Z axe</th><th style="text-align:right">Z gauche</th><th style="text-align:right">Z droite</th><th style="text-align:right">TN axe</th><th style="text-align:right">Déblai m²</th><th style="text-align:right">Remblai m²</th><th>Alerte</th></tr></thead><tbody id="tbTrav"></tbody></table></div>
+</div>
 <div id="roleBoite"><div class="boite"><div id="roleTexte"></div><div class="lig" id="roleBoutons"></div></div></div>
 <div id="coupeTrBoite">
   <div class="tete"><b id="cpTitre">✂ Coupe</b><button class="btn" id="cpFermer">✕ Fermer</button></div>
@@ -604,7 +619,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Chutes – v1";
+const VERSION = "Axe – v2";
 </script>
 <script>
 "use strict";
@@ -2442,6 +2457,8 @@ function dessinerAxes(c){ if(!scene||!axes.length) return; const o=scene.origine
     for(const m of cc.M){ const A=E[m.i], B=E[m.i+1]; c.strokeStyle=m.cl.c; c.globalAlpha=actif?0.9:0.5; c.lineWidth=actif?5:3; c.beginPath(); c.moveTo(A[0],A[1]); c.lineTo(B[0],B[1]); c.stroke();
       if(actif && m.pe!==null){ const mx=(A[0]+B[0])/2, my=(A[1]+B[1])/2; if(Math.hypot(B[0]-A[0],B[1]-A[1])>60){ const t=(m.pe>=0?'+':'')+frN(m.pe,2)+' %'; c.globalAlpha=1; c.font='bold 12px Arial'; const w=c.measureText(t).width+8; c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(mx-w/2,my-19,w,15); c.fillStyle=m.cl.c; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,mx,my-11); } } }
     c.globalAlpha=1; if(!actif){ return; }
+    if(a.tr && a.pts.length>=2){ const r=calcTravers(a); c.strokeStyle='rgba(239,108,0,0.75)'; c.lineWidth=1.5; c.setLineDash([5,4]); for(const side of ['g','d']){ c.beginPath(); r.R.forEach((p,k)=>{ const [x,y]=versEcran((side==='g'?p.xg:p.xd)-o.x,(side==='g'?p.yg:p.yd)-o.y); k?c.lineTo(x,y):c.moveTo(x,y); }); c.stroke(); } c.setLineDash([]);
+      r.R.forEach((p,k)=>{ const [x1,y1]=versEcran(p.xg-o.x,p.yg-o.y), [x2,y2]=versEcran(p.xd-o.x,p.yd-o.y); c.strokeStyle=p.al.length?'#b71c1c':(k===atSel&&$('axeTravBoite').style.display==='flex'?'#1f5fa8':'rgba(239,108,0,0.8)'); c.lineWidth=2; c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke(); if(Math.hypot(x2-x1,y2-y1)>8||k%5===0){ c.font='10px Arial'; c.fillStyle='#e65100'; c.textAlign='left'; c.textBaseline='middle'; c.fillText('P'+(k+1),x1+4,y1); } }); }
     E.forEach(([x,y],i)=>{ const q=a.pts[i]; c.beginPath(); c.arc(x,y,i===axeSel?8:6,0,DEUXPI); c.fillStyle=i===axeSel?'#ef6c00':'#fff'; c.fill(); c.strokeStyle='#ef6c00'; c.lineWidth=2.5; c.stroke();
       c.font='bold 11px Arial'; c.textAlign='left'; c.textBaseline='bottom'; const t=(i+1)+(cc.z[i]!==null?' · '+frN(cc.z[i],2):''); const w=c.measureText(t).width+6; c.fillStyle='rgba(255,255,255,0.85)'; c.fillRect(x+8,y-20,w,14); c.fillStyle=vOk(q.z)?'#e65100':'#999'; c.fillText(t,x+11,y-7); }); });
   c.restore(); }
@@ -2473,6 +2490,84 @@ function dessinerProfilAxe(){ const a=axeCourant(), c=calcAxe(a), cv2=$('apCanva
 function texteAxe(a){ const c=calcAxe(a), L=[['N°','Abs. (m)','X','Y','Z fini','Longueur (m)','ΔZ (m)','Pente (%)','PMR'].join('\t')], v=(x,d)=>x===null||x===undefined||!Number.isFinite(x)?'':frN(x,d);
   a.pts.forEach((q,i)=>{ const m=c.M[i]; L.push([i+1, v(c.s[i],2), v(q.x,3), v(q.y,3), v(c.z[i],3)+(vOk(q.z)?'':(c.z[i]!==null?' (calculé)':'')), m?v(m.L,2):'', m?v(m.dz,3):'', m?v(m.pe,2):'', m?m.cl.t:''].join('\t')); });
   L.push(['Total','',' ','','',v(c.L,2),v(c.dz,3),v(c.pm,2),''].join('\t')); return a.nom+' ('+({pmr:'cheminement PMR',voie:'voie',ev:'espace vert, talus '+(a.talus||'3/2')})[a.type]+', largeur '+frN(a.larg,2)+' m)\n'+L.join('\n'); }
+
+// ---- 🛤 Axe v2 : profils en travers (largeurs, dévers, structure, TN → déblai / remblai, images, points des bords) ----
+let atSel=0;
+function paramsTrav(a){ if(!a.tr) a.tr={pas:10, aux:true, g:a.larg/2, d:a.larg/2, dev:1, sens:'d', modele:a.type==='voie'?'Voirie enrobé':a.type==='pmr'?'Trottoir enrobé':''}; return a.tr; }
+function couchesTrav(a){ const m=tousModeles().find(x=>x.nom===paramsTrav(a).modele); return m?m.couches:[]; }
+function posAxe(a,c,s){ const P=a.pts; let i=0; while(i<P.length-2 && s>c.s[i+1]+1e-9) i++; const L=c.s[i+1]-c.s[i]||1e-9, t=Math.max(0,Math.min(1,(s-c.s[i])/L)), dx=P[i+1].x-P[i].x, dy=P[i+1].y-P[i].y, l=Math.hypot(dx,dy)||1;
+  const z=(c.z[i]!==null&&c.z[i+1]!==null)?c.z[i]+(c.z[i+1]-c.z[i])*t:null; return {x:P[i].x+dx*t, y:P[i].y+dy*t, z, tx:dx/l, ty:dy/l}; }
+function abscissesTrav(a,c){ const T=paramsTrav(a), L=c.L, S=[0]; if(T.pas>0.009) for(let k=1;k*T.pas<L-0.01;k++) S.push(Math.round(k*T.pas*100)/100); S.push(L); if(T.aux) for(const v of c.s) S.push(v);
+  S.sort((x,y)=>x-y); return S.filter((v,i)=>i===0||v-S[i-1]>0.01); }
+function tnPointsAxe(a){ const L=[]; for(const p of pointsExp){ if(calqueDe(p)!==CALQUE_TN||!vOkN(p.z)) continue; if(a.pts.some(q=>Math.hypot(q.x-p.x,q.y-p.y)<30)) L.push({x:p.x,y:p.y,z:+p.z}); } return L.length>=3?L:null; }
+function calcTravers(a){ const c=calcAxe(a), T=paramsTrav(a), co=couchesTrav(a), ep=co.reduce((x,k)=>x+(Number.isFinite(k.ep)?k.ep:0),0), tnL=tnPointsAxe(a), R=[];
+  if(a.pts.length<2) return {R, c, T, co, ep, tn:!!tnL};
+  for(const s of abscissesTrav(a,c)){ const p=posAxe(a,c,s), nx=-p.ty, ny=p.tx; // normale vers la gauche
+    const dv=T.dev/100, zg=p.z===null?null:(T.sens==='d'?p.z+dv*T.g:p.z-dv*T.g), zd=p.z===null?null:(T.sens==='g'?p.z+dv*T.d:p.z-dv*T.d);
+    const pr={s, x:p.x, y:p.y, z:p.z, zg, zd, xg:p.x+nx*T.g, yg:p.y+ny*T.g, xd:p.x-nx*T.d, yd:p.y-ny*T.d, nx, ny, al:[]};
+    if(a.type==='pmr' && T.dev>2+1e-9) pr.al.push('dévers > 2 %');
+    if(tnL){ const N=12, w=T.g+T.d; pr.tn=[]; let deb=0, rem=0; for(let k=0;k<=N;k++){ const off=-T.g+w*k/N, x=p.x-nx*off, y=p.y-ny*off, zt=zTN(tnL,x,y); pr.tn.push([off,zt]);
+        if(p.z!==null){ const zf=(off<=0?p.z+(zg-p.z)*(-off/(T.g||1)):p.z+(zd-p.z)*(off/(T.d||1)))-ep, h=zt-zf; const wk=(k===0||k===N)?w/N/2:w/N; if(h>0) deb+=h*wk; else rem+=-h*wk; } }
+      pr.tnAxe=zTN(tnL,p.x,p.y); if(p.z!==null){ pr.deb=deb; pr.rem=rem; for(const [nom,ze,i] of [['gauche',zg,0],['droit',zd,N]]){ const dz=ze-pr.tn[i][1]; if(Math.abs(dz)>CHUTE_MAX) pr.al.push('⚠ bord '+nom+(dz>0?' '+frN(dz,2)+' m au-dessus':' '+frN(-dz,2)+' m sous')+' le TN'); } } }
+    R.push(pr); }
+  let vd=0, vr=0; for(let i=0;i+1<R.length;i++){ const ds=R[i+1].s-R[i].s; if(Number.isFinite(R[i].deb)&&Number.isFinite(R[i+1].deb)){ vd+=(R[i].deb+R[i+1].deb)/2*ds; vr+=(R[i].rem+R[i+1].rem)/2*ds; } }
+  return {R, c, T, co, ep, tn:!!tnL, vd, vr}; }
+function ouvrirTravers(){ const a=axeCourant(); if(a.pts.length<2){ $('etat').textContent='Il faut au moins 2 points sur l\'axe.'; return; } paramsTrav(a); atSel=0; $('axeTravBoite').style.display='flex'; remplirTravers(); }
+function remplirTravers(){ const a=axeCourant(), T=paramsTrav(a); $('atTitre').textContent='Profils en travers — '+a.nom+' ('+({pmr:'PMR',voie:'voie',ev:'espace vert'})[a.type]+')';
+  for(const [id,k] of [['atPas','pas'],['atG','g'],['atD','d'],['atDev','dev']]) if(document.activeElement!==$(id)) $(id).value=frN(T[k],2);
+  $('atAuxPts').checked=T.aux; $('atSensD').classList.toggle('on',T.sens==='d'); $('atSensG').classList.toggle('on',T.sens==='g'); $('atToit').classList.toggle('on',T.sens==='toit');
+  const sm=$('atModele'); sm.replaceChildren(); const o0=document.createElement('option'); o0.value=''; o0.textContent='(sans structure)'; sm.appendChild(o0); for(const m of tousModeles()){ const o=document.createElement('option'); o.value=m.nom; o.textContent=m.nom+' ('+frN(m.couches.reduce((x,k)=>x+(k.ep||0),0),2)+' m)'; sm.appendChild(o); } sm.value=T.modele||'';
+  majTravers(); }
+function majTravers(){ const a=axeCourant(), r=calcTravers(a), R=r.R; atSel=Math.max(0,Math.min(atSel,R.length-1));
+  $('atNum').textContent=R.length?'Profil '+(atSel+1)+' / '+R.length+' · abs. '+frN(R[atSel].s,2)+' m':'—';
+  const tb=$('tbTrav'), f=document.createDocumentFragment(), v=(x,d)=>Number.isFinite(x)?frN(x,d):'—';
+  R.forEach((p,i)=>{ const tr=document.createElement('tr'); if(i===atSel) tr.className='sel'; tr.innerHTML='<td>'+(i+1)+'</td><td class="num">'+v(p.s,2)+'</td><td class="num">'+v(p.z,3)+'</td><td class="num">'+v(p.zg,3)+'</td><td class="num">'+v(p.zd,3)+'</td><td class="num">'+v(p.tnAxe,3)+'</td><td class="num">'+v(p.deb,2)+'</td><td class="num">'+v(p.rem,2)+'</td><td style="color:#b71c1c;font-size:12px">'+echapper(p.al.join(' · '))+'</td>'; tr.onclick=()=>{ atSel=i; majTravers(); }; f.appendChild(tr); });
+  tb.replaceChildren(f);
+  const L=r.c.L, w=r.T.g+r.T.d; let t='Largeur '+frN(w,2)+' m (G '+frN(r.T.g,2)+' / D '+frN(r.T.d,2)+') · dévers '+frN(r.T.dev,2)+' % '+({d:'vers la droite',g:'vers la gauche',toit:'en toit'})[r.T.sens]+' · '+R.length+' profils';
+  if(r.co.length) t+='<br>Structure '+echapper(r.T.modele)+' sur '+frN(L,2)+' m : '+r.co.map(k=>echapper(k.nom)+' '+frN(k.ep,2)+' m → <b>'+frN(k.ep*w*L,2)+' m³</b>').join(' · ');
+  t+= r.tn ? '<br>Terrassement sous le fond de forme : déblai <b>'+frN(r.vd,2)+' m³</b> · remblai <b>'+frN(r.vr,2)+' m³</b> (talus non comptés)' : '<br><span style="color:#777">Pas de TN : placez des points sur le calque POINTS_TN pour le déblai / remblai.</span>';
+  const na=R.filter(p=>p.al.length).length; if(na) t+='<br><b style="color:#b71c1c">⚠ '+na+' profil(s) avec alerte</b>';
+  $('atResume').innerHTML=t; dessinerTravers(r); demanderDessin(false); }
+
+function dessinerTravers(r){ const cv2=$('atCanvas'), box=cv2.parentElement, dpr2=window.devicePixelRatio||1, Wb=box.clientWidth, Hb=box.clientHeight; cv2.width=Wb*dpr2; cv2.height=Hb*dpr2; cv2.style.width=Wb+'px'; cv2.style.height=Hb+'px';
+  const g=cv2.getContext('2d'); g.setTransform(dpr2,0,0,dpr2,0,0); g.fillStyle='#fff'; g.fillRect(0,0,Wb,Hb); const p=r.R[atSel]; if(!p||p.z===null){ g.fillStyle='#777'; g.font='14px Arial'; g.fillText('Pas de Z sur l\'axe à cet endroit : tapez les cotes de l\'axe.',12,30); return; }
+  const T=r.T, marge=Math.max(0.5,(T.g+T.d)*0.15), x0=-T.g-marge, x1=T.d+marge; const zs=[p.z,p.zg,p.zd,p.z-r.ep]; if(p.tn) for(const q of p.tn) if(Number.isFinite(q[1])) zs.push(q[1]);
+  let zmin=Math.min(...zs)-0.1, zmax=Math.max(...zs)+0.1; const mg={g:56,d:16,h:34,b:44}, kx=(Wb-mg.g-mg.d)/(x1-x0); let ky=kx*3; if((zmax-zmin)*ky>Hb-mg.h-mg.b) ky=(Hb-mg.h-mg.b)/(zmax-zmin);
+  const lib=(Hb-mg.h-mg.b-(zmax-zmin)*ky)/2, X=o=>mg.g+(o-x0)*kx, Y=z=>Hb-mg.b-lib-(z-zmin)*ky; // o : décalage, gauche négatif
+  const zF=o=>o<=0?p.z+(p.zg-p.z)*(-o/(T.g||1)):p.z+(p.zd-p.z)*(o/(T.d||1));
+  // grille
+  g.strokeStyle='#eee'; g.lineWidth=1; g.fillStyle='#777'; g.font='10px Arial'; g.textAlign='right'; g.textBaseline='middle'; const pz=[0.02,0.05,0.1,0.2,0.25,0.5,1].find(q=>(zmax-zmin)/q<=7)||1; for(let z=Math.ceil(zmin/pz)*pz;z<=zmax;z+=pz){ g.beginPath(); g.moveTo(mg.g,Y(z)); g.lineTo(Wb-mg.d,Y(z)); g.stroke(); g.fillText(frN(z,2),mg.g-4,Y(z)); }
+  // déblai / remblai
+  if(p.tn){ for(let k=0;k+1<p.tn.length;k++){ const [oa,ta]=p.tn[k], [ob,tb]=p.tn[k+1]; const fa=zF(oa)-r.ep, fb=zF(ob)-r.ep; g.fillStyle=(ta+tb)/2>(fa+fb)/2?'rgba(229,57,53,0.18)':'rgba(67,160,71,0.18)'; g.beginPath(); g.moveTo(X(oa),Y(ta)); g.lineTo(X(ob),Y(tb)); g.lineTo(X(ob),Y(fb)); g.lineTo(X(oa),Y(fa)); g.closePath(); g.fill(); } }
+  // couches de structure
+  let cum=0; r.co.forEach((k,i)=>{ const e=k.ep||0; g.fillStyle=COUL_COUCHES[i%COUL_COUCHES.length]; g.globalAlpha=0.85; g.beginPath(); g.moveTo(X(-T.g),Y(zF(-T.g)-cum)); g.lineTo(X(0),Y(p.z-cum)); g.lineTo(X(T.d),Y(zF(T.d)-cum)); g.lineTo(X(T.d),Y(zF(T.d)-cum-e)); g.lineTo(X(0),Y(p.z-cum-e)); g.lineTo(X(-T.g),Y(zF(-T.g)-cum-e)); g.closePath(); g.fill(); g.globalAlpha=1;
+    g.fillStyle=i===0?'#fff':'#222'; g.font='10px Arial'; g.textAlign='center'; if((e*ky)>9) g.fillText(k.nom+' '+frN(e,2),X(T.d/2),Y(zF(T.d/2)-cum-e/2)); cum+=e; });
+  // TN
+  if(p.tn){ g.strokeStyle='#8d6e63'; g.lineWidth=1.8; g.setLineDash([6,4]); g.beginPath(); p.tn.forEach(([o,z],k)=>k?g.lineTo(X(o),Y(z)):g.moveTo(X(o),Y(z))); g.stroke(); g.setLineDash([]); }
+  // fini
+  const col=p.al.length?'#b71c1c':'#ef6c00'; g.strokeStyle=col; g.lineWidth=3; g.beginPath(); g.moveTo(X(-T.g),Y(p.zg)); g.lineTo(X(0),Y(p.z)); g.lineTo(X(T.d),Y(p.zd)); g.stroke();
+  // axe + cotes
+  g.strokeStyle='#1f5fa8'; g.lineWidth=1; g.setLineDash([4,3]); g.beginPath(); g.moveTo(X(0),mg.h-10); g.lineTo(X(0),Hb-mg.b+6); g.stroke(); g.setLineDash([]);
+  g.font='bold 12px Arial'; g.textBaseline='bottom'; g.fillStyle='#1f5fa8'; g.textAlign='center'; g.fillText('axe '+frN(p.z,3),X(0),Y(p.z)-8);
+  g.fillStyle=col; g.textAlign='left'; g.fillText(frN(p.zg,3),X(-T.g)+2,Y(p.zg)-8); g.textAlign='right'; g.fillText(frN(p.zd,3),X(T.d)-2,Y(p.zd)-8);
+  const dvt=frN(T.dev,2)+' %'; g.font='bold 11px Arial'; g.textAlign='center'; g.fillStyle='#333'; if(T.sens==='toit'){ g.fillText('← '+dvt,X(-T.g/2),Y(zF(-T.g/2))-18); g.fillText(dvt+' →',X(T.d/2),Y(zF(T.d/2))-18); } else g.fillText(T.sens==='d'?dvt+' →':'← '+dvt,X((T.d-T.g)/2),Y(zF((T.d-T.g)/2))-18);
+  // largeurs
+  g.strokeStyle='#555'; g.lineWidth=1; const yb=Hb-mg.b+18; g.beginPath(); g.moveTo(X(-T.g),yb); g.lineTo(X(T.d),yb); for(const o of [-T.g,0,T.d]){ g.moveTo(X(o),yb-5); g.lineTo(X(o),yb+5); } g.stroke(); g.font='11px Arial'; g.fillStyle='#333'; g.textBaseline='top'; g.fillText(frN(T.g,2),X(-T.g/2),yb+3); g.fillText(frN(T.d,2),X(T.d/2),yb+3);
+  g.textAlign='left'; g.textBaseline='top'; g.font='bold 12px Arial'; g.fillStyle='#222'; g.fillText('P'+(atSel+1)+' · abs. '+frN(p.s,2)+' m'+(p.al.length?' · '+p.al.join(' · '):''),6,6);
+  if(p.tn) { g.font='11px Arial'; g.fillStyle='#555'; g.fillText('déblai '+frN(p.deb,2)+' m² · remblai '+frN(p.rem,2)+' m² · hauteurs × '+frN(ky/kx,1),6,20); } }
+function brancherTravers(){
+  $('axTravers').onclick=ouvrirTravers; $('atFermer').onclick=()=>{ $('axeTravBoite').style.display='none'; demanderDessin(false); };
+  const num=(id,k,min)=>{ $(id).onchange=()=>{ const v=lireNombre($(id).value); if(!Number.isFinite(v)||v<min) return; memoAxe(); paramsTrav(axeCourant())[k]=v; sauverAxes(); remplirTravers(); }; $(id).onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); $(id).blur(); } }; };
+  num('atPas','pas',0.01); num('atG','g',0); num('atD','d',0); num('atDev','dev',0);
+  $('atAuxPts').onchange=e=>{ memoAxe(); paramsTrav(axeCourant()).aux=e.target.checked; sauverAxes(); majTravers(); };
+  for(const [id,v] of [['atSensD','d'],['atSensG','g'],['atToit','toit']]) $(id).onclick=()=>{ memoAxe(); paramsTrav(axeCourant()).sens=v; sauverAxes(); remplirTravers(); };
+  $('atModele').onchange=e=>{ memoAxe(); paramsTrav(axeCourant()).modele=e.target.value; sauverAxes(); majTravers(); };
+  $('atPrec').onclick=()=>{ atSel--; majTravers(); }; $('atSuiv').onclick=()=>{ atSel++; majTravers(); };
+  $('atImg').onclick=()=>{ const a=axeCourant(), nom=('Travers_'+a.nom+'_P'+(atSel+1)).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')+'.png', l=document.createElement('a'); l.href=$('atCanvas').toDataURL('image/png'); l.download=nom; document.body.appendChild(l); l.click(); l.remove(); $('atResume').insertAdjacentHTML('afterbegin','💾 '+nom+' enregistrée · '); };
+  $('atCopier').onclick=async()=>{ const a=axeCourant(), r=calcTravers(a), v=(x,d)=>Number.isFinite(x)?frN(x,d):''; const L=[a.nom+' — profils en travers (largeur G '+v(r.T.g,2)+' / D '+v(r.T.d,2)+' m, dévers '+v(r.T.dev,2)+' %, structure '+(r.T.modele||'aucune')+')', ['N°','Abs.','X axe','Y axe','Z axe','Z gauche','Z droite','TN axe','Déblai m²','Remblai m²','Alerte'].join('\t')];
+    r.R.forEach((p,i)=>L.push([i+1,v(p.s,2),v(p.x,3),v(p.y,3),v(p.z,3),v(p.zg,3),v(p.zd,3),v(p.tnAxe,3),v(p.deb,2),v(p.rem,2),p.al.join(' · ')].join('\t'))); if(r.tn) L.push(['Volumes','','','','','','','',v(r.vd,2)+' m³',v(r.vr,2)+' m³',''].join('\t'));
+    const ok=await copierTexte(L.join('\n')); $('atResume').insertAdjacentHTML('afterbegin',ok?'📋 Tableau copié · ':'⚠ Copie impossible · '); };
+}
 function brancherAxe(){
   $('mAxe').onclick=ouvrirAxe; $('axFermer').onclick=fermerAxe;
   $('selAxe').onchange=e=>{ axeActif=+e.target.value; axeSel=null; majAxe(); demanderDessin(false); };
@@ -2492,8 +2587,9 @@ function brancherAxe(){
   for(const [id,k] of [['apx1',1],['apx5',5],['apx10',10]]) $(id).onclick=()=>{ apExag=k; for(const j of ['apx1','apx5','apx10']) $(j).classList.toggle('on',j===id); dessinerProfilAxe(); };
   $('apEnreg').onclick=()=>{ const a=axeCourant(), url=$('apCanvas').toDataURL('image/png'), nom=('Profil_'+a.nom).normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_')+'.png'; const l=document.createElement('a'); l.href=url; l.download=nom; document.body.appendChild(l); l.click(); l.remove(); $('apLegende').insertAdjacentHTML('afterbegin','💾 Image enregistrée ('+nom+') · '); };
   $('axCopier').onclick=async()=>{ const ok=await copierTexte(texteAxe(axeCourant())); $('etat').textContent=ok?'📋 Tableau de l\'axe copié (à coller dans Excel).':'⚠ Copie impossible.'; };
-  $('axPoints').onclick=()=>{ const a=axeCourant(), c=calcAxe(a); if(!a.pts.length) return; memoriserPourAnnuler(); let n=+prochainNom(); const cal=calqueReseauType(a.type==='pmr'?'CHEMINEMENT':a.type==='ev'?'ESPACE_VERT':'VOIE'), r3=v=>v===null?null:Math.round(v*1000)/1000;
-    a.pts.forEach((q,i)=>{ pointsExp.push({nom:String(n++), x:q.x, y:q.y, z:r3(c.z[i]), calque:cal}); }); sauverPoints(); majCompteCalque(); remplirCalques(); demanderDessin(false); $('etat').textContent='⟋ '+a.pts.length+' points de l\'axe créés (calque '+cal+', Z fini). Les bords viendront avec les profils en travers.'; };
+  $('axPoints').onclick=()=>{ const a=axeCourant(); if(a.pts.length<2) return; memoriserPourAnnuler(); let n=+prochainNom(); const cal=calqueReseauType(a.type==='pmr'?'CHEMINEMENT':a.type==='ev'?'ESPACE_VERT':'VOIE'), r3=v=>v===null||!Number.isFinite(v)?null:Math.round(v*1000)/1000, r=calcTravers(a); let k=0;
+    for(const p of r.R){ for(const [x,y,z] of [[p.xg,p.yg,p.zg],[p.x,p.y,p.z],[p.xd,p.yd,p.zd]]){ pointsExp.push({nom:String(n++), x, y, z:r3(z), calque:cal}); k++; } }
+    sauverPoints(); majCompteCalque(); remplirCalques(); demanderDessin(false); $('etat').textContent='⟋ '+k+' points créés : bord gauche, axe, bord droit à chacun des '+r.R.length+' profils (calque '+cal+', Z fini).'; };
 }
 
 // ================= ⚠ Contrôle des chutes : plus de 40 cm entre deux points, plus raide qu'un talus 3/2 =================
@@ -2533,6 +2629,7 @@ const GUIDE={
  pmTroncon:{t:'📏 Tronçon', x:'Touchez un trait : pas (Par côté, Continu ou Égal), désignation, type de réseau, cotes finies et fils d\'eau des 2 bouts → ✓ Créer : tous les points et leurs Z calculés. ✎ dans la liste pour modifier la ligne.', a:'📏 Tronçon'},
  lfE:{t:'Égal', x:'Même distance entre tous les points (ex. 12,40 m au pas de 2 → 6 × 2,067 m).'},
  axEv:{t:'🌿 Espace vert', x:'Seule norme : le talus, 3/2 (66,7 %) ou 1/1 (100 %). Un morceau plus raide passe en rouge. Et partout : pas de chute de plus de 40 cm.'},
+ axTravers:{t:'📐 Profils en travers', x:'Pas (au cm), largeurs gauche / droite, dévers et son sens, structure : chaque profil est dessiné avec ses couches, le TN et le déblai / remblai. ◀ ▶ pour passer d\'un profil à l\'autre, 💾 image, 📋 Copier.', a:'📐 Profils en travers'},
  mAxe:{t:'🛤 Axe', x:'Touchez les points de l\'axe (ou 🔗 Du plan). Z repris de la cote écrite, ou tapé dans le tableau. Pentes par morceau en couleur (PMR : vert ≤ 4 %, orange 4–5 %, rouge > 5 %). 📈 Profil pour le profil en long.', a:'🛤 Axe'},
  mDist:{t:'Distance', x:'Touchez le point de départ puis le point d\'arrivée. Pour déplacer un point : glissez-le avec le doigt. 📌 Garder pour la conserver.', a:'Mesurer une distance'},
  mSurf:{t:'Surface', x:'Touchez les coins un par un. Glissez un coin pour le corriger, touchez un côté pour ajouter un coin. ⬚ Du plan prend une surface toute faite.', a:'Mesurer une surface'},
@@ -3794,6 +3891,7 @@ const AIDE=[
  {r:'Plan', t:'📐 Calage « Angle + façade »', txt:'⋮ → 📐 Caler → Angle + façade. 1) Touchez l\'angle précis, tapez ses X / Y. 2) Touchez un 2e point sur le même mur : la façade est prolongée en pointillés. 3) Tapez X / Y d\'un point relevé n\'importe où sur cette façade : il se place sur la ligne à la bonne distance (repère ②). Rotation calculée, échelle 1. ＋ Point pour un contrôle (écart en cm).', mots:'calage angle facade direction alignement mur theodolite', go:()=>{ ouvrirCalage(); changerModeCalage('fac'); }},
  {r:'Points', t:'Écrire directement dans l\'étiquette d\'un point ou d\'un tronçon', txt:'Touchez le nom d\'un point sur le plan : une bulle s\'ouvre (Z fini, FE, FF, nom). Entrée = case suivante, puis point suivant ; ◀ ▶ pour passer d\'un point à l\'autre. Touchez l\'étiquette d\'un tronçon (« PVC 200 · 23,39 m ») : désignation, calque, Z et FE des bouts, points recalculés tout de suite.', mots:'etiquette bulle point troncon z fini fe ecrire plan', go:null},
  {r:'Mesure', t:'🛤 Axe : cheminement PMR ou voie, profil en long', txt:'📏 Mesure → 🛤 Axe. PMR ou Voie, largeur. Touchez les points de l\'axe (toucher l\'axe = insérer un point, glisser = déplacer) ou 🔗 Du plan. Z : cote écrite du plan reprise, ou tapée ; sinon calculé entre deux cotes. Tableau : pente de chaque morceau (PMR : vert ≤ 4 %, orange 4–5 % avec palier tous les 10 m, rouge > 5 %) et total. 📈 Profil (avec TN si points POINTS_TN), 💾 image, 📋 Copier pour Excel, ⟋ Points.', mots:'axe profil long pente pmr voie cheminement palier rampe cote', go:()=>{ if(outil!=='mesure') choisirOutil('mesure'); ouvrirAxe(); }},
+ {r:'Mesure', t:'📐 Profils en travers d\'un axe', txt:'🛤 Axe → 📐 Travers. Pas en m (au cm près) + profils aux points de l\'axe, largeurs gauche / droite, dévers % (pente → droite, ← gauche ou en toit ; PMR : alerte > 2 %), structure (modèles des Quantités). Chaque profil : cotes axe / bords, couches, TN et déblai / remblai sous le fond de forme (points POINTS_TN), alerte si un bord est à plus de 40 cm du TN. Volumes de structure et de terrassement, 💾 image, 📋 Copier. ⟋ Points crée bord gauche, axe, bord droit à chaque profil.', mots:'profil travers devers structure couches deblai remblai bords axe largeur', go:()=>{ if(outil!=='mesure') choisirOutil('mesure'); ouvrirAxe(); ouvrirTravers(); }},
  {r:'Plan', t:'⚠ Chute de plus de 40 cm', txt:'Contrôle automatique partout : deux points voisins (axe, tronçon, surface, points d\'export, tampons de regards à moins de 5 m) avec plus de 40 cm d\'écart ET plus raides qu\'un talus 3/2 = CHUTE. Repère rouge sur le plan « ⚠ CHUTE 0,52 m », alerte dans la barre d\'état et les tableaux. Une pente douce n\'est pas une chute.', mots:'chute 40 cm securite talus garde corps denivele brusque'},
  {r:'Mesure', t:'🌿 Axe espace vert (talus)', txt:'🛤 Axe → 🌿 Esp. vert, talus 3/2 ou 1/1 : vert si respecté, rouge si plus raide. Pas de règle PMR.', mots:'espace vert talus 3/2 1/1 axe pente'},
  {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
@@ -4282,7 +4380,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherCalage(); brancherGuide(); brancherAxe(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherCalage(); brancherGuide(); brancherAxe(); brancherTravers(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
