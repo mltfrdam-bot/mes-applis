@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="fond">#F6F7F9</color>
+    <color name="carte">#FFFFFF</color>
+    <color name="texte">#1A1C20</color>
+    <color name="gris">#6B7280</color>
+    <color name="gris_clair">#9AA0A8</color>
+    <color name="trait">#E3E6EA</color>
+    <color name="accent">#1E63D6</color>
+    <color name="accent_pale">#EAF1FD</color>
+    <color name="vert">#1F9D55</color>
+    <color name="icone_fond">#1E63D6</color>
+</resources>

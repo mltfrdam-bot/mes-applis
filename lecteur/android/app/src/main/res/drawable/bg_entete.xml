@@ -1,0 +1,4 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="#EEF0F3"/></item>
+    <item android:gravity="bottom" android:height="1dp"><color android:color="#D5D9DF"/></item>
+</layer-list>

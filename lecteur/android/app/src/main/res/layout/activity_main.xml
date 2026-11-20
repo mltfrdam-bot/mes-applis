@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/fond">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="18dp"
+        android:paddingEnd="6dp">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Lecteur"
+                android:textColor="@color/texte"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/compteur"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/gris"
+                android:textSize="12sp" />
+        </LinearLayout>
+        <TextView android:id="@+id/btnActualiser" style="@style/BoutonHaut" android:text="🔄" />
+        <TextView android:id="@+id/btnAide" style="@style/BoutonHaut" android:text="❓" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/bandeau"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_bandeau"
+        android:foreground="?android:attr/selectableItemBackground"
+        android:padding="12dp"
+        android:textColor="#6B4A00"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:background="@drawable/bg_entete"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="68dp"
+        android:paddingEnd="14dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Titre · Artiste · Album"
+            android:textColor="@color/gris"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Durée"
+            android:textColor="@color/gris"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/liste"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/carte"
+            android:scrollbars="vertical" />
+        <LinearLayout
+            android:id="@+id/vide"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/fond"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/texteVide"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/texte"
+                android:textSize="16sp" />
+            <TextView
+                android:id="@+id/btnVide"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/bg_bouton"
+                android:gravity="center"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/mini"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/carte"
+        android:elevation="12dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+        <ProgressBar
+            android:id="@+id/miniBarre"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:max="1000"
+            android:progressTint="@color/accent"
+            android:progressBackgroundTint="@color/trait" />
+        <LinearLayout
+            android:id="@+id/miniZone"
+            android:layout_width="match_parent"
+            android:layout_height="68dp"
+            android:foreground="?android:attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+            <ImageView
+                android:id="@+id/miniPochette"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_pochette"
+                android:scaleType="centerCrop" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:id="@+id/miniTitre"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/texte"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/miniArtiste"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/gris"
+                    android:textSize="13sp" />
+            </LinearLayout>
+            <ImageView
+                android:id="@+id/miniLecture"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="12dp"
+                android:src="@drawable/ic_lecture" />
+            <ImageView
+                android:id="@+id/miniSuivant"
+                android:layout_width="52dp"
+                android:layout_height="56dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:padding="13dp"
+                android:src="@drawable/ic_suivant" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
