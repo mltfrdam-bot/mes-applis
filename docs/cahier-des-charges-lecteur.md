@@ -119,6 +119,7 @@ Une seule base de données (Room/SQLite) : playlists, favoris, nombre d'écoutes
 - Sauvegarde automatique locale quotidienne, les 7 dernières gardées.
 - **Statistiques** en tableau : écoutes par piste, par artiste, par semaine. Rapport 📋 Copier pour l'envoyer à Claude.
 - Pas de données à récupérer d'un ancien lecteur (confirmé le 20/11/2026).
+- Fichiers de sauvegarde : `Download/Lecteur/` (manuelles et « avant fusion »), `Download/Lecteur/Auto/` (automatiques). Format JSON `lecteur-sauvegarde` version 1.
 
 ## 10. Aide intégrée et hors ligne
 
@@ -139,7 +140,7 @@ Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/lecte
 Livrer dans cet ordre, une APK testable à chaque étape.
 
 1. **Socle** : l'APK s'installe, trouve les fichiers Termux, lit la musique en arrière-plan avec la notification et l'écran verrouillé. Paroles en karaoké. Aide « Première utilisation ». — *Livré le 20/11/2026 (version 1.1).*
-2. **Bibliothèque complète** : recherche, playlists, favoris, reprise, sauvegarde + fusion.
+2. **Bibliothèque complète** : recherche, playlists, favoris, reprise, sauvegarde + fusion. — *Livré le 20/11/2026 (version 1.2) : onglets Musique · ★ Favoris · Playlists · Dossiers, tri en un appui (ajout, titre, artiste, écoutes, durée), menu ⋮ (lire ensuite, file d'attente, playlist, dossier), file d'attente rangeable, minuterie avec fondu, reprise par fichier pour les morceaux de plus de 10 min, corbeille des playlists, sauvegarde de sécurité automatique avant chaque fusion, écran 📊 Données (sauvegarde, fusion, statistiques en tableaux).*
 3. **Vidéo** : plein écran, gestes, fenêtre flottante, « Écouter seulement ».
 4. **Mode Chevet** puis **Mode Conduite**.
 5. **Fond d'écran animé**.
