@@ -580,7 +580,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Tronçon – v4";
+const VERSION = "Étiquettes – v1";
 </script>
 <script>
 "use strict";
@@ -1000,7 +1000,7 @@ function dessiner(){
   aDessiner=false;
   if(sceneSale){ rendreScene(cctx); sceneSale=false; }
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(cache,0,0);
-  if(scene){ ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerTroncons(ctx); dessinerReseaux(ctx); dessinerConv(ctx); dessinerMain(ctx); dessinerCalage(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
+  if(scene){ etiqRes=[]; ctx.setTransform(dpr,0,0,dpr,0,0); dessinerFiche(ctx); dessinerMesuresGardees(ctx); dessinerTroncons(ctx); dessinerReseaux(ctx); dessinerConv(ctx); dessinerMain(ctx); dessinerCalage(ctx); dessinerLigne(ctx); dessinerPointsExport(ctx); dessinerTaches(ctx); if(outil==='mesure'){ dessinerCarteTN(ctx); dessinerMesure(ctx); dessinerTraitCoupe(ctx); } ctx.setTransform(1,0,0,1,0,0); } placerBulle();
   majLoupe();
 }
 function rendreScene(c){
@@ -1426,7 +1426,9 @@ function dessinerPointsExport(c){
     c.beginPath(); c.moveTo(x-9,y); c.lineTo(x+9,y); c.moveTo(x,y-9); c.lineTo(x,y+9); c.lineWidth=1.5; c.stroke();
     const L=[String(p.nom)]; if(vOkN(p.z)) L.push(frN(+p.z,2)); if(afficherFF && vOkN(p.ff)) L.push('FF '+frN(+p.ff,2));
     let w=0; for(const t of L) w=Math.max(w,c.measureText(t).width);
-    c.fillStyle='rgba(255,255,255,0.85)'; c.fillRect(x+7,y-22,w+6,16*L.length); L.forEach((t,k)=>{ c.fillStyle= k===2 ? '#7a4a00' : col; c.fillText(t,x+10,y-7+16*k); });
+    const ouv=!p.prov && bulleReg && bulleReg.m===pointsExp[p.i];
+    c.fillStyle=ouv?'#1f5fa8':'rgba(255,255,255,0.85)'; c.fillRect(x+7,y-22,w+6,16*L.length); L.forEach((t,k)=>{ c.fillStyle= ouv?'#fff': k===2 ? '#7a4a00' : col; c.fillText(t,x+10,y-7+16*k); });
+    if(!p.prov) etiqRes.push({m:pointsExp[p.i], pt:true, x0:x+9, y0:y-26, x1:x+w+18, y1:y-22+16*L.length+2});
   }
   c.restore();
 }
@@ -2203,7 +2205,7 @@ function majReseau(infoSeule){
   const rs=tb.querySelector('tr.sel'); if(rs) rs.scrollIntoView({block:'nearest'});
 }
 function dessinerReseaux(c){
-  etiqRes=[]; if(!scene||!reseaux.length||!calqueVisible(CALQUE_RES)) return; const o=scene.origine, enRes=outil==='mesure'&&mesure.mode==='res';
+  if(!scene||!reseaux.length||!calqueVisible(CALQUE_RES)) return; const o=scene.origine, enRes=outil==='mesure'&&mesure.mode==='res';
   c.save();
   reseaux.forEach((r,ir)=>{ if(r.calque && !calqueVisible(r.calque)) return; const N=r.noeuds.map(n=>({...n}));
     if(enRes && ir===resActif && visee && deplace!==null){ const v=pointVise(); if(v){ N[deplace].x=v.x+o.x; N[deplace].y=v.y+o.y; } }
@@ -2237,10 +2239,10 @@ function dessinerReseaux(c){
 function etiquetteSousDoigt(sx,sy){ for(let k=etiqRes.length-1;k>=0;k--){ const e=etiqRes[k]; if(sx>=e.x0&&sx<=e.x1&&sy>=e.y0&&sy<=e.y1) return e; } return null; }
 // Toutes les places du regard m : dans son réseau et dans les réseaux qui y arrivent (liens)
 function placesRegard(m){ const L=[]; reseaux.forEach((r,ri)=>r.noeuds.forEach((n,ni)=>{ if(n===m || (m.id && n.lien===m.id)) L.push({r,ri,ni,n}); })); return L; }
-function ouvrirBulle(e){ if(bulleReg && bulleReg.m===e.m){ fermerBulle(); return; } bulleReg={m:e.m}; construireBulle(); demanderDessin(false); }
+function ouvrirBulle(e){ if(bulleReg && bulleReg.m===e.m){ fermerBulle(); return; } bulleReg={m:e.m, type:e.pt?'pt':e.tr?'tr':'reg'}; construireBulle(); demanderDessin(false); }
 function fermerBulle(){ if(!bulleReg) return; const a=document.activeElement; if(a && a.blur && $('bulleReg').contains(a)) a.blur(); bulleReg=null; $('bulleReg').style.display='none'; demanderDessin(false); }
 function apresModifBulle(complet){ sauverReseaux(); if(outil==='mesure'&&mesure.mode==='res') majReseau(); if(complet) construireBulle(); else majCalculsBulle(); demanderDessin(false); }
-function construireBulle(){ const b=$('bulleReg'), m=bulleReg.m, P=placesRegard(m);
+function construireBulle(){ if(bulleReg.type==='pt') return construireBullePoint(); if(bulleReg.type==='tr') return construireBulleTroncon(); const b=$('bulleReg'), m=bulleReg.m, P=placesRegard(m);
   if(!P.length){ fermerBulle(); return; }
   const plusieurs=reseaux.length>1, chez=P.find(p=>p.n===m)||P[0];
   let h='<div class="bTete"><b>'+echapper(m.nom)+'</b><span class="petit">'+(plusieurs?echapper(chez.r.nom):'')+(P.length>1?' · '+P.length+' réseaux':'')+'</span><span style="flex:1"></span><button class="btn petitb" data-act="fermer">✕</button></div>';
@@ -2313,9 +2315,9 @@ function calqueReseauType(nom){ if(tousCalquesPerso().some(c=>c.nom===nom)) retu
 function genererPointsTroncon(t){ // remplace les points calculés du tronçon (ceux corrigés à la main restent)
   const i0=pointsExp.findIndex(p=>p.tr===t.id), manu=pointsExp.filter(p=>p.tr===t.id&&p.manu), nomsManu=new Set(manu.map(p=>p.nom));
   const pts=genererPointsLigne(t.els, t.p), r3=v=>Number.isFinite(v)?Math.round(v*1000)/1000:null; const nv=[];
-  const anciens=pointsExp.filter(p=>p.tr===t.id&&!p.manu&&/^\d+$/.test(String(p.nom))).map(p=>p.nom).sort((a,b)=>(parseInt(a,10)||0)-(parseInt(b,10)||0)); let libre=+prochainNom();
-  const nomI=i=>{ if(t.pre) return t.pre+(i+1); if(i<anciens.length) return anciens[i]; return String(libre++); };
-  pts.forEach((r,i)=>{ let nom=nomI(i); if(nomsManu.has(nom)) nom+='b'; nv.push({nom, x:r.x, y:r.y, z:r3(r.z), ...(Number.isFinite(r.fe)?{fe:r3(r.fe)}:{}), calque:t.calque, tr:t.id}); });
+  // même rang = même nom ; un point corrigé à la main remplace le point calculé de son rang
+  const anciens=pointsExp.filter(p=>p.tr===t.id&&/^\d+$/.test(String(p.nom))).sort((a,b)=>(parseInt(a.nom,10)||0)-(parseInt(b.nom,10)||0)); let libre=+prochainNom();
+  pts.forEach((r,i)=>{ let nom; if(t.pre) nom=t.pre+(i+1); else if(i<anciens.length){ if(anciens[i].manu) return; nom=anciens[i].nom; } else nom=String(libre++); if(nomsManu.has(nom)) nom+='b'; nv.push({nom, x:r.x, y:r.y, z:r3(r.z), ...(Number.isFinite(r.fe)?{fe:r3(r.fe)}:{}), calque:t.calque, tr:t.id}); });
   const num=n=>{ const m=String(n).slice((t.pre||'').length).match(/^(\d+)(b?)/); return m?(+m[1])+(m[2]?0.5:0):1e9; };
   const groupe=manu.concat(nv).sort((a,b)=>num(a.nom)-num(b.nom)), reste=pointsExp.filter(p=>p.tr!==t.id);
   const pos=i0<0?reste.length:pointsExp.slice(0,i0).filter(p=>p.tr!==t.id).length; reste.splice(pos,0,...groupe); pointsExp=reste; t.nManu=manu.length; return nv.length; }
@@ -2346,7 +2348,7 @@ function dessinerTroncons(c){ if(!scene||!troncons.length) return; const o=scene
     // étiquette au milieu
     let s=t.L/2, e0=t.els[0], tt=0; for(const e of t.els){ const l=elLong(e); if(s<=l){ e0=e; tt=l?s/l:0; break; } s-=l; }
     const m=elPt(e0,tt), [x,y]=versEcran(m[0]-o.x,m[1]-o.y); if(x<-50||y<-50||x>W+50||y>H+50) continue;
-    const txt=(t.des||t.res)+' · '+fr(t.L,2)+' m'; c.font='bold 11px Arial'; const w=c.measureText(txt).width+8; c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(x-w/2,y-20,w,15); c.strokeStyle=col; c.lineWidth=1; c.strokeRect(x-w/2,y-20,w,15); c.fillStyle=col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(txt,x,y-12); }
+    const txt=(t.des||t.res)+' · '+fr(t.L,2)+' m'; c.font='bold 11px Arial'; const w=c.measureText(txt).width+8; c.fillStyle='rgba(255,255,255,0.9)'; const ouv=bulleReg&&bulleReg.m===t; c.fillStyle=ouv?col:'rgba(255,255,255,0.9)'; c.fillRect(x-w/2,y+8,w,15); c.strokeStyle=col; c.lineWidth=1; c.strokeRect(x-w/2,y+8,w,15); c.fillStyle=ouv?'#fff':col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(txt,x,y+16); etiqRes.push({m:t, tr:true, x0:x-w/2-4, y0:y+4, x1:x+w/2+4, y1:y+27}); }
   c.restore(); }
 // ================= 💡 Guide : une bulle explique chaque bouton touché (le bouton marche normalement) =================
 let guideOn=false, guideVus=new Set(), guideMinut=null;
@@ -2704,6 +2706,49 @@ function pointsReseaux(){ const L=[], vus=new Set(); for(const r of reseaux){ co
 function texteRegards(){ const L=[['Nom','X','Y','Tampon','FE (plus bas)','Prof.','Réseau'].join('\t')], vus=new Set();
   for(const r of reseaux) for(const n of r.noeuds){ if(n.t!=='R'||n.lien||vus.has(n)) continue; vus.add(n); const f=fesRegard(n), p=profRegard(n), v=x=>vOk(x)?frN(x,2):'';
     L.push([n.nom, frN(n.x,3), frN(n.y,3), v(n.tampon), f.length?frN(Math.min(...f),2):'', v(p), r.nom].join('\t')); } return L.join('\n'); }
+
+// ---- Étiquette d'un point (Z fini, FE, FF, nom) et d'un tronçon, directement sur le plan ----
+function construireBullePoint(){ const b=$('bulleReg'), q=bulleReg.m, i=pointsExp.indexOf(q); if(i<0){ fermerBulle(); return; }
+  const t=q.tr?troncons.find(x=>x.id===q.tr):null;
+  b.innerHTML='<div class="bTete"><button class="btn petitb" data-act="prec">◀</button><b>'+echapper(q.nom)+'</b><span class="petit">'+(t?echapper(t.des||t.res):echapper(calqueDe(q)))+(q.manu?' · ✋ corrigé':'')+'</span><span style="flex:1"></span><button class="btn petitb" data-act="suiv">▶</button><button class="btn petitb" data-act="fermer">✕</button></div>'
+   +'<table class="bTab"><tr><td>Z fini</td><td><input data-k="z" inputmode="decimal"></td><td>FE</td><td><input data-k="fe" inputmode="decimal"></td></tr>'
+   +'<tr><td>FF</td><td><input data-k="ff" inputmode="decimal"></td><td>Nom</td><td><input data-k="nom" style="text-align:left;font-family:Arial"></td></tr></table>'
+   +'<div class="bPentes petit">X '+frN(q.x,3)+' · Y '+frN(q.y,3)+' · Entrée = case suivante, puis point suivant</div><div style="padding:0 6px 6px"><button class="btn petitb" data-act="sup" style="color:#b00020">🗑 Supprimer le point</button></div>';
+  b.style.display='block';
+  const champs=[...b.querySelectorAll('input')];
+  for(const inp of champs){ const k=inp.dataset.k; inp.value=k==='nom'?q.nom:(vOkN(q[k])?frN(+q[k],3):'');
+    inp.onchange=()=>{ if(k==='nom'){ const v=inp.value.trim(); if(!v||v===q.nom) return; memoriserPourAnnuler(); q.nom=v; }
+      else { const v=lireNombre(inp.value); if(Number.isNaN(v)){ inp.classList.add('faux'); return; } inp.classList.remove('faux'); if(v===(vOkN(q[k])?+q[k]:null)) return; memoriserPourAnnuler(); if(v===null) delete q[k]; else q[k]=v; if(k==='z'&&v===null) q.z=null; if(q.tr && k!=='ff') q.manu=true; inp.value=v===null?'':frN(v,3); }
+      sauverPoints(); if(outil==='points') majTablePoints(); demanderDessin(false); }; }
+  champs.forEach((inp,j)=>inp.onkeydown=e=>{ if(e.key!=='Enter') return; e.preventDefault(); e.stopPropagation(); inp.onchange(); const n=champs[j+1]; if(n&&j<1) n.focus(); else allerPoint(1); });
+  b.querySelector('[data-act=fermer]').onclick=fermerBulle; b.querySelector('[data-act=prec]').onclick=()=>allerPoint(-1); b.querySelector('[data-act=suiv]').onclick=()=>allerPoint(1);
+  b.querySelector('[data-act=sup]').onclick=()=>{ memoriserPourAnnuler(); pointsExp.splice(pointsExp.indexOf(q),1); fermerBulle(); majCompteCalque(); sauverPoints(); if(outil==='points') majTablePoints(); remplirCalques(); demanderDessin(false); $('etat').textContent='Point supprimé (↶ dans 📍 Points pour le remettre).'; };
+  placerBulle(); }
+// Point suivant / précédent (dans le même tronçon s'il y en a un, sinon dans la liste) — la bulle le suit, Z prêt à taper
+function allerPoint(sens){ const q=bulleReg&&bulleReg.m; if(!q) return; const L=q.tr?pointsExp.filter(p=>p.tr===q.tr):pointsExp.filter(p=>calqueVisible(calqueDe(p))); const i=L.indexOf(q), n=L[i+sens];
+  if(!n){ $('etat').textContent=sens>0?'Dernier point.':'Premier point.'; const a=document.activeElement; if(a&&a.blur) a.blur(); return; }
+  bulleReg={m:n, type:'pt'}; const o=scene.origine, [x,y]=versEcran(n.x-o.x,n.y-o.y); if(x<20||y<20||x>W-120||y>H-150) centrerSur([n]); demanderDessin(false);
+  requestAnimationFrame(()=>{ construireBullePoint(); const z=$('bulleReg').querySelector('[data-k=z]'); if(z){ z.focus(); try{ z.select(); }catch(e){} } }); }
+function construireBulleTroncon(){ const b=$('bulleReg'), t=bulleReg.m; if(!troncons.includes(t)){ fermerBulle(); return; } const P=t.p;
+  const np=pointsExp.filter(q=>q.tr===t.id).length, ni=(P.inter||[]).length;
+  b.innerHTML='<div class="bTete"><b>📏 '+echapper(t.des||t.res)+'</b><span class="petit">'+frN(t.L,2)+' m · '+np+' pts'+(ni?' · '+ni+' cote(s) interm.':'')+'</span><span style="flex:1"></span><button class="btn petitb" data-act="fermer">✕</button></div>'
+   +'<table class="bTab"><tr><td>Désignation</td><td colspan="3"><input data-k="des" list="dlDesignations" style="width:100%;text-align:left;font-family:Arial"></td></tr>'
+   +'<tr><td>Calque</td><td colspan="3"><select data-k="cal" style="height:32px;width:100%"></select></td></tr>'
+   +'<tr><td>Z départ</td><td><input data-k="z0" inputmode="decimal"></td><td>Z arrivée</td><td><input data-k="z1" inputmode="decimal"></td></tr>'
+   +'<tr><td>FE départ</td><td><input data-k="fe0" inputmode="decimal"></td><td>FE arrivée</td><td><input data-k="fe1" inputmode="decimal"></td></tr></table>'
+   +'<div class="bPentes petit">Changer une cote recalcule les points (sauf ceux corrigés à la main).</div><div style="padding:0 6px 6px;display:flex;gap:6px"><button class="btn petitb" data-act="ligne">✎ Pas, cotes intermédiaires…</button><button class="btn petitb" data-act="sup" style="color:#b00020">🗑</button></div>';
+  b.style.display='block';
+  const des=b.querySelector('[data-k=des]'); des.value=t.des||''; des.onchange=()=>{ memoriserPourAnnuler(); t.des=des.value.trim(); t.p.des=t.des; sauverTroncons(); if(outil==='points'&&ptsMode==='troncon'&&!ligneSel) majTableTroncons(); demanderDessin(false); };
+  const sc=b.querySelector('[data-k=cal]'); remplirChoixCalqueTr(sc,t.calque); sc.onchange=()=>{ memoriserPourAnnuler(); const cal=calqueReseauType(sc.value); t.res=sc.value; t.p.res=sc.value; t.calque=cal; for(const q of pointsExp) if(q.tr===t.id) q.calque=cal; sauverTroncons(); sauverPoints(); majCompteCalque(); remplirCalques(); demanderDessin(false); };
+  const champs=[...b.querySelectorAll('input[inputmode]')];
+  for(const inp of champs){ const k=inp.dataset.k; inp.value=Number.isFinite(P[k])?frN(P[k],3):'';
+    inp.onchange=()=>{ const v=lireNombre(inp.value); if(Number.isNaN(v)){ inp.classList.add('faux'); return; } inp.classList.remove('faux'); const nv=v===null?null:v; if(nv===(Number.isFinite(P[k])?P[k]:null)) return;
+      memoriserPourAnnuler(); P[k]=nv; inp.value=nv===null?'':frN(nv,3); genererPointsTroncon(t); sauverTroncons(); sauverPoints(); if(outil==='points') majTablePoints(); demanderDessin(false); }; }
+  champs.forEach((inp,j)=>inp.onkeydown=e=>{ if(e.key!=='Enter') return; e.preventDefault(); e.stopPropagation(); inp.onchange(); const n=champs[j+1]; if(n) n.focus(); else inp.blur(); });
+  b.querySelector('[data-act=fermer]').onclick=fermerBulle;
+  b.querySelector('[data-act=ligne]').onclick=()=>{ fermerBulle(); if(outil!=='points') choisirOutil('points'); choisirModePoints('troncon'); modifierTroncon(t); };
+  b.querySelector('[data-act=sup]').onclick=()=>{ memoriserPourAnnuler(); pointsExp=pointsExp.filter(q=>q.tr!==t.id); troncons=troncons.filter(x=>x!==t); fermerBulle(); sauverTroncons(); sauverPoints(); majCompteCalque(); remplirCalques(); if(outil==='points') majVueLigne(); demanderDessin(false); $('etat').textContent='Tronçon supprimé (↶ dans 📍 Points pour le remettre).'; };
+  placerBulle(); }
 // ---- Profil en long (fenêtre plein écran) ----
 let profilCurseur=null;
 function ouvrirProfil(){ const r=resCourant(); if(regards(r).length<2){ $('etat').textContent='Il faut au moins 2 regards pour le profil.'; return; } $('profilBoite').style.display='flex'; $('pfTitre').textContent='Profil en long — '+r.nom; profilCurseur=null; setTimeout(()=>{ dessinerProfil(); majTableProfil(); },30); }
@@ -3572,6 +3617,7 @@ const AIDE=[
  {r:'Appli', t:'💡 Guide : une bulle sur chaque bouton', txt:'💡 en haut : allumé (jaune), chaque bouton touché marche normalement et affiche une bulle « à quoi il sert / comment faire », puis des conseils pendant le travail (ex. « touchez le point d\'arrivée »). « Ne plus me le montrer » cache une bulle ; éteindre et rallumer 💡 les remontre toutes.', mots:'guide aide interactive bulle bouton explication conseil', go:()=>{ if(!guideOn) $('bGuide').click(); }, sansPlan:true},
  {r:'Points', t:'📏 Tronçon : points, cotes et désignation en une fois', txt:'📍 Points → 📏 Tronçon, touchez un trait. Pas en m (Par côté / Continu, ou Égal = même distance partout), désignation (PVC 200, cheminement…), calque (choix « Calque » : vos calques ou un type de réseau, modifiable aussi dans la liste), Z fini et FE des 2 bouts : les Z de chaque point sont calculés. ✓ Créer. La liste : désignation modifiable dans sa case, ✎ pour changer la ligne (points recalculés sauf ceux corrigés à la main), 🗑. À l\'export : Z = cote finie ou fil d\'eau.', mots:'troncon points pas egal designation cote finie fil eau interpoler implantation', go:()=>{ if(outil!=='points') choisirOutil('points'); choisirModePoints('troncon'); }},
  {r:'Plan', t:'📐 Calage « Angle + façade »', txt:'⋮ → 📐 Caler → Angle + façade. 1) Touchez l\'angle précis, tapez ses X / Y. 2) Touchez un 2e point sur le même mur : la façade est prolongée en pointillés. 3) Tapez X / Y d\'un point relevé n\'importe où sur cette façade : il se place sur la ligne à la bonne distance (repère ②). Rotation calculée, échelle 1. ＋ Point pour un contrôle (écart en cm).', mots:'calage angle facade direction alignement mur theodolite', go:()=>{ ouvrirCalage(); changerModeCalage('fac'); }},
+ {r:'Points', t:'Écrire directement dans l\'étiquette d\'un point ou d\'un tronçon', txt:'Touchez le nom d\'un point sur le plan : une bulle s\'ouvre (Z fini, FE, FF, nom). Entrée = case suivante, puis point suivant ; ◀ ▶ pour passer d\'un point à l\'autre. Touchez l\'étiquette d\'un tronçon (« PVC 200 · 23,39 m ») : désignation, calque, Z et FE des bouts, points recalculés tout de suite.', mots:'etiquette bulle point troncon z fini fe ecrire plan', go:null},
  {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
  {r:'Plan', t:'✋ Modifier un de vos points', txt:'✋ en haut : glissez un regard, un point d\'export ou un coin de mesure pour le déplacer (accrochage et loupe) ; glissez le trait d\'une mesure pour la déplacer entière. Un appui : nom, Z, état, 🗑 Supprimer, 🏷 Étiquette. ↶ annule.', mots:'main modifier deplacer supprimer point regard mesure coin selection toucher', go:()=>{ if(outil!=='main') choisirOutil('main'); }},
  {r:'Réseau', t:'🔁 Transformer des traits du plan en réseau', txt:'Mesure → Réseau → 🔁 Du plan. Touchez les traits des tuyaux (⬚ Zone : rectangle, même calque que le 1er trait touché), puis ✓ Convertir. Chaque bout à moins de 0,50 m d\'un regard du plan va au centre du regard ; les bouts communs ne font qu\'un point ; ↶ annule tout.', mots:'convertir traits plan reseau selection zone regard centre axe points', go:()=>{ choisirOutil('mesure'); choisirMode('res'); ouvrirConversion(); }},
@@ -3711,7 +3757,7 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   // ✋ : doigt sur un de vos points → le prendre (glisser = déplacer, appui = actions), sinon déplacer le plan
   if(outil==='main' && pointeurs.size===1 && !sequenceMulti){ const h=pointMainSousDoigt(p.x,p.y); if(h){ if(bulleReg) fermerBulle(); mainPrise=h; appui={x:p.x,y:p.y,bouge:false,main:true}; viser(p); return; } }
   // Étiquette d'un regard touchée (ou bulle ouverte) : un appui ouvre / ferme la bulle, un glissé déplace le plan
-  if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y), surNoeud=outil==='mesure'&&mesure.mode==='res'&&noeudProcheTous(p.x,p.y,16); if(surNoeud && bulleReg) fermerBulle(); if(!surNoeud && (e||bulleReg)){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
+  if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y), surNoeud=(outil==='mesure'&&mesure.mode==='res'&&noeudProcheTous(p.x,p.y,16)) || (outil==='points'&&ptsMode==='point'&&pointExportSousDoigt(p.x,p.y)!==null&&(!e||!e.pt||Math.hypot(e.x0-9-p.x,0)<12)); if(surNoeud && bulleReg) fermerBulle(); if(!surNoeud && (e||bulleReg)){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
   else if(outil==='oeil' && !sequenceMulti){ oeilViser(p); }
   else if(outil==='mesure' && (voirGardees||prendreSurface) && !coupeMode && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false}; debutGeste(); }
