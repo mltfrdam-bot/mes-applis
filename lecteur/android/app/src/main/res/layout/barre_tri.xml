@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HorizontalScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/barreTri"
+    android:layout_width="match_parent"
+    android:layout_height="32dp"
+    android:background="@drawable/bg_entete"
+    android:scrollbars="none">
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Trier :"
+            android:textColor="@color/gris"
+            android:textSize="12sp" />
+        <TextView android:id="@+id/triAjout" style="@style/Tri" android:text="Ajout" />
+        <TextView android:id="@+id/triTitre" style="@style/Tri" android:text="Titre" />
+        <TextView android:id="@+id/triArtiste" style="@style/Tri" android:text="Artiste" />
+        <TextView android:id="@+id/triEcoutes" style="@style/Tri" android:text="Écoutes" />
+        <TextView android:id="@+id/triDuree" style="@style/Tri" android:text="Durée" />
+    </LinearLayout>
+</HorizontalScrollView>

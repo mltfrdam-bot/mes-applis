@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mini"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/carte"
+    android:elevation="12dp"
+    android:orientation="vertical"
+    android:visibility="gone">
+    <ProgressBar
+        android:id="@+id/miniBarre"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:max="1000"
+        android:progressTint="@color/accent"
+        android:progressBackgroundTint="@color/trait" />
+    <LinearLayout
+        android:id="@+id/miniZone"
+        android:layout_width="match_parent"
+        android:layout_height="68dp"
+        android:foreground="?android:attr/selectableItemBackground"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="4dp">
+        <ImageView
+            android:id="@+id/miniPochette"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_pochette"
+            android:scaleType="centerCrop" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/miniTitre"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/texte"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/miniArtiste"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/gris"
+                android:textSize="13sp" />
+        </LinearLayout>
+        <ImageView
+            android:id="@+id/miniLecture"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:padding="12dp"
+            android:src="@drawable/ic_lecture" />
+        <ImageView
+            android:id="@+id/miniSuivant"
+            android:layout_width="52dp"
+            android:layout_height="56dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:padding="13dp"
+            android:src="@drawable/ic_suivant" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fond"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingEnd="6dp">
+        <TextView
+            android:id="@+id/btnRetour"
+            style="@style/BoutonHaut"
+            android:layout_width="52dp"
+            android:text="←"
+            android:textColor="@color/texte"
+            android:textSize="24sp" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/titreListe"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/texte"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+            <TextView
+                android:id="@+id/sousTitre"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/gris"
+                android:textSize="12sp" />
+        </LinearLayout>
+        <ImageView
+            android:id="@+id/btnMenuListe"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:scaleType="center"
+            android:src="@drawable/ic_menu"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <HorizontalScrollView
+        android:id="@+id/zoneActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="10dp">
+            <TextView android:id="@+id/btnToutLire" style="@style/BoutonAction" android:background="@drawable/bg_bouton" android:textColor="#FFFFFF" android:text="▶ Tout lire" />
+            <TextView android:id="@+id/btnAleatoire" style="@style/BoutonAction" android:text="🔀 Aléatoire" />
+            <TextView android:id="@+id/btnAjouter" style="@style/BoutonAction" android:text="➕ Ajouter des titres" android:visibility="gone" />
+            <TextView android:id="@+id/btnModifier" style="@style/BoutonAction" android:text="✏️ Modifier" android:visibility="gone" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <include layout="@layout/barre_recherche" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/liste"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/carte"
+            android:scrollbars="vertical" />
+        <TextView
+            android:id="@+id/texteVide"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/fond"
+            android:gravity="center"
+            android:padding="32dp"
+            android:textColor="@color/gris"
+            android:textSize="15sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/btnValider"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:layout_margin="12dp"
+        android:background="@drawable/bg_bouton"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <include layout="@layout/mini_lecteur" />
+</LinearLayout>

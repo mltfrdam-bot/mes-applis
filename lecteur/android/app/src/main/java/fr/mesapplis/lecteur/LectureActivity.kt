@@ -1,6 +1,8 @@
 package fr.mesapplis.lecteur
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.widget.Toast
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Bitmap
@@ -48,6 +50,10 @@ class LectureActivity : Activity() {
     private lateinit var btnLecture: ImageView
     private lateinit var btnAleatoire: ImageView
     private lateinit var btnRepetition: ImageView
+    private lateinit var btnFavori: ImageView
+    private lateinit var icoMinuterie: ImageView
+    private lateinit var texteMinuterie: TextView
+    private var favoriAffiche: String? = null
 
     private var futur: ListenableFuture<MediaController>? = null
     private var ctrl: MediaController? = null
@@ -82,6 +88,15 @@ class LectureActivity : Activity() {
         btnLecture = findViewById(R.id.btnLecture)
         btnAleatoire = findViewById(R.id.btnAleatoire)
         btnRepetition = findViewById(R.id.btnRepetition)
+        btnFavori = findViewById(R.id.btnFavori)
+        icoMinuterie = findViewById(R.id.icoMinuterie)
+        texteMinuterie = findViewById(R.id.texteMinuterie)
+        btnFavori.setOnClickListener { pisteEnCours()?.let { p -> Actions.basculerFavori(this, p); majFavori(p.favori) } }
+        findViewById<View>(R.id.btnPlaylist).setOnClickListener { pisteEnCours()?.let { p -> Actions.choisirPlaylist(this, listOf(p)) } }
+        findViewById<View>(R.id.btnFile).setOnClickListener {
+            startActivity(Intent(this, ListeActivity::class.java).putExtra("type", "file"))
+        }
+        findViewById<View>(R.id.btnMinuterie).setOnClickListener { choisirMinuterie() }
 
         val rayon = 18 * resources.displayMetrics.density
         pochette.outlineProvider = object : ViewOutlineProvider() {
@@ -168,6 +183,8 @@ class LectureActivity : Activity() {
         btnRepetition.setColorFilter(if (c.repeatMode == Player.REPEAT_MODE_OFF) gris else accent)
         if (affiche != item.mediaId) {
             affiche = item.mediaId
+            val emp = Emplacement.de(item)?.empreinte
+            majFavori(emp != null && Base.de(this).estFavori(emp))
             chargerPochette(item, md.title?.toString() ?: "")
             chargerParoles(item)
         }
@@ -183,6 +200,8 @@ class LectureActivity : Activity() {
             tempsActuel.text = Format.duree(pos)
         }
         tempsTotal.text = Format.duree(d)
+        texteMinuterie.text = Minuterie.texte()
+        icoMinuterie.setColorFilter(ContextCompat.getColor(this, if (Minuterie.active()) R.color.accent else R.color.texte))
         val p = paroles ?: return
         if (!p.synchro) return
         val i = p.indexA(pos)
@@ -334,6 +353,36 @@ class LectureActivity : Activity() {
             chargerPochette(item, titre.text.toString())
             chargerParoles(item)
         }
+    }
+
+    private fun majFavori(f: Boolean) {
+        btnFavori.setImageResource(if (f) R.drawable.ic_etoile else R.drawable.ic_etoile_vide)
+    }
+
+    /** Le titre en cours, retrouvé dans la bibliothèque (ou reconstruit). */
+    private fun pisteEnCours(): Piste? {
+        val item = ctrl?.currentMediaItem ?: return null
+        val p = Bibliotheque.derniere.firstOrNull { it.uri.toString() == item.mediaId } ?: Actions.depuisItem(item, 0)
+        if (p.empreinte == null) Emplacement.de(item)?.empreinte?.let { p.empreinte = it }
+        p.favori = p.empreinte?.let { Base.de(this).estFavori(it) } ?: false
+        return p
+    }
+
+    private fun choisirMinuterie() {
+        val choix = arrayOf("15 minutes", "30 minutes", "45 minutes", "1 heure", "1 h 30", "À la fin du titre", "Annuler la minuterie")
+        val minutes = intArrayOf(15, 30, 45, 60, 90)
+        AlertDialog.Builder(this)
+            .setTitle("⏾ Arrêter la musique dans…")
+            .setItems(choix) { _, i ->
+                when {
+                    i < minutes.size -> Minuterie.programmer(minutes[i])
+                    i == 5 -> Minuterie.programmerFinDuTitre()
+                    else -> Minuterie.annuler()
+                }
+                majProgression()
+                if (i < 6) Toast.makeText(this, "⏾ Minuterie : ${choix[i]}", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

@@ -31,11 +31,25 @@ class LectureService : MediaSessionService() {
     private val principal = Handler(Looper.getMainLooper())
     private val ecriture = Executors.newSingleThreadExecutor()
     private var ecouteComptee = false
+    // Reprise par fichier (morceaux longs : cours, livres audio…)
+    private var empEnCours: String? = null
+    private var posEnCours = 0L
+    private var dureeEnCours = 0L
 
     private val sauvegardeReguliere = object : Runnable {
         override fun run() {
             sauverPosition()
             if (joueur.isPlaying) principal.postDelayed(this, 5000)
+        }
+    }
+    private val suiviPosition = object : Runnable {
+        override fun run() {
+            if (joueur.mediaItemCount > 0) {
+                posEnCours = joueur.currentPosition
+                val d = joueur.duration
+                if (d > 0) dureeEnCours = d
+            }
+            principal.postDelayed(this, 1000)
         }
     }
 
@@ -59,6 +73,8 @@ class LectureService : MediaSessionService() {
             .setSessionActivity(ouvrir)
             .build()
         joueur.addListener(Ecouteur())
+        Minuterie.joueur = joueur
+        principal.post(suiviPosition)
         // Reprise exacte, même après redémarrage du téléphone
         restaurer()?.let {
             joueur.setMediaItems(it.mediaItems, it.startIndex, it.startPositionMs)
@@ -78,6 +94,10 @@ class LectureService : MediaSessionService() {
 
     override fun onDestroy() {
         principal.removeCallbacks(sauvegardeReguliere)
+        principal.removeCallbacks(suiviPosition)
+        garderPositionFichier()
+        Minuterie.annuler()
+        Minuterie.joueur = null
         sauverPosition()
         session?.run {
             player.release()
@@ -93,8 +113,11 @@ class LectureService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            garderPositionFichier()
             ecouteComptee = false
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) Minuterie.finDeTitre()
             sauverPosition()
+            reprendreFichier(mediaItem)
             if (joueur.isPlaying) compterEcoute()
         }
 
@@ -117,10 +140,36 @@ class LectureService : MediaSessionService() {
     }
 
     private fun compterEcoute() {
-        val e = Emplacement.de(joueur.currentMediaItem) ?: return
+        val item = joueur.currentMediaItem ?: return
+        val e = Emplacement.de(item) ?: return
         ecouteComptee = true
+        val titre = item.mediaMetadata.title?.toString() ?: ""
+        val artiste = item.mediaMetadata.artist?.toString() ?: ""
+        val ctx = applicationContext
+        ecriture.execute {
+            val emp = e.empreinte ?: Bibliotheque.empreinte(ctx, Uri.parse(item.mediaId), 0) ?: return@execute
+            Base.de(ctx).compterEcoute(emp, titre, artiste)
+        }
+    }
+
+    /** Morceau de plus de 10 min quitté en cours de route : on garde l'endroit. */
+    private fun garderPositionFichier() {
+        val e = empEnCours ?: return
+        val d = dureeEnCours
+        if (d < LONG) return
+        val pos = if (posEnCours < 30_000 || posEnCours > d - 30_000) 0L else posEnCours
         val base = Base.de(this)
-        ecriture.execute { base.compterEcoute(e.cle) }
+        ecriture.execute { base.sauverPosition(e, pos) }
+    }
+
+    private fun reprendreFichier(item: MediaItem?) {
+        val e = Emplacement.de(item)?.empreinte
+        empEnCours = e
+        posEnCours = 0L
+        dureeEnCours = 0L
+        if (e == null) return
+        val pos = Base.de(this).position(e)
+        if (pos > 0 && joueur.currentPosition < 1000) joueur.seekTo(pos)
     }
 
     // ----- Sauvegarde de la file d'attente et de la position -----
@@ -139,6 +188,7 @@ class LectureService : MediaSessionService() {
                 put("v", ex?.getString("vol") ?: "")
                 put("d", ex?.getString("dossier") ?: "")
                 put("n", ex?.getString("nom") ?: "")
+                put("e", ex?.getString("emp") ?: "")
             })
         }
         val texte = tab.toString()
@@ -167,7 +217,10 @@ class LectureService : MediaSessionService() {
                     .setMediaId(u)
                     .setUri(Uri.parse(u))
                     .setMediaMetadata(
-                        Piste.metadonnees(o.optString("t"), o.optString("a"), o.optString("l"), o.optString("v"), o.optString("d"), o.optString("n"))
+                        Piste.metadonnees(
+                            o.optString("t"), o.optString("a"), o.optString("l"), o.optString("v"), o.optString("d"), o.optString("n"),
+                            o.optString("e").ifEmpty { null }
+                        )
                     )
                     .build()
             }
@@ -179,6 +232,10 @@ class LectureService : MediaSessionService() {
         } catch (e: Exception) {
             null
         }
+    }
+
+    companion object {
+        const val LONG = 10 * 60 * 1000L
     }
 
     private inner class Rappels : MediaSession.Callback {

@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import java.text.Normalizer
 
 /** Un fichier audio trouvé sur le téléphone. */
 class Piste(
@@ -20,24 +21,36 @@ class Piste(
     val dossier: String,
     /** Nom du fichier, ex. « Chanson.mp3 ». */
     val nom: String,
+    val taille: Long = 0,
+    val modifie: Long = 0,
 ) {
+    /** Identifiant basé sur le contenu : un fichier renommé ou déplacé garde ses écoutes, favoris et playlists. */
+    var empreinte: String? = null
     var nouveau = false
+    var favori = false
+    var ecoutes = 0
 
-    /** Clé stable dans la base (dossier + nom). */
+    /** Chemin (dossier + nom). */
     val cle: String get() = dossier + nom
+
+    /** Texte de recherche sans accents ni majuscules. */
+    val recherche: String by lazy { Texte.simplifier("$titre $artiste $album $dossier") }
+
+    val nomDossier: String get() = dossier.trimEnd('/').substringAfterLast('/')
 
     fun versMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(uri.toString())
         .setUri(uri)
-        .setMediaMetadata(metadonnees(titre, artiste, album, volume, dossier, nom))
+        .setMediaMetadata(metadonnees(titre, artiste, album, volume, dossier, nom, empreinte))
         .build()
 
     companion object {
-        fun metadonnees(titre: String, artiste: String, album: String, volume: String, dossier: String, nom: String): MediaMetadata {
+        fun metadonnees(titre: String, artiste: String, album: String, volume: String, dossier: String, nom: String, empreinte: String?): MediaMetadata {
             val extras = Bundle().apply {
                 putString("vol", volume)
                 putString("dossier", dossier)
                 putString("nom", nom)
+                if (empreinte != null) putString("emp", empreinte)
             }
             return MediaMetadata.Builder()
                 .setTitle(titre)
@@ -49,17 +62,22 @@ class Piste(
     }
 }
 
-/** Où se trouve le fichier d'un MediaItem (pour les paroles et les pochettes de dossier). */
-class Emplacement(val volume: String, val dossier: String, val nom: String) {
+/** Où se trouve le fichier d'un MediaItem (pour les paroles, les pochettes de dossier et les écoutes). */
+class Emplacement(val volume: String, val dossier: String, val nom: String, val empreinte: String? = null) {
     val cle: String get() = dossier + nom
 
     companion object {
         fun de(item: MediaItem?): Emplacement? {
             val e = item?.mediaMetadata?.extras ?: return null
             val nom = e.getString("nom") ?: return null
-            return Emplacement(e.getString("vol") ?: "", e.getString("dossier") ?: "", nom)
+            return Emplacement(e.getString("vol") ?: "", e.getString("dossier") ?: "", nom, e.getString("emp"))
         }
     }
+}
+
+object Texte {
+    private val accents = Regex("\\p{Mn}+")
+    fun simplifier(s: String): String = accents.replace(Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD), "")
 }
 
 object Format {
@@ -71,4 +89,13 @@ object Format {
         val sec = s % 60
         return if (h > 0) String.format("%d:%02d:%02d", h, m, sec) else String.format("%d:%02d", m, sec)
     }
+
+    /** Durée longue lisible, ex. « 3 h 12 min ». */
+    fun dureeLongue(ms: Long): String {
+        val min = ms / 60000
+        return if (min >= 60) "${min / 60} h ${String.format("%02d", min % 60)} min" else "$min min"
+    }
+
+    private val fmtDate = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE)
+    fun date(ms: Long): String = if (ms <= 0) "–" else fmtDate.format(java.util.Date(ms))
 }

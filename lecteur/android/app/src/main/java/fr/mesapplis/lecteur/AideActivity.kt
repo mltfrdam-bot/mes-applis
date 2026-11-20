@@ -144,7 +144,7 @@ class AideActivity : Activity() {
                 appendLine("Dossiers autorisés (paroles) : ${Acces.nomsDossiers(ctx).joinToString(", ").ifEmpty { "aucun" }}")
                 appendLine("Fichiers audio trouvés : ${pistes.size} dans $albums dossier(s)")
                 parDossier.forEach { (d, n) -> appendLine("  • $d : $n") }
-                appendLine("Pistes connues dans la base : ${Base.de(ctx).nombrePistesConnues()}")
+                appendLine("Base : ${Base.de(ctx).totaux()}")
             }
             runOnUiThread { suite(t) }
         }

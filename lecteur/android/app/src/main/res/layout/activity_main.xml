@@ -7,7 +7,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
+        android:layout_height="56dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="18dp"
@@ -32,6 +32,7 @@
                 android:textSize="12sp" />
         </LinearLayout>
         <TextView android:id="@+id/btnActualiser" style="@style/BoutonHaut" android:text="🔄" />
+        <TextView android:id="@+id/btnDonnees" style="@style/BoutonHaut" android:text="📊" />
         <TextView android:id="@+id/btnAide" style="@style/BoutonHaut" android:text="❓" />
     </LinearLayout>
 
@@ -49,30 +50,22 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <include layout="@layout/barre_recherche" />
+
     <LinearLayout
+        android:id="@+id/onglets"
         android:layout_width="match_parent"
-        android:layout_height="30dp"
-        android:background="@drawable/bg_entete"
-        android:gravity="center_vertical"
+        android:layout_height="44dp"
         android:orientation="horizontal"
-        android:paddingStart="68dp"
-        android:paddingEnd="14dp">
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Titre · Artiste · Album"
-            android:textColor="@color/gris"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Durée"
-            android:textColor="@color/gris"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
+        <TextView android:id="@+id/ongletMusique" style="@style/Onglet" android:text="Musique" />
+        <TextView android:id="@+id/ongletFavoris" style="@style/Onglet" android:text="★ Favoris" />
+        <TextView android:id="@+id/ongletPlaylists" style="@style/Onglet" android:text="Playlists" />
+        <TextView android:id="@+id/ongletDossiers" style="@style/Onglet" android:text="Dossiers" />
     </LinearLayout>
+
+    <include layout="@layout/barre_tri" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -115,75 +108,5 @@
         </LinearLayout>
     </FrameLayout>
 
-    <LinearLayout
-        android:id="@+id/mini"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/carte"
-        android:elevation="12dp"
-        android:orientation="vertical"
-        android:visibility="gone">
-        <ProgressBar
-            android:id="@+id/miniBarre"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="3dp"
-            android:max="1000"
-            android:progressTint="@color/accent"
-            android:progressBackgroundTint="@color/trait" />
-        <LinearLayout
-            android:id="@+id/miniZone"
-            android:layout_width="match_parent"
-            android:layout_height="68dp"
-            android:foreground="?android:attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="12dp"
-            android:paddingEnd="4dp">
-            <ImageView
-                android:id="@+id/miniPochette"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="@drawable/bg_pochette"
-                android:scaleType="centerCrop" />
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-                <TextView
-                    android:id="@+id/miniTitre"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:singleLine="true"
-                    android:textColor="@color/texte"
-                    android:textSize="16sp"
-                    android:textStyle="bold" />
-                <TextView
-                    android:id="@+id/miniArtiste"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:singleLine="true"
-                    android:textColor="@color/gris"
-                    android:textSize="13sp" />
-            </LinearLayout>
-            <ImageView
-                android:id="@+id/miniLecture"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:padding="12dp"
-                android:src="@drawable/ic_lecture" />
-            <ImageView
-                android:id="@+id/miniSuivant"
-                android:layout_width="52dp"
-                android:layout_height="56dp"
-                android:background="?android:attr/selectableItemBackgroundBorderless"
-                android:padding="13dp"
-                android:src="@drawable/ic_suivant" />
-        </LinearLayout>
-    </LinearLayout>
+    <include layout="@layout/mini_lecteur" />
 </LinearLayout>

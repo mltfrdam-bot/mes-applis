@@ -41,6 +41,17 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".ListeActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".DonneesActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
             android:name=".AideActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

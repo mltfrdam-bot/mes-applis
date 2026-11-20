@@ -6,8 +6,25 @@
     android:foreground="?android:attr/selectableItemBackground"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingStart="12dp"
-    android:paddingEnd="14dp">
+    android:paddingStart="12dp">
+    <ImageView
+        android:id="@+id/poignee"
+        android:layout_width="36dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="-8dp"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:scaleType="center"
+        android:src="@drawable/ic_poignee"
+        android:visibility="gone" />
+    <CheckBox
+        android:id="@+id/caseChoix"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="-6dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone" />
     <ImageView
         android:id="@+id/pochette"
         android:layout_width="44dp"
@@ -56,16 +73,48 @@
             android:textColor="@color/gris"
             android:textSize="13sp" />
     </LinearLayout>
+    <ImageView
+        android:id="@+id/etoile"
+        android:layout_width="40dp"
+        android:layout_height="match_parent"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:scaleType="center"
+        android:src="@drawable/ic_etoile_vide" />
     <View
         android:layout_width="1dp"
         android:layout_height="match_parent"
-        android:layout_marginStart="8dp"
         android:background="@color/trait" />
-    <TextView
-        android:id="@+id/duree"
-        android:layout_width="48dp"
+    <LinearLayout
+        android:layout_width="50dp"
         android:layout_height="wrap_content"
         android:gravity="end"
-        android:textColor="@color/gris"
-        android:textSize="13sp" />
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/duree"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/gris"
+            android:textSize="13sp" />
+        <TextView
+            android:id="@+id/ecoutes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/gris_clair"
+            android:textSize="11sp" />
+    </LinearLayout>
+    <ImageView
+        android:id="@+id/menu"
+        android:layout_width="40dp"
+        android:layout_height="match_parent"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:scaleType="center"
+        android:src="@drawable/ic_menu" />
+    <ImageView
+        android:id="@+id/retirer"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:scaleType="center"
+        android:src="@drawable/ic_fermer"
+        android:visibility="gone" />
 </LinearLayout>
