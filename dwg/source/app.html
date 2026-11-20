@@ -111,6 +111,11 @@ body.outil-calage #calagePanel{display:flex}
 #tabCalage input{width:100%;min-width:88px;height:32px;border:0;background:#fffbe6;text-align:right;font-family:Consolas,'Courier New',monospace;font-size:14px;padding:0 4px}
 #tabCalage td:nth-child(2),#tabCalage td:nth-child(5){font-family:Consolas,'Courier New',monospace;font-size:12.5px}
 #cgRes{padding:6px 8px;font-size:13.5px;line-height:1.45}
+#guideBulle{position:fixed;z-index:60;display:none;max-width:min(340px,calc(100vw - 12px));background:#fffde7;border:2px solid #f9a825;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:7px 9px;font-size:14px;line-height:1.4;color:#222}
+#guideBulle b.gT{display:block;color:#e65100;margin-bottom:2px}
+#guideBulle .gL{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:12.5px;color:#555}
+#guideBulle .gL button{height:28px;padding:0 8px;font-size:12.5px;border:1px solid #c9c9c9;border-radius:4px;background:#fff}
+#barre .btn#bGuide.actif{background:#fff59d;border-color:#f9a825}
 #calqueBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:31;padding:16px}
 #calqueBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:420px;width:100%;padding:14px}
 #calqueBoite h3{margin:0 0 8px;font-size:17px}
@@ -312,7 +317,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 </head>
 <body>
 <div id="onglets"></div>
-<div id="bandeauArticle"></div><div id="listeArticles"></div><div id="pastilleChrono"><span class="pc">⏸</span><span class="pt"></span><b class="ph">0:00:00</b><button class="pf" title="Terminer">✅</button></div><datalist id="dlTaches"></datalist><datalist id="dlTuyaux"></datalist><datalist id="dlRegards"></datalist><div id="bulleReg"></div><div id="mainBar"></div>
+<div id="bandeauArticle"></div><div id="listeArticles"></div><div id="pastilleChrono"><span class="pc">⏸</span><span class="pt"></span><b class="ph">0:00:00</b><button class="pf" title="Terminer">✅</button></div><datalist id="dlTaches"></datalist><datalist id="dlTuyaux"></datalist><datalist id="dlRegards"></datalist><div id="bulleReg"></div><div id="mainBar"></div><div id="guideBulle"></div>
 <div id="barre">
   <button class="btn prim" id="bOuvrir" title="Ouvrir un plan">📂</button>
   <button class="btn" id="bAjuster" disabled title="Voir tout le plan">⛶</button>
@@ -322,6 +327,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <button class="btn" id="bMetre" disabled title="Métré et devis">🧾 Métré</button>
   <button class="btn" id="bMain" disabled title="Toucher un de vos points pour le modifier">✋</button>
   <span style="flex:1"></span>
+  <button class="btn" id="bGuide" title="Guide : une bulle explique chaque bouton">💡</button>
   <button class="btn" id="bSignal" title="Signaler à Claude (épingle)">💬</button>
   <button class="btn" id="bMenu" title="Menu">⋮</button>
   <input type="file" id="fichier" style="display:none">
@@ -564,7 +570,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Calage – v3";
+const VERSION = "Guide – v1";
 </script>
 <script>
 "use strict";
@@ -2206,6 +2212,84 @@ function placerBulle(){ if(!bulleReg) return; const b=$('bulleReg'); const e=eti
 
 
 
+
+// ================= 💡 Guide : une bulle explique chaque bouton touché (le bouton marche normalement) =================
+let guideOn=false, guideVus=new Set(), guideMinut=null;
+const GUIDE={
+ bGuide:{t:'💡 Guide allumé', x:'Chaque bouton touché affiche une bulle comme celle-ci, et le bouton marche normalement. Retouchez 💡 pour éteindre le guide.'},
+ bOuvrir:{t:'📂 Ouvrir', x:'Choisissez un DWG ou un DXF dans le téléphone. Il s\'ajoute au classeur (onglets en haut).', a:'Ouvrir un plan'},
+ bAjuster:{t:'⛶ Cadrer', x:'Remet tout le plan à l\'écran. Pincez avec deux doigts pour zoomer, glissez pour déplacer.'},
+ bCalques:{t:'☰ Calques', x:'Cochez / décochez pour afficher ou masquer un calque. Touchez un nom pour sa fiche (voir seul, geler, verrouiller).', a:'Calques'},
+ bMesure:{t:'📏 Mesure', x:'Choisissez Distance, Surface ou Réseau en bas, puis touchez le plan. La loupe et l\'accrochage (bouts, milieux, centres, croisements) aident à viser.'},
+ mDist:{t:'Distance', x:'Touchez le point de départ puis le point d\'arrivée. Pour déplacer un point : glissez-le avec le doigt. 📌 Garder pour la conserver.', a:'Mesurer une distance'},
+ mSurf:{t:'Surface', x:'Touchez les coins un par un. Glissez un coin pour le corriger, touchez un côté pour ajouter un coin. ⬚ Du plan prend une surface toute faite.', a:'Mesurer une surface'},
+ mRes:{t:'Réseau', x:'Touchez les regards dans le sens de l\'écoulement. Touchez le nom d\'un regard (ex. B2) pour taper tampon et fil d\'eau.', a:'Tracer un réseau'},
+ bGarder:{t:'📌 Garder', x:'Conserve la mesure sur le plan (liste 📋 Gardées). Vous pourrez la modifier, la déplacer avec ✋ ou la supprimer.'},
+ bRetour:{t:'↶ Annuler', x:'Annule la dernière action de l\'outil ouvert (point posé, regard, conversion…).'},
+ bEffacer:{t:'🗑', x:'Recommence la mesure en cours (en Réseau : retire le regard sélectionné).'},
+ bProfil:{t:'📈 Profil', x:'Profil en long du réseau entre les regards : fils d\'eau, tampons, pentes.', a:'Profil'},
+ bDuPlan:{t:'⬚ Du plan', x:'Touchez une surface hachurée du plan : ses contours deviennent votre surface.'},
+ bStruct:{t:'🧱 Quantités', x:'Couches de la structure (enrobé, 0/20, 0/80…) et volumes sous la surface.', a:'Quantités'},
+ bCoupe:{t:'📐 Coupe', x:'Tracez un trait sur la surface : coupe avec dévers et pentes (contrôle PMR).', a:'Coupe et contrôle PMR'},
+ b3D:{t:'🧊 3D', x:'Vue 3D de la surface avec ses cotes. Glissez pour tourner.', a:'Vue 3D'},
+ bTN:{t:'⛰ TN', x:'Points du terrain naturel → déblai / remblai sous la surface.', a:'Terrain naturel'},
+ bMesVersPoints:{t:'⟋ Points', x:'Crée des points d\'export le long de la mesure (pour l\'implantation).'},
+ bModifMes:{t:'✎ Modifier', x:'Reprend la mesure gardée sélectionnée : glissez ses points, puis 📌 Garder.', a:'Modifier une mesure gardée'},
+ bVoirGardees:{t:'📋 Gardées', x:'Liste de vos mesures gardées : valeur, état des travaux (un appui : à faire → en cours → fait), calque, 🗑.'},
+ bNouvRes:{t:'＋ Réseau', x:'Commence un nouveau réseau (ex. Eaux pluviales). Touchez ✎ pour le renommer.'},
+ bRenRes:{t:'✎ Renommer', x:'Donne un nom au réseau (EU, EP, Réseau 3…).'},
+ bInvRes:{t:'⇄ Inverser', x:'Retourne le sens d\'écoulement du réseau (le tuyau et l\'état des tronçons suivent).', a:'Arrivée n° ou départ'},
+ bConv:{t:'🔁 Du plan', x:'Touchez les traits des tuyaux du plan (ou ⬚ Zone), puis ✓ Convertir : regards au centre des symboles, points communs réunis. ↶ annule tout.', a:'🔁 Transformer'},
+ convZone:{t:'⬚ Zone', x:'Glissez le doigt pour tracer un rectangle : tous les traits du même calque que ceux déjà touchés sont pris.'},
+ convOk:{t:'✓ Convertir', x:'Crée les réseaux. Si un tronçon touche un regard partagé, l\'appli demande : Arrivée n° ou Départ.'},
+ bCote:{t:'＋ Cote', x:'Touchez le tracé du réseau pour ajouter un point de cote (dessus connu entre deux regards).'},
+ bPoints:{t:'📍 Points', x:'Touchez le plan pour placer un point X/Y (loupe + accrochage). Glissez un point pour le déplacer, tapez Z dans le tableau.', a:'Points X / Y / Z'},
+ pmLigne:{t:'⟋ Ligne', x:'Touchez un trait du plan : points tous les X mètres, d\'un côté ou des deux.'},
+ bExporter:{t:'📤 Export', x:'DXF + TXT pour la TS11. ☑ Tout / ☐ Aucun pour les calques, Z des regards (tampon ou fil d\'eau).', a:'Exporter pour la TS11'},
+ bImporter:{t:'📥 Importer', x:'Reprend des points depuis un fichier texte (Nom;X;Y;Z).'},
+ bMetre:{t:'🧾 Métré', x:'Articles du devis, mesuré / devis / écart, fouilles et planning.', a:'Coller le devis'},
+ bMain:{t:'✋ Modifier', x:'Glissez un de vos points (regard, point, coin de mesure) pour le déplacer. Un appui : nom, Z, état, 🗑. Glisser le trait d\'une mesure la déplace entière.', a:'✋ Modifier'},
+ bSignal:{t:'💬 Signaler', x:'Glissez l\'épingle sur l\'endroit, ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (ou 📋 Copier).', a:'💬 Signaler'},
+ bMenu:{t:'⋮ Menu', x:'Enregistrer, classeur, fusion, 📐 calage, ❓ aide, mise à jour de l\'appli.'},
+ bMenuCaler:{t:'📐 Caler', x:'Touchez un angle sur le plan, tapez X et Y relevés, puis un 2e angle (un 3e pour contrôler). ✓ Appliquer. ↩ Retirer pour revenir.', a:'📐 Caler'},
+ cgEchCalc:{t:'Échelle calculée', x:'Le plan est agrandi / réduit pour coller aux distances relevées.'},
+ cgEch1:{t:'Garder l\'échelle à 1', x:'Seulement déplacement + rotation : l\'écart de distance reste visible dans la colonne Écart.'},
+ cgPlus:{t:'＋ Point', x:'Ajoute un point de contrôle : son écart s\'affiche en cm (rouge au-delà de 2 cm).'},
+ cgAppliquer:{t:'✓ Appliquer le calage', x:'Le plan et tous vos points passent dans le repère du théodolite. Le fichier d\'origine n\'est pas modifié.'},
+ bSauver:{t:'💾 Enregistrer', x:'Enregistre vos points, mesures, réseaux et métré (le plan d\'origine n\'est jamais modifié).', a:'Enregistrer'},
+ bOeil:{t:'👁 Œil', x:'Touchez un trait : son calque s\'affiche, avec voir seul / masquer.', a:'Œil'},
+ bMenuOuvrirSauv:{t:'📂 Fusion', x:'Ouvre une sauvegarde et l\'ajoute à vos données sans rien perdre ; un descriptif montre ce qui a été ajouté.', a:'Fusionner'}};
+const CTX={
+ dist1:'Touchez maintenant le point d\'arrivée.', dist2:'Glissez un point pour le corriger · 📌 Garder pour la conserver · 🗑 pour recommencer.',
+ surf1:'Continuez : touchez le coin suivant.', surf3:'Glissez un coin pour le corriger, touchez un côté pour ajouter un coin · 📌 Garder.',
+ res1:'Touchez le regard suivant, dans le sens de l\'écoulement.', res2:'Touchez le nom d\'un regard pour tampon et fil d\'eau · glissez un regard pour le déplacer · ↶ annule.',
+ pt:'Glissez le point pour le déplacer · tapez Z et le nom dans le tableau · 📤 Export pour la TS11.',
+ cal:'Tapez X puis Y relevés (Entrée = case suivante), puis touchez le point suivant.'};
+function guideCacher(){ clearTimeout(guideMinut); const b=$('guideBulle'); if(b) b.style.display='none'; }
+function guideMontrer(cle,titre,texte,el,aide){ if(!guideOn||guideVus.has(cle)) return; const b=$('guideBulle');
+  b.innerHTML=(titre?'<b class="gT">'+echapper(titre)+'</b>':'')+echapper(texte)+'<div class="gL"><label><input type="checkbox" class="gNon"> Ne plus me le montrer</label><span style="flex:1"></span>'+(aide?'<button class="gPlus">❓ Plus</button>':'')+'<button class="gOk">OK</button></div>';
+  b.style.display='block'; b.style.visibility='hidden';
+  const bw=b.offsetWidth, bh=b.offsetHeight, Wf=innerWidth, Hf=innerHeight; let x, y;
+  if(el && el.getBoundingClientRect){ const r=el.getBoundingClientRect(); x=r.left+r.width/2-bw/2; y=r.bottom+8; if(y+bh>Hf-30) y=r.top-bh-8; }
+  else { const r=cv.getBoundingClientRect(); x=r.left+(r.width-bw)/2; y=r.top+10; }
+  b.style.left=Math.max(6,Math.min(Wf-bw-6,x))+'px'; b.style.top=Math.max(54,Math.min(Hf-bh-30,y))+'px'; b.style.visibility='';
+  b.querySelector('.gNon').onchange=e=>{ if(e.target.checked){ guideVus.add(cle); Memoire.ecrire('guideVus',[...guideVus]); } };
+  b.querySelector('.gOk').onclick=guideCacher;
+  const pl=b.querySelector('.gPlus'); if(pl) pl.onclick=()=>{ guideCacher(); ouvrirAide(); const q=$('aideCherche'); if(q){ q.value=aide.replace(/[^\p{L}\p{N} ]/gu,' ').trim(); q.dispatchEvent(new Event('input')); } };
+  clearTimeout(guideMinut); guideMinut=setTimeout(guideCacher, el?8000:7000); }
+function guideContexte(){ if(!guideOn||!scene) return; let k=null;
+  if(outil==='mesure'){ if(mesure.mode==='dist') k=mesure.pts.length===1?'dist1':mesure.pts.length>=2?'dist2':null;
+    else if(mesure.mode==='surf') k=mesure.pts.length>=3?'surf3':mesure.pts.length>=1?'surf1':null;
+    else if(mesure.mode==='res'){ const r=reseaux[resActif]; const n=r?r.noeuds.filter(x=>x.t==='R').length:0; k=n===1?'res1':n>=2?'res2':null; } }
+  else if(outil==='points') k='pt'; else if(outil==='calage') k='cal';
+  if(k) setTimeout(()=>guideMontrer('ctx-'+k,'',CTX[k],null),40); }
+function brancherGuide(){
+  Memoire.lire('guide').then(v=>{ guideOn=!!v; $('bGuide').classList.toggle('actif',guideOn); }); Memoire.lire('guideVus').then(v=>{ guideVus=new Set(Array.isArray(v)?v:[]); });
+  $('bGuide').onclick=()=>{ guideOn=!guideOn; Memoire.ecrire('guide',guideOn); $('bGuide').classList.toggle('actif',guideOn);
+    if(guideOn){ guideVus.delete('bGuide'); setTimeout(()=>guideMontrer('bGuide',GUIDE.bGuide.t,GUIDE.bGuide.x+(guideVus.size?' ('+guideVus.size+' bulle(s) cachée(s) : retouchez 💡 deux fois pour les remontrer.)':''),$('bGuide')),30); } else { guideCacher(); guideVus.clear(); Memoire.ecrire('guideVus',[]); } };
+  document.addEventListener('pointerdown',e=>{ const b=$('guideBulle'); if(b.style.display!=='none' && !b.contains(e.target)) guideCacher(); },true);
+  document.addEventListener('click',e=>{ if(!guideOn) return; for(let el=e.target; el && el!==document.body; el=el.parentElement){ if(el.id==='bGuide') return; if(el.id && GUIDE[el.id]){ const g=GUIDE[el.id], cible=el; setTimeout(()=>guideMontrer(el.id,g.t,g.x,cible,g.a),40); return; } } },true);
+  const pp=poserPoint; poserPoint=function(){ const r=pp.apply(this,arguments); guideContexte(); return r; }; }
 // ================= 📐 Calage du plan sur des points relevés (théodolite) =================
 // 1 point : déplacement · 2 points ou plus : déplacement + rotation (+ échelle si « Calculée »), moindres carrés, écart par point
 let calageSaisie=null;
@@ -3312,6 +3396,7 @@ const AIDE=[
  {r:'Réseau', t:'Type de tuyau d\'un tronçon', txt:'Dans le tableau du réseau, ligne ↓ du tronçon : case Tuyau (PVC 125, Annelé 90…), ou dans la bulle du regard. Un nouveau tronçon reprend le tuyau du précédent. Un type tapé à la main est retenu.', mots:'tuyau diametre pvc annele tronçon type'},
  {r:'Réseau', t:'Travaux à faire / en cours / faits', txt:'Bouton ⬜ À faire : un appui → 🔄 En cours → ✅ Fait. Sur les tronçons (tableau ou bulle), les regards (bulle) et les mesures gardées (📋 Gardées). Sur le plan : vert = fait, orange pointillé = en cours.', mots:'travaux etat fait en cours a faire avancement'},
  {r:'Appli', t:'💬 Signaler une modification à Claude', txt:'💬 en haut : glissez l\'épingle sur l\'endroit (plan, bouton, case…), ✎ Écrire ici, tapez la demande, 📨 Envoyer à Claude (dépôt GitHub retours-hub, clé à régler une fois avec 🔑) ou 📋 Copier pour coller dans la conversation. 📋 Liste : tous vos signalements.', mots:'signaler claude epingle demande modification bug github copier', go:()=>ouvrirEpingle(), sansPlan:true},
+ {r:'Appli', t:'💡 Guide : une bulle sur chaque bouton', txt:'💡 en haut : allumé (jaune), chaque bouton touché marche normalement et affiche une bulle « à quoi il sert / comment faire », puis des conseils pendant le travail (ex. « touchez le point d\'arrivée »). « Ne plus me le montrer » cache une bulle ; éteindre et rallumer 💡 les remontre toutes.', mots:'guide aide interactive bulle bouton explication conseil', go:()=>{ if(!guideOn) $('bGuide').click(); }, sansPlan:true},
  {r:'Plan', t:'📐 Caler le plan sur le théodolite', txt:'⋮ → 📐 Caler. Touchez l\'angle 1 sur le plan, tapez X et Y relevés (Entrée = case suivante), puis l\'angle 2, et un 3e de contrôle si possible. Échelle Calculée ou Garder 1, écart de chaque point en cm, ✓ Appliquer. Vos points suivent. ↩ Retirer le calage pour revenir.', mots:'calage caler theodolite ts11 coordonnees echelle rotation pdf repere station', go:()=>ouvrirCalage()},
  {r:'Plan', t:'✋ Modifier un de vos points', txt:'✋ en haut : glissez un regard, un point d\'export ou un coin de mesure pour le déplacer (accrochage et loupe) ; glissez le trait d\'une mesure pour la déplacer entière. Un appui : nom, Z, état, 🗑 Supprimer, 🏷 Étiquette. ↶ annule.', mots:'main modifier deplacer supprimer point regard mesure coin selection toucher', go:()=>{ if(outil!=='main') choisirOutil('main'); }},
  {r:'Réseau', t:'🔁 Transformer des traits du plan en réseau', txt:'Mesure → Réseau → 🔁 Du plan. Touchez les traits des tuyaux (⬚ Zone : rectangle, même calque que le 1er trait touché), puis ✓ Convertir. Chaque bout à moins de 0,50 m d\'un regard du plan va au centre du regard ; les bouts communs ne font qu\'un point ; ↶ annule tout.', mots:'convertir traits plan reseau selection zone regard centre axe points', go:()=>{ choisirOutil('mesure'); choisirMode('res'); ouvrirConversion(); }},
@@ -3798,7 +3883,7 @@ $('ncNom').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); creerCalque()
 $('bNcCreer').onclick=creerCalque;
 $('bNcAnnuler').onclick=()=>{ $('calqueBoite').style.display='none'; };
 }
-brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherCalage(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
+brancherPoints(); brancherLigne(); Memoire.lire('afficherFF').then(v=>{ afficherFF=!!v; $('cbFF').checked=afficherFF; demanderDessin(false); }); $('cbFF').onchange=e=>{ afficherFF=e.target.checked; Memoire.ecrire('afficherFF',afficherFF); demanderDessin(false); }; brancherFiche(); brancherReseau(); Memoire.lire('typesTuyau').then(v=>{ typesTuyauPerso=Array.isArray(v)?v:[]; remplirDlTuyaux(); }); brancherStructure(); chargerModeles(); brancherMetre(); brancherBandeau(); brancherPlanning(); brancherChrono(); brancherFouilles(); brancherAide(); brancherSignal(); brancherCalage(); brancherGuide(); brancherGarde(); brancherCoupe(); brancher3D(); brancherTN();
 $('bSauver').onclick=enregistrer;
 $('bMenuClasseur').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrerClasseur(); };
 $('bMenuSauver').onclick=()=>{ $('menu').classList.remove('ouvert'); enregistrer(); };
