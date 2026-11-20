@@ -21,3 +21,8 @@
 - `dwg/` : appli Android **Plans DWG** pour ouvrir les plans DWG/DXF sur le téléphone et mesurer (voir `dwg/LISEZMOI.md`).
 - `.github/workflows/dwg.yml` : fabrique et signe `PlansDWG.apk`, publié dans **Releases** (tag `plans-dwg`, toujours la dernière version).
 - Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/plans-dwg/PlansDWG.apk
+
+## Lecteur (musique et vidéo)
+- `lecteur/android/` : appli Android native **Lecteur** (Kotlin, Media3) qui lit la musique téléchargée avec Termux, paroles en karaoké. Cahier des charges : `docs/cahier-des-charges-lecteur.md`.
+- `.github/workflows/lecteur.yml` : fabrique et signe `Lecteur.apk`, publié dans **Releases** (tag `lecteur`, toujours la dernière version).
+- Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/lecteur/Lecteur.apk
