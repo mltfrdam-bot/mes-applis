@@ -213,7 +213,7 @@ class LectureActivity : Activity() {
         val c = ctrl ?: return
         val item = c.currentMediaItem
         if (item == null) { finish(); return }
-        if (Format.estVideo(item.mediaId) && hasWindowFocus()) {
+        if (Format.estVideo(item.mediaId)) {
             // Une vidéo est en cours : on l'affiche dans l'écran vidéo
             startActivity(Intent(this, VideoActivity::class.java)); finish(); return
         }

@@ -141,7 +141,7 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 
 1. **Socle** : l'APK s'installe, trouve les fichiers Termux, lit la musique en arrière-plan avec la notification et l'écran verrouillé. Paroles en karaoké. Aide « Première utilisation ». — *Livré le 20/11/2026 (version 1.1).*
 2. **Bibliothèque complète** : recherche, playlists, favoris, reprise, sauvegarde + fusion. — *Livré le 20/11/2026 (version 1.2) : onglets Musique · ★ Favoris · Playlists · Dossiers, tri en un appui (ajout, titre, artiste, écoutes, durée), menu ⋮ (lire ensuite, file d'attente, playlist, dossier), file d'attente rangeable, minuterie avec fondu, reprise par fichier pour les morceaux de plus de 10 min, corbeille des playlists, sauvegarde de sécurité automatique avant chaque fusion, écran 📊 Données (sauvegarde, fusion, statistiques en tableaux).*
-3. **Vidéo** : plein écran, gestes, fenêtre flottante, « Écouter seulement ». Livrée avec l'économiseur « Ambiance » (13.6).
+3. **Vidéo** : plein écran, gestes, fenêtre flottante, « Écouter seulement ». Livrée avec l'économiseur « Ambiance » (13.6). — *Livré le 21/11/2026 (version 1.7) : onglet Vidéos ; balayer ±10 s ou double appui, luminosité à gauche, volume à droite ; ⧉ ou bouton Accueil = fenêtre flottante ; 🎧 Écouter seulement ; ← met en pause ; écran éteint = le son continue ; sous-titres .srt/.vtt du même nom avec traduction 🌐 ; reprise de chaque vidéo (plus d'1 min) ; écran noir pendant la vidéo (seule exception au mode clair).*
 4. **Mode Chevet** puis **Mode Conduite**.
 5. **Fond d'écran animé**.
 6. **Musique des autres applis** (option).
@@ -197,11 +197,13 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - Police au choix parmi celles d'Android (aucun téléchargement) : Normale, Ronde, Fine, Étroite, Épaisse, Livre, Machine, Manuscrite, BD, Majuscules (selon le téléphone, certaines peuvent se ressembler).
 - Couleur de la ligne chantée et couleur de la traduction (9 pastilles). « Remettre comme au début ».
 
-### 13.6 Économiseur d'écran musical « Ambiance » (validé le 21/11/2026, avec l'étape Vidéo)
+### 13.6 Économiseur d'écran musical « Ambiance » — *livré le 21/11/2026 (version 1.7)*
 
 - Animation plein écran qui bouge au rythme de la musique, aux couleurs de la pochette. Styles : ondes, barres, particules, vinyle. Paroles en karaoké par-dessus (au choix).
 - Le son est analysé dans le lecteur lui-même : pas de micro, pas d'autorisation, pas d'appli tierce.
-- Lancement : bouton sur l'écran de lecture, ou automatique après quelques minutes sans toucher l'écran (réglable).
+- Lancement : bouton ✨ sur l'écran de lecture, ou automatique après 2, 5 ou 10 minutes sans toucher l'écran de lecture (réglable dans l'économiseur, « non » par défaut).
+- Fond clair et coloré (couleurs de la pochette éclaircies), écran maintenu allumé, textes déplacés chaque minute (protection OLED). Toucher l'écran : barre de réglages (style, paroles, auto, pause, fermer).
+- Analyse : 32 bandes de fréquences (TeeAudioProcessor de Media3), calculées seulement quand l'économiseur est affiché.
 - Les mêmes animations serviront au mode Chevet et au fond d'écran animé (étapes 4 et 5).
 
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)

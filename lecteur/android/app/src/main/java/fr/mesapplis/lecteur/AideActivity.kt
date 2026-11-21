@@ -110,6 +110,24 @@ class AideActivity : Activity() {
                 "• Chaque texte n'est traduit qu'une fois, puis gardé : l'affichage reste instantané."
         )
 
+        titre("🎬 Vidéos")
+        texte(
+            "Onglet Vidéos : les vidéos de Movies, Download et Music. Pendant la lecture :\n" +
+                "• Toucher : afficher ou cacher les commandes.\n" +
+                "• Balayer à gauche / à droite, ou double appui : reculer / avancer de 10 s.\n" +
+                "• Balayer en haut / en bas : luminosité à gauche, volume à droite.\n" +
+                "• Bouton Accueil ou ⧉ : petite fenêtre flottante.\n" +
+                "• 🎧 Écouter seulement : le son continue écran éteint.\n" +
+                "• 💬 Sous-titres : fichier .srt ou .vtt du même nom à côté de la vidéo (dossier Movies à autoriser ci-dessus avec « Ajouter un dossier »). Traduits si 🌐 est activé."
+        )
+
+        titre("✨ Économiseur Ambiance")
+        texte(
+            "Sur l'écran de lecture, touche ✨ : animation plein écran au rythme de la musique, aux couleurs de la pochette, avec les paroles.\n" +
+                "• Toucher l'écran : changer de style (ondes, barres, particules, vinyle), paroles oui/non, lancement automatique (2, 5 ou 10 min sans toucher l'écran de lecture), pause, fermer.\n" +
+                "• Le son est analysé par le lecteur lui-même : pas de micro, pas d'autorisation."
+        )
+
         titre("📦 Pack de playlist (clé USB)")
         texte(
             "Pour donner une playlist à quelqu'un sans le reste de ta musique :\n" +
