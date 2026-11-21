@@ -197,11 +197,11 @@ const MAT_MODELES = { cordage: { nom: "Cordage raquette", icone: "🎾", acts: [
 const MAT_ICONES = ["🎾", "🟡", "👟", "🚲", "🏸", "🧢", "🩳", "🎒", "⌚", "🧰"];
 const matCompte = (x) => ({ t: Math.round(Number(x.t) || 0), sec: Math.round(Number(x.sec) || 0), imp: Math.round(Number(x.imp) || 0), m: Math.round(Number(x.m) || 0) });
 function matLire(base) { return lireListe(base.reglages["materiel"]).filter(x => x && x.id && x.nom).map(x => ({ id: String(x.id), nom: String(x.nom).slice(0, 40), icone: typeof x.icone === "string" && x.icone.length <= 8 ? x.icone : "🧰",
-    acts: Array.isArray(x.acts) ? x.acts.filter(a => typeof a === "string") : [], seuilH: Math.max(0, Number(x.seuilH) || 0), seuilKm: Math.max(0, Number(x.seuilKm) || 0), debut: Number(x.debut) || 0, enService: x.enService !== false,
+    acts: Array.isArray(x.acts) ? x.acts.filter(a => typeof a === "string") : [], seuilH: Math.max(0, Number(x.seuilH) || 0), seuilKm: Math.max(0, Number(x.seuilKm) || 0), debut: Number(x.debut) || 0, cree: Number(x.cree) || 0, enService: x.enService !== false,
     plusTop: x.plusTop ? matCompte(x.plusTop) : null, histo: Array.isArray(x.histo) ? x.histo.map(h => ({ debut: Number(h.debut) || 0, fin: Number(h.fin) || 0, sec: Math.round(h.sec || 0), imp: Math.round(h.imp || 0), m: Math.round(h.m || 0), n: Math.round(h.n || 0), plusTop: h.plusTop ? matCompte(h.plusTop) : null })) : [], alerte: Number(x.alerte) || 0 })); }
 const matEcrire = (base, l) => { base.reglages["materiel"] = JSON.stringify(l); };
 function matAjouter(base, modele, nom, debut) { const M = MAT_MODELES[modele] || MAT_MODELES.autre, l = matLire(base), id = "m" + Date.now().toString(36) + l.length;
-  const e = { id, nom: String(nom || M.nom).trim().slice(0, 40) || M.nom, icone: M.icone, acts: M.acts.slice(), seuilH: M.seuilH, seuilKm: M.seuilKm, debut: Number(debut) || Date.now(), enService: true, plusTop: null, histo: [], alerte: 0 };
+  const e = { id, nom: String(nom || M.nom).trim().slice(0, 40) || M.nom, icone: M.icone, acts: M.acts.slice(), seuilH: M.seuilH, seuilKm: M.seuilKm, debut: Number(debut) || Date.now(), cree: Date.now(), enService: true, plusTop: null, histo: [], alerte: 0 };
   l.push(e); matEcrire(base, l); return e; }
 function matRegler(base, id, ch) { const l = matLire(base), e = l.find(x => x.id === id); if (!e) return null;
   if (ch.nom != null && String(ch.nom).trim()) e.nom = String(ch.nom).trim().slice(0, 40); if (ch.icone != null && MAT_ICONES.includes(ch.icone)) e.icone = ch.icone;
@@ -213,7 +213,11 @@ function matSupprimer(base, id) { const l = matLire(base), i = l.findIndex(x => 
 function matUsageNoter(base, act, t) { const ids = matLire(base).filter(x => x.enService && x.acts.includes(act)).map(x => x.id); const l = lireListe(base.reglages["materiel-usage"]); l.push({ t: Math.round(t), act, ids }); base.reglages["materiel-usage"] = JSON.stringify(l.slice(-600)); }
 /* une ligne d'Historique compte-t-elle pour ce matériel ? (activité reliée, depuis sa date, et en service ce jour-là si on le sait) */
 function matCompteLigne(e, x, usages, fin) { if (!x.t || x.t < e.debut || (fin && x.t >= fin) || !e.acts.includes(x.act) || x.journee) return false;
-  const deb = x.ref && x.ref.n && x.ref.n.h10rec ? x.ref.n.h10rec.debut : x.t, u = usages.find(v => v.act === x.act && Math.abs(deb - v.t) <= 180000); return u ? (u.ids || []).includes(e.id) : true; }
+  const deb = x.ref && x.ref.n && x.ref.n.h10rec ? x.ref.n.h10rec.debut : x.t, u = usages.find(v => v.act === x.act && Math.abs(deb - v.t) <= 180000);
+  /* le « matériel du jour » n'est pris en compte que si ce matériel existait déjà dans l'appli à ce moment-là
+     (sinon une séance jouée avant d'ajouter les baskets ou le cordage, mais après « Depuis le », n'était jamais comptée) */
+  return u && u.t >= matCree(e) ? (u.ids || []).includes(e.id) : true; }
+function matCree(e) { if (e.cree) return e.cree; const t = parseInt(String(e.id || "").substr(1, 8), 36); return t > 1.6e12 && t < 4e12 ? t : 0; }
 function matCompteur(base, e, lignes, fin) { const L = lignes || lignesHistorique(base), U = lireListe(base.reglages["materiel-usage"]), c = { sec: 0, imp: 0, m: 0, n: 0 };
   L.forEach(x => { if (!matCompteLigne(e, x, U, fin)) return; c.n++; c.sec += x.duree || 0; c.m += x.dist || 0; c.imp += x.ref && x.ref.n && x.ref.n.h10rec ? ((x.ref.n.h10rec.res || {}).pics || 0) : 0; }); c.sec = Math.round(c.sec); c.m = Math.round(c.m); return c; }
 const matDepasse = (e, c) => (e.seuilH > 0 && c.sec >= e.seuilH * 3600) || (e.seuilKm > 0 && c.m >= e.seuilKm * 1000);

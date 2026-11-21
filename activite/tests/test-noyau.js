@@ -385,7 +385,7 @@ test("Sas de départ (1.18) : démarrage direct par activité, échauffement gar
 test("Suivi du matériel (1.19) : compteurs depuis la date, seuil, alerte une seule fois, plus au top, neuf, matériel en service", () => {
   const b = N.baseVide(); N.importer(b, hubFictif(), {}); N.lignesHistorique(b).find(l => l.act === "tennis").ref.n.h10rec.res.duree = 3600;
   const t = N.lignesHistorique(b).find(l => l.act === "tennis"), deb = t.ref.n.h10rec.debut; assert.strictEqual(t.duree, 3600);
-  const c1 = N.matAjouter(b, "cordage", "", deb - 86400e3), c2 = N.matAjouter(b, "cordage", "Raquette 2", deb - 86400e3), bal = N.matAjouter(b, "balles", "", deb + 1000), bk = N.matAjouter(b, "baskets", "", 1);
+  const c1 = N.matAjouter(b, "cordage", "", deb - 86400e3), c2 = N.matAjouter(b, "cordage", "Raquette 2", deb - 86400e3), bal = N.matAjouter(b, "balles", "", deb + 1000), bk = N.matAjouter(b, "baskets", "", 1); { const L = N.matLire(b); L.forEach(x => { x.cree = 1; }); b.reglages["materiel"] = JSON.stringify(L); }  /* matériel censé exister avant ces séances */
   assert.deepStrictEqual([c1.nom, c1.seuilH, bk.seuilKm, bk.acts], ["Cordage raquette", 30, 600, ["footing", "marche"]]);
   let c = N.matCompteur(b, N.matLire(b)[0]); assert.deepStrictEqual([c.n, c.sec, c.imp], [1, t.duree, 4]); assert.strictEqual(N.matCompteur(b, N.matLire(b)[2]).n, 0, "balles achetées après la séance");
   assert.strictEqual(N.matUsageTxt(N.matLire(b)[0], c), "1 h 00 / 30 h · 4 impacts · 1 séance");
@@ -402,4 +402,7 @@ test("Suivi du matériel (1.19) : compteurs depuis la date, seuil, alerte une se
   /* fusion : le réglage matériel garde la version du téléphone, l'usage se fusionne */
   const b2 = N.baseVide(); N.importer(b2, JSON.parse(JSON.stringify(N.sauvegarde(b, "t"))), {}); assert.strictEqual(N.matLire(b2).length, 3); assert.strictEqual(JSON.parse(b2.reglages["materiel-usage"]).length, 1); });
 
+test("Matériel ajouté après des séances jouées depuis « Depuis le » : elles comptent (21/11)", () => { const B = N.baseVide(), t0 = Date.now() - 3 * 86400000;
+  N.matUsageNoter(B, "tennis", t0 + 3600000); const e = N.matAjouter(B, "cordage", "Cordage", t0);
+  assert.strictEqual(N.matCompteur(B, e, [{ t: t0 + 3600000, act: "tennis", duree: 3600 }]).sec, 3600); });
 console.log("\n" + n + " tests réussis.");
