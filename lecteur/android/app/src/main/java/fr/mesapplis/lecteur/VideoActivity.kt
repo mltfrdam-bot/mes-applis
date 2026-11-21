@@ -81,6 +81,8 @@ class VideoActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // L'image suit la rotation de l'appareil (portrait ou paysage, au choix de l'utilisateur)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         sousTitresOui = Base.de(this).lire("video_st") != "0"
         construire()
         connexion = Connexion(this) { c ->
@@ -320,7 +322,6 @@ class VideoActivity : Activity() {
         if (v.width <= 0 || v.height <= 0) return
         largeurVideo = (v.width * v.pixelWidthHeightRatio).toInt().coerceAtLeast(1)
         hauteurVideo = v.height
-        requestedOrientation = if (largeurVideo > hauteurVideo) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_USER
         racine.post { placerImage() }
         if (Build.VERSION.SDK_INT >= 26) try { setPictureInPictureParams(parametresPip()!!) } catch (e: Exception) { }
     }
