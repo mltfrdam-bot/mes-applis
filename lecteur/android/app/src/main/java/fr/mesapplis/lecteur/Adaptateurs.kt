@@ -71,9 +71,9 @@ class PistesAdaptateur(private val ecouteur: Ecouteur) : RecyclerView.Adapter<Pi
         val p = pistes[position]
         val ctx = h.itemView.context
         val absente = p.id < 0
-        h.titre.text = p.titre
-        h.artiste.text = if (absente) "Fichier absent du téléphone" else
-            listOf(p.artiste, p.album).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { p.nomDossier }
+        h.titre.text = Traduction.titre(p.titre)
+        h.artiste.text = if (absente) "Fichier absent du téléphone" else Traduction.detail(p.titre,
+            listOf(p.artiste, Traduction.titre(p.album)).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { Traduction.titre(p.nomDossier) })
         h.duree.text = if (absente) "" else Format.duree(p.duree)
         h.ecoutes.text = if (p.ecoutes > 0) "${p.ecoutes}×" else ""
         h.nouveau.visibility = if (p.nouveau) View.VISIBLE else View.GONE
@@ -143,8 +143,8 @@ class GroupesAdaptateur(private val clic: (Groupe) -> Unit) : RecyclerView.Adapt
 
     override fun onBindViewHolder(h: Ligne, position: Int) {
         val g = groupes[position]
-        h.titre.text = g.titre
-        h.detail.text = g.detail
+        h.titre.text = Traduction.titre(g.titre)
+        h.detail.text = Traduction.detail(g.titre, g.detail)
         val p = g.pochette
         if (g.icone != 0) {
             h.pochette.tag = null

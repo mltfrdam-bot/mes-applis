@@ -68,6 +68,22 @@ class DonneesActivity : Activity() {
         contenu.addView(zone, marge(4))
         resultat = zone
 
+        titre("🌐 Traduction anglais → français")
+        Traduction.init(this)
+        texte(
+            when {
+                !Traduction.pret -> "Pack de langue pas encore téléchargé : touche 🌐 en haut de l'écran principal."
+                Traduction.actif -> "Activée · ${Traduction.nombre()} texte(s) traduit(s). Touche 🌐 sur l'écran principal pour l'arrêter."
+                else -> "Désactivée · ${Traduction.nombre()} texte(s) déjà traduit(s). Touche 🌐 sur l'écran principal pour l'activer."
+            }, gris = true
+        )
+        val choixTrad = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        choixTrad.addView(bouton("Sous l'anglais", Traduction.dessous) { Traduction.choisirDessous(this, true); construire() }, poids())
+        choixTrad.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
+        choixTrad.addView(bouton("À la place", !Traduction.dessous) { Traduction.choisirDessous(this, false); construire() }, poids())
+        contenu.addView(choixTrad, marge(8))
+        texte("Traduits : titres, albums, dossiers et paroles. Les noms d'artistes restent tels quels.", gris = true)
+
         titre("Doublons")
         texte("Cherche les morceaux en double et propose de les supprimer du lecteur et du téléphone (corbeille 30 jours, données reportées sur la version gardée).", gris = true)
         contenu.addView(bouton("🔁 Chercher les doublons", false) { startActivity(Intent(this, DoublonsActivity::class.java)) }, marge(8))

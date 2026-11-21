@@ -135,6 +135,12 @@ class LectureActivity : Activity() {
         zoneParoles.setOnTouchListener { _, _ -> dernierToucher = System.currentTimeMillis(); false }
     }
 
+    override fun onResume() {
+        super.onResume()
+        val ctx = applicationContext
+        travail.execute { Traduction.init(ctx); principal.post { majTout() } }
+    }
+
     override fun onStart() {
         super.onStart()
         val f = MediaController.Builder(this, SessionToken(this, ComponentName(this, LectureService::class.java))).buildAsync()
@@ -173,8 +179,9 @@ class LectureActivity : Activity() {
         val item = c.currentMediaItem
         if (item == null) { finish(); return }
         val md = c.mediaMetadata
-        titre.text = md.title ?: ""
-        artiste.text = listOfNotNull(md.artist, md.albumTitle).joinToString(" · ")
+        val t = md.title?.toString() ?: ""
+        titre.text = Traduction.titre(t)
+        artiste.text = Traduction.detail(t, listOfNotNull(md.artist, md.albumTitle?.toString()?.let { Traduction.titre(it) }).joinToString(" · "))
         btnLecture.setImageResource(if (c.playWhenReady) R.drawable.ic_pause else R.drawable.ic_lecture)
         val accent = ContextCompat.getColor(this, R.color.accent)
         val gris = ContextCompat.getColor(this, R.color.gris_clair)
@@ -267,6 +274,10 @@ class LectureActivity : Activity() {
         travail.execute {
             val p = LecteurParoles.chercher(ctx, empl)
             principal.post { if (affiche == id) afficherParoles(p) }
+            // 🌐 Paroles en anglais : traduites une fois, puis réaffichées
+            if (p != null) Traduction.traduireParoles(ctx, p) {
+                principal.post { if (affiche == id && paroles === p) { afficherParoles(p); majTout() } }
+            }
         }
     }
 
@@ -294,12 +305,13 @@ class LectureActivity : Activity() {
             return
         }
         paroles = p
+        ligneActive = -1
         taillePochette(grande = false)
         lignesParoles.removeAllViews()
         val gris = ContextCompat.getColor(this, R.color.gris)
         for (l in p.lignes) {
             val tv = TextView(this).apply {
-                text = l.texte.ifEmpty { "♪" }
+                text = texteLigne(l.texte)
                 gravity = Gravity.CENTER
                 textSize = 19f
                 setTextColor(if (p.synchro) gris else ContextCompat.getColor(context, R.color.texte))
@@ -313,6 +325,19 @@ class LectureActivity : Activity() {
             lignesParoles.addView(tv)
         }
         majProgression()
+    }
+
+    /** Ligne de paroles avec sa traduction 🌐 (en dessous, plus petite et en gris), ou à la place. */
+    private fun texteLigne(t: String): CharSequence {
+        if (t.isEmpty()) return "♪"
+        val f = Traduction.fr(t) ?: return t
+        if (!Traduction.dessous) return f
+        val s = android.text.SpannableString("$t\n$f")
+        val debut = t.length + 1
+        s.setSpan(android.text.style.RelativeSizeSpan(0.8f), debut, s.length, 0)
+        s.setSpan(android.text.style.ForegroundColorSpan(0xFF5B7DB8.toInt()), debut, s.length, 0)
+        s.setSpan(android.text.style.StyleSpan(Typeface.ITALIC), debut, s.length, 0)
+        return s
     }
 
     private fun surligner(i: Int) {

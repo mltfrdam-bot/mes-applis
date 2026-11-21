@@ -91,8 +91,8 @@ class MiniLecteur(private val act: Activity, private val connexion: Connexion, p
         mini.visibility = View.VISIBLE
         val md = c.mediaMetadata
         val t = md.title?.toString() ?: ""
-        titre.text = t
-        artiste.text = md.artist?.toString() ?: ""
+        titre.text = Traduction.titre(t)
+        artiste.text = Traduction.detail(t, md.artist?.toString() ?: "")
         lecture.setImageResource(if (c.playWhenReady) R.drawable.ic_pause else R.drawable.ic_lecture)
         if (affiche != item.mediaId) {
             affiche = item.mediaId

@@ -16,6 +16,8 @@ android {
         versionCode numVersion
         versionName "1." + numVersion
         resValue "string", "app_name", "Lecteur"
+        // Téléphones 64 et 32 bits seulement : APK plus léger (le traducteur contient du code natif)
+        ndk { abiFilters "arm64-v8a", "armeabi-v7a" }
     }
     signingConfigs {
         release {
@@ -46,4 +48,7 @@ dependencies {
     implementation "androidx.recyclerview:recyclerview:1.3.2"
     implementation "androidx.palette:palette:1.0.0"
     implementation "androidx.core:core:1.13.1"
+    // 🌐 Traduction sur le téléphone : pack de langue téléchargé une seule fois
+    implementation "com.google.mlkit:translate:17.0.3"
+    implementation "com.google.mlkit:language-id:17.0.6"
 }

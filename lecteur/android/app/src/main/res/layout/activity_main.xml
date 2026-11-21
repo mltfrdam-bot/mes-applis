@@ -31,6 +31,7 @@
                 android:textColor="@color/gris"
                 android:textSize="12sp" />
         </LinearLayout>
+        <TextView android:id="@+id/btnTraduction" style="@style/BoutonHaut" android:text="🌐" />
         <TextView android:id="@+id/btnActualiser" style="@style/BoutonHaut" android:text="🔄" />
         <TextView android:id="@+id/btnDonnees" style="@style/BoutonHaut" android:text="📊" />
         <TextView android:id="@+id/btnAide" style="@style/BoutonHaut" android:text="❓" />

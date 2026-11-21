@@ -101,6 +101,15 @@ class AideActivity : Activity() {
         texte("Paroles : pose le fichier .lrc à côté de la chanson, avec le même nom (ex. Chanson.mp3 et Chanson.lrc). Les .srt et .vtt marchent aussi.")
         texte("Un fichier n'apparaît pas ? Touche 🔄 en haut de la liste.")
 
+        titre("🌐 Traduction")
+        texte(
+            "Touche 🌐 en haut de l'écran principal pour traduire en français les titres, albums, dossiers et paroles en anglais. " +
+                "La première fois, l'appli télécharge le pack de langue (environ 30 Mo, une seule fois, Wi-Fi conseillé) ; ensuite tout marche sans internet.\n" +
+                "• Un appui sur 🌐 : activer ou désactiver.\n" +
+                "• 📊 Données : traduction sous le texte anglais, ou à la place.\n" +
+                "• Chaque texte n'est traduit qu'une fois, puis gardé : l'affichage reste instantané."
+        )
+
         titre("Doublons")
         texte(
             "Quand un même morceau est présent deux fois (même fichier, ou même titre et même durée), un bandeau 🔁 le signale. " +

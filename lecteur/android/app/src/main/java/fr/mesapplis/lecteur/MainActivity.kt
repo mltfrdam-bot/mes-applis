@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var recherche: Recherche
     private lateinit var connexion: Connexion
     private lateinit var mini: MiniLecteur
+    private lateinit var btnTraduction: TextView
 
     private var toutes: List<Piste> = emptyList()
     private var onglet = 0
@@ -121,6 +122,8 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.btnAide).setOnClickListener { startActivity(Intent(this, AideActivity::class.java)) }
         findViewById<View>(R.id.btnDonnees).setOnClickListener { startActivity(Intent(this, DonneesActivity::class.java)) }
         findViewById<View>(R.id.btnActualiser).setOnClickListener { actualiser() }
+        btnTraduction = findViewById(R.id.btnTraduction)
+        btnTraduction.setOnClickListener { basculerTraduction() }
         bandeau.setOnClickListener {
             val cible = if (reglagesManquants(this) == 0 && nbDoublons > 0) DoublonsActivity::class.java else AideActivity::class.java
             startActivity(Intent(this, cible))
@@ -140,6 +143,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         majBandeau()
+        majBoutonTraduction()
         if (toutes.isNotEmpty()) afficher()
     }
 
@@ -171,6 +175,8 @@ class MainActivity : Activity() {
         if (!aLesDroits(this)) { toutes = emptyList(); afficher(); return }
         val ctx = applicationContext
         travail.execute {
+            Traduction.init(ctx)
+            principal.post { majBoutonTraduction() }
             val l = Bibliotheque.charger(ctx)
             val base = Base.de(ctx)
             val manquants = base.completer(ctx, l, calculer = false)
@@ -182,6 +188,7 @@ class MainActivity : Activity() {
                 }
                 principal.post { analyse = ""; afficher() }
             }
+            traduireBibliotheque(l)
             // Doublons : proposés automatiquement dans le bandeau
             val d = Doublons.chercher(ctx, l).size
             principal.post { nbDoublons = d; majBandeau() }
@@ -320,6 +327,63 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Fermer", null)
             .show()
+    }
+
+    // ----- 🌐 Traduction -----
+
+    private fun traduireBibliotheque(l: List<Piste>) {
+        Traduction.traduireBibliotheque(applicationContext, l) { principal.post { afficher(); mini.maj() } }
+    }
+
+    private fun majBoutonTraduction() {
+        btnTraduction.alpha = if (Traduction.actif && Traduction.pret) 1f else 0.35f
+    }
+
+    /** Un appui : active ou désactive. La première fois, propose de télécharger le pack de langue. */
+    private fun basculerTraduction() {
+        if (!Traduction.pret) { proposerPack(); return }
+        Traduction.activer(this, !Traduction.actif)
+        majBoutonTraduction()
+        Toast.makeText(this, if (Traduction.actif) "🌐 Traduction activée" else "Traduction désactivée", Toast.LENGTH_SHORT).show()
+        afficher(); mini.maj()
+        if (Traduction.actif) traduireBibliotheque(toutes)
+    }
+
+    private fun proposerPack() {
+        AlertDialog.Builder(this)
+            .setTitle("🌐 Traduction anglais → français")
+            .setMessage(
+                "Pour traduire les titres et les paroles en anglais, l'appli doit télécharger une seule fois le pack de langue " +
+                    "(environ 30 Mo, Wi-Fi conseillé).\n\nEnsuite, la traduction marche sans internet. " +
+                    "Tu pourras choisir dans 📊 Données : traduction sous le texte anglais, ou à la place."
+            )
+            .setPositiveButton("Télécharger") { _, _ -> telechargerPack() }
+            .setNegativeButton("Plus tard", null)
+            .show()
+    }
+
+    private fun telechargerPack() {
+        val attente = AlertDialog.Builder(this)
+            .setTitle("🌐 Téléchargement du pack…")
+            .setMessage("Environ 30 Mo. Ça peut prendre une à deux minutes. Tu peux continuer à écouter ta musique.")
+            .setView(android.widget.ProgressBar(this).apply { isIndeterminate = true; setPadding(0, 30, 0, 30) })
+            .setCancelable(false)
+            .show()
+        val ctx = applicationContext
+        Thread {
+            val erreur = Traduction.telecharger(ctx)
+            principal.post {
+                attente.dismiss()
+                if (erreur != null) {
+                    AlertDialog.Builder(this).setTitle("❌ Pack non téléchargé").setMessage(erreur).setPositiveButton("OK", null).show()
+                    return@post
+                }
+                Traduction.activer(this, true)
+                majBoutonTraduction()
+                Toast.makeText(this, "✅ Pack installé : traduction activée. Les titres se traduisent petit à petit.", Toast.LENGTH_LONG).show()
+                traduireBibliotheque(toutes)
+            }
+        }.start()
     }
 
     /** Demande à Android de chercher les fichiers arrivés récemment (si un fichier n'apparaît pas tout seul). */
