@@ -633,9 +633,9 @@ function majSeance() { const e = S.enr; if (!e || !$("#sTemps")) { majReglage();
   const al = $("#sAlerte"); if (al) { al.classList.toggle("cache", !msg); al.innerHTML = msg; } majRavito(); majReglage(); }
 /* ===== 🍇 Ravitaillement et 🎾 score pendant la séance (essai 10) ===== */
 function seanceDebut() { const e = S.enr; return e ? (e.debut || Date.now() - (e.ecoule || 0) * 1000) : Date.now(); }
-const gourde = () => BASE.reglages["gourde"] === "eau" ? "eau" : "erable";
+const gourde = () => ["eau", "sucre"].includes(BASE.reglages["gourde"]) ? BASE.reglages["gourde"] : "erable";
 function htmlRavitoBoutons() { const d = seanceDebut(), ev = N.evtsSeance(BASE, d, null), g = gourde(), st = N.scoreEtat(ev), o = N.ravitoTotaux(ev), bt = (k, q, n, t) => '<button class="sec" data-do="rav" data-k="' + k + '" data-q="' + q + '" data-n="' + (n || 0) + '" style="min-height:52px;font-size:17px">' + t + '</button>';
-  let h = '<h2>🍇 Ravitaillement <span class="gris" style="font-size:14px;font-weight:400">— une touche = noté dans le 📒 carnet</span></h2><div class="chips" style="margin-bottom:6px"><span class="gris" style="align-self:center">Ma gourde :</span><button class="chip" data-do="gourde" data-v="erable" aria-pressed="' + (g === "erable") + '">🍁 Érable-sel</button><button class="chip" data-do="gourde" data-v="eau" aria-pressed="' + (g === "eau") + '">💧 Eau</button></div>' +
+  let h = '<h2>🍇 Ravitaillement <span class="gris" style="font-size:14px;font-weight:400">— une touche = noté dans le 📒 carnet</span></h2><div class="chips" style="margin-bottom:6px"><span class="gris" style="align-self:center">Ma gourde :</span><button class="chip" data-do="gourde" data-v="erable" aria-pressed="' + (g === "erable") + '">🍁 Érable-sel</button><button class="chip" data-do="gourde" data-v="sucre" aria-pressed="' + (g === "sucre") + '">🍬 Sucre-sel</button><button class="chip" data-do="gourde" data-v="eau" aria-pressed="' + (g === "eau") + '">💧 Eau</button>' + (g !== "eau" ? '<button class="sec petit" data-do="gourdeDosage">🧪 ' + esc(N.gourdeRecette(BASE, g).txt) + '</button>' : "") + '</div>' +
     '<div class="ligne">' + bt(g, 100, 0, "+10 cl") + bt(g, 150, 0, "+15 cl") + bt(g, 200, 0, "+20 cl") + '</div><div class="ligne">' + bt("raisins", 2.5, 5, "🍇 +5") + bt("raisins", 5, 10, "🍇 +10") + bt("cacahuetes", 2.1, 3, "🥜 +3") + '<button class="sec petit" data-do="ravAnnuler">↩ Annuler</button></div>' +
     (o.eau || o.sucre ? '<p class="gris" style="font-size:14px;margin:4px 0">Pris : ' + Object.keys(o.par).map(k => N.RAVITO[k].icone + " " + (N.RAVITO[k].unite === "ml" ? (o.par[k].q / 10) + " cl" : o.par[k].n)).join(" · ") + '</p>' : "");
   if (!st) h += '<div class="ligne"><button class="sec" data-do="matchDebut">🎾 Noter le score d\'un match</button></div>';
@@ -655,11 +655,17 @@ let ravCT = 0;
 function majRavito(force) { const b = $("#ravB"), c = $("#ravC"); if (!b || !c || !S.enr) return; const h = htmlRavitoBoutons(); if (force || b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; }
   if (force || Date.now() - ravCT > 5000) { ravCT = Date.now(); c.innerHTML = htmlRavitoConseil(); } }
 function ravNoter(b) { const k = b.dataset.k, q = Number(b.dataset.q), n = Number(b.dataset.n) || 0, R = N.RAVITO[k]; if (!R) return; const ts = Date.now(), act = S.enr ? N.actNom(S.enr.act).toLowerCase() : "la séance";
-  N.evtAjouter(BASE, { ts, k, q, n }); sauver();
-  Pont.eauNoter(R.unite === "ml" ? { ts, ml: q, type: k, note: "Pendant " + act } : { ts, g: q, n, type: k, note: "Pendant " + act });
-  Pont.vibrer(30); toast(R.icone + " " + (R.unite === "ml" ? "+" + q / 10 + " cl " + (k === "erable" ? "d'érable-sel" : "d'eau") : "+" + n + " " + R.nom.toLowerCase()) + " noté", 1500); majRavito(true); }
+  const rc = R.unite === "ml" && k !== "eau" ? N.gourdeRecette(BASE, k) : null, ev = { ts, k, q, n };
+  if (rc) { ev.s = rc.sucreL / 1000; ev.sl = rc.selL / 1000; }
+  N.evtAjouter(BASE, ev); sauver();
+  Pont.eauNoter(R.unite === "ml" ? Object.assign({ ts, ml: q, type: k, note: "Pendant " + act + (rc ? " · " + rc.txt : "") }, rc ? { kcal: Math.round(q * ev.s * 4), glucides: Math.round(q * ev.s * 10) / 10, sel: Math.round(q * ev.sl * 100) / 100 } : {}) : { ts, g: q, n, type: k, note: "Pendant " + act });
+  Pont.vibrer(30); toast(R.icone + " " + (R.unite === "ml" ? "+" + q / 10 + " cl " + (k === "erable" ? "d'érable-sel" : k === "sucre" ? "de sucre-sel" : "d'eau") : "+" + n + " " + R.nom.toLowerCase()) + " noté", 1500); majRavito(true); }
 function ravAnnuler() { const e = N.evtAnnuler(BASE, seanceDebut() - 60000, ["eau", "erable", "raisins", "cacahuetes"]); if (!e) { toast("Rien à annuler."); return; } sauver(); const ok = Pont.eauAnnuler(e.ts);
   toast("↩ Annulé" + (ok ? "" : " ici (déjà rangé dans le carnet : à retirer aussi là-bas)"), 3000); majRavito(true); }
+function gourdeDosage() { const g = gourde(), r = N.gourdeRecette(BASE, g), champ = (id, v, t) => '<tr><td>' + t + '</td><td><input id="' + id + '" type="number" inputmode="decimal" step="0.5" value="' + v + '" style="width:100%;font-size:22px"></td><td>g / litre</td></tr>';
+  fenetre('<div class="t">🧪 Dosage — ' + (g === "erable" ? "🍁 Érable-sel" : "🍬 Sucre-sel") + '</div><table class="milieu"><tbody>' + (g === "erable" ? champ("gdA", r.sirop, "Sirop d'érable") : champ("gdA", r.sucre, "Sucre")) + champ("gdS", r.sel, "Sel") + '</tbody></table><p class="aide">Les boissons déjà notées gardent leur ancien dosage.</p><div class="ligne"><button class="main" data-do="gourdeDosageOk">Enregistrer</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
+function gourdeDosageOk() { const g = gourde(), a = Number($("#gdA").value), sl = Number($("#gdS").value); if (!(a >= 0 && a <= 200 && sl >= 0 && sl <= 20)) { toast("Dosage à vérifier (sucre 0 à 200 g, sel 0 à 20 g par litre)."); return; }
+  const r = N.gourdeRegler(BASE, g, g === "erable" ? { sirop: a, sel: sl } : { sucre: a, sel: sl }); sauver(); fermerFenetre(); toast("🧪 " + r.txt, 3000); majRavito(true); }
 function matchDebut() { fenetre('<div class="t">🎾 Match</div><table class="milieu"><tbody><tr><td>Moi</td><td><input id="matchMoi" value="' + esc(BASE.reglages["match-moi"] || "Frédéric") + '" maxlength="30" style="width:100%;font-size:18px"></td></tr><tr><td>Adversaire</td><td><input id="matchAdv" maxlength="30" style="width:100%;font-size:18px" placeholder="Nom"></td></tr></tbody></table><div class="ligne"><button class="main" data-do="matchOk">🎾 Commencer le score</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#matchAdv"); if (i) i.focus(); }, 200); }
 function matchOk() { const moi = ($("#matchMoi").value || "Moi").trim(), adv = ($("#matchAdv").value || "Adversaire").trim(); BASE.reglages["match-moi"] = moi; N.evtAjouter(BASE, { ts: Date.now(), k: "match", moi, adv }); sauver(); fermerFenetre(); majRavito(true); }
 function jeuNoter(qui) { N.evtAjouter(BASE, { ts: Date.now(), k: "jeu", qui }); sauver(); Pont.vibrer(25); majRavito(true); }
@@ -916,6 +922,7 @@ const ACTIONS = {
   jeuAnnuler: () => { if (N.evtAnnuler(BASE, seanceDebut() - 60000, ["jeu", "set", "stb"])) { sauver(); majRavito(true); } else toast("Rien à annuler."); },
   setSuivant: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "set" }); sauver(); majRavito(true); },
   stb: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "stb" }); sauver(); majRavito(true); },
+  gourdeDosage, gourdeDosageOk,
   gourde: (b) => { BASE.reglages["gourde"] = b.dataset.v; sauver(); majRavito(true); },
   fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct, creerExoFiche, eauPerm: (b) => { const R = Pont.eauReglages() || {}; R.permanente = b.dataset.v === "1"; Pont.eauRegler(R); Pont.eauPermanente(R.permanente); dessiner(); toast(R.permanente ? "💧 Notification permanente activée." : "Notification permanente retirée."); },
   eauR: (b) => { const R = Pont.eauReglages() || {}, v = b.dataset.v; R[b.dataset.k] = v === "true" ? true : v === "false" ? false : Number(v); Pont.eauRegler(R); dessiner(); },

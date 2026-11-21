@@ -744,9 +744,17 @@ function chargeRessentie(rs, dureeSec) { return rs && rs.effort != null && EFFOR
 const RAVITO = {
   eau: { nom: "Eau", icone: "💧", unite: "ml", sucre: 0, sel: 0 },
   erable: { nom: "Boisson érable-sel", icone: "🍁", unite: "ml", sucre: 0.04, sel: 0.001 },   // 60 g de sirop d'érable (≈ 40 g de sucre) et 1 g de sel par litre
+  sucre: { nom: "Boisson sucre-sel", icone: "🍬", unite: "ml", sucre: 0.04, sel: 0.001 },    // sucre bio : 40 g de sucre et 1 g de sel par litre
   raisins: { nom: "Raisins secs", icone: "🍇", unite: "g", sucre: 0.66, sel: 0, piece: 0.5 },
   cacahuetes: { nom: "Cacahuètes", icone: "🥜", unite: "g", sucre: 0.13, sel: 0, piece: 0.7 } };
-const RAVITO_KCAL = { eau: 0, erable: 0.16, raisins: 3.0, cacahuetes: 6.0 };   // kcal par ml ou par g
+const RAVITO_KCAL = { eau: 0, erable: 0.16, sucre: 0.16, raisins: 3.0, cacahuetes: 6.0 };   // kcal par ml ou par g
+/* 🧪 Dosage de la gourde (grammes par litre), réglable ; le sirop d'érable contient ≈ 67 % de sucre */
+const GOURDE_DEFAUT = { erable: { sirop: 60, sel: 1 }, sucre: { sucre: 40, sel: 1 } };
+function gourdeRecette(base, k) { let r = {}; try { r = JSON.parse(base.reglages["gourde-recette"] || "{}") || {}; } catch (e) {} const d = Object.assign({}, GOURDE_DEFAUT[k] || {}, r[k] || {});
+  const sucreL = k === "erable" ? Math.round((Number(d.sirop) || 0) * 0.67) : k === "sucre" ? Number(d.sucre) || 0 : 0, selL = k === "eau" ? 0 : Number(d.sel) || 0;
+  return Object.assign(d, { sucreL, selL, txt: k === "erable" ? d.sirop + " g de sirop d'érable + " + String(selL).replace(".", ",") + " g de sel / L" : k === "sucre" ? sucreL + " g de sucre + " + String(selL).replace(".", ",") + " g de sel / L" : "" }); }
+function gourdeRegler(base, k, ch) { let r = {}; try { r = JSON.parse(base.reglages["gourde-recette"] || "{}") || {}; } catch (e) {} r[k] = Object.assign({}, GOURDE_DEFAUT[k] || {}, r[k] || {});
+  Object.keys(ch).forEach(c => { const v = Math.max(0, Math.min(200, Math.round(Number(ch[c]) * 10) / 10)); if (isFinite(v)) r[k][c] = v; }); base.reglages["gourde-recette"] = JSON.stringify(r); return gourdeRecette(base, k); }
 function evtsLire(base) { try { const l = JSON.parse(base.reglages["seance-evts"] || "[]"); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 function evtAjouter(base, e) { const l = evtsLire(base); l.push(e); base.reglages["seance-evts"] = JSON.stringify(l.slice(-4000)); return e; }
 /* enlève le dernier événement d'une des sortes données, depuis « debut » */
@@ -754,7 +762,8 @@ function evtAnnuler(base, debut, sortes) { const l = evtsLire(base); for (let i 
 function evtsSeance(base, debut, fin) { return evtsLire(base).filter(e => e.ts >= debut - 60000 && e.ts <= (fin || Infinity) + 60000).sort((a, b) => a.ts - b.ts); }
 function ravitoTotaux(evts, jusqua) { const o = { eau: 0, sucre: 0, sel: 0, kcal: 0, par: {} };
   evts.forEach(e => { const R = RAVITO[e.k]; if (!R || (jusqua && e.ts > jusqua)) return; const q = Number(e.q) || 0; if (R.unite === "ml") o.eau += q;
-    o.sucre += q * R.sucre; o.sel += q * R.sel; o.kcal += q * (RAVITO_KCAL[e.k] || 0); const p = o.par[e.k] = o.par[e.k] || { q: 0, n: 0 }; p.q += q; p.n += Number(e.n) || 0; });
+    const su = e.s != null ? Number(e.s) : R.sucre, se = e.sl != null ? Number(e.sl) : R.sel;
+    o.sucre += q * su; o.sel += q * se; o.kcal += R.unite === "ml" ? q * su * 4 : q * (RAVITO_KCAL[e.k] || 0); const p = o.par[e.k] = o.par[e.k] || { q: 0, n: 0 }; p.q += q; p.n += Number(e.n) || 0; });
   o.sucre = Math.round(o.sucre); o.sel = Math.round(o.sel * 10) / 10; o.kcal = Math.round(o.kcal); return o; }
 /* Conseil pendant la séance (estimation à partir du cœur, pas une mesure).
    Dépense : formule de Keytel (homme) × 0,7 (calée sur la COROS du 19/11 : 454 kcal en 52 min à 142).
@@ -905,7 +914,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
   tensionNiveau, isoJour, santeMesures, douleursActives, rapportPeriode,
-  RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,
+  GOURDE_DEFAUT, gourdeRecette, gourdeRegler, RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,
   DIFF, kg, chargeTxt, chargeVal, MAT_MODELES, MAT_ICONES, matLire, matAjouter, matRegler, matSupprimer, matUsageNoter, matCompteur, matDepasse, matUsageTxt, matNeuf, matPlusTop, matSuggestion, matAlertesNouvelles, matBilan, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,
   detailLigne, seriesDetail, supprimable, supprimerLigne, restaurer, clesCorbeille,
   fantRepsFabriquer, fantRepsDe, fantRepsChoisir, fantRepsPour, fantRepsEtat, fantRepsAnnonce, fantRepsBilan, fantRepsTotal, signe,
