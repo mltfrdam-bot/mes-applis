@@ -47,8 +47,15 @@ object Acces {
         ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() }
     } catch (e: Exception) { null }
 
+    /** Dossier Musique autorisé en écriture (pour ranger les chansons d'un pack importé), ou null. */
+    fun arbreMusique(ctx: Context): Uri? = ctx.contentResolver.persistedUriPermissions.filter { it.isWritePermission }.map { it.uri }.firstOrNull {
+        val id = try { DocumentsContract.getTreeDocumentId(it) } catch (e: Exception) { "" }
+        id == "primary:Music" || id == "primary:"
+    }
+
     /** Ouvre le sélecteur Android directement sur le dossier Musique. */
     fun intentChoix(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         putExtra(
             DocumentsContract.EXTRA_INITIAL_URI,
             DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Music")
@@ -58,7 +65,12 @@ object Acces {
     fun garder(ctx: Context, data: Intent?): Boolean {
         val u = data?.data ?: return false
         return try {
-            ctx.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Lecture + écriture (import de packs) ; lecture seule si Android refuse l'écriture
+            try {
+                ctx.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                ctx.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             memo = null
             Pochettes.vider()
             LecteurParoles.vider()

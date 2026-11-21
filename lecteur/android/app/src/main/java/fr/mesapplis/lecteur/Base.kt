@@ -353,6 +353,27 @@ class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db
         return n
     }
 
+    /** Ajoute à la fin par empreinte (import de pack) ; retourne le nombre réellement ajouté. */
+    fun ajouterEmpreintes(id: String, l: List<Triple<String, String, String>>): Int {
+        val db = writableDatabase
+        var ordre = db.rawQuery("SELECT COALESCE(MAX(ordre), 0) FROM playlist_pistes WHERE playlist=?", arrayOf(id)).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
+        var n = 0
+        val t = System.currentTimeMillis()
+        db.beginTransaction()
+        try {
+            for ((e, titre, artiste) in l) {
+                ordre += 1
+                val r = db.insertWithOnConflict("playlist_pistes", null, ContentValues().apply {
+                    put("playlist", id); put("empreinte", e); put("ordre", ordre); put("ajoute_le", t); put("titre", titre); put("artiste", artiste)
+                }, SQLiteDatabase.CONFLICT_IGNORE)
+                if (r != -1L) n++
+            }
+            db.update("playlists", ContentValues().apply { put("modifie_le", t) }, "id=?", arrayOf(id))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return n
+    }
+
     fun retirer(id: String, e: String) {
         writableDatabase.delete("playlist_pistes", "playlist=? AND empreinte=?", arrayOf(id, e))
         writableDatabase.update("playlists", ContentValues().apply { put("modifie_le", System.currentTimeMillis()) }, "id=?", arrayOf(id))

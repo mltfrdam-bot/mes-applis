@@ -110,6 +110,14 @@ class AideActivity : Activity() {
                 "• Chaque texte n'est traduit qu'une fois, puis gardé : l'affichage reste instantané."
         )
 
+        titre("📦 Pack de playlist (clé USB)")
+        texte(
+            "Pour donner une playlist à quelqu'un sans le reste de ta musique :\n" +
+                "• Ouvre la playlist, touche « 📦 Pack clé USB », branche la clé et choisis-la. Un dossier au nom de la playlist y est créé, avec les chansons, les paroles et l'ordre.\n" +
+                "• Chez l'autre personne (avec le Lecteur) : onglet Playlists → « 📥 Importer un pack », puis choisir le dossier du pack sur la clé. Les chansons vont dans Music, la playlist est recréée.\n" +
+                "• Sans le Lecteur : les chansons du dossier se lisent avec n'importe quel lecteur, un autoradio ou un PC."
+        )
+
         titre("Doublons")
         texte(
             "Quand un même morceau est présent deux fois (même fichier, ou même titre et même durée), un bandeau 🔁 le signale. " +

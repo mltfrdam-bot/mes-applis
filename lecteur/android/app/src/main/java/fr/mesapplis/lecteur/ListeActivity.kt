@@ -87,11 +87,13 @@ class ListeActivity : Activity() {
         btnModifier.setOnClickListener { basculerModification() }
         btnValider.setOnClickListener { validerChoix() }
         findViewById<View>(R.id.btnMenuListe).setOnClickListener { menuPlaylist(it) }
+        findViewById<View>(R.id.btnPack).setOnClickListener { proposerPack() }
 
         when (type) {
             "playlist" -> {
                 findViewById<View>(R.id.btnAjouter).visibility = View.VISIBLE
                 btnModifier.visibility = View.VISIBLE
+                findViewById<View>(R.id.btnPack).visibility = View.VISIBLE
                 findViewById<View>(R.id.btnMenuListe).visibility = View.VISIBLE
             }
             "choix" -> {
@@ -201,6 +203,43 @@ class ListeActivity : Activity() {
             btnModifier.text = "✅ Terminé"
         }
         filtrer()
+    }
+
+    // ----- 📦 Pack pour clé USB -----
+
+    private fun proposerPack() {
+        val p = Base.de(this).playlist(cle) ?: return
+        val presentes = source.filter { it.id >= 0 }
+        if (presentes.isEmpty()) { Toast.makeText(this, "Aucune chanson de cette playlist n'est sur le téléphone", Toast.LENGTH_SHORT).show(); return }
+        val taille = presentes.sumOf { it.taille }
+        AlertDialog.Builder(this)
+            .setTitle("📦 Pack « ${p.nom} »")
+            .setMessage(
+                "${presentes.size} chanson(s) avec leurs paroles, environ ${String.format("%.0f", taille / 1048576.0)} Mo.\n\n" +
+                    "Branche la clé USB, touche « Choisir la clé », puis choisis la clé et touche « Utiliser ce dossier ». " +
+                    "Un dossier « ${Pack.nomSain(p.nom)} » y sera créé (les chansons déjà dessus ne sont pas recopiées)."
+            )
+            .setPositiveButton("Choisir la clé") { _, _ ->
+                try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PACK) }
+                catch (e: Exception) { Toast.makeText(this, "Sélecteur de dossier introuvable", Toast.LENGTH_SHORT).show() }
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    @Deprecated("Activity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val arbre = data?.data
+        if (requestCode != PACK || resultCode != RESULT_OK || arbre == null) return
+        val p = Base.de(this).playlist(cle) ?: return
+        val pistes = source
+        val (fenetre, avance) = Pack.attente(this, "📦 Copie sur la clé…")
+        val ctx = applicationContext
+        Thread {
+            val r = Pack.exporter(ctx, p.nom, pistes, arbre, avance)
+            principal.post { fenetre.dismiss(); Pack.montrerRapport(this, "Pack « ${p.nom} »", r) }
+        }.start()
     }
 
     private fun menuPlaylist(ancre: View) {
@@ -324,5 +363,9 @@ class ListeActivity : Activity() {
             }
             departGlisse = -1
         }
+    }
+
+    companion object {
+        const val PACK = 41
     }
 }

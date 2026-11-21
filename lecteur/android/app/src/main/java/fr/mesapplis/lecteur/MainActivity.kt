@@ -245,6 +245,7 @@ class MainActivity : Activity() {
                 val parEmp = Bibliotheque.parEmpreinte()
                 val g = ArrayList<Groupe>()
                 if (recherche.texte.isEmpty()) g += Groupe("+", "➕ Nouvelle playlist", "Créer une liste de titres", null, R.drawable.ic_ajout_playlist)
+                if (recherche.texte.isEmpty()) g += Groupe("importer", "📥 Importer un pack", "Depuis une clé USB : chansons, paroles et playlist", null, R.drawable.ic_dossier)
                 for (p in actives) {
                     val premier = bd.elements(p.id).firstNotNullOfOrNull { parEmp[it.empreinte] }
                     g += Groupe(p.id, p.nom, "${p.nombre} titre${if (p.nombre > 1) "s" else ""}", premier)
@@ -311,6 +312,7 @@ class MainActivity : Activity() {
                 startActivity(Intent(this, ListeActivity::class.java).putExtra("type", "playlist").putExtra("cle", id))
             }
             g.cle == "corbeille" -> corbeille()
+            g.cle == "importer" -> choisirPack()
             else -> startActivity(Intent(this, ListeActivity::class.java).putExtra("type", "playlist").putExtra("cle", g.cle))
         }
     }
@@ -327,6 +329,62 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("Fermer", null)
             .show()
+    }
+
+    // ----- 📥 Import d'un pack (clé USB) -----
+
+    private var packEnAttente: android.net.Uri? = null
+
+    private fun choisirPack() {
+        AlertDialog.Builder(this)
+            .setTitle("📥 Importer un pack")
+            .setMessage("Branche la clé USB, touche « Choisir le pack », ouvre la clé puis le dossier du pack (ex. « Céline Dion ») et touche « Utiliser ce dossier ».")
+            .setPositiveButton("Choisir le pack") { _, _ ->
+                try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), IMPORT_PACK) } catch (e: Exception) { }
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
+    }
+
+    private fun importerPack(arbre: android.net.Uri) {
+        val (fenetre, avance) = Pack.attente(this, "📥 Import du pack…")
+        val ctx = applicationContext
+        travail.execute {
+            if (Bibliotheque.derniere.isNotEmpty()) Base.de(ctx).completer(ctx, Bibliotheque.derniere, calculer = true)
+            val r = Pack.importer(ctx, arbre, avance)
+            principal.post {
+                fenetre.dismiss()
+                if (r.musiqueRefusee) {
+                    packEnAttente = arbre
+                    AlertDialog.Builder(this)
+                        .setTitle("Autoriser le dossier Musique")
+                        .setMessage("Pour ranger les chansons du pack, l'appli doit pouvoir écrire dans Musique (une seule fois). Dans la fenêtre qui s'ouvre, reste sur « Music », touche « Utiliser ce dossier », puis « Autoriser ».")
+                        .setPositiveButton("Continuer") { _, _ -> startActivityForResult(Acces.intentChoix(), DROIT_MUSIQUE) }
+                        .setNegativeButton("Annuler", null)
+                        .show()
+                    return@post
+                }
+                Pack.montrerRapport(this, "Import du pack", r)
+                rechargerBientot(1500)
+            }
+        }
+    }
+
+    @Deprecated("Activity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        when (requestCode) {
+            IMPORT_PACK -> data?.data?.let { importerPack(it) }
+            DROIT_MUSIQUE -> {
+                Acces.garder(this, data)
+                val p = packEnAttente
+                packEnAttente = null
+                if (Acces.arbreMusique(this) == null) {
+                    Toast.makeText(this, "Choisis bien le dossier « Music » (sans entrer dans un sous-dossier).", Toast.LENGTH_LONG).show()
+                } else if (p != null) importerPack(p)
+            }
+        }
     }
 
     // ----- 🌐 Traduction -----
@@ -409,6 +467,9 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        const val IMPORT_PACK = 51
+        const val DROIT_MUSIQUE = 52
+
         fun droitsNecessaires(): Array<String> =
             if (Build.VERSION.SDK_INT >= 33) arrayOf(
                 Manifest.permission.READ_MEDIA_AUDIO,
