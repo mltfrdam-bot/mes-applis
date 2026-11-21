@@ -141,7 +141,7 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 
 1. **Socle** : l'APK s'installe, trouve les fichiers Termux, lit la musique en arrière-plan avec la notification et l'écran verrouillé. Paroles en karaoké. Aide « Première utilisation ». — *Livré le 20/11/2026 (version 1.1).*
 2. **Bibliothèque complète** : recherche, playlists, favoris, reprise, sauvegarde + fusion. — *Livré le 20/11/2026 (version 1.2) : onglets Musique · ★ Favoris · Playlists · Dossiers, tri en un appui (ajout, titre, artiste, écoutes, durée), menu ⋮ (lire ensuite, file d'attente, playlist, dossier), file d'attente rangeable, minuterie avec fondu, reprise par fichier pour les morceaux de plus de 10 min, corbeille des playlists, sauvegarde de sécurité automatique avant chaque fusion, écran 📊 Données (sauvegarde, fusion, statistiques en tableaux).*
-3. **Vidéo** : plein écran, gestes, fenêtre flottante, « Écouter seulement ».
+3. **Vidéo** : plein écran, gestes, fenêtre flottante, « Écouter seulement ». Livrée avec l'économiseur « Ambiance » (13.6).
 4. **Mode Chevet** puis **Mode Conduite**.
 5. **Fond d'écran animé**.
 6. **Musique des autres applis** (option).
@@ -189,6 +189,20 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - « 📥 Importer un pack » (onglet Playlists) : choisir le dossier sur la clé ; les chansons sont copiées dans `Music/<nom de la playlist>/` avec leurs paroles, la playlist est recréée. Chansons déjà présentes (même empreinte) : pas recopiées, simplement ajoutées à la playlist. Descriptif de ce qui a été ajouté avec 📋 Copier. Le dossier Musique doit être autorisé en écriture : l'appli le demande une fois si besoin (le dossier Musique est désormais autorisé en lecture + écriture).
 - Re-exporter sur la même clé : les chansons déjà présentes (même nom, même taille) ne sont pas recopiées ; la liste est mise à jour.
 - Sans le Lecteur, le destinataire lit quand même les chansons avec n'importe quel lecteur (sans karaoké).
+
+### 13.5 Aa : taille, police et couleurs des paroles — *livré le 21/11/2026 (version 1.6)*
+
+- Bouton **Aa** en haut de l'écran de lecture : panneau en bas, les paroles changent derrière en direct.
+- Taille des paroles (A− / A+, de 12 à 44) et de la traduction 🌐 (de 10 à 40), séparément.
+- Police au choix parmi celles d'Android (aucun téléchargement) : Normale, Ronde, Fine, Étroite, Épaisse, Livre, Machine, Manuscrite, BD, Majuscules (selon le téléphone, certaines peuvent se ressembler).
+- Couleur de la ligne chantée et couleur de la traduction (9 pastilles). « Remettre comme au début ».
+
+### 13.6 Économiseur d'écran musical « Ambiance » (validé le 21/11/2026, avec l'étape Vidéo)
+
+- Animation plein écran qui bouge au rythme de la musique, aux couleurs de la pochette. Styles : ondes, barres, particules, vinyle. Paroles en karaoké par-dessus (au choix).
+- Le son est analysé dans le lecteur lui-même : pas de micro, pas d'autorisation, pas d'appli tierce.
+- Lancement : bouton sur l'écran de lecture, ou automatique après quelques minutes sans toucher l'écran (réglable).
+- Les mêmes animations serviront au mode Chevet et au fond d'écran animé (étapes 4 et 5).
 
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
 
