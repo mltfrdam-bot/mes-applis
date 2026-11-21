@@ -149,6 +149,8 @@ class MainActivity : Activity() {
         majBandeau()
         majBoutonTraduction()
         if (toutes.isNotEmpty()) afficher()
+        // Retour des réglages Android après avoir autorisé les vidéos
+        if (videos.isEmpty() && videosOk(this) && Base.de(this).lire("video_demande") == "1") charger()
     }
 
     override fun onStop() {
@@ -161,6 +163,18 @@ class MainActivity : Activity() {
     // ----- Droits -----
 
     private fun demanderDroits() = requestPermissions(droitsNecessaires(), 1)
+
+    /** Vidéos : droit à part (groupe « Photos et vidéos » d'Android). Refusé pour de bon : on ouvre les réglages de l'appli. */
+    private fun demanderVideos() {
+        val p = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+        if (Base.de(this).lire("video_demande") == "1" && !shouldShowRequestPermissionRationale(p)) {
+            Toast.makeText(this, "Autorisations → Photos et vidéos → « Toujours tout autoriser »", Toast.LENGTH_LONG).show()
+            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+            return
+        }
+        Base.de(this).ecrire("video_demande", "1")
+        requestPermissions(arrayOf(p), 2)
+    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -299,6 +313,11 @@ class MainActivity : Activity() {
             recherche.texte.isNotEmpty() -> {
                 texteVide.text = "Rien ne correspond à « ${recherche.champ.text} »."
                 btnVide.visibility = View.GONE
+            }
+            onglet == 4 && !videosOk(this) -> {
+                texteVide.text = "Le Lecteur n'a pas encore le droit de voir tes vidéos.\n\nDans la fenêtre d'Android, choisis « Toujours tout autoriser » (et non « Sélectionner »)."
+                btnVide.text = "Autoriser les vidéos"
+                btnVide.setOnClickListener { demanderVideos() }
             }
             onglet == 4 -> {
                 texteVide.text = "Aucune vidéo trouvée dans Movies, Download ou Music.\n\nAvec Termux, enregistre tes vidéos dans ~/storage/shared/Movies."
@@ -492,6 +511,10 @@ class MainActivity : Activity() {
             val p = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
             return ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
         }
+
+        fun videosOk(ctx: Context): Boolean = ctx.checkSelfPermission(
+            if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
+        ) == PackageManager.PERMISSION_GRANTED
 
         fun notificationsOk(ctx: Context): Boolean =
             Build.VERSION.SDK_INT < 33 || ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
