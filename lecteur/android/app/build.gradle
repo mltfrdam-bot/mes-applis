@@ -16,8 +16,8 @@ android {
         versionCode numVersion
         versionName "1." + numVersion
         resValue "string", "app_name", "Lecteur"
-        // Téléphones 64 et 32 bits seulement : APK plus léger (le traducteur contient du code natif)
-        ndk { abiFilters "arm64-v8a", "armeabi-v7a" }
+        // Téléphones 64 bits seulement (tous les téléphones récents) : le traducteur contient un gros code natif
+        ndk { abiFilters "arm64-v8a" }
     }
     signingConfigs {
         release {
