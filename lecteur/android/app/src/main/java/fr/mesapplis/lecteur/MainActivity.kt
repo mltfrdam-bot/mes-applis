@@ -48,6 +48,7 @@ class MainActivity : Activity() {
     private var tri = Tri.AJOUT
     private var triInverse = false
     private var analyse = ""
+    private var nbDoublons = 0
 
     private val principal = Handler(Looper.getMainLooper())
     private val travail = Executors.newSingleThreadExecutor()
@@ -120,7 +121,10 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.btnAide).setOnClickListener { startActivity(Intent(this, AideActivity::class.java)) }
         findViewById<View>(R.id.btnDonnees).setOnClickListener { startActivity(Intent(this, DonneesActivity::class.java)) }
         findViewById<View>(R.id.btnActualiser).setOnClickListener { actualiser() }
-        bandeau.setOnClickListener { startActivity(Intent(this, AideActivity::class.java)) }
+        bandeau.setOnClickListener {
+            val cible = if (reglagesManquants(this) == 0 && nbDoublons > 0) DoublonsActivity::class.java else AideActivity::class.java
+            startActivity(Intent(this, cible))
+        }
 
         choisirOnglet(onglet)
         if (aLesDroits(this)) charger() else demanderDroits()
@@ -178,6 +182,9 @@ class MainActivity : Activity() {
                 }
                 principal.post { analyse = ""; afficher() }
             }
+            // Doublons : proposés automatiquement dans le bandeau
+            val d = Doublons.chercher(ctx, l).size
+            principal.post { nbDoublons = d; majBandeau() }
             Sauvegarde.autoSiBesoin(ctx)
         }
     }
@@ -326,7 +333,10 @@ class MainActivity : Activity() {
 
     private fun majBandeau() {
         val n = reglagesManquants(this)
-        if (n == 0) {
+        if (n == 0 && nbDoublons > 0) {
+            bandeau.visibility = View.VISIBLE
+            bandeau.text = "🔁 $nbDoublons morceau${if (nbDoublons > 1) "x" else ""} en double : touche ici pour choisir quoi supprimer."
+        } else if (n == 0) {
             bandeau.visibility = View.GONE
         } else {
             bandeau.visibility = View.VISIBLE

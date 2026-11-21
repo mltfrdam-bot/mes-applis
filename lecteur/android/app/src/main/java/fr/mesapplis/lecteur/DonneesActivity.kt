@@ -68,6 +68,10 @@ class DonneesActivity : Activity() {
         contenu.addView(zone, marge(4))
         resultat = zone
 
+        titre("Doublons")
+        texte("Cherche les morceaux en double et propose de les supprimer du lecteur et du téléphone (corbeille 30 jours, données reportées sur la version gardée).", gris = true)
+        contenu.addView(bouton("🔁 Chercher les doublons", false) { startActivity(Intent(this, DoublonsActivity::class.java)) }, marge(8))
+
         titre("Statistiques")
         val stats = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         contenu.addView(stats)

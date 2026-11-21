@@ -125,7 +125,7 @@ Une seule base de données (Room/SQLite) : playlists, favoris, nombre d'écoutes
 
 - Onglet ❓ Aide, une fiche par fonction, phrases courtes, pas d'anglais.
 - Page « Première utilisation » : autoriser l'accès aux fichiers, configurer Termux (`termux-setup-storage` + bon dossier), sortir l'appli de l'optimisation de batterie Samsung, autoriser le dossier Musique (paroles), activer le fond d'écran animé.
-- L'appli fonctionne à 100 % sans internet.
+- L'appli fonctionne à 100 % sans internet, sauf le téléchargement unique du pack de traduction (section 13.1).
 
 ## 11. Technique et atelier APK
 
@@ -133,7 +133,7 @@ Une seule base de données (Room/SQLite) : playlists, favoris, nombre d'écoutes
 
 Lien direct : https://github.com/mltfrdam-bot/mes-applis/releases/download/lecteur/Lecteur.apk
 
-**Permissions minimales** : accès musique et vidéo, notifications, service de premier plan (lecture média), Bluetooth (détection de connexion pour le mode Conduite), optionnellement l'accès aux notifications (section 7). Pas d'accès internet (retiré explicitement du manifeste).
+**Permissions minimales** : accès musique et vidéo, notifications, service de premier plan (lecture média), Bluetooth (détection de connexion pour le mode Conduite), optionnellement l'accès aux notifications (section 7). **Internet** (décidé le 21/11/2026, choix A) : autorisé uniquement pour le téléchargement unique du pack de traduction anglais → français ; aucune autre fonction ne s'en sert.
 
 ## 12. Étapes, tests et critères de réussite
 
@@ -146,6 +146,8 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 5. **Fond d'écran animé**.
 6. **Musique des autres applis** (option).
 
+Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'étape 2 : doublons d'abord (*livré le 21/11/2026, version 1.3*), traduction ensuite. La voix traduite des podcasts (13.3) vient après l'étape 6.
+
 **Tests que Frédéric fera.**
 
 - [ ] Télécharger un titre avec Termux, ouvrir l'appli : il apparaît en tête sans rien faire.
@@ -155,5 +157,32 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 - [ ] Brancher le chargeur la nuit : le mode Chevet se lance, l'écran ne marque pas.
 - [ ] Monter en voiture : le mode Conduite se lance à la connexion Bluetooth.
 - [ ] Sauvegarde, réinstallation, restauration : tout est revenu (playlists, écoutes, positions).
+- [ ] Doublons : un même titre téléchargé deux fois est proposé à la suppression ; après validation, il disparaît de l'appli et du téléphone, et se restaure depuis la corbeille.
+- [ ] Traduction : après le téléchargement du pack, un titre et des paroles en anglais s'affichent en français, mode avion activé.
+
+## 13. Fonctions validées le 21/11/2026
+
+### 13.1 Traduction anglais → français (activable/désactivable)
+
+- **Tous les textes** : titres, artistes, noms d'albums et de dossiers, paroles (karaoké), sous-titres des vidéos.
+- Un bouton 🌐 dans les réglages active ou désactive la traduction. Choix d'affichage : traduction sous le texte anglais, ou à la place.
+- Traduction faite sur le téléphone (traducteur intégré Google ML Kit, pas d'appli à installer), puis gardée dans la base : un texte n'est traduit qu'une fois, l'affichage reste instantané.
+- **Pack de langue (choix A, validé le 21/11/2026)** : environ 30 Mo, téléchargé une seule fois avec internet à la première activation de 🌐 (message clair avant, barre de progression). Ensuite, tout fonctionne sans internet. L'APK reste sous 15 Mo.
+
+### 13.2 Détection et suppression des doublons — *livré le 21/11/2026 (version 1.3)*
+
+- Comparaison des fichiers : contenu identique (empreinte), ou même titre et même artiste (sans « Official video », « Lyrics »…) avec moins de 3 s d'écart de durée.
+- Liste en tableaux : la meilleure version (débit le plus haut, puis rangée dans Music, puis la plus écoutée) est cochée ✅ ; toucher une ligne change le choix (au moins une version gardée). « Pas un doublon » retire le groupe pour toujours.
+- Proposition automatique par le bandeau 🔁 de l'écran principal, et bouton « 🔁 Chercher les doublons » dans 📊 Données.
+- À la validation : Android affiche sa fenêtre de confirmation (un seul appui pour tout le lot), le fichier disparaît du lecteur et du téléphone.
+- **Sécurité** : corbeille d'Android (30 jours), restaurable depuis l'écran Doublons (une ligne ou tout). Écoutes, favori, reprise et playlists du doublon sont reportés sur la version gardée ; le lien est gardé (table `remplacements`, exportée dans la sauvegarde) pour que les anciennes sauvegardes fusionnent sur la version gardée.
+- Les fichiers de paroles restent en place (rien n'est perdu si on restaure).
+- Rapport de ce qui a été supprimé et reporté, avec bouton 📋 Copier.
+
+### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
+
+- Idée : écouter un podcast anglais en français. L'appli écrit ce qui est dit, le traduit, puis le lit avec une voix française d'Android, la voix d'origine baissée en fond.
+- Limites : ce sera une voix de synthèse, pas la voix de la personne. En temps réel, le décalage sera de quelques secondes. Proposition : préparer la traduction à l'avance (téléphone en charge), puis l'écouter parfaitement synchronisée.
+- À présenter de nouveau en détail avant de coder.
 
 **Idées à proposer (ne rien coder sans son accord).** Pistes possibles : égaliseur simple, réglage de vitesse de lecture pour les cours, lecture des sous-titres (.srt) des vidéos, widget écran d'accueil, réveil en musique. Ajoute les tiennes, en 2-3 lignes chacune.

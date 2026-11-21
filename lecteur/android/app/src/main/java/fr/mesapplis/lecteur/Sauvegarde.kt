@@ -75,6 +75,12 @@ object Sauvegarde {
         }
         racine.put("playlists", playlists)
 
+        val remplacements = JSONArray()
+        db.rawQuery("SELECT ancienne, nouvelle, quand FROM remplacements", null).use { c ->
+            while (c.moveToNext()) remplacements.put(JSONObject().apply { put("a", c.getString(0)); put("n", c.getString(1)); put("quand", c.getLong(2)) })
+        }
+        racine.put("remplacements", remplacements)
+
         val reglages = JSONObject()
         db.rawQuery("SELECT cle, valeur FROM etat", null).use { c -> while (c.moveToNext()) reglages.put(c.getString(0), c.getString(1)) }
         racine.put("reglages", reglages)
@@ -165,9 +171,13 @@ object Sauvegarde {
         val db = Base.de(ctx).writableDatabase
         db.beginTransaction()
         try {
-            fusionMorceaux(db, s.optJSONArray("morceaux") ?: JSONArray(), lignes)
-            fusionEcoutes(db, s.optJSONObject("ecoutes") ?: JSONObject(), lignes)
-            fusionPlaylists(db, s.optJSONArray("playlists") ?: JSONArray(), lignes)
+            fusionRemplacements(db, s.optJSONArray("remplacements") ?: JSONArray(), lignes)
+            // Les données d'un doublon supprimé vont directement sur la version gardée
+            val rempl = Base.de(ctx).remplacements(db)
+            val m: (String) -> String = { rempl[it] ?: it }
+            fusionMorceaux(db, s.optJSONArray("morceaux") ?: JSONArray(), lignes, m)
+            fusionEcoutes(db, s.optJSONObject("ecoutes") ?: JSONObject(), lignes, m)
+            fusionPlaylists(db, s.optJSONArray("playlists") ?: JSONArray(), lignes, m)
             fusionReglages(db, s.optJSONObject("reglages") ?: JSONObject(), lignes)
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
@@ -175,11 +185,25 @@ object Sauvegarde {
         return lignes
     }
 
-    private fun fusionMorceaux(db: SQLiteDatabase, t: JSONArray, lignes: MutableList<LigneFusion>) {
+    private fun fusionRemplacements(db: SQLiteDatabase, t: JSONArray, lignes: MutableList<LigneFusion>) {
+        var n = 0
+        for (i in 0 until t.length()) {
+            val o = t.getJSONObject(i)
+            val a = o.optString("a"); val nv = o.optString("n")
+            if (a.isEmpty() || nv.isEmpty() || a == nv) continue
+            val r = db.insertWithOnConflict("remplacements", null, ContentValues().apply {
+                put("ancienne", a); put("nouvelle", nv); put("quand", o.optLong("quand"))
+            }, SQLiteDatabase.CONFLICT_IGNORE)
+            if (r != -1L) n++
+        }
+        if (n > 0) lignes += LigneFusion("Doublons", "+$n doublon(s) supprimé(s) ailleurs : leurs données vont sur la version gardée", true)
+    }
+
+    private fun fusionMorceaux(db: SQLiteDatabase, t: JSONArray, lignes: MutableList<LigneFusion>, m: (String) -> String) {
         var ajoutes = 0; var favoris = 0; var completes = 0; var positions = 0; var presents = 0
         for (i in 0 until t.length()) {
             val o = t.getJSONObject(i)
-            val e = o.optString("e")
+            val e = m(o.optString("e"))
             if (e.isEmpty()) continue
             val actuel = db.rawQuery("SELECT favori, ecoutes_base, position FROM morceaux WHERE empreinte=?", arrayOf(e)).use {
                 if (it.moveToFirst()) longArrayOf(it.getLong(0), it.getLong(1), it.getLong(2)) else null
@@ -209,12 +233,13 @@ object Sauvegarde {
         lignes += LigneFusion("Favoris", if (favoris > 0) "+$favoris favori(s) ajouté(s)" else "Rien à ajouter", favoris > 0)
     }
 
-    private fun fusionEcoutes(db: SQLiteDatabase, o: JSONObject, lignes: MutableList<LigneFusion>) {
+    private fun fusionEcoutes(db: SQLiteDatabase, o: JSONObject, lignes: MutableList<LigneFusion>, m: (String) -> String) {
         var ajoutees = 0; var presentes = 0
         val cles = o.keys()
         while (cles.hasNext()) {
-            val e = cles.next()
-            val t = o.optJSONArray(e) ?: continue
+            val brute = cles.next()
+            val t = o.optJSONArray(brute) ?: continue
+            val e = m(brute)
             for (i in 0 until t.length()) {
                 val r = db.insertWithOnConflict("ecoutes", null, ContentValues().apply { put("empreinte", e); put("quand", t.getLong(i)) }, SQLiteDatabase.CONFLICT_IGNORE)
                 if (r == -1L) presentes++ else ajoutees++
@@ -225,7 +250,7 @@ object Sauvegarde {
         ).joinToString(" · ").ifEmpty { "Rien à ajouter" }, ajoutees > 0)
     }
 
-    private fun fusionPlaylists(db: SQLiteDatabase, t: JSONArray, lignes: MutableList<LigneFusion>) {
+    private fun fusionPlaylists(db: SQLiteDatabase, t: JSONArray, lignes: MutableList<LigneFusion>, m: (String) -> String) {
         if (t.length() == 0) { lignes += LigneFusion("Playlists", "Aucune dans la sauvegarde", false); return }
         for (i in 0 until t.length()) {
             val o = t.getJSONObject(i)
@@ -241,11 +266,11 @@ object Sauvegarde {
                     put("id", id); put("nom", nom); put("cree_le", o.optLong("cree_le")); put("modifie_le", o.optLong("modifie_le"))
                     put("supprimee_le", o.optLong("supprimee_le"))
                 })
-                val n = ajouterPistes(db, id, pistes)
+                val n = ajouterPistes(db, id, pistes, m)
                 lignes += LigneFusion("📃 $nom", "Playlist ajoutée ($n titres)" + (if (o.optLong("supprimee_le") > 0) ", dans la corbeille" else ""), true)
                 continue
             }
-            val n = ajouterPistes(db, id, pistes)
+            val n = ajouterPistes(db, id, pistes, m)
             val details = ArrayList<String>()
             if (n > 0) details += "+$n titre(s) ajouté(s) à la fin"
             if (actuelle.first != nom) details += "nom différent (« $nom ») : nom actuel gardé"
@@ -254,12 +279,12 @@ object Sauvegarde {
         }
     }
 
-    private fun ajouterPistes(db: SQLiteDatabase, id: String, pistes: JSONArray): Int {
+    private fun ajouterPistes(db: SQLiteDatabase, id: String, pistes: JSONArray, m: (String) -> String): Int {
         var ordre = db.rawQuery("SELECT COALESCE(MAX(ordre), 0) FROM playlist_pistes WHERE playlist=?", arrayOf(id)).use { if (it.moveToFirst()) it.getDouble(0) else 0.0 }
         var n = 0
         for (k in 0 until pistes.length()) {
             val p = pistes.getJSONObject(k)
-            val e = p.optString("e")
+            val e = m(p.optString("e"))
             if (e.isEmpty()) continue
             val existe = db.rawQuery("SELECT 1 FROM playlist_pistes WHERE playlist=? AND empreinte=?", arrayOf(id, e)).use { it.moveToFirst() }
             if (existe) continue

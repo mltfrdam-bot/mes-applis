@@ -19,9 +19,10 @@ class LigneStat(val colonnes: List<String>)
  *  - morceaux        : tout ce qui est connu d'un morceau, par empreinte (favori, écoutes, position…)
  *  - ecoutes         : chaque écoute avec sa date (statistiques par semaine, fusion exacte)
  *  - playlists, playlist_pistes
+ *  - remplacements   : doublon supprimé → version gardée (ses données y ont été reportées)
  *  - pistes          : ancienne table de la version 1 (vidée au fur et à mesure de la reprise des données)
  */
-class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db", null, 2) {
+class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE etat (cle TEXT PRIMARY KEY, valeur TEXT)")
@@ -30,11 +31,17 @@ class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db
                 "ecoutes INTEGER NOT NULL DEFAULT 0, derniere_ecoute INTEGER NOT NULL DEFAULT 0)"
         )
         creerV2(db)
+        creerV3(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, ancienne: Int, nouvelle: Int) {
         // On ajoute, on n'efface jamais rien.
         if (ancienne < 2) creerV2(db)
+        if (ancienne < 3) creerV3(db)
+    }
+
+    private fun creerV3(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS remplacements (ancienne TEXT PRIMARY KEY, nouvelle TEXT NOT NULL, quand INTEGER NOT NULL DEFAULT 0)")
     }
 
     private fun creerV2(db: SQLiteDatabase) {
@@ -204,6 +211,77 @@ class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db
     fun sauverPosition(e: String, ms: Long) {
         writableDatabase.update("morceaux", ContentValues().apply { put("position", ms) }, "empreinte=?", arrayOf(e))
     }
+
+    // ----- Doublons -----
+
+    /** Table « ancienne empreinte → empreinte gardée », chaînes résolues. */
+    fun remplacements(db: SQLiteDatabase = readableDatabase): Map<String, String> {
+        val brut = HashMap<String, String>()
+        db.rawQuery("SELECT ancienne, nouvelle FROM remplacements", null).use { c -> while (c.moveToNext()) brut[c.getString(0)] = c.getString(1) }
+        val res = HashMap<String, String>()
+        for (a in brut.keys) {
+            var n = brut[a]!!
+            var garde = 0
+            while (brut.containsKey(n) && garde++ < 20) n = brut[n]!!
+            if (n != a) res[a] = n
+        }
+        return res
+    }
+
+    /** Oublie la base (empreinte → données) d'un fichier supprimé du téléphone. */
+    fun oublierChemin(chemin: String) {
+        writableDatabase.delete("fichiers", "chemin=?", arrayOf(chemin))
+    }
+
+    /**
+     * Doublon supprimé : tout ce qu'il avait (écoutes, favori, reprise, playlists) passe sur la version gardée.
+     * Rien n'est perdu ; le lien est gardé pour que les anciennes sauvegardes fusionnent au bon endroit.
+     */
+    fun reporter(ancienne: String, nouvelle: String, titre: String, artiste: String): Report {
+        val r = Report()
+        if (ancienne == nouvelle) return r
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            assurerMorceau(db, nouvelle, titre, artiste)
+            val vieux = db.rawQuery("SELECT favori, favori_le, ecoutes_base, position FROM morceaux WHERE empreinte=?", arrayOf(ancienne)).use {
+                if (it.moveToFirst()) longArrayOf(it.getLong(0), it.getLong(1), it.getLong(2), it.getLong(3)) else null
+            }
+            r.ecoutes = db.rawQuery("SELECT COUNT(*) FROM ecoutes WHERE empreinte=?", arrayOf(ancienne)).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            db.execSQL("INSERT OR IGNORE INTO ecoutes (empreinte, quand) SELECT ?, quand FROM ecoutes WHERE empreinte=?", arrayOf(nouvelle, ancienne))
+            db.delete("ecoutes", "empreinte=?", arrayOf(ancienne))
+            if (vieux != null) {
+                r.ecoutes += vieux[2].toInt()
+                db.execSQL("UPDATE morceaux SET ecoutes_base = ecoutes_base + ? WHERE empreinte=?", arrayOf<Any>(vieux[2], nouvelle))
+                if (vieux[0] == 1L) {
+                    val deja = db.rawQuery("SELECT favori FROM morceaux WHERE empreinte=?", arrayOf(nouvelle)).use { it.moveToFirst() && it.getInt(0) == 1 }
+                    if (!deja) {
+                        db.update("morceaux", ContentValues().apply { put("favori", 1); put("favori_le", vieux[1]) }, "empreinte=?", arrayOf(nouvelle))
+                        r.favori = true
+                    }
+                }
+                if (vieux[3] > 0) db.execSQL("UPDATE morceaux SET position=? WHERE empreinte=? AND position=0", arrayOf<Any>(vieux[3], nouvelle))
+                db.delete("morceaux", "empreinte=?", arrayOf(ancienne))
+            }
+            val listes = ArrayList<String>()
+            db.rawQuery("SELECT playlist FROM playlist_pistes WHERE empreinte=?", arrayOf(ancienne)).use { c -> while (c.moveToNext()) listes += c.getString(0) }
+            for (pl in listes) {
+                val dejaLa = db.rawQuery("SELECT 1 FROM playlist_pistes WHERE playlist=? AND empreinte=?", arrayOf(pl, nouvelle)).use { it.moveToFirst() }
+                if (dejaLa) db.delete("playlist_pistes", "playlist=? AND empreinte=?", arrayOf(pl, ancienne))
+                else db.update("playlist_pistes", ContentValues().apply { put("empreinte", nouvelle) }, "playlist=? AND empreinte=?", arrayOf(pl, ancienne))
+                r.playlists++
+            }
+            db.insertWithOnConflict("remplacements", null, ContentValues().apply {
+                put("ancienne", ancienne); put("nouvelle", nouvelle); put("quand", System.currentTimeMillis())
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            db.update("remplacements", ContentValues().apply { put("nouvelle", nouvelle) }, "nouvelle=?", arrayOf(ancienne))
+            db.delete("remplacements", "ancienne=nouvelle", null)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return r
+    }
+
+    class Report { var ecoutes = 0; var favori = false; var playlists = 0 }
 
     // ----- Playlists -----
 

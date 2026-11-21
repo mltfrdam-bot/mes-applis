@@ -101,6 +101,16 @@ class AideActivity : Activity() {
         texte("Paroles : pose le fichier .lrc à côté de la chanson, avec le même nom (ex. Chanson.mp3 et Chanson.lrc). Les .srt et .vtt marchent aussi.")
         texte("Un fichier n'apparaît pas ? Touche 🔄 en haut de la liste.")
 
+        titre("Doublons")
+        texte(
+            "Quand un même morceau est présent deux fois (même fichier, ou même titre et même durée), un bandeau 🔁 le signale. " +
+                "Tu peux aussi chercher toi-même : 📊 Données → 🔁 Chercher les doublons.\n" +
+                "• La meilleure qualité est cochée ✅ d'office ; touche une ligne pour changer.\n" +
+                "• Les fichiers 🗑 vont dans la corbeille d'Android : 30 jours pour les restaurer (en bas de l'écran Doublons).\n" +
+                "• Écoutes, favoris, reprise et playlists passent sur la version gardée.\n" +
+                "• Les fichiers de paroles (.lrc) restent en place : rien n'est perdu si tu restaures."
+        )
+
         titre("Rapport pour Claude")
         texte("Copie ce rapport et colle-le dans la conversation si quelque chose ne marche pas.")
         val ligne = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
