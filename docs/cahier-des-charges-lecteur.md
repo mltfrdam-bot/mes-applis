@@ -213,6 +213,12 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - Corbeille d'Android 30 jours ; écoutes et favoris gardés dans la base (ils reviennent si on restaure) ; rapport avec 📋 Copier. Écran « ♻️ Corbeille » dans 📊 Données (musiques et vidéos), restauration ligne par ligne ou tout.
 - **📁 Dossiers suivis** (📊 Données) : Music, Download, Movies de base + « ➕ Ajouter un dossier » (n'importe quel dossier, ou tout le téléphone), « ✕ Retirer ». Le dossier ajouté est aussi autorisé pour les paroles et sous-titres. Les doublons sont cherchés dans tous les dossiers suivis.
 
+### 13.8 Qualité des musiques — *livré le 21/11/2026 (version 1.9)*
+
+- Tri « Qualité » (les plus faibles d'abord) et ⚠ « 96 kb/s » sur les musiques sous 120 kb/s (YouTube plafonne vers 130-160 kb/s : rien à gagner au-dessus).
+- 📊 Données → 🎚 Qualité : « 💾 Préparer pour Termux » écrit `Download/Lecteur/a-ameliorer.txt` (lien YouTube lu dans le fichier, sinon recherche « artiste titre ») ; « 📋 Copier la liste ».
+- Termux : commande `ameliorer` (ou choix 4 du menu de partage) : retélécharge en meilleure qualité dans `Music/Améliorés/`, avec paroles ; l'écran Doublons propose ensuite de garder la meilleure version (données reportées, ancienne à la corbeille).
+
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
 
 - Idée : écouter un podcast anglais en français. L'appli écrit ce qui est dit, le traduit, puis le lit avec une voix française d'Android, la voix d'origine baissée en fond.
