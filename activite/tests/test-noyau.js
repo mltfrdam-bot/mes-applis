@@ -405,4 +405,8 @@ test("Suivi du matériel (1.19) : compteurs depuis la date, seuil, alerte une se
 test("Matériel ajouté après des séances jouées depuis « Depuis le » : elles comptent (21/11)", () => { const B = N.baseVide(), t0 = Date.now() - 3 * 86400000;
   N.matUsageNoter(B, "tennis", t0 + 3600000); const e = N.matAjouter(B, "cordage", "Cordage", t0);
   assert.strictEqual(N.matCompteur(B, e, [{ t: t0 + 3600000, act: "tennis", duree: 3600 }]).sec, 3600); });
+test("Fiches adversaires et résultats passés (essai 15)", () => { const B = N.baseVide(); N.advEnregistrer(B, { nom: "Alexandre", cl: "30/1", ancien: "15/4", ans: 12, main: "D" });
+  const t0 = 1e12; N.evtAjouter(B, { ts: t0, k: "match", moi: "Frédéric", moiCl: "30", adv: "Alexandre", advCl: "30/1" }); for (let i = 0; i < 6; i++) N.evtAjouter(B, { ts: t0 + 1 + i, k: "jeu", qui: 1 }); for (let i = 0; i < 6; i++) N.evtAjouter(B, { ts: t0 + 10 + i, k: "jeu", qui: 1 });
+  assert.strictEqual(N.advTrouver(B, "alexandre ").cl, "30/1"); const r = N.advResultats(B, "Alexandre"); assert.strictEqual(r.length, 1); assert.strictEqual(r[0].score, "0-6 0-6"); assert.strictEqual(r[0].gagne, false);
+  assert.strictEqual(N.ecartCl("30", "30/1"), -1); assert.strictEqual(N.ecartCl("30", "15/4"), 2); });
 console.log("\n" + n + " tests réussis.");

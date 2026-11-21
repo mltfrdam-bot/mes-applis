@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["seance-evts", "acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["adversaires", "seance-evts", "acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -784,7 +784,7 @@ function ravitoConseil(o) { const sec = Math.max(0, o.sec || 0), h = sec / 3600,
 /* Après la séance : (prévu − bu) × 1,5, à boire dans les 1 h 30 */
 function rehydratation(sec, mlBu, mlH) { const manque = (mlH || 700) * sec / 3600 - (mlBu || 0); return manque > 0 ? Math.round(manque * 1.5 / 50) * 50 : 0; }
 /* 🎾 Score : jeux par set ; set gagné à 6 avec 2 d'écart ou à 7 ; super tie-break : 10 points avec 2 d'écart */
-function scoreEtat(evts) { const m = evts.filter(e => e.k === "match").pop(); if (!m) return null; const st = { moi: m.moi || "Moi", adv: m.adv || "Adversaire", sets: [], cur: [0, 0], stb: false, debut: m.ts, jeux: [] };
+function scoreEtat(evts) { const m = evts.filter(e => e.k === "match").pop(); if (!m) return null; const st = { moi: m.moi || "Moi", adv: m.adv || "Adversaire", moiCl: m.moiCl || "", advCl: m.advCl || "", m, sets: [], cur: [0, 0], stb: false, debut: m.ts, jeux: [] };
   const clore = () => { st.sets.push({ a: st.cur[0], b: st.cur[1], stb: st.stb }); st.cur = [0, 0]; st.stb = false; };
   evts.forEach(e => { if (e.ts < m.ts) return;
     if (e.k === "jeu") { st.cur[e.qui ? 1 : 0]++; const [a, b] = st.cur, fini = st.stb ? (a >= 10 || b >= 10) && Math.abs(a - b) >= 2 : ((a >= 6 || b >= 6) && Math.abs(a - b) >= 2) || a === 7 || b === 7;
@@ -795,12 +795,12 @@ function scoreEtat(evts) { const m = evts.filter(e => e.k === "match").pop(); if
 function scoreTxt(st) { if (!st) return ""; const t = st.sets.map(x => x.stb ? "[" + x.a + "-" + x.b + "]" : x.a + "-" + x.b); if (st.cur[0] || st.cur[1]) t.push((st.stb ? "[" : "") + st.cur[0] + "-" + st.cur[1] + (st.stb ? "]" : "") + " en cours"); return t.join(" "); }
 function scoreA(st, ts) { if (!st) return ""; let txt = ""; st.jeux.forEach(j => { if (j.ts <= ts) txt = "set " + j.set + " : " + j.a + "-" + j.b + (j.stb ? " (super tie-break)" : ""); }); return txt; }
 function ravitoLigne(evts) { const o = ravitoTotaux(evts), st = scoreEtat(evts), t = [];
-  if (st) t.push("🎾 " + scoreTxt(st) + " contre " + st.adv);
+  if (st) t.push("🎾 " + scoreTxt(st) + " contre " + st.adv + (st.advCl ? " (" + st.advCl + ")" : ""));
   if (o.eau || o.sucre) t.push("💧 bu " + (o.eau / 1000).toFixed(2).replace(".", ",") + " L" + (o.sucre ? " · sucre " + o.sucre + " g" : "") + (o.sel ? " · sel " + String(o.sel).replace(".", ",") + " g" : ""));
   return t; }
 function ravitoDetail(T, evts, R, mlH) { if (!evts.length) return; const st = scoreEtat(evts), o = ravitoTotaux(evts), h = (ts) => { const d = new Date(ts); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
   T.push("", "Ravitaillement et score :");
-  if (st) T.push("Match : " + st.moi + " contre " + st.adv + " · score " + scoreTxt(st));
+  if (st) { const e = ecartCl(st.moiCl, st.advCl); T.push("Match : " + st.moi + (st.moiCl ? " (" + st.moiCl + ")" : "") + " contre " + st.adv + (advTxt(st.m) ? " (" + advTxt(st.m) + ")" : "") + " · score " + scoreTxt(st) + (e ? " · écart : " + Math.abs(e) + " échelon" + (Math.abs(e) > 1 ? "s" : "") + (e > 0 ? " au-dessus de moi" : " en dessous de moi") : e === 0 ? " · même classement" : "")); if (st.m.advNote) T.push("Note sur l'adversaire : " + st.m.advNote); }
   if (o.eau || o.sucre) { const p = Object.keys(o.par).map(k => RAVITO[k].nom.toLowerCase() + " " + (RAVITO[k].unite === "ml" ? (o.par[k].q / 10) + " cl" : (o.par[k].n ? o.par[k].n + " (" + Math.round(o.par[k].q) + " g)" : Math.round(o.par[k].q) + " g"))).join(", ");
     T.push("Pris pendant la séance : " + p + " → eau " + (o.eau / 1000).toFixed(2).replace(".", ",") + " L, sucre " + o.sucre + " g, sel " + String(o.sel).replace(".", ",") + " g, " + o.kcal + " kcal");
     if (R && R.debut) { const sec = ((R.l || []).length ? R.l[R.l.length - 1][0] : 0); if (sec > 0) T.push("Eau par heure : " + Math.round(o.eau / (sec / 3600)) + " ml/h (objectif " + (mlH || 700) + ")"); } }
@@ -813,6 +813,25 @@ function avecRavito(x, evts) { if (!evts || !evts.length) return x; x.evts = evt
 /* ✍️ Notes libres du ressenti */
 function ressentiNoter(n, txt) { if (!n) return null; const rs = Object.assign({}, n.ressenti || {}), t = String(txt || "").trim().slice(0, 3000); if (t) rs.notes = t; else delete rs.notes; if (Object.keys(rs).length) n.ressenti = rs; else delete n.ressenti; return rs; }
 
+
+
+/* ===== 🎾 Fiches adversaires (essai 15) ===== */
+const CLASSEMENTS = ["NC", "40", "30/5", "30/4", "30/3", "30/2", "30/1", "30", "15/5", "15/4", "15/3", "15/2", "15/1", "15", "5/6", "4/6", "3/6", "2/6", "1/6", "0", "-2/6", "-4/6", "-15", "-30", "Top 60 / 100"];
+const normNom = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+function advLire(base) { return lireListe(base.reglages["adversaires"]).filter(a => a && a.nom); }
+function advTrouver(base, nom) { const n = normNom(nom); return n ? advLire(base).filter(a => normNom(a.nom) === n).sort((a, b) => (b.maj || 0) - (a.maj || 0))[0] || null : null; }
+function advEnregistrer(base, f) { const nom = String(f.nom || "").trim().slice(0, 40); if (!nom) return null; const l = advLire(base).filter(a => normNom(a.nom) !== normNom(nom));
+  const a = { nom, cl: CLASSEMENTS.includes(f.cl) ? f.cl : "", ancien: CLASSEMENTS.includes(f.ancien) ? f.ancien : "", ans: Math.max(0, Math.min(80, Math.round(Number(f.ans) || 0))) || null, main: f.main === "G" ? "G" : f.main === "D" ? "D" : "", note: String(f.note || "").trim().slice(0, 300), maj: Date.now() };
+  l.push(a); base.reglages["adversaires"] = JSON.stringify(l); return a; }
+/* écart de classement : positif = l'adversaire est mieux classé que moi (en échelons) */
+function ecartCl(moi, adv) { const a = CLASSEMENTS.indexOf(moi), b = CLASSEMENTS.indexOf(adv); return a < 0 || b < 0 ? null : b - a; }
+function advTxt(m) { const t = []; if (m.advCl) t.push(m.advCl); if (m.advAncien && m.advAncien !== m.advCl) t.push("ancien " + m.advAncien); if (m.advAns) t.push(m.advAns + " an" + (m.advAns > 1 ? "s" : "") + " de tennis"); if (m.advMain) t.push(m.advMain === "G" ? "gaucher" : "droitier"); return t.join(", "); }
+/* résultats passés contre un adversaire (matchs notés dans les séances) */
+function advResultats(base, nom) { const n = normNom(nom), ev = evtsLire(base).slice().sort((a, b) => a.ts - b.ts), res = [];
+  ev.forEach((m, i) => { if (m.k !== "match" || normNom(m.adv) !== n) return; const fin = (ev.slice(i + 1).find(x => x.k === "match") || { ts: m.ts + 6 * 3600e3 }).ts;
+    const st = scoreEtat(ev.filter(x => x.ts >= m.ts && x.ts < fin)); if (!st) return; const g = st.sets.filter(x => x.a > x.b).length, p = st.sets.filter(x => x.b > x.a).length;
+    res.push({ ts: m.ts, score: scoreTxt(st), gagne: g > p ? true : p > g ? false : null }); });
+  return res; }
 
 /* ===== 🩺 Santé (données du 📒 carnet) et 📋 rapport du jour / de la semaine (essai 12) ===== */
 /* Repères de tension (société européenne d'hypertension) : < 130/85 normale, 130-139 / 85-89 à surveiller, ≥ 140/90 élevée, ≥ 180/110 très élevée ; < 90/60 basse */
@@ -913,6 +932,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
+  CLASSEMENTS, advLire, advTrouver, advEnregistrer, advResultats, ecartCl, advTxt,
   tensionNiveau, isoJour, santeMesures, douleursActives, rapportPeriode,
   GOURDE_DEFAUT, gourdeRecette, gourdeRegler, RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,
   DIFF, kg, chargeTxt, chargeVal, MAT_MODELES, MAT_ICONES, matLire, matAjouter, matRegler, matSupprimer, matUsageNoter, matCompteur, matDepasse, matUsageTxt, matNeuf, matPlusTop, matSuggestion, matAlertesNouvelles, matBilan, sasDirect, sasDirectRegler, echauffementNoter, echauffementPour, echauffementTxt, actPerso, actSupprimer, actRecreer, actVersExo, exoSupprimer, photoReglages, remettreReglages, EXO_ICONES, EXO_COMPTAGES, EXO_COTES, exoResume, repsDebutSerie, repsDeclarer, repsCoteSuivant, seriesTxt, RESSENTI, EFFORT_CR10, ressentiRegler, ressentiTxt, chargeRessentie, noteRessenti, exosLire, exoRegler, exoAjouter, programmeLire, programmeEcrire, recordSerie, repsNouveau, repsCourant, repsT, repsTotal, repsAppui, repsPlus, repsMoins, repsFc, repsFinSerie, repsDiff, repsCharge, repsRepos, repsSuivant, repsSeance, rapportReps,

@@ -355,7 +355,7 @@ function vueSas() { if (!SAS) { aller("activites"); return; } const act = SAS.ac
       '<tr><td>💥 Impacts</td><td>' + (imp.auto ? '<span class="gris">Réglage automatique pour cette activité.</span>' : 'Fais quelques frappes : regarde ce qui est compté (✅) ou pas (✗), puis ajuste.' + htmlReglage("essai")) + '</td></tr>' +
       (gps ? '<tr><td>📍 GPS</td><td>Il démarre avec la séance. <button class="sec petit" data-do="sasSansGps">Sans GPS cette fois</button></td></tr>' : "") +
       (gps ? '<tr><td>👻 Fantôme</td><td>' + (htmlFantome(act) || '<span class="gris">Aucun. Pour en choisir un : Historique, touche une course, « 👻 Prendre comme fantôme ».</span>') + '</td></tr>' : "") +
-      htmlMaterielSas(act) +
+      htmlMaterielSas(act) + (act === "tennis" ? '<div id="sasMatch">' + htmlMatchSas() + '</div>' : "") +
       '<tr><td>⚡ Démarrage</td><td><label style="display:flex;gap:8px;align-items:center;font-size:16px"><input type="checkbox" data-do="sasDirect"' + (N.sasDirect(BASE, act) ? " checked" : "") + ' style="width:24px;height:24px"> Pour ' + esc(N.actNom(act)) + ', démarrer directement la prochaine fois (sans préparation)</label></td></tr>' +
       '<tr><td>🎮 🥤 ⏭</td><td class="gris" style="font-size:14px">Bientôt ici : boutons des manettes, boissons prévues, séance suivante.</td></tr>' +
     '</tbody></table>' +
@@ -559,7 +559,7 @@ function tic() { lireEtat(); majH10();
   if (fenetreH10) majFenetreH10(); }
 
 /* ----- séance ----- */
-function lancerSeance() { fermerFenetre(); const act = actCourante(), o = N.gpsLire(BASE), gps = o.acts.includes(act) && !DEPART.sansGps && Pont.gpsEtat().droit; pousserReglage(act); if (gps) Pont.gpsRegler(o);
+function lancerSeance() { fermerFenetre(); { const m = matchAttente(); if (m && actCourante() === "tennis") { delete m.prep; N.evtAjouter(BASE, Object.assign({ ts: Date.now() }, m)); } delete BASE.reglages["match-attente"]; sauver(); } const act = actCourante(), o = N.gpsLire(BASE), gps = o.acts.includes(act) && !DEPART.sansGps && Pont.gpsEtat().droit; pousserReglage(act); if (gps) Pont.gpsRegler(o);
   const fant = gps ? fantomePret(act) : null; Pont.ecrire("fantome-en-cours.json", fant ? JSON.stringify(fant) : "{}"); if (fant) Pont.fantomeRegler(N.fantLire(BASE).rythme);
   if (!(gps ? Pont.seanceDemarrerGps(act) : Pont.seanceDemarrer(act))) { info("⚠️ Démarrage impossible", "<p>Le service d'enregistrement n'a pas pu démarrer. Vérifie l'autorisation " + (gps ? "de la position" : "Bluetooth") + ".</p>"); return; }
   N.matUsageNoter(BASE, act, Date.now()); sauver();
@@ -666,8 +666,31 @@ function gourdeDosage() { const g = gourde(), r = N.gourdeRecette(BASE, g), cham
   fenetre('<div class="t">🧪 Dosage — ' + (g === "erable" ? "🍁 Érable-sel" : "🍬 Sucre-sel") + '</div><table class="milieu"><tbody>' + (g === "erable" ? champ("gdA", r.sirop, "Sirop d'érable") : champ("gdA", r.sucre, "Sucre")) + champ("gdS", r.sel, "Sel") + '</tbody></table><p class="aide">Les boissons déjà notées gardent leur ancien dosage.</p><div class="ligne"><button class="main" data-do="gourdeDosageOk">Enregistrer</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); }
 function gourdeDosageOk() { const g = gourde(), a = Number($("#gdA").value), sl = Number($("#gdS").value); if (!(a >= 0 && a <= 200 && sl >= 0 && sl <= 20)) { toast("Dosage à vérifier (sucre 0 à 200 g, sel 0 à 20 g par litre)."); return; }
   const r = N.gourdeRegler(BASE, g, g === "erable" ? { sirop: a, sel: sl } : { sucre: a, sel: sl }); sauver(); fermerFenetre(); toast("🧪 " + r.txt, 3000); majRavito(true); }
-function matchDebut() { fenetre('<div class="t">🎾 Match</div><table class="milieu"><tbody><tr><td>Moi</td><td><input id="matchMoi" value="' + esc(BASE.reglages["match-moi"] || "Frédéric") + '" maxlength="30" style="width:100%;font-size:18px"></td></tr><tr><td>Adversaire</td><td><input id="matchAdv" maxlength="30" style="width:100%;font-size:18px" placeholder="Nom"></td></tr></tbody></table><div class="ligne"><button class="main" data-do="matchOk">🎾 Commencer le score</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>'); setTimeout(() => { const i = $("#matchAdv"); if (i) i.focus(); }, 200); }
-function matchOk() { const moi = ($("#matchMoi").value || "Moi").trim(), adv = ($("#matchAdv").value || "Adversaire").trim(); BASE.reglages["match-moi"] = moi; N.evtAjouter(BASE, { ts: Date.now(), k: "match", moi, adv }); sauver(); fermerFenetre(); majRavito(true); }
+/* 🎾 Fiche du match : adversaire (classement, ancien classement, années de tennis, main, note) — avant ou pendant la séance */
+function selCl(id, v, vide) { return '<select id="' + id + '" style="width:100%;font-size:18px;padding:6px">' + (vide ? '<option value="">–</option>' : "") + N.CLASSEMENTS.map(c => '<option' + (c === v ? " selected" : "") + '>' + c + '</option>').join("") + '</select>'; }
+let MATCH_MAIN = "";
+function matchDebut() { const noms = [...new Map(N.advLire(BASE).map(a => [a.nom.toLowerCase(), a.nom])).values()].sort(), moiCl = BASE.reglages["mon-classement"] || "30"; MATCH_MAIN = "";
+  fenetre('<div class="t">🎾 Match officiel</div><table class="milieu"><tbody>' +
+    '<tr><td>Moi</td><td><input id="matchMoi" value="' + esc(BASE.reglages["match-moi"] || "Frédéric") + '" maxlength="30" style="width:100%;font-size:18px"></td></tr><tr><td>Mon classement</td><td>' + selCl("matchMoiCl", moiCl) + '</td></tr>' +
+    '<tr><td>Adversaire</td><td><input id="matchAdv" list="advListe" maxlength="40" style="width:100%;font-size:18px" placeholder="Nom (tape le début)"><datalist id="advListe">' + noms.map(n => '<option value="' + esc(n) + '">').join("") + '</datalist></td></tr>' +
+    '<tr><td>Son classement</td><td>' + selCl("advCl", "", true) + '</td></tr><tr><td>Son meilleur classement d\'avant</td><td>' + selCl("advAncien", "", true) + '</td></tr>' +
+    '<tr><td>Années de tennis</td><td><input id="advAns" type="number" inputmode="numeric" style="width:100%;font-size:18px"></td></tr>' +
+    '<tr><td>Il joue</td><td><div class="chips"><button class="chip" data-do="matchMain" data-v="D">Droitier</button><button class="chip" data-do="matchMain" data-v="G">Gaucher</button></div></td></tr>' +
+    '<tr><td>Note</td><td><input id="advNote" maxlength="300" style="width:100%;font-size:16px" placeholder="ex. : monte au filet, vise mon revers"></td></tr></tbody></table><div id="advPasse" class="gris"></div>' +
+    '<div class="ligne"><button class="main" data-do="matchOk">🎾 ' + (S.enr ? "Commencer le score" : "Préparer le match") + '</button></div><div class="ligne"><button class="sec" data-do="fermer">Annuler</button></div>');
+  const i = $("#matchAdv"); if (i) { i.addEventListener("input", advRemplir); i.addEventListener("change", advRemplir); setTimeout(() => i.focus(), 200); } }
+function advRemplir() { const a = N.advTrouver(BASE, $("#matchAdv").value), r = $("#advPasse"); if (!a) { if (r) r.innerHTML = ""; return; }
+  $("#advCl").value = a.cl || ""; $("#advAncien").value = a.ancien || ""; $("#advAns").value = a.ans || ""; $("#advNote").value = a.note || ""; MATCH_MAIN = a.main || "";
+  document.querySelectorAll('[data-do="matchMain"]').forEach(x => x.setAttribute("aria-pressed", x.dataset.v === MATCH_MAIN));
+  const res = N.advResultats(BASE, a.nom); if (r) r.innerHTML = res.length ? "Tes matchs contre " + esc(a.nom) + " : " + res.map(x => (x.gagne ? "✅ " : x.gagne === false ? "❌ " : "") + new Date(x.ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" }) + " " + esc(x.score)).join(" · ") : "Pas encore de match noté contre " + esc(a.nom) + "."; }
+function matchOk() { const moi = ($("#matchMoi").value || "Moi").trim(), adv = ($("#matchAdv").value || "").trim(); if (!adv) { toast("Indique le nom de l'adversaire."); return; }
+  const moiCl = $("#matchMoiCl").value; BASE.reglages["match-moi"] = moi; BASE.reglages["mon-classement"] = moiCl;
+  const a = N.advEnregistrer(BASE, { nom: adv, cl: $("#advCl").value, ancien: $("#advAncien").value, ans: $("#advAns").value, main: MATCH_MAIN, note: $("#advNote").value });
+  const m = { k: "match", moi, moiCl, adv: a.nom, advCl: a.cl, advAncien: a.ancien, advAns: a.ans, advMain: a.main, advNote: a.note };
+  if (S.enr) { N.evtAjouter(BASE, Object.assign({ ts: Date.now() }, m)); sauver(); fermerFenetre(); majRavito(true); }
+  else { BASE.reglages["match-attente"] = JSON.stringify(Object.assign({ prep: Date.now() }, m)); sauver(); fermerFenetre(); const z = $("#sasMatch"); if (z) z.innerHTML = htmlMatchSas(); toast("🎾 Match prêt : le score démarre avec la séance.", 2500); } }
+function matchAttente() { try { const m = JSON.parse(BASE.reglages["match-attente"] || "null"); return m && Date.now() - m.prep < 3 * 3600e3 ? m : null; } catch (e) { return null; } }
+function htmlMatchSas() { const m = matchAttente(); return '<div class="ligne">' + (m ? '<button class="sec" data-do="matchDebut">🎾 Match contre <b>' + esc(m.adv) + '</b>' + (m.advCl ? " (" + esc(m.advCl) + ")" : "") + ' — modifier</button><button class="sec petit" data-do="matchSansSas">✖</button>' : '<button class="sec" data-do="matchDebut">🎾 Match officiel : fiche de l\'adversaire</button>') + '</div>'; }
 function jeuNoter(qui) { N.evtAjouter(BASE, { ts: Date.now(), k: "jeu", qui }); sauver(); Pont.vibrer(25); majRavito(true); }
 /* 1.13 : écran 2 « Prévision » */
 let PAGE_SEANCE = (() => { try { return Number(localStorage.getItem("seance-page")) || 0; } catch (e) { return 0; } })();
@@ -918,7 +941,9 @@ const ACTIONS = {
   doulNiv: (b) => { DOUL.niv = Number(b.dataset.v); document.querySelectorAll('[data-do="doulNiv"]').forEach(x => x.setAttribute("aria-pressed", x === b)); },
   rapportNb: (b) => { RAPPORT_NB = Number(b.dataset.v) || 7; dessiner(); },
   rapportCopier: () => copie(N.rapportPeriode(BASE, Pont.santeLire(), RAPPORT_NB), "Rapport"),
-  rav: ravNoter, ravAnnuler, matchDebut, matchOk, jeu: (b) => jeuNoter(Number(b.dataset.q) ? 1 : 0),
+  rav: ravNoter, ravAnnuler, matchDebut, matchOk,
+  matchMain: (b) => { MATCH_MAIN = b.dataset.v; document.querySelectorAll('[data-do="matchMain"]').forEach(x => x.setAttribute("aria-pressed", x === b)); },
+  matchSansSas: () => { delete BASE.reglages["match-attente"]; sauver(); const z = $("#sasMatch"); if (z) z.innerHTML = htmlMatchSas(); }, jeu: (b) => jeuNoter(Number(b.dataset.q) ? 1 : 0),
   jeuAnnuler: () => { if (N.evtAnnuler(BASE, seanceDebut() - 60000, ["jeu", "set", "stb"])) { sauver(); majRavito(true); } else toast("Rien à annuler."); },
   setSuivant: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "set" }); sauver(); majRavito(true); },
   stb: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "stb" }); sauver(); majRavito(true); },
