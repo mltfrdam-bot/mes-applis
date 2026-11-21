@@ -219,6 +219,15 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - 📊 Données → 🎚 Qualité : « 💾 Préparer pour Termux » écrit `Download/Lecteur/a-ameliorer.txt` (lien YouTube lu dans le fichier, sinon recherche « artiste titre ») ; « 📋 Copier la liste ».
 - Termux : commande `ameliorer` (ou choix 4 du menu de partage) : retélécharge en meilleure qualité dans `Music/Améliorés/`, avec paroles ; l'écran Doublons propose ensuite de garder la meilleure version (données reportées, ancienne à la corbeille).
 
+### 13.9 Fondu enchaîné et mix automatique — *livré le 21/11/2026 (version 2.0, première version à régler à l'oreille)*
+
+- Bouton **⇄** (écran de lecture) : sans fondu → fondu 3 / 6 / 10 s → mix auto (un appui = réglage suivant). Fondu « puissance égale » ; pas de fondu entre deux pistes consécutives d'un même album (même dossier), sauf en mix.
+- Technique : un second lecteur joue le début du morceau suivant pendant la fin du morceau en cours, puis le lecteur principal reprend exactement à la même position (relais de 150 ms) ; notification et file d'attente inchangées. Pause, saut ou recherche pendant l'enchaînement = annulation propre.
+- **Mix auto** : analyse une fois par morceau (décodage, enveloppe des attaques, tempo par autocorrélation + affinage, phase des temps, rythme régulier ou non, début/fin sans blancs) — table `analyses`. Calage du tempo du suivant si les deux sont réguliers et à ±8 % (aussi demi/double tempo), voix inchangée, retour doux à la vitesse normale en 8 s. Phases : préparer (prochain temps fort, toutes les 4 mesures) → annoncer (8 temps, suivant à 45 % sans basses) → enchaîner (8 temps, les basses passent sur le suivant, fondu). Tempo libre : annonce + fondu sans calage.
+- **⏭🎚 Mixer maintenant** : enchaîne tout de suite (à la prochaine mesure) ; nouvel appui pendant l'enchaînement = enchaînement rapide (2,5 s).
+- Annonce : faite avec l'intro du morceau suivant (début de la musique, sans blanc), plutôt qu'un refrain deviné, pour un enchaînement naturel.
+- Pack : « Playlist seule » ou « Playlist + Lecteur » (APK installée copiée sur la clé + LISEZ-MOI.txt).
+
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
 
 - Idée : écouter un podcast anglais en français. L'appli écrit ce qui est dit, le traduit, puis le lit avec une voix française d'Android, la voix d'origine baissée en fond.

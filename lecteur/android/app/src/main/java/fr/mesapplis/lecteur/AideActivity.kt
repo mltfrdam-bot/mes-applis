@@ -146,6 +146,15 @@ class AideActivity : Activity() {
         titre("📁 Autres dossiers")
         texte("Tes musiques ou vidéos sont ailleurs que dans Music, Download ou Movies ? 📊 Données → 📁 Dossiers suivis → « ➕ Ajouter un dossier ». Les doublons sont cherchés dans tous les dossiers suivis.")
 
+        titre("⇄ Fondu et mix automatique")
+        texte(
+            "Sur l'écran de lecture, le bouton ⇄ change l'enchaînement à chaque appui : sans fondu → fondu 3 s → 6 s → 10 s → mix auto.\n" +
+                "• Fondu : la fin du morceau baisse pendant que le suivant monte (pas entre deux pistes d'un même album).\n" +
+                "• Mix auto : chaque morceau est analysé une fois (tempo, temps forts, blancs). L'appli coupe les blancs, cale le tempo du suivant (±8 %, voix inchangée), l'annonce en fond sans basses, puis enchaîne sur un temps fort.\n" +
+                "• ⏭🎚 Mixer maintenant : écourte le morceau en cours et enchaîne en mix. Rappuie pour enchaîner tout de suite.\n" +
+                "• Une pause ou un saut pendant l'enchaînement l'annule proprement."
+        )
+
         titre("Doublons")
         texte(
             "Quand un même morceau est présent deux fois (même fichier, ou même titre et même durée), un bandeau 🔁 le signale. " +
