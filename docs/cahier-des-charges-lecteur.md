@@ -206,6 +206,13 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - Analyse : 32 bandes de fréquences (TeeAudioProcessor de Media3), calculées seulement quand l'économiseur est affiché.
 - Les mêmes animations serviront au mode Chevet et au fond d'écran animé (étapes 4 et 5).
 
+### 13.7 Suppression simple et dossiers suivis — *livré le 21/11/2026 (version 1.8)*
+
+- **Un titre** : ⋮ → « 🗑 Supprimer du téléphone » (confirmation d'Android directe).
+- **Plusieurs** : « ☑ Choisir » dans la barre de tri (Musique, Vidéos, Favoris) et en haut d'une playlist ou d'un dossier ; cocher, « Tout cocher », puis « 🗑 Supprimer du téléphone (N) ». Dans une playlist : « Retirer de la playlist (N) » (le fichier reste).
+- Corbeille d'Android 30 jours ; écoutes et favoris gardés dans la base (ils reviennent si on restaure) ; rapport avec 📋 Copier. Écran « ♻️ Corbeille » dans 📊 Données (musiques et vidéos), restauration ligne par ligne ou tout.
+- **📁 Dossiers suivis** (📊 Données) : Music, Download, Movies de base + « ➕ Ajouter un dossier » (n'importe quel dossier, ou tout le téléphone), « ✕ Retirer ». Le dossier ajouté est aussi autorisé pour les paroles et sous-titres. Les doublons sont cherchés dans tous les dossiers suivis.
+
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
 
 - Idée : écouter un podcast anglais en français. L'appli écrit ce qui est dit, le traduit, puis le lit avec une voix française d'Android, la voix d'origine baissée en fond.

@@ -72,6 +72,12 @@
             android:parentActivityName=".LectureActivity" />
 
         <activity
+            android:name=".SelectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Lecteur.Translucide"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
             android:name=".AideActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

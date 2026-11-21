@@ -84,6 +84,37 @@ class DonneesActivity : Activity() {
         contenu.addView(choixTrad, marge(8))
         texte("Traduits : titres, albums, dossiers et paroles. Les noms d'artistes restent tels quels.", gris = true)
 
+        titre("📁 Dossiers suivis")
+        texte("Les musiques et vidéos de ces dossiers (et de leurs sous-dossiers) sont dans le Lecteur. Les doublons sont cherchés dans tous.", gris = true)
+        val ajoutes = Bibliotheque.dossiersAjoutes(this)
+        for (d in Bibliotheque.dossiersDeBase + ajoutes) {
+            val l = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            l.addView(TextView(this).apply {
+                text = "📁 " + d.ifEmpty { "Tout le téléphone" }.trimEnd('/'); textSize = 15f
+                setTextColor(couleur(R.color.texte))
+            }, poids())
+            if (d in ajoutes) l.addView(TextView(this).apply {
+                text = "✕ Retirer"; textSize = 14f; setTextColor(couleur(R.color.accent))
+                setPadding(dp(12), dp(10), dp(4), dp(10))
+                setOnClickListener {
+                    Bibliotheque.retirerDossier(this@DonneesActivity, d)
+                    Toast.makeText(this@DonneesActivity, "Dossier retiré du Lecteur (les fichiers restent sur le téléphone)", Toast.LENGTH_SHORT).show()
+                    construire()
+                }
+            }) else l.addView(TextView(this).apply { text = "de base"; textSize = 13f; setTextColor(couleur(R.color.gris)) })
+            contenu.addView(l, marge(4))
+        }
+        contenu.addView(bouton("➕ Ajouter un dossier", false) {
+            try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), DOSSIER) }
+            catch (e: Exception) { Toast.makeText(this, "Sélecteur de dossier introuvable", Toast.LENGTH_SHORT).show() }
+        }, marge(8))
+
+        titre("♻️ Corbeille")
+        texte("Fichiers supprimés (doublons ou suppression) : restaurables pendant 30 jours.", gris = true)
+        contenu.addView(bouton("♻️ Ouvrir la corbeille", false) {
+            startActivity(Intent(this, DoublonsActivity::class.java).putExtra("corbeille", true))
+        }, marge(8))
+
         titre("Doublons")
         texte("Cherche les morceaux en double et propose de les supprimer du lecteur et du téléphone (corbeille 30 jours, données reportées sur la version gardée).", gris = true)
         contenu.addView(bouton("🔁 Chercher les doublons", false) { startActivity(Intent(this, DoublonsActivity::class.java)) }, marge(8))
@@ -162,6 +193,15 @@ class DonneesActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
+        if (requestCode == DOSSIER && resultCode == RESULT_OK && uri != null) {
+            // « primary:Documents/Karaoké » → « Documents/Karaoké/ »
+            val id = try { android.provider.DocumentsContract.getTreeDocumentId(uri) } catch (e: Exception) { null } ?: return
+            Acces.garder(this, data) // paroles et sous-titres de ce dossier
+            val msg = Bibliotheque.ajouterDossier(this, id.substringAfter(':'))
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            construire()
+            return
+        }
         if (requestCode != FICHIER || resultCode != RESULT_OK || uri == null) return
         val ctx = applicationContext
         Toast.makeText(this, "Fusion en cours…", Toast.LENGTH_SHORT).show()
@@ -291,5 +331,6 @@ class DonneesActivity : Activity() {
 
     companion object {
         const val FICHIER = 21
+        const val DOSSIER = 22
     }
 }

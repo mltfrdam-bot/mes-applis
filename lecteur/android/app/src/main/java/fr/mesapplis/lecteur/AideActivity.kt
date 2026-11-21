@@ -136,6 +136,16 @@ class AideActivity : Activity() {
                 "• Sans le Lecteur : les chansons du dossier se lisent avec n'importe quel lecteur, un autoradio ou un PC."
         )
 
+        titre("🗑 Supprimer des titres")
+        texte(
+            "• Un titre : menu ⋮ de la ligne → « 🗑 Supprimer du téléphone ».\n" +
+                "• Plusieurs : « ☑ Choisir » (barre de tri, ou en haut d'une playlist ou d'un dossier), coche les titres, puis « 🗑 Supprimer du téléphone ». Dans une playlist, « Retirer de la playlist » garde le fichier.\n" +
+                "• Les fichiers vont dans la corbeille d'Android : 30 jours pour les restaurer (📊 Données → ♻️ Corbeille). Écoutes et favoris reviennent avec eux."
+        )
+
+        titre("📁 Autres dossiers")
+        texte("Tes musiques ou vidéos sont ailleurs que dans Music, Download ou Movies ? 📊 Données → 📁 Dossiers suivis → « ➕ Ajouter un dossier ». Les doublons sont cherchés dans tous les dossiers suivis.")
+
         titre("Doublons")
         texte(
             "Quand un même morceau est présent deux fois (même fichier, ou même titre et même durée), un bandeau 🔁 le signale. " +

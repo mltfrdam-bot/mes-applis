@@ -88,14 +88,20 @@ class ListeActivity : Activity() {
         btnValider.setOnClickListener { validerChoix() }
         findViewById<View>(R.id.btnMenuListe).setOnClickListener { menuPlaylist(it) }
         findViewById<View>(R.id.btnPack).setOnClickListener { proposerPack() }
+        findViewById<View>(R.id.btnChoisir).setOnClickListener {
+            if (adaptateur.pistes.isEmpty()) return@setOnClickListener
+            SelectionActivity.ouvrir(this, if (type == "playlist") "Playlist" else "Dossier", adaptateur.pistes.toList(), if (type == "playlist") cle else null)
+        }
 
         when (type) {
             "playlist" -> {
                 findViewById<View>(R.id.btnAjouter).visibility = View.VISIBLE
                 btnModifier.visibility = View.VISIBLE
                 findViewById<View>(R.id.btnPack).visibility = View.VISIBLE
+                findViewById<View>(R.id.btnChoisir).visibility = View.VISIBLE
                 findViewById<View>(R.id.btnMenuListe).visibility = View.VISIBLE
             }
+            "dossier" -> findViewById<View>(R.id.btnChoisir).visibility = View.VISIBLE
             "choix" -> {
                 findViewById<View>(R.id.zoneActions).visibility = View.GONE
                 btnValider.visibility = View.VISIBLE

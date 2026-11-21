@@ -113,22 +113,24 @@ object Doublons {
     fun corbeille(ctx: Context): List<FichierCorbeille> {
         if (Build.VERSION.SDK_INT < 30) return emptyList()
         val res = ArrayList<FichierCorbeille>()
-        val sel = Bibliotheque.dossiersSuivis.joinToString(" OR ", "(", ")") { "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '$it%'" }
+        Bibliotheque.majDossiers(ctx)
+        val sel = Bibliotheque.selection(MediaStore.MediaColumns.RELATIVE_PATH)
         val args = Bundle().apply {
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
             putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, sel)
             putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${MediaStore.MediaColumns.DATE_EXPIRES} DESC")
         }
-        try {
+        // Musiques et vidéos
+        for (table in listOf(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)) try {
             ctx.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                table,
                 arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.RELATIVE_PATH, MediaStore.MediaColumns.DATE_EXPIRES),
                 args, null
             )?.use { c ->
                 while (c.moveToNext()) {
                     val nom = (c.getString(1) ?: "").removePrefix(".trashed-").replace(Regex("""^\d+-"""), "")
                     res += FichierCorbeille(
-                        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)),
+                        ContentUris.withAppendedId(table, c.getLong(0)),
                         nom, c.getString(2) ?: "", c.getLong(3) * 1000
                     )
                 }

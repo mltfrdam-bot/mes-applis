@@ -179,12 +179,14 @@ object Actions {
         m.menu.add(0, 2, 1, "➕ Ajouter à la file d'attente")
         m.menu.add(0, 3, 2, "📃 Ajouter à une playlist…")
         m.menu.add(0, 4, 3, "📁 Ouvrir le dossier « ${p.nomDossier} »")
+        if (p.id >= 0) m.menu.add(0, 5, 4, "🗑 Supprimer du téléphone")
         m.setOnMenuItemClickListener {
             when (it.itemId) {
                 1 -> ajouterFile(act, c, p, ensuite = true)
                 2 -> ajouterFile(act, c, p, ensuite = false)
                 3 -> choisirPlaylist(act, listOf(p), surChangement)
                 4 -> act.startActivity(Intent(act, ListeActivity::class.java).putExtra("type", "dossier").putExtra("cle", p.dossier))
+                5 -> SelectionActivity.supprimerUn(act, p)
             }
             true
         }

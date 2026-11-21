@@ -34,6 +34,7 @@ class DoublonsActivity : Activity() {
     /** En attente de la réponse d'Android : (supprimé, gardé). */
     private var plan: List<Pair<Piste, Piste>> = emptyList()
     private var rapport: List<String> = emptyList()
+    private val seulementCorbeille by lazy { intent.getBooleanExtra("corbeille", false) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +78,7 @@ class DoublonsActivity : Activity() {
             setOnClickListener { finish() }
         })
         haut.addView(TextView(this).apply {
-            text = "🔁 Doublons"; textSize = 22f; typeface = Typeface.DEFAULT_BOLD
+            text = if (seulementCorbeille) "♻️ Corbeille" else "🔁 Doublons"; textSize = 22f; typeface = Typeface.DEFAULT_BOLD
             setTextColor(couleur(R.color.texte))
         })
         contenu.addView(haut)
@@ -93,11 +94,14 @@ class DoublonsActivity : Activity() {
             contenu.addView(bouton("📋 Copier le détail", true) { copier(t) }, marge(10))
         }
 
-        if (!Doublons.corbeillePossible()) {
+        if (seulementCorbeille) {
+            if (corbeille.isEmpty()) texte("✅ La corbeille est vide.")
+        } else if (!Doublons.corbeillePossible()) {
             texte("Cette version d'Android ne permet pas la corbeille : la suppression n'est pas proposée.", gris = true)
         }
 
-        if (groupes.isEmpty()) {
+        if (seulementCorbeille) {
+        } else if (groupes.isEmpty()) {
             texte("✅ Aucun doublon trouvé.")
         } else {
             val aSupprimer = groupes.sumOf { g -> g.pistes.count { garder[it.cle] == false } }

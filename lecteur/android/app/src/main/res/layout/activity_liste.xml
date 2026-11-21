@@ -69,6 +69,7 @@
             <TextView android:id="@+id/btnAjouter" style="@style/BoutonAction" android:text="➕ Ajouter des titres" android:visibility="gone" />
             <TextView android:id="@+id/btnModifier" style="@style/BoutonAction" android:text="✏️ Modifier" android:visibility="gone" />
             <TextView android:id="@+id/btnPack" style="@style/BoutonAction" android:text="📦 Pack clé USB" android:visibility="gone" />
+            <TextView android:id="@+id/btnChoisir" style="@style/BoutonAction" android:text="☑ Choisir" android:visibility="gone" />
         </LinearLayout>
     </HorizontalScrollView>
 

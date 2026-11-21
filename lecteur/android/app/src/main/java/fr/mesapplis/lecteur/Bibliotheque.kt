@@ -9,9 +9,45 @@ import android.provider.MediaStore
 /** Lit la liste des fichiers audio dans Musique, Download et Movies (là où Termux enregistre). */
 object Bibliotheque {
 
-    val dossiersSuivis = listOf("Music/", "Download/", "Movies/")
+    /** Dossiers de base, toujours suivis. */
+    val dossiersDeBase = listOf("Music/", "Download/", "Movies/")
+    /** Dossiers suivis : ceux de base + ceux ajoutés dans 📊 Données (« 📁 Dossiers suivis »). */
+    @Volatile var dossiersSuivis: List<String> = dossiersDeBase
+    /** Mis à true quand la liste des dossiers change : l'écran principal recharge. */
+    @Volatile var aRecharger = false
+
+    fun dossiersAjoutes(ctx: Context): List<String> =
+        (Base.de(ctx).lire("dossiers_plus") ?: "").split('\n').filter { it.isNotEmpty() }
+
+    fun majDossiers(ctx: Context) {
+        dossiersSuivis = (dossiersDeBase + dossiersAjoutes(ctx)).distinct()
+    }
+
+    /** Ajoute un dossier (chemin relatif, ex. « Documents/Karaoké/ ») ; retourne le message à afficher. */
+    fun ajouterDossier(ctx: Context, relatif: String): String {
+        val r = if (relatif.isEmpty()) "" else relatif.trimEnd('/') + "/"
+        val actuels = dossiersDeBase + dossiersAjoutes(ctx)
+        actuels.firstOrNull { r.startsWith(it, true) }?.let { return "Déjà suivi : « ${it.ifEmpty { "tout le téléphone" }} » le contient." }
+        val gardes = dossiersAjoutes(ctx).filter { !it.startsWith(r, true) } + r
+        Base.de(ctx).ecrire("dossiers_plus", gardes.joinToString("\n"))
+        majDossiers(ctx); aRecharger = true
+        return "📁 « ${r.ifEmpty { "Tout le téléphone" }} » ajouté : ses musiques et vidéos arrivent dans le Lecteur."
+    }
+
+    fun retirerDossier(ctx: Context, relatif: String) {
+        Base.de(ctx).ecrire("dossiers_plus", dossiersAjoutes(ctx).filter { it != relatif }.joinToString("\n"))
+        majDossiers(ctx); aRecharger = true
+    }
+
+    /** Condition SQL « dans un des dossiers suivis » (les apostrophes sont protégées). */
+    fun selection(colonne: String, ancienne: Boolean = false): String =
+        dossiersSuivis.joinToString(" OR ", "(", ")") {
+            val d = it.replace("'", "''")
+            if (ancienne) "$colonne LIKE '%/$d%'" else "$colonne LIKE '$d%'"
+        }
 
     fun charger(ctx: Context): List<Piste> {
+        majDossiers(ctx)
         val res = ArrayList<Piste>()
         val q = Build.VERSION.SDK_INT >= 29
         val proj = mutableListOf(
@@ -29,10 +65,10 @@ object Bibliotheque {
         if (q) {
             proj += MediaStore.Audio.Media.RELATIVE_PATH
             proj += MediaStore.Audio.Media.VOLUME_NAME
-            selection = dossiersSuivis.joinToString(" OR ", "(", ")") { "${MediaStore.Audio.Media.RELATIVE_PATH} LIKE '$it%'" }
+            selection = selection(MediaStore.Audio.Media.RELATIVE_PATH)
         } else {
             proj += MediaStore.Audio.Media.DATA
-            selection = dossiersSuivis.joinToString(" OR ", "(", ")") { "${MediaStore.Audio.Media.DATA} LIKE '%/$it%'" }
+            selection = selection(MediaStore.Audio.Media.DATA, ancienne = true)
         }
         val racine = Environment.getExternalStorageDirectory().absolutePath.trimEnd('/') + "/"
         try {
@@ -102,7 +138,7 @@ object Bibliotheque {
             MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATE_MODIFIED,
             MediaStore.Video.Media.RELATIVE_PATH, MediaStore.Video.Media.VOLUME_NAME,
         )
-        val sel = dossiersSuivis.joinToString(" OR ", "(", ")") { "${MediaStore.Video.Media.RELATIVE_PATH} LIKE '$it%'" }
+        val sel = selection(MediaStore.Video.Media.RELATIVE_PATH)
         try {
             ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, sel, null, null)?.use { c ->
                 while (c.moveToNext()) {

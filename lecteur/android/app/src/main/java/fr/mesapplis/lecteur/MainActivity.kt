@@ -66,6 +66,11 @@ class MainActivity : Activity() {
         compteur = findViewById(R.id.compteur)
         bandeau = findViewById(R.id.bandeau)
         barreTri = findViewById(R.id.barreTri)
+        findViewById<View>(R.id.triChoisir).setOnClickListener {
+            val nom = listOf("Musique", "Favoris", "Playlists", "Dossiers", "Vidéos").getOrElse(onglet) { "Choisir" }
+            if (adPistes.pistes.isEmpty()) return@setOnClickListener
+            SelectionActivity.ouvrir(this, nom, adPistes.pistes.toList())
+        }
         vide = findViewById(R.id.vide)
         texteVide = findViewById(R.id.texteVide)
         btnVide = findViewById(R.id.btnVide)
@@ -149,6 +154,7 @@ class MainActivity : Activity() {
         majBandeau()
         majBoutonTraduction()
         if (toutes.isNotEmpty()) afficher()
+        if (Bibliotheque.aRecharger || SelectionActivity.modifie) { Bibliotheque.aRecharger = false; SelectionActivity.modifie = false; charger() }
         // Retour des réglages Android après avoir autorisé les vidéos
         if (videos.isEmpty() && videosOk(this) && Base.de(this).lire("video_demande") == "1") charger()
     }
