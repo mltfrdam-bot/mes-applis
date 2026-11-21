@@ -146,7 +146,7 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 5. **Fond d'écran animé**.
 6. **Musique des autres applis** (option).
 
-Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'étape 2 : doublons d'abord (*livré le 21/11/2026, version 1.3*), traduction ensuite, puis le pack de playlist (13.4). La voix traduite des podcasts (13.3) vient après l'étape 6.
+Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'étape 2 : doublons d'abord (*livré le 21/11/2026, version 1.3*), traduction ensuite (*livrée le 21/11/2026, version 1.4*), puis le pack de playlist (13.4). La voix traduite des podcasts (13.3) vient après l'étape 6.
 
 **Tests que Frédéric fera.**
 
@@ -162,12 +162,13 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 
 ## 13. Fonctions validées le 21/11/2026
 
-### 13.1 Traduction anglais → français (activable/désactivable)
+### 13.1 Traduction anglais → français (activable/désactivable) — *livré le 21/11/2026 (version 1.4)*
 
-- **Tous les textes** : titres, artistes, noms d'albums et de dossiers, paroles (karaoké), sous-titres des vidéos.
-- Un bouton 🌐 dans les réglages active ou désactive la traduction. Choix d'affichage : traduction sous le texte anglais, ou à la place.
+- **Textes traduits** : titres, noms d'albums et de dossiers, paroles (karaoké) ; sous-titres des vidéos à l'étape Vidéo. Les noms d'artistes restent tels quels (noms propres).
+- Bouton 🌐 en haut de l'écran principal : un appui active ou désactive (grisé = désactivé). Choix d'affichage dans 📊 Données : sous le texte anglais (🌐 en gris dans les listes, ligne bleue en italique sous chaque ligne de paroles), ou à la place. Langue reconnue automatiquement (ML Kit Language ID).
 - Traduction faite sur le téléphone (traducteur intégré Google ML Kit, pas d'appli à installer), puis gardée dans la base : un texte n'est traduit qu'une fois, l'affichage reste instantané.
-- **Pack de langue (choix A, validé le 21/11/2026)** : environ 30 Mo, téléchargé une seule fois avec internet à la première activation de 🌐 (message clair avant, barre de progression). Ensuite, tout fonctionne sans internet. L'APK reste sous 15 Mo.
+- **Pack de langue (choix A, validé le 21/11/2026)** : environ 30 Mo, téléchargé une seule fois avec internet à la première activation de 🌐 (message clair avant, barre de progression). Ensuite, tout fonctionne sans internet. Pas de barre de progression possible (ML Kit ne donne pas l'avancement) : une fenêtre d'attente s'affiche.
+- **Taille** : le traducteur contient un gros code natif. APK réduite aux téléphones 64 bits (tous les téléphones récents) : environ 20 Mo au lieu de 1,4 Mo. Objectif de 15 Mo dépassé, à cause de cette fonction.
 
 ### 13.2 Détection et suppression des doublons — *livré le 21/11/2026 (version 1.3)*
 
