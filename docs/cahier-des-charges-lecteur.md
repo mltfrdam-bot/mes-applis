@@ -146,7 +146,7 @@ Livrer dans cet ordre, une APK testable à chaque étape.
 5. **Fond d'écran animé**.
 6. **Musique des autres applis** (option).
 
-Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'étape 2 : doublons d'abord (*livré le 21/11/2026, version 1.3*), traduction ensuite (*livrée le 21/11/2026, version 1.4*), puis le pack de playlist (13.4). La voix traduite des podcasts (13.3) vient après l'étape 6.
+Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'étape 2 : doublons d'abord (*livré le 21/11/2026, version 1.3*), traduction ensuite (*livrée le 21/11/2026, version 1.4*), puis le pack de playlist (13.4, *livré le 21/11/2026, version 1.5*). La voix traduite des podcasts (13.3) vient après l'étape 6.
 
 **Tests que Frédéric fera.**
 
@@ -180,13 +180,14 @@ Les fonctions de la section 13 (doublons, traduction) s'intercalent après l'ét
 - Les fichiers de paroles restent en place (rien n'est perdu si on restaure).
 - Rapport de ce qui a été supprimé et reporté, avec bouton 📋 Copier.
 
-### 13.4 Partager une playlist en pack (validé le 21/11/2026, après la traduction)
+### 13.4 Partager une playlist en pack — *livré le 21/11/2026 (version 1.5)*
 
 - But : donner une playlist (ex. « Céline Dion », « Karaoké ») à quelqu'un (ex. sa mère), sans le reste de la bibliothèque.
-- Bouton 📦 dans une playlist : choisir la destination (clé USB branchée au téléphone, ou dossier du téléphone) avec le sélecteur Android. L'appli y crée un dossier au nom de la playlist : les chansons copiées (originaux jamais touchés), leurs paroles (.lrc), et la liste dans l'ordre (`.m3u` + fichier pack du Lecteur). Barre de progression, place nécessaire affichée avant (environ 5 Mo par titre).
+- Bouton « 📦 Pack clé USB » dans une playlist : choisir la destination (clé USB branchée au téléphone, ou dossier du téléphone) avec le sélecteur Android. L'appli y crée un dossier au nom de la playlist : les chansons copiées (originaux jamais touchés), leurs paroles (.lrc), et la liste dans l'ordre (`.m3u` + fichier pack du Lecteur). Barre de progression, place nécessaire affichée avant (environ 5 Mo par titre).
 - Un dossier simple plutôt qu'un fichier compressé : il se lit aussi sur un autoradio, une télé ou un PC.
 - Moyen prévu par Frédéric : **clé USB**. Le menu Partager d'Android (Quick Share, Drive) reste possible.
-- Bouton « 📥 Importer un pack » : choisir le dossier sur la clé ; les chansons sont copiées dans `Music/<nom de la playlist>/` avec leurs paroles, la playlist est recréée. Chansons déjà présentes (même empreinte) : pas recopiées, simplement ajoutées à la playlist. Descriptif de ce qui a été ajouté avec 📋 Copier.
+- « 📥 Importer un pack » (onglet Playlists) : choisir le dossier sur la clé ; les chansons sont copiées dans `Music/<nom de la playlist>/` avec leurs paroles, la playlist est recréée. Chansons déjà présentes (même empreinte) : pas recopiées, simplement ajoutées à la playlist. Descriptif de ce qui a été ajouté avec 📋 Copier. Le dossier Musique doit être autorisé en écriture : l'appli le demande une fois si besoin (le dossier Musique est désormais autorisé en lecture + écriture).
+- Re-exporter sur la même clé : les chansons déjà présentes (même nom, même taille) ne sont pas recopiées ; la liste est mise à jour.
 - Sans le Lecteur, le destinataire lit quand même les chansons avec n'importe quel lecteur (sans karaoké).
 
 ### 13.3 Voix traduite pour les podcasts (plus tard, à confirmer)
