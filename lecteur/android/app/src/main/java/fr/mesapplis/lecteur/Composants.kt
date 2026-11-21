@@ -71,7 +71,8 @@ class MiniLecteur(private val act: Activity, private val connexion: Connexion, p
     init {
         pochette.clipToOutline = true
         act.findViewById<View>(R.id.miniZone).setOnClickListener {
-            act.startActivity(Intent(act, LectureActivity::class.java))
+            val video = Format.estVideo(connexion.ctrl?.currentMediaItem?.mediaId)
+            act.startActivity(Intent(act, if (video) VideoActivity::class.java else LectureActivity::class.java))
             act.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
         lecture.setOnClickListener { connexion.ctrl?.let { Actions.lectureOuPause(it) } }

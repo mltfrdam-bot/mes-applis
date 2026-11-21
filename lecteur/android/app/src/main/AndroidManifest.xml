@@ -57,6 +57,21 @@
             android:parentActivityName=".MainActivity" />
 
         <activity
+            android:name=".VideoActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
+            android:launchMode="singleTop"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".AmbianceActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:parentActivityName=".LectureActivity" />
+
+        <activity
             android:name=".AideActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />

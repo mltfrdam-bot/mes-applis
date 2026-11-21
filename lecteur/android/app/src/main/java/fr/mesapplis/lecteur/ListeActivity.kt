@@ -297,7 +297,10 @@ class ListeActivity : Activity() {
                 }
                 type == "file" -> connexion.ctrl?.let { it.seekTo(p.id.toInt(), 0L); if (!it.isPlaying) it.play() }
                 p.id < 0 -> Toast.makeText(this@ListeActivity, "Ce fichier n'est plus sur le téléphone", Toast.LENGTH_SHORT).show()
-                adaptateur.mode == Mode.NORMAL -> Actions.jouer(connexion.ctrl, adaptateur.pistes, position)
+                adaptateur.mode == Mode.NORMAL -> {
+                    Actions.jouer(connexion.ctrl, adaptateur.pistes, position)
+                    if (Format.estVideo(p.uri.toString())) startActivity(android.content.Intent(this@ListeActivity, VideoActivity::class.java))
+                }
             }
         }
 

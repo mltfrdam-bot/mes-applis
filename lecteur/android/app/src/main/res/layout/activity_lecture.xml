@@ -34,6 +34,14 @@
             android:textSize="14sp"
             android:textStyle="bold" />
         <TextView
+            android:id="@+id/btnAmbiance"
+            android:layout_width="48dp"
+            android:layout_height="52dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:text="✨"
+            android:textSize="20sp" />
+        <TextView
             android:id="@+id/btnStyle"
             android:layout_width="52dp"
             android:layout_height="52dp"

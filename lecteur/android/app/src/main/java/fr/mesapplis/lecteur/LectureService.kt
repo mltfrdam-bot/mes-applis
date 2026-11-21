@@ -12,6 +12,12 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.TeeAudioProcessor
+import androidx.media3.common.audio.AudioProcessor
+import android.content.Context
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
@@ -55,7 +61,16 @@ class LectureService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        joueur = ExoPlayer.Builder(this)
+        // Le son passe aussi par AnalyseSon (économiseur « Ambiance ») : aucune autorisation micro nécessaire
+        val rendus = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf<AudioProcessor>(TeeAudioProcessor(AnalyseSon)))
+                    .build()
+        }
+        joueur = ExoPlayer.Builder(this, rendus)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 true
@@ -63,6 +78,7 @@ class LectureService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true) // casque débranché ou Bluetooth coupé : pause
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        joueurActif = joueur
         val ouvrir = PendingIntent.getActivity(
             this, 0,
             Intent(this, LectureActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -93,6 +109,7 @@ class LectureService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        joueurActif = null
         principal.removeCallbacks(sauvegardeReguliere)
         principal.removeCallbacks(suiviPosition)
         garderPositionFichier()
@@ -156,14 +173,17 @@ class LectureService : MediaSessionService() {
     private fun garderPositionFichier() {
         val e = empEnCours ?: return
         val d = dureeEnCours
-        if (d < LONG) return
+        if (d < LONG && !videoEnCours) return
         val pos = if (posEnCours < 30_000 || posEnCours > d - 30_000) 0L else posEnCours
         val base = Base.de(this)
         ecriture.execute { base.sauverPosition(e, pos) }
     }
 
+    private var videoEnCours = false
+
     private fun reprendreFichier(item: MediaItem?) {
         val e = Emplacement.de(item)?.empreinte
+        videoEnCours = Format.estVideo(item?.mediaId)
         empEnCours = e
         posEnCours = 0L
         dureeEnCours = 0L
@@ -236,6 +256,8 @@ class LectureService : MediaSessionService() {
 
     companion object {
         const val LONG = 10 * 60 * 1000L
+        /** Le lecteur, pour l'écran vidéo (même appli, même processus). */
+        @Volatile var joueurActif: ExoPlayer? = null
     }
 
     private inner class Rappels : MediaSession.Callback {

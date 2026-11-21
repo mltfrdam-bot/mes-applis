@@ -61,6 +61,7 @@
         android:paddingStart="6dp"
         android:paddingEnd="6dp">
         <TextView android:id="@+id/ongletMusique" style="@style/Onglet" android:text="Musique" />
+        <TextView android:id="@+id/ongletVideos" style="@style/Onglet" android:text="Vidéos" />
         <TextView android:id="@+id/ongletFavoris" style="@style/Onglet" android:text="★ Favoris" />
         <TextView android:id="@+id/ongletPlaylists" style="@style/Onglet" android:text="Playlists" />
         <TextView android:id="@+id/ongletDossiers" style="@style/Onglet" android:text="Dossiers" />

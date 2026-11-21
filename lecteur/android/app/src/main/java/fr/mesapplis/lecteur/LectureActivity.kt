@@ -106,6 +106,7 @@ class LectureActivity : Activity() {
 
         findViewById<View>(R.id.btnFermer).setOnClickListener { finish() }
         StyleParoles.charger(this)
+        findViewById<View>(R.id.btnAmbiance).setOnClickListener { lancerAmbiance() }
         findViewById<View>(R.id.btnStyle).setOnClickListener { StyleParoles.panneau(this) { paroles?.let { afficherParoles(it) } } }
         btnLecture.setOnClickListener {
             ctrl?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } }
@@ -137,8 +138,40 @@ class LectureActivity : Activity() {
         zoneParoles.setOnTouchListener { _, _ -> dernierToucher = System.currentTimeMillis(); false }
     }
 
+    // ----- ✨ Économiseur « Ambiance » -----
+
+    private var dernierGeste = System.currentTimeMillis()
+    private val veille = object : Runnable {
+        override fun run() {
+            val minutes = Base.de(this@LectureActivity).lire("amb_auto")?.toIntOrNull() ?: 0
+            val c = ctrl
+            if (minutes > 0 && c != null && c.isPlaying && !Format.estVideo(c.currentMediaItem?.mediaId) &&
+                System.currentTimeMillis() - dernierGeste > minutes * 60_000L
+            ) lancerAmbiance()
+            principal.postDelayed(this, 15_000)
+        }
+    }
+
+    private fun lancerAmbiance() {
+        dernierGeste = System.currentTimeMillis()
+        startActivity(Intent(this, AmbianceActivity::class.java))
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        dernierGeste = System.currentTimeMillis()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onPause() {
+        principal.removeCallbacks(veille)
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
+        dernierGeste = System.currentTimeMillis()
+        principal.postDelayed(veille, 15_000)
         val ctx = applicationContext
         travail.execute { Traduction.init(ctx); principal.post { majTout() } }
     }
@@ -180,6 +213,10 @@ class LectureActivity : Activity() {
         val c = ctrl ?: return
         val item = c.currentMediaItem
         if (item == null) { finish(); return }
+        if (Format.estVideo(item.mediaId) && hasWindowFocus()) {
+            // Une vidéo est en cours : on l'affiche dans l'écran vidéo
+            startActivity(Intent(this, VideoActivity::class.java)); finish(); return
+        }
         val md = c.mediaMetadata
         val t = md.title?.toString() ?: ""
         titre.text = Traduction.titre(t)

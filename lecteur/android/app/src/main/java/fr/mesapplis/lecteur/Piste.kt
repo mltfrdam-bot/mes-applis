@@ -96,6 +96,9 @@ object Format {
         return if (min >= 60) "${min / 60} h ${String.format("%02d", min % 60)} min" else "$min min"
     }
 
+    /** Une vidéo (MediaStore Video) plutôt qu'un fichier audio. */
+    fun estVideo(uri: String?): Boolean = uri?.contains("/video/") == true
+
     private val fmtDate = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE)
     fun date(ms: Long): String = if (ms <= 0) "–" else fmtDate.format(java.util.Date(ms))
 }

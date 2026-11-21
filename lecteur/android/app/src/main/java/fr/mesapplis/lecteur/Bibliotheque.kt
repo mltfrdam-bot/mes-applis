@@ -93,10 +93,44 @@ object Bibliotheque {
         return res
     }
 
+    /** Vidéos de Movies, Download et Music (onglet Vidéos). */
+    fun chargerVideos(ctx: Context): List<Piste> {
+        val res = ArrayList<Piste>()
+        if (Build.VERSION.SDK_INT < 29) return res
+        val proj = arrayOf(
+            MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE, MediaStore.Video.Media.DURATION, MediaStore.Video.Media.DATE_ADDED,
+            MediaStore.Video.Media.DISPLAY_NAME, MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DATE_MODIFIED,
+            MediaStore.Video.Media.RELATIVE_PATH, MediaStore.Video.Media.VOLUME_NAME,
+        )
+        val sel = dossiersSuivis.joinToString(" OR ", "(", ")") { "${MediaStore.Video.Media.RELATIVE_PATH} LIKE '$it%'" }
+        try {
+            ctx.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, proj, sel, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    val nom = c.getString(4) ?: continue
+                    var dossier = c.getString(7) ?: ""
+                    if (!dossier.endsWith("/")) dossier += "/"
+                    var titre = nettoyerTitre(c.getString(1)?.takeIf { it.isNotBlank() } ?: nom.substringBeforeLast('.'))
+                    var artiste = ""
+                    if (titre.contains(" - ")) { artiste = titre.substringBefore(" - ").trim(); titre = titre.substringAfter(" - ").trim() }
+                    res += Piste(
+                        id = id, uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id),
+                        titre = titre, artiste = artiste, album = "", duree = c.getLong(2), ajoute = c.getLong(3),
+                        volume = c.getString(8) ?: "external_primary", dossier = dossier, nom = nom,
+                        taille = c.getLong(5), modifie = c.getLong(6),
+                    )
+                }
+            }
+        } catch (e: Exception) { }
+        return res
+    }
+
+    @Volatile var videos: List<Piste> = emptyList()
+
     /** Dernière liste chargée (partagée entre les écrans). */
     @Volatile var derniere: List<Piste> = emptyList()
 
-    fun parEmpreinte(): Map<String, Piste> = derniere.mapNotNull { p -> p.empreinte?.let { it to p } }.toMap()
+    fun parEmpreinte(): Map<String, Piste> = (videos + derniere).mapNotNull { p -> p.empreinte?.let { it to p } }.toMap()
 
     /**
      * Empreinte du contenu : taille + somme de contrôle de 64 Ko pris au milieu du fichier (là où est le son,

@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var btnTraduction: TextView
 
     private var toutes: List<Piste> = emptyList()
+    private var videos: List<Piste> = emptyList()
     private var onglet = 0
     private var tri = Tri.AJOUT
     private var triInverse = false
@@ -73,6 +74,7 @@ class MainActivity : Activity() {
             override fun clic(position: Int) {
                 Actions.jouer(connexion.ctrl, adPistes.pistes, position)
                 val p = adPistes.pistes.getOrNull(position)
+                if (p != null && Format.estVideo(p.uri.toString())) startActivity(Intent(this@MainActivity, VideoActivity::class.java))
                 if (p != null && p.nouveau) { p.nouveau = false; adPistes.notifyItemChanged(position) }
             }
             override fun favori(position: Int) {
@@ -97,7 +99,8 @@ class MainActivity : Activity() {
 
         recherche = Recherche(this) { afficher() }
 
-        onglets = listOf(R.id.ongletMusique, R.id.ongletFavoris, R.id.ongletPlaylists, R.id.ongletDossiers).map { findViewById(it) }
+        // L'ordre des numéros ne change pas (réglage gardé) : Vidéos est le n° 4, affiché en 2e
+        onglets = listOf(R.id.ongletMusique, R.id.ongletFavoris, R.id.ongletPlaylists, R.id.ongletDossiers, R.id.ongletVideos).map { findViewById(it) }
         onglets.forEachIndexed { i, v -> v.setOnClickListener { choisirOnglet(i) } }
         boutonsTri = mapOf(
             Tri.AJOUT to findViewById(R.id.triAjout), Tri.TITRE to findViewById(R.id.triTitre),
@@ -117,7 +120,7 @@ class MainActivity : Activity() {
             tri = Tri.values().firstOrNull { it.name == morceaux.getOrNull(0) } ?: Tri.AJOUT
             triInverse = morceaux.getOrNull(1) == "true"
         }
-        onglet = base.lire("onglet")?.toIntOrNull()?.coerceIn(0, 3) ?: 0
+        onglet = base.lire("onglet")?.toIntOrNull()?.coerceIn(0, 4) ?: 0
 
         findViewById<View>(R.id.btnAide).setOnClickListener { startActivity(Intent(this, AideActivity::class.java)) }
         findViewById<View>(R.id.btnDonnees).setOnClickListener { startActivity(Intent(this, DonneesActivity::class.java)) }
@@ -138,6 +141,7 @@ class MainActivity : Activity() {
         connexion.demarrer()
         mini.demarrer()
         contentResolver.registerContentObserver(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, observateur)
+        contentResolver.registerContentObserver(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, observateur)
     }
 
     override fun onResume() {
@@ -178,17 +182,20 @@ class MainActivity : Activity() {
             Traduction.init(ctx)
             principal.post { majBoutonTraduction() }
             val l = Bibliotheque.charger(ctx)
+            val v = Bibliotheque.chargerVideos(ctx)
             val base = Base.de(ctx)
-            val manquants = base.completer(ctx, l, calculer = false)
+            val manquants = base.completer(ctx, l, calculer = false) + base.completer(ctx, v, calculer = false)
             Bibliotheque.derniere = l
-            principal.post { toutes = l; afficher() }
+            Bibliotheque.videos = v
+            principal.post { toutes = l; videos = v; afficher() }
             if (manquants > 0) {
+                base.completer(ctx, v, calculer = true)
                 base.completer(ctx, l, calculer = true) { n, total ->
                     principal.post { analyse = "Analyse des fichiers : $n / $total"; majCompteur() }
                 }
                 principal.post { analyse = ""; afficher() }
             }
-            traduireBibliotheque(l)
+            traduireBibliotheque(l + v)
             // Doublons : proposés automatiquement dans le bandeau
             val d = Doublons.chercher(ctx, l).size
             principal.post { nbDoublons = d; majBandeau() }
@@ -220,7 +227,7 @@ class MainActivity : Activity() {
     }
 
     private fun afficher() {
-        val pistesOnglet = onglet <= 1
+        val pistesOnglet = onglet <= 1 || onglet == 4
         barreTri.visibility = if (pistesOnglet) View.VISIBLE else View.GONE
         boutonsTri.forEach { (t, v) ->
             val actif = t == tri
@@ -230,8 +237,8 @@ class MainActivity : Activity() {
         }
         val nbAffiches: Int
         when (onglet) {
-            0, 1 -> {
-                val base = if (onglet == 1) toutes.filter { it.favori } else toutes
+            0, 1, 4 -> {
+                val base = when (onglet) { 1 -> (toutes + videos).filter { it.favori }; 4 -> videos; else -> toutes }
                 val l = trier(base.filter { recherche.correspond(it.recherche) })
                 adPistes.pistes = l.toMutableList()
                 if (liste.adapter !== adPistes) liste.adapter = adPistes
@@ -291,6 +298,10 @@ class MainActivity : Activity() {
             }
             recherche.texte.isNotEmpty() -> {
                 texteVide.text = "Rien ne correspond à « ${recherche.champ.text} »."
+                btnVide.visibility = View.GONE
+            }
+            onglet == 4 -> {
+                texteVide.text = "Aucune vidéo trouvée dans Movies, Download ou Music.\n\nAvec Termux, enregistre tes vidéos dans ~/storage/shared/Movies."
                 btnVide.visibility = View.GONE
             }
             onglet == 1 -> {
@@ -404,7 +415,7 @@ class MainActivity : Activity() {
         majBoutonTraduction()
         Toast.makeText(this, if (Traduction.actif) "🌐 Traduction activée" else "Traduction désactivée", Toast.LENGTH_SHORT).show()
         afficher(); mini.maj()
-        if (Traduction.actif) traduireBibliotheque(toutes)
+        if (Traduction.actif) traduireBibliotheque(toutes + videos)
     }
 
     private fun proposerPack() {
@@ -439,7 +450,7 @@ class MainActivity : Activity() {
                 Traduction.activer(this, true)
                 majBoutonTraduction()
                 Toast.makeText(this, "✅ Pack installé : traduction activée. Les titres se traduisent petit à petit.", Toast.LENGTH_LONG).show()
-                traduireBibliotheque(toutes)
+                traduireBibliotheque(toutes + videos)
             }
         }.start()
     }
