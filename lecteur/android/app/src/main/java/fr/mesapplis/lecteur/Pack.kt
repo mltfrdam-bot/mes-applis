@@ -81,7 +81,38 @@ object Pack {
 
     // ----- 📦 Export -----
 
-    fun exporter(ctx: Context, nomPlaylist: String, pistes: List<Piste>, arbre: Uri, progression: (Int, Int, String) -> Unit): RapportPack {
+    /** Copie le Lecteur lui-même (sa version installée, à jour) dans le pack, avec un mode d'emploi. */
+    private fun ajouterLecteur(ctx: Context, arbre: Uri, idDossier: String, lignes: MutableList<String>) {
+        val apk = java.io.File(ctx.applicationInfo.sourceDir)
+        val version = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (e: Exception) { "" }
+        enfants(ctx, arbre, idDossier).filter { it.nom == "Lecteur.apk" }.forEach {
+            try { DocumentsContract.deleteDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(arbre, it.id)) } catch (e: Exception) { }
+        }
+        val ok = try {
+            val cible = DocumentsContract.createDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(arbre, idDossier), "application/vnd.android.package-archive", "Lecteur.apk")
+            if (cible == null) false else {
+                apk.inputStream().use { e -> ctx.contentResolver.openOutputStream(cible)!!.use { s -> e.copyTo(s, 256 * 1024) } }
+                true
+            }
+        } catch (e: Exception) { false }
+        ecrireTexte(ctx, arbre, idDossier, "LISEZ-MOI.txt", """
+            LECTEUR — mode d'emploi
+
+            1. Installer le Lecteur (une seule fois) :
+               ouvrir cette clé dans « Mes fichiers », toucher « Lecteur.apk », puis « Installer ».
+               Si Android demande l'autorisation d'installer depuis cette source : l'accepter, puis revenir et toucher « Installer ».
+               Si le Lecteur est déjà installé, c'est une mise à jour : rien n'est perdu.
+
+            2. Mettre les chansons de la clé dans le Lecteur :
+               ouvrir le Lecteur, onglet « Playlists », toucher « 📥 Importer un pack »,
+               puis choisir ce dossier sur la clé et toucher « Utiliser ce dossier ».
+
+            Les chansons se lisent aussi sans le Lecteur, avec n'importe quel lecteur, un autoradio ou un PC.
+        """.trimIndent())
+        lignes += if (ok) "✅ Lecteur ajouté au pack (version $version, ${mo(apk.length())}) + LISEZ-MOI.txt" else "❌ Le Lecteur n'a pas pu être copié sur la clé (place ?)"
+    }
+
+    fun exporter(ctx: Context, nomPlaylist: String, pistes: List<Piste>, arbre: Uri, progression: (Int, Int, String) -> Unit, avecLecteur: Boolean = false): RapportPack {
         val lignes = ArrayList<String>()
         val nom = nomSain(nomPlaylist)
         val racine = DocumentsContract.getTreeDocumentId(arbre)
@@ -120,6 +151,7 @@ object Pack {
             })
             m3u.append("#EXTINF:${p.duree / 1000},${if (p.artiste.isNotEmpty()) p.artiste + " - " else ""}${p.titre}\n$fichier\n")
         }
+        if (avecLecteur) { progression(presentes.size, presentes.size, "Copie du Lecteur…"); ajouterLecteur(ctx, arbre, idDossier, lignes) }
         progression(presentes.size, presentes.size, "Liste de lecture…")
         ecrireTexte(ctx, arbre, idDossier, FICHIER_M3U, m3u.toString())
         ecrireTexte(ctx, arbre, idDossier, FICHIER_PACK, JSONObject().apply {

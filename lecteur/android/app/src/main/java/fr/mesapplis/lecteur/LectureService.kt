@@ -89,6 +89,7 @@ class LectureService : MediaSessionService() {
             .setSessionActivity(ouvrir)
             .build()
         joueur.addListener(Ecouteur())
+        enchaineur = Enchaineur(this, joueur).also { it.demarrer() }
         Minuterie.joueur = joueur
         principal.post(suiviPosition)
         // Reprise exacte, même après redémarrage du téléphone
@@ -109,6 +110,7 @@ class LectureService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        enchaineur?.arreter(); enchaineur = null
         joueurActif = null
         principal.removeCallbacks(sauvegardeReguliere)
         principal.removeCallbacks(suiviPosition)
@@ -130,12 +132,20 @@ class LectureService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val relais = enchaineur?.bascule == true
+            if (!relais) enchaineur?.annuler()
+            enchaineur?.preparerAnalyses()
             garderPositionFichier()
             ecouteComptee = false
             if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) Minuterie.finDeTitre()
             sauverPosition()
-            reprendreFichier(mediaItem)
+            if (!relais) reprendreFichier(mediaItem)
             if (joueur.isPlaying) compterEcoute()
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            // L'utilisateur avance ou recule pendant un fondu : on l'annule
+            if (reason == Player.DISCONTINUITY_REASON_SEEK && enchaineur?.bascule != true) enchaineur?.annuler()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -256,6 +266,8 @@ class LectureService : MediaSessionService() {
 
     companion object {
         const val LONG = 10 * 60 * 1000L
+        /** Fondu enchaîné / mix automatique (bouton ⇄ et ⏭🎚 de l'écran de lecture). */
+        @Volatile var enchaineur: Enchaineur? = null
         /** Le lecteur, pour l'écran vidéo (même appli, même processus). */
         @Volatile var joueurActif: ExoPlayer? = null
     }

@@ -107,6 +107,21 @@ class LectureActivity : Activity() {
         findViewById<View>(R.id.btnFermer).setOnClickListener { finish() }
         StyleParoles.charger(this)
         findViewById<View>(R.id.btnAmbiance).setOnClickListener { lancerAmbiance() }
+        // ⇄ Enchaînement : un appui = réglage suivant (sans fondu, fondu 3/6/10 s, mix auto)
+        val btnEnch = findViewById<TextView>(R.id.btnEnchainement)
+        btnEnch.text = LectureService.enchaineur?.nom() ?: "⇄"
+        btnEnch.setOnClickListener {
+            val e = LectureService.enchaineur ?: return@setOnClickListener
+            btnEnch.text = e.reglageSuivant()
+            if (e.mode == Enchaineur.MIX) {
+                e.preparerAnalyses()
+                Toast.makeText(this, "🎚 Mix auto : chaque morceau est analysé une fois (tempo, temps forts), puis les enchaînements se calent sur le rythme.", Toast.LENGTH_LONG).show()
+            }
+        }
+        findViewById<View>(R.id.btnMixer).setOnClickListener {
+            val e = LectureService.enchaineur ?: return@setOnClickListener
+            e.mixerMaintenant()?.let { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }
+        }
         findViewById<View>(R.id.btnStyle).setOnClickListener { StyleParoles.panneau(this) { paroles?.let { afficherParoles(it) } } }
         btnLecture.setOnClickListener {
             ctrl?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } }
@@ -172,6 +187,7 @@ class LectureActivity : Activity() {
         super.onResume()
         dernierGeste = System.currentTimeMillis()
         principal.postDelayed(veille, 15_000)
+        LectureService.enchaineur?.let { findViewById<TextView>(R.id.btnEnchainement).text = it.nom() }
         val ctx = applicationContext
         travail.execute { Traduction.init(ctx); principal.post { majTout() } }
     }

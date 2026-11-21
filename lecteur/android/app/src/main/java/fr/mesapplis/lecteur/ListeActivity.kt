@@ -222,15 +222,22 @@ class ListeActivity : Activity() {
             .setTitle("📦 Pack « ${p.nom} »")
             .setMessage(
                 "${presentes.size} chanson(s) avec leurs paroles, environ ${String.format("%.0f", taille / 1048576.0)} Mo.\n\n" +
-                    "Branche la clé USB, touche « Choisir la clé », puis choisis la clé et touche « Utiliser ce dossier ». " +
+                    "« Playlist + Lecteur » ajoute aussi l'appli à jour (environ ${String.format("%.0f", java.io.File(applicationInfo.sourceDir).length() / 1048576.0)} Mo) et un mode d'emploi, pour l'installer sur un autre téléphone.\n\n" +
+                    "Branche la clé USB, choisis le type de pack, puis la clé, et touche « Utiliser ce dossier ». " +
                     "Un dossier « ${Pack.nomSain(p.nom)} » y sera créé (les chansons déjà dessus ne sont pas recopiées)."
             )
-            .setPositiveButton("Choisir la clé") { _, _ ->
-                try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PACK) }
-                catch (e: Exception) { Toast.makeText(this, "Sélecteur de dossier introuvable", Toast.LENGTH_SHORT).show() }
-            }
+            .setPositiveButton("Playlist + Lecteur") { _, _ -> choisirCle(true) }
+            .setNeutralButton("Playlist seule") { _, _ -> choisirCle(false) }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    private var packAvecLecteur = false
+
+    private fun choisirCle(avecLecteur: Boolean) {
+        packAvecLecteur = avecLecteur
+        try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PACK) }
+        catch (e: Exception) { Toast.makeText(this, "Sélecteur de dossier introuvable", Toast.LENGTH_SHORT).show() }
     }
 
     @Deprecated("Activity")
@@ -243,7 +250,7 @@ class ListeActivity : Activity() {
         val (fenetre, avance) = Pack.attente(this, "📦 Copie sur la clé…")
         val ctx = applicationContext
         Thread {
-            val r = Pack.exporter(ctx, p.nom, pistes, arbre, avance)
+            val r = Pack.exporter(ctx, p.nom, pistes, arbre, avance, packAvecLecteur)
             principal.post { fenetre.dismiss(); Pack.montrerRapport(this, "Pack « ${p.nom} »", r) }
         }.start()
     }

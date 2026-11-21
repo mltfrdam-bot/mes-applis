@@ -23,7 +23,7 @@ class LigneStat(val colonnes: List<String>)
  *  - traductions     : texte anglais → traduction française (🌐), "" si ce n'est pas de l'anglais
  *  - pistes          : ancienne table de la version 1 (vidée au fur et à mesure de la reprise des données)
  */
-class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db", null, 4) {
+class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db", null, 5) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE etat (cle TEXT PRIMARY KEY, valeur TEXT)")
@@ -34,6 +34,7 @@ class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db
         creerV2(db)
         creerV3(db)
         creerV4(db)
+        creerV5(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, ancienne: Int, nouvelle: Int) {
@@ -41,6 +42,12 @@ class Base private constructor(ctx: Context) : SQLiteOpenHelper(ctx, "lecteur.db
         if (ancienne < 2) creerV2(db)
         if (ancienne < 3) creerV3(db)
         if (ancienne < 4) creerV4(db)
+        if (ancienne < 5) creerV5(db)
+    }
+
+    /** Analyses pour le mix automatique (tempo, temps, début/fin), recalculables. */
+    private fun creerV5(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS analyses (empreinte TEXT PRIMARY KEY, bpm REAL, phase INTEGER, regulier INTEGER, debut INTEGER, fin INTEGER, version INTEGER)")
     }
 
     private fun creerV4(db: SQLiteDatabase) {
