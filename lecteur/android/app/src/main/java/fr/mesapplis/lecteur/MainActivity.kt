@@ -26,7 +26,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
 
-    enum class Tri { AJOUT, TITRE, ARTISTE, ECOUTES, DUREE }
+    enum class Tri { AJOUT, TITRE, ARTISTE, ECOUTES, DUREE, QUALITE }
 
     private lateinit var liste: RecyclerView
     private lateinit var adPistes: PistesAdaptateur
@@ -110,7 +110,7 @@ class MainActivity : Activity() {
         boutonsTri = mapOf(
             Tri.AJOUT to findViewById(R.id.triAjout), Tri.TITRE to findViewById(R.id.triTitre),
             Tri.ARTISTE to findViewById(R.id.triArtiste), Tri.ECOUTES to findViewById(R.id.triEcoutes),
-            Tri.DUREE to findViewById(R.id.triDuree),
+            Tri.DUREE to findViewById(R.id.triDuree), Tri.QUALITE to findViewById(R.id.triQualite),
         )
         boutonsTri.forEach { (t, v) ->
             v.setOnClickListener {
@@ -241,6 +241,8 @@ class MainActivity : Activity() {
             Tri.ARTISTE -> compareBy<Piste> { it.artiste.ifEmpty { "￿" }.lowercase() }.thenBy { it.album.lowercase() }.thenBy { it.nom }
             Tri.ECOUTES -> compareByDescending<Piste> { it.ecoutes }.thenBy { it.titre.lowercase() }
             Tri.DUREE -> compareByDescending { it.duree }
+            // Les plus faibles d'abord (à améliorer)
+            Tri.QUALITE -> compareBy<Piste> { Doublons.kbps(it).let { k -> if (k <= 0) Int.MAX_VALUE else k } }
         }
         val r = l.sortedWith(c)
         return if (triInverse) r.reversed() else r

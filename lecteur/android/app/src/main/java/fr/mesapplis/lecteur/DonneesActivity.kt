@@ -115,6 +115,34 @@ class DonneesActivity : Activity() {
             startActivity(Intent(this, DoublonsActivity::class.java).putExtra("corbeille", true))
         }, marge(8))
 
+        titre("🎚 Qualité")
+        val faibles = Bibliotheque.derniere.filter { Qualite.faible(it) }.sortedBy { Doublons.kbps(it) }
+        texte(
+            if (faibles.isEmpty()) "✅ Aucune musique en dessous de ${Qualite.SEUIL} kb/s."
+            else "⚠ ${faibles.size} musique(s) en dessous de ${Qualite.SEUIL} kb/s (tri « Qualité » dans Musique pour les voir). " +
+                "Touche « Préparer pour Termux », puis tape « ameliorer » dans Termux : les meilleures versions arrivent, et l'écran Doublons te propose de garder la meilleure.",
+            gris = true
+        )
+        if (faibles.isNotEmpty()) {
+            val l = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            l.addView(bouton("💾 Préparer pour Termux", true) {
+                val ctx = applicationContext
+                travail.execute {
+                    val t = Qualite.texte(ctx, faibles)
+                    val ok = Qualite.enregistrer(ctx, t)
+                    runOnUiThread {
+                        Toast.makeText(this, if (ok) "✅ Liste prête (${faibles.size} titres) : dans Termux, tape « ameliorer »" else "❌ Liste non enregistrée", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }, poids())
+            l.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
+            l.addView(bouton("📋 Copier la liste", false) {
+                val ctx = applicationContext
+                travail.execute { val t = Qualite.texte(ctx, faibles); runOnUiThread { copier(t) } }
+            }, poids())
+            contenu.addView(l, marge(8))
+        }
+
         titre("Doublons")
         texte("Cherche les morceaux en double et propose de les supprimer du lecteur et du téléphone (corbeille 30 jours, données reportées sur la version gardée).", gris = true)
         contenu.addView(bouton("🔁 Chercher les doublons", false) { startActivity(Intent(this, DoublonsActivity::class.java)) }, marge(8))

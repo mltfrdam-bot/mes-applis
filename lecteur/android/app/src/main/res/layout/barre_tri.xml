@@ -23,6 +23,7 @@
         <TextView android:id="@+id/triArtiste" style="@style/Tri" android:text="Artiste" />
         <TextView android:id="@+id/triEcoutes" style="@style/Tri" android:text="Écoutes" />
         <TextView android:id="@+id/triDuree" style="@style/Tri" android:text="Durée" />
+        <TextView android:id="@+id/triQualite" style="@style/Tri" android:text="Qualité" />
         <TextView android:id="@+id/triChoisir" style="@style/Tri" android:text="☑ Choisir" />
     </LinearLayout>
 </HorizontalScrollView>

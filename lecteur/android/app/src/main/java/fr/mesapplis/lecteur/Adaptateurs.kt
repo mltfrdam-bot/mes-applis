@@ -73,7 +73,8 @@ class PistesAdaptateur(private val ecouteur: Ecouteur) : RecyclerView.Adapter<Pi
         val absente = p.id < 0
         h.titre.text = Traduction.titre(p.titre)
         h.artiste.text = if (absente) "Fichier absent du téléphone" else Traduction.detail(p.titre,
-            listOf(p.artiste, Traduction.titre(p.album)).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { Traduction.titre(p.nomDossier) })
+            listOf(p.artiste, Traduction.titre(p.album)).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { Traduction.titre(p.nomDossier) }) +
+            (if (Qualite.faible(p)) "  ⚠ ${Doublons.kbps(p)} kb/s" else "")
         h.duree.text = if (absente) "" else Format.duree(p.duree)
         h.ecoutes.text = if (p.ecoutes > 0) "${p.ecoutes}×" else ""
         h.nouveau.visibility = if (p.nouveau) View.VISIBLE else View.GONE
