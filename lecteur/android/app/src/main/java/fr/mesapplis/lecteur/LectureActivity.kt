@@ -105,6 +105,8 @@ class LectureActivity : Activity() {
         pochette.clipToOutline = true
 
         findViewById<View>(R.id.btnFermer).setOnClickListener { finish() }
+        StyleParoles.charger(this)
+        findViewById<View>(R.id.btnStyle).setOnClickListener { StyleParoles.panneau(this) { paroles?.let { afficherParoles(it) } } }
         btnLecture.setOnClickListener {
             ctrl?.let { if (it.isPlaying) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } }
         }
@@ -313,8 +315,9 @@ class LectureActivity : Activity() {
             val tv = TextView(this).apply {
                 text = texteLigne(l.texte)
                 gravity = Gravity.CENTER
-                textSize = 19f
-                setTextColor(if (p.synchro) gris else ContextCompat.getColor(context, R.color.texte))
+                textSize = StyleParoles.taille.toFloat()
+                typeface = StyleParoles.typeface()
+                setTextColor(if (p.synchro) gris else StyleParoles.couleurActive())
                 setPadding(0, dp(7), 0, dp(7))
                 setLineSpacing(0f, 1.1f)
                 if (p.synchro) {
@@ -334,24 +337,24 @@ class LectureActivity : Activity() {
         if (!Traduction.dessous) return f
         val s = android.text.SpannableString("$t\n$f")
         val debut = t.length + 1
-        s.setSpan(android.text.style.RelativeSizeSpan(0.8f), debut, s.length, 0)
-        s.setSpan(android.text.style.ForegroundColorSpan(0xFF5B7DB8.toInt()), debut, s.length, 0)
+        s.setSpan(android.text.style.AbsoluteSizeSpan(StyleParoles.tailleTrad, true), debut, s.length, 0)
+        s.setSpan(android.text.style.ForegroundColorSpan(StyleParoles.couleurTraduction()), debut, s.length, 0)
         s.setSpan(android.text.style.StyleSpan(Typeface.ITALIC), debut, s.length, 0)
         return s
     }
 
     private fun surligner(i: Int) {
         val gris = ContextCompat.getColor(this, R.color.gris)
-        val fort = ContextCompat.getColor(this, R.color.texte)
+        val fort = StyleParoles.couleurActive()
         (lignesParoles.getChildAt(ligneActive) as? TextView)?.apply {
             setTextColor(gris)
-            typeface = Typeface.DEFAULT
+            typeface = StyleParoles.typeface()
             animate().scaleX(1f).scaleY(1f).setDuration(200).start()
         }
         ligneActive = i
         val tv = lignesParoles.getChildAt(i) as? TextView ?: return
         tv.setTextColor(fort)
-        tv.typeface = Typeface.DEFAULT_BOLD
+        tv.typeface = StyleParoles.typeface(gras = true)
         tv.animate().scaleX(1.08f).scaleY(1.08f).setDuration(200).start()
         if (System.currentTimeMillis() - dernierToucher > 4000) {
             val y = lignesParoles.top + tv.top + tv.height / 2 - zoneParoles.height / 2

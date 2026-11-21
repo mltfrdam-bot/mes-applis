@@ -33,7 +33,16 @@
             android:textColor="@color/gris"
             android:textSize="14sp"
             android:textStyle="bold" />
-        <View android:layout_width="52dp" android:layout_height="1dp" />
+        <TextView
+            android:id="@+id/btnStyle"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:text="Aa"
+            android:textColor="@color/accent"
+            android:textSize="20sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <ImageView
