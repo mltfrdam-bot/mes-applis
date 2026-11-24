@@ -514,7 +514,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <div class="petit" style="padding:6px 8px;color:#666">État : un appui fait passer À faire → En cours → Fait. 📍 place la tâche sur le plan (drapeau rouge / orange / vert).</div>
   </div>
   <div id="zoneFouilles" style="display:none;flex:1;overflow:auto;min-height:0;flex-direction:column">
-    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="fqCopier">📋 Copier</button><span class="petit" style="flex:1">Largeur automatique selon la profondeur ; tapez une largeur pour la forcer.</span></div>
+    <div style="display:flex;gap:6px;padding:6px 8px;align-items:center;flex-wrap:wrap"><button class="btn" id="fqCopier">📋 Copier</button><span style="font-size:14px">Largeur :</span><select id="fqRegle" style="height:34px;font-size:15px"><option value="moi">Ma règle</option><option value="f70">Fascicule 70</option></select><span class="petit" id="fqRegleTxt" style="flex:1"></span></div>
     <table class="xl compact" id="tabFouilles"><thead><tr><th>Tronçon</th><th style="text-align:right">L m</th><th style="text-align:right">Prof.</th><th style="text-align:right">Larg.</th><th style="text-align:right">Fouille</th><th style="text-align:right">Sable</th><th style="text-align:right">Rembl.</th><th></th></tr></thead><tbody id="tbFouilles"></tbody></table>
     <div id="fqTotaux"></div>
     <div class="petit" style="padding:8px 8px 2px;font-weight:bold;color:#333">Tuyaux</div>
@@ -529,7 +529,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div style="display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap"><button class="btn" id="mtAjArt">＋ Article</button><button class="btn" id="mtColler">📥 Coller le devis</button><button class="btn" id="mtCopier">📋 Copier</button></div>
   <div id="mtForm" style="display:none;padding:6px 8px;background:#f6f9fc;border-top:1px solid #dde;border-bottom:1px solid #dde;font-size:14px;line-height:2.2">
     Désignation <input id="afDes" placeholder="ex. PVC 200" style="width:170px"><br>
-    Mesuré par <select id="afBase"><option value="ml">Distance (ml)</option><option value="m2">Surface (m²)</option><option value="U">Points (U)</option><option value="F">Forfait (tâche)</option></select> Unité <select id="afUnite"><option>ml</option><option>m²</option><option>m³</option><option>U</option><option>Ft</option></select><br>
+    Mesuré par <select id="afBase"><option value="ml">Distance (ml)</option><option value="m2">Surface (m²)</option><option value="U">Points (U)</option><option value="F">Forfait (tâche)</option><option value="mur">Mur (ml → m³, base / tête)</option></select> Unité <select id="afUnite"><option>ml</option><option>m²</option><option>m³</option><option>U</option><option>Ft</option></select><br>
     × <input id="afK1lib" placeholder="ex. hauteur" style="width:90px"> <input id="afK1" inputmode="decimal" placeholder="1,20" style="width:64px"> × <input id="afK2lib" placeholder="ex. épaisseur" style="width:90px"> <input id="afK2" inputmode="decimal" placeholder="0,40" style="width:64px"> <span class="petit">(facultatif)</span><br>
     <button class="btn prim" id="afCreer">✓ Créer l'article</button> <span class="petit">Un calque DEVIS_… est créé : mesurez sur ce calque.</span></div>
   <div id="mtCollerZone" style="display:none;padding:6px 8px;background:#f6f9fc;border-bottom:1px solid #dde"><div class="petit">Copiez les lignes du devis dans Excel (colonnes : Désignation · Unité · Quantité · Prix unitaire) et collez-les ici :</div>
@@ -648,7 +648,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Lignes – v1";
+const VERSION = "Murs et F70 – v1";
 </script>
 <script>
 "use strict";
@@ -3734,15 +3734,20 @@ function sauverDevis(){ if(scene) Memoire.ecrire(cleDevis(),devis); marquerModif
 function qteMesure(art,m){ const D=art.devis, k=(Number.isFinite(D.k1)?D.k1:1)*(Number.isFinite(D.k2)?D.k2:1);
   if(D.base==='U') return 1*k;
   if(D.base==='ml'){ const L=(m.type==='dist'?m.valeur:(m.perim||0));
+    if(D.mur){ const h=hautsMur(m); return h? L*(secMur(h[0],D.mur)+secMur(h[1],D.mur))/2 : 0; }
     if(D.unite==='m³' && !Number.isFinite(D.k2)){ const p=profMoyenne(m); return L*(Number.isFinite(D.k1)?D.k1:1)*(p!==null?p:0); }
     return L*k; }
   if(D.base==='m2'){ if(m.type!=='surf') return 0;
     if(D.unite==='m³' && !Number.isFinite(D.k1) && !Number.isFinite(D.k2)){ const vf=volumeFF(m.pts.map(q=>({x:+q.x,y:+q.y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN}))); if(vf&&vf.V!==undefined) return vf.V; }
     return m.valeur*k; }
   return 0; }
+// Règle mur (moellons) : base = b × hauteur (au moins la tête), tête t ; hauteur = Z (tête) − FF (pied) aux deux bouts
+function hautsMur(m){ const P=m.pts||[]; if(P.length<2) return null; const h=q=>vOkN(q.z)&&vOkN(q.ff)?Math.max(0,+q.z-+q.ff):null; let a=h(P[0]), b=h(P[P.length-1]); if(a===null) a=b; if(b===null) b=a; return a===null?null:[a,b]; }
+function secMur(H,R){ const t=Number.isFinite(R.t)?R.t:0.5, k=Number.isFinite(R.b)?R.b:0.5; return (Math.max(k*H,t)+t)/2*H; }
+function texteMur(m,R){ const h=hautsMur(m); if(!h) return ' · ⚠ hauteur inconnue (Z = tête, FF = pied aux bouts)'; const H=(h[0]+h[1])/2; return ' · haut. moy. '+frN(H,2)+' m · base '+frN(Math.max((Number.isFinite(R.b)?R.b:0.5)*H,Number.isFinite(R.t)?R.t:0.5),2)+' · section '+frN((secMur(h[0],R)+secMur(h[1],R))/2,2)+' m²'; }
 function profMoyenne(m){ const P=(m.pts||[]).filter(q=>vOkN(q.z)&&vOkN(q.ff)); if(!m.pts||m.pts.length<2) return null; const a=m.pts[0], b=m.pts[m.pts.length-1]; const ok=q=>vOkN(q.z)&&vOkN(q.ff); if(!ok(a)||!ok(b)) return null; return ((+a.z-+a.ff)+(+b.z-+b.ff))/2; }
 function lignesArticle(art,lot){ const L=[];
-  mesuresGardees.forEach((m,i)=>{ if(m.calque!==art.nom) return; if(lot && (m.lot||'')!==lot) return; const pm=(art.devis.base==='ml'&&art.devis.unite==='m³'&&!Number.isFinite(art.devis.k2))?profMoyenne(m):undefined; L.push({sorte:'m', i, lot:m.lot||'', q:qteMesure(art,m), txt:texteMesure(m)+(pm===undefined?'':pm===null?' · ⚠ profondeur inconnue (Z fini / FF aux bouts)':' · prof. moy. '+frN(pm,2)+' m')}); });
+  mesuresGardees.forEach((m,i)=>{ if(m.calque!==art.nom) return; if(lot && (m.lot||'')!==lot) return; const pm=(art.devis.base==='ml'&&art.devis.unite==='m³'&&!Number.isFinite(art.devis.k2)&&!art.devis.mur)?profMoyenne(m):undefined; L.push({sorte:'m', i, lot:m.lot||'', q:qteMesure(art,m), txt:texteMesure(m)+(art.devis.mur&&art.devis.base==='ml'?texteMur(m,art.devis.mur):'')+(pm===undefined?'':pm===null?' · ⚠ profondeur inconnue (Z fini / FF aux bouts)':' · prof. moy. '+frN(pm,2)+' m')}); });
   pointsExp.forEach((p,i)=>{ if((p.calque||CALQUE_PTS)!==art.nom) return; if(lot && (p.lot||'')!==lot) return; const prof=vOkN(p.z)&&vOkN(p.ff)?(+p.z-+p.ff):null;
     L.push({sorte:'p', i, lot:p.lot||'', q:art.devis.base==='U'?qteMesure(art,{}):0, txt:'Point '+p.nom+(prof!==null?' · prof. '+frN(prof,2)+' m':'')}); });
   for(const l of lignesReseauArticle(art)) if(!lot || l.lot===lot) L.push(l);
@@ -3771,12 +3776,20 @@ function majTableMetre(){
     if(fo){ const t=tachesDe().find(x=>x.art===art.nom), et=t?(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]:'⬜ À faire'; tEc.textContent=''; tr.append(tNom, td('Ft',''), td('<span class="petit">'+et+'</span>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?(faitF?'':'<span class="petit">(à faire)</span> ')+frN(q*pu,2):'','num')); tNom.querySelector('.petit').textContent=''; tNom.querySelector('.fl').onclick=null; tNom.querySelector('.des').onclick=ev=>{ ev.stopPropagation(); choisirOngletMetre('planning'); }; }
     else tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
     frag.appendChild(tr);
+    if(metreOuvert.has(art.nom) && D.base==='ml' && D.unite==='m³') frag.appendChild(ligneRegleMur(art));
     if(metreOuvert.has(art.nom)){ if(!L.length){ const r=document.createElement('tr'); r.innerHTML='<td colspan="7" class="petit" style="padding-left:24px;color:#777">Aucune mesure sur ce calque'+(lot?' pour '+echapper(lot):'')+'.</td>'; frag.appendChild(r); }
       for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':l.sorte==='r'?'🔧 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯</button></td>';
         r.querySelector('button').onclick=()=>voirLigneMetre(l); frag.appendChild(r); } } }
   tb.replaceChildren(frag);
   $('mtTotal').innerHTML= avecPrix ? 'Total réalisé : <b>'+frN(total,2)+' €</b>'+(!lot&&totalDevis?' · devis : '+frN(totalDevis,2)+' € · écart '+(total-totalDevis>=0?'+':'')+frN(total-totalDevis,2)+' €':'') : '<span class="petit">Tapez les prix unitaires (PU) pour avoir les montants.</span>';
   $('mtLotInfo').textContent= devis.lotActif ? 'Les nouvelles mesures et les nouveaux points iront dans « '+devis.lotActif+' ».' : 'Les nouvelles mesures ne sont rangées dans aucun lot.'; }
+function ligneRegleMur(art){ const D=art.devis, R=D.mur, r=document.createElement('tr'); r.className='detail'; const c=document.createElement('td'); c.colSpan=7; c.style.paddingLeft='22px';
+  const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!R; cb.style.cssText='width:22px;height:22px;vertical-align:middle';
+  const lb=document.createElement('span'); lb.textContent=' 🧱 Règle mur : base = '; c.append(cb,lb);
+  const ch=(cle,def,suite)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.style.width='56px'; e.value=frN(R&&Number.isFinite(R[cle])?R[cle]:def,2); e.disabled=!R; e.onchange=()=>{ const n=lireNombre(e.value); if(!Number.isFinite(n)||n<0){ e.style.background='#ffd6d6'; return; } D.mur[cle]=n; sauverCalquesPerso(); sauverDevis(); majTableMetre(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; c.appendChild(e); const s=document.createElement('span'); s.textContent=suite; c.appendChild(s); };
+  ch('b',0.5,' × hauteur, tête '); ch('t',0.5,' m'); const p=document.createElement('div'); p.className='petit'; p.textContent= R ? 'Mesurez le mur en Distance avec Z = tête et FF = pied à chaque bout. Ex. mur de 3 m : base 1,50, tête 0,50 → 3 m³ par ml.' : 'Cochez pour calculer le volume d\'un mur avec base et tête (au lieu de longueur × épaisseur × hauteur).'; c.appendChild(p);
+  cb.onchange=()=>{ if(cb.checked) D.mur={b:0.5,t:0.5}; else delete D.mur; sauverCalquesPerso(); sauverDevis(); majTableMetre(); };
+  r.appendChild(c); return r; }
 function echapper(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function voirLigneMetre(l){ $('metreBoite').style.display='none';
   if(l.sorte==='m'){ const m=mesuresGardees[l.i]; if(outil!=='mesure') choisirOutil('mesure'); voirGardees=true; selectionnerMesure(l.i); majPanneau(); centrerSur(m.pts); }
@@ -3833,9 +3846,11 @@ function brancherMetre(){
   $('mtNomLot').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } };
   $('mtNomLot').onblur=()=>{ const v=$('mtNomLot').value.trim(); $('mtNomLot').style.display='none'; if(!v||devis.lots.includes(v)) return; devis.lots.push(v); devis.lotActif=v; sauverDevis(); remplirMetre(); };
   $('mtAjArt').onclick=()=>{ $('mtForm').style.display=$('mtForm').style.display==='none'?'':'none'; $('afDes').focus(); };
-  $('afBase').onchange=()=>{ const b=$('afBase').value; $('afUnite').value= b==='ml'?'ml':b==='m2'?'m²':b==='F'?'Ft':'U'; };
+  $('afBase').onchange=()=>{ const b=$('afBase').value; $('afUnite').value= b==='ml'?'ml':b==='m2'?'m²':b==='F'?'Ft':b==='mur'?'m³':'U'; };
   $('afCreer').onclick=()=>{ const des=$('afDes').value.trim(); if(!des){ $('afDes').focus(); return; } const k=id=>{ const v=lireNombre($(id).value); return Number.isFinite(v)?v:undefined; };
-    const art=creerArticle(des,$('afUnite').value,$('afBase').value,k('afK1'),$('afK1lib').value.trim()||undefined,k('afK2'),$('afK2lib').value.trim()||undefined);
+    const estMur=$('afBase').value==='mur';
+    const art=estMur? creerArticle(des,'m³','ml') : creerArticle(des,$('afUnite').value,$('afBase').value,k('afK1'),$('afK1lib').value.trim()||undefined,k('afK2'),$('afK2lib').value.trim()||undefined);
+    if(art && estMur && !art.devis.mur){ art.devis.mur={b:0.5,t:0.5}; metreOuvert.add(art.nom); }
     if(art){ calqueActifMes=art.nom; if(art.devis.base==='U') calqueActifPts=art.nom; sauverCalquesPerso(); remplirSelectsCalques(); }
     tachesDesForfaits();
     for(const id of ['afDes','afK1','afK1lib','afK2','afK2lib']) $(id).value=''; $('mtForm').style.display='none'; majTableMetre(); };
@@ -3983,7 +3998,9 @@ function bandeHaut(e,H,W){ if(!(e>0)) return 0; e=Math.min(e,H); const hT=H>F.ta
 function sauverFouilles(){ Memoire.ecrire('fouilles',F); marquerModifie(); }
 const estTuyau=a=>a&&a.devis&&a.devis.base==='ml'&&a.devis.unite==='ml';
 function infoTuyau(a){ let t=F.tuyaux[a.nom]; if(!t){ const des=a.devis.des||a.nom, m=String(des).match(/(\d{2,4})/); t={d:m?Math.min(+m[1],2000)/1000:0.10, type:/EDF|enedis/i.test(des)?'EDF':'autre', nat:F.natures[0].nom}; F.tuyaux[a.nom]=t; } return t; }
-function largeurAuto(H){ return H<=F.p1+1e-9?F.l1 : H<F.p2-1e-9?F.l2 : F.l3; }
+function largeurAuto(H,D){ if(F.regle==='f70') return largeurF70(H,D); return H<=F.p1+1e-9?F.l1 : H<F.p2-1e-9?F.l2 : F.l3; }
+// Fascicule 70 (NF EN 1610) : largeur mini selon le diamètre extérieur D et selon la profondeur H ; on garde la plus grande
+function largeurF70(H,D){ D=Number.isFinite(D)?D:0.16; const parD= D<=0.225?D+0.40 : D<=0.35?D+0.50 : D<=0.70?D+0.70 : D<=1.20?D+0.85 : D+1.00; const parH= H<1-1e-9?0 : H<=1.75+1e-9?0.80 : H<=4+1e-9?0.90 : 1.00; return Math.round(Math.max(parD,parH)*100)/100; }
 // section de fouille (m²) pour une profondeur H et une largeur au fond W
 function secFouille(H,W){ if(H<=F.talus+1e-9) return W*H; const h=H-F.droit; return W*F.droit+(W+h)*h; }
 // calcul d'une coupe : H = profondeur de fouille (dessus → fond), D diamètre, W largeur
@@ -3996,12 +4013,13 @@ function lignesFouilles(lot){ const L=[];
   mesuresGardees.forEach((m,mi)=>{ const a=articles().find(x=>x.nom===m.calque); if(!estTuyau(a)||m.type!=='dist') return; if(lot && (m.lot||'')!==lot) return; const t=infoTuyau(a);
     const p0=m.pts[0], p1=m.pts[m.pts.length-1], h=q=>vOkN(q.z)&&vOkN(q.ff)?(+q.z-+q.ff):null; let Ha=h(p0), Hb=h(p1); if(Ha===null) Ha=Hb; if(Hb===null) Hb=Ha;
     L.push({src:'m', mi, art:a, t, nom:'Mesure '+(mi+1), Lg:m.valeur, Ha, Hb, forceW:Number.isFinite(m.largF)?m.largF:null, dessus:m.dessus||''}); });
-  for(const l of L){ if(l.Ha===null){ l.ok=false; continue; } l.ok=true; const Hm=(l.Ha+l.Hb)/2, W=l.forceW!==null?l.forceW:largeurAuto(Hm); l.W=W; l.Hm=Hm;
+  for(const l of L){ if(l.Ha===null){ l.ok=false; continue; } l.ok=true; const Hm=(l.Ha+l.Hb)/2, W=l.forceW!==null?l.forceW:largeurAuto(Hm,l.t.d); l.W=W; l.Hm=Hm;
     const ep=epDessus(l.dessus), ca=coupe(l.Ha,l.t.d,l.t.type,W,ep), cb=coupe(l.Hb,l.t.d,l.t.type,W,ep); l.W=ca.W; l.ep=ep; l.Vex=(ca.Sex+cb.Sex)/2*l.Lg; l.Vf=(ca.S+cb.S)/2*l.Lg; l.Vs=(ca.Sa+cb.Sa)/2*l.Lg; l.Vr=(ca.Re+cb.Re)/2*l.Lg; l.mat=ca.s.mat; l.talus=ca.talus||cb.talus; l.court=ca.court||cb.court; }
   return L; }
 function totauxFouilles(L){ const T={Vf:0, Vex:0, sable:{}, remblai:{}, nonCalc:0}; for(const l of L){ if(!l.ok){ T.nonCalc++; continue; } T.Vf+=l.Vf; T.Vex+=l.Vex||0; T.sable[l.mat]=(T.sable[l.mat]||0)+l.Vs; T.remblai[l.t.nat]=(T.remblai[l.t.nat]||0)+l.Vr; } T.deblai=T.Vf*F.fois; return T; }
 const prixDe=mat=>{ const t=F.tarifs.find(x=>x.mat===mat); return t&&Number.isFinite(t.pu)?t.pu:null; };
-function majFouilles(){ const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=totauxFouilles(L), z=$('zoneFouilles'); const f2=v=>frN(v,2);
+function majFouilles(){ const sR=$('fqRegle'); if(sR){ sR.value=F.regle==='f70'?'f70':'moi'; sR.onchange=()=>{ F.regle=sR.value; sauverFouilles(); majFouilles(); }; $('fqRegleTxt').textContent= F.regle==='f70' ? 'Ø ext. + 0,40 à 0,70 m ; mini 0,80 m de 1 à 1,75 m de prof., 0,90 m au-delà. Tapez une largeur pour la forcer.' : 'Largeur selon la profondeur (⚙ Règles) ; tapez une largeur pour la forcer.'; }
+  const lot=$('mtFiltre').value, L=lignesFouilles(lot), T=totauxFouilles(L), z=$('zoneFouilles'); const f2=v=>frN(v,2);
   const champ=(v,cb,w)=>{ const e=document.createElement('input'); e.inputMode='decimal'; e.value=v===null||v===undefined?'':frN(v,2); e.style.width=(w||52)+'px'; e.onchange=()=>{ const n=lireNombre(e.value); if(Number.isNaN(n)){ e.style.background='#ffd6d6'; return; } cb(n); sauverFouilles(); majFouilles(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; return e; };
   // 1. récapitulatif par tronçon
   const tb=$('tbFouilles'), frag=document.createDocumentFragment();
@@ -4057,7 +4075,7 @@ function texteFouilles(){ const L=lignesFouilles($('mtFiltre').value), T=totauxF
   out.push('', 'Fouille en place\t'+n(T.Vf), 'Déblai foisonné (×'+n(F.fois)+')\t'+n(T.deblai)); for(const [m,v] of Object.entries(T.sable)) out.push(m+'\t'+n(v)); for(const [k,v] of Object.entries(T.remblai)){ const nt=F.natures.find(x=>x.nom===k); out.push('Remblai '+k+' (×'+n(nt?nt.k:1)+')\t'+n(v*(nt?nt.k:1))); }
   return out.join('\n'); }
 // ----- coupe de tranchée (dessin SVG) -----
-function svgCoupe(a,H,Wf,dessus){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf:largeurAuto(H), c=coupe(H,t.d,t.type,W0,epDessus(dessus)), s=c.s, W=c.W, n=v=>frN(v,2);
+function svgCoupe(a,H,Wf,dessus){ const t=infoTuyau(a), W0=Wf!==null&&Wf!==undefined?Wf:largeurAuto(H,t.d), c=coupe(H,t.d,t.type,W0,epDessus(dessus)), s=c.s, W=c.W, n=v=>frN(v,2);
   const hT=c.talus?H-F.droit:0, Wh=W+2*hT, marge=0.6, larg=Math.max(Wh+2*marge,1.8), sc=Math.min(560/larg, 420/(H+0.5)), X=v=>40+(v+larg/2)*sc, Y=v=>90+v*sc, Wpx=larg*sc+80, Hpx=(H+0.5)*sc+160;
   const fondG=-W/2, fondD=W/2, yF=H, yD=c.talus?H-F.droit:0;
   const poly=[[-Wh/2,0],[fondG,yD],[fondG,yF],[fondD,yF],[fondD,yD],[Wh/2,0]].map(p=>X(p[0])+','+Y(p[1])).join(' ');
@@ -4171,6 +4189,8 @@ const AIDE=[
  {r:'Métré', t:'Demande / Mesuré / En attente', txt:'Demande = tout le devis ; Mesuré = déjà trouvé sur le plan ; En attente = pas encore placé. Appui sur une désignation → retour au plan dans le bon outil.', mots:'demande mesure attente ecart', go:()=>{ ouvrirMetre(); choisirOngletMetre('attente'); }},
  {r:'Métré', t:'Lots (logements)', txt:'＋ Lot, puis choisissez le lot actif : chaque nouvelle mesure et chaque point y sont rangés. « Afficher » filtre par lot.', mots:'lot logement filtre'},
  {r:'Fouilles', t:'Fouilles des tranchées', txt:'🧾 Métré → Fouilles : largeur auto selon la profondeur (tapez une largeur pour la forcer), talus au-delà de 1,30 m, sable autour du tuyau, remblai, déblai foisonné. Menu Dessus : espace vert ou structure, non comptés deux fois.', mots:'fouille tranchee largeur talus sable remblai deblai foisonnement dessus espace vert', go:()=>{ ouvrirMetre(); choisirOngletMetre('fouilles'); }},
+ {r:'Fouilles', t:'Largeur : ma règle ou Fascicule 70', txt:'En haut de Fouilles, choisissez « Largeur : ma règle » (0,40 / 0,60 / 0,80 m selon la profondeur, réglable dans ⚙ Règles) ou « Fascicule 70 » quand le CCTP l\'impose : Ø extérieur + 0,40 m jusqu\'au Ø 225, + 0,50 jusqu\'au Ø 350, + 0,70 jusqu\'au Ø 700 ; au moins 0,80 m entre 1 et 1,75 m de profondeur, 0,90 m au-delà. La plus grande des deux est gardée. Une largeur tapée à la main reste prioritaire.', mots:'fascicule 70 largeur tranchee norme cctp NF EN 1610'},
+ {r:'Métré', t:'Murs en moellons : règle base / tête', txt:'Article en m³ mesuré en distance : ouvrez sa ligne (▸) et cochez 🧱 Règle mur. Base = 0,5 × hauteur (au moins la tête), tête 0,50 m, réglables. Mesurez le mur en 📏 Distance avec Z = tête et FF = pied à chaque bout : volume = longueur × section moyenne. Ex. 3 m de haut : base 1,50, tête 0,50 → 3 m³/ml. Nouvel article : ＋ Article → Mesuré par « Mur ».', mots:'mur moellon soutenement volume base tete m3 section'},
  {r:'Fouilles', t:'Coupe de tranchée pour le client', txt:'Fouilles → ✂ sur un tronçon (ou ✂ Coupe d\'un tuyau) : dessin coté, 0,40 / 0,80 / 1,50 m, 💾 Enregistrer l\'image (SVG, à joindre à un mail).', mots:'coupe tranchee image client svg'},
  {r:'Fouilles', t:'Tarifs d\'achat et règles de calcul', txt:'Fouilles → Tarifs d\'achat : prix et fournisseur, montants calculés. ⚙ Règles : largeurs, talus, sable, foisonnement, coefficients de remblai.', mots:'tarif prix fournisseur regle coefficient'},
  {r:'Planning', t:'Tâches et planning', txt:'🧾 Métré → Planning : ＋ Tâche, un appui sur l\'état (À faire → En cours → Fait), ▲▼ pour l\'ordre, 📍 pour la placer sur le plan (drapeau).', mots:'tache planning drapeau forfait', go:()=>{ ouvrirMetre(); choisirOngletMetre('planning'); }},
