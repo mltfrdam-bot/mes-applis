@@ -5,6 +5,9 @@ Usage : python3 -I pdf2dxf.py plan.pdf sortie.dxf <metres_par_point> [--leger] [
  - Calques : ceux du PDF (OCG) s'il y en a, sinon un calque par couleur.
  - --leger : enleve les traits gris clairs (textures, hachures de remplissage).
  - Traits -> LWPOLYLINE, courbes de Bezier en 8 morceaux, remplissages -> HATCH plein (blanc ignore).
+ - --textes : ecrit aussi les textes du PDF (TEXT, calque TEXTES_<couleur>), utiles pour les cotes
+   (niveaux, diametres, longueurs) lues par l'appli.
+ - --sans MOT1,MOT2 : calques du PDF dont le nom contient un de ces mots : pas copies (vegetation, vehicules...).
 """
 import sys, math
 import pymupdf, ezdxf
@@ -23,6 +26,11 @@ def nom_couleur(c):
     if abs(r[0]-r[1])<0.03 and abs(r[1]-r[2])<0.03: return 'GRIS_%d' % round(r[0]*100)
     return 'C_%02X%02X%02X' % tuple(round(v*255) for v in c)
 
+def propre(n):
+    # noms de calques DXF : pas de < > / \ " : ; ? * | = `
+    for ch in '<>/\\":;?*|=`': n=n.replace(ch,'-')
+    return n.strip() or 'SANS_NOM'
+
 def bezier(p0,p1,p2,p3,n=8):
     out=[]
     for i in range(1,n+1):
@@ -33,6 +41,9 @@ def bezier(p0,p1,p2,p3,n=8):
 def main():
     a=sys.argv[1:]
     leger='--leger' in a; a=[x for x in a if x!='--leger']
+    textes='--textes' in a; a=[x for x in a if x!='--textes']
+    sans=set()
+    if '--sans' in a: i=a.index('--sans'); sans=set(a[i+1].split(',')); del a[i:i+2]
     page=0
     if '--page' in a: i=a.index('--page'); page=int(a[i+1])-1; del a[i:i+2]
     src, dst, mpp = a[0], a[1], float(a[2])
@@ -51,6 +62,8 @@ def main():
         c=d.get('color'); fc=d.get('fill')
         if leger and c and abs(c[0]-c[1])<0.03 and abs(c[1]-c[2])<0.03 and 0.55<c[0]<0.97: ignores+=1; continue
         nomc = (d.get('layer') if d.get('layer') not in (None,'','0') else None) or nom_couleur(c if c else fc)
+        if any(m in nomc for m in sans): ignores+=1; continue
+        nomc=propre(nomc)
         lay=calque(nomc, c if c else fc)
         # chemins : enchainer les morceaux qui se suivent
         chemins=[]; cour=[]
@@ -74,7 +87,20 @@ def main():
         if d['type'] in ('s','fs') and c:
             for ch in chemins:
                 msp.add_lwpolyline([T(*q) for q in ch], dxfattribs={'layer':lay}); nb+=1
+    nt=0
+    if textes:
+        for b in p.get_text('rawdict')['blocks']:
+            for l in b.get('lines',[]):
+                dx,dy=l['dir']; ang=math.degrees(math.atan2(-dy,dx))
+                for sp in l['spans']:
+                    t=''.join(ch['c'] for ch in sp['chars']).strip()
+                    if not t: continue
+                    col=sp.get('color',0); rgb=((col>>16)&255,(col>>8)&255,col&255)
+                    lay=calque('TEXTES_'+nom_couleur(tuple(v/255 for v in rgb)), tuple(v/255 for v in rgb))
+                    o=sp['chars'][0]['origin'] if sp['chars'] else sp['origin']
+                    x,y=T(o[0],o[1])
+                    msp.add_text(t, height=max(sp['size']*0.7*mpp,0.01), rotation=ang, dxfattribs={'layer':lay,'insert':(x,y)}); nt+=1
     dxf.saveas(dst)
-    print('OK', nb, 'objets,', len(calques), 'calques,', ignores, 'traits gris ignores')
+    print('OK', nb, 'objets,', len(calques), 'calques,', ignores, 'traits gris ignores,', nt, 'textes')
 
 if __name__=='__main__': main()
