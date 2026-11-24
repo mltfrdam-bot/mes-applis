@@ -35,7 +35,10 @@ def _polys(dessins):
 def _axe_ruban(P):
     """Axe d'un ruban (deux bords paralleles fermes par deux petits cotes)."""
     n = len(P); E = [math.dist(P[i], P[(i + 1) % n]) for i in range(n)]
-    i = min(range(n), key=lambda k: E[k]); j = (i + n // 2) % n          # petits cotes opposes
+    per = sum(E) or 1
+    # petits cotes = la paire de cotes opposes la plus egale et la plus courte (largeur du tuyau)
+    i = min(range(n // 2), key=lambda k: abs(E[k] - E[k + n // 2]) / ((E[k] + E[k + n // 2]) or 1) + (E[k] + E[k + n // 2]) / per)
+    j = (i + n // 2) % n
     A = [P[(i + 1 + k) % n] for k in range((j - i) % n)]                  # bord 1 : de la fin du cote i au debut du cote j
     B = [P[(j + 1 + k) % n] for k in range((i - j) % n)][::-1]            # bord 2 dans le meme sens
     if len(A) != len(B) or len(A) < 2: return None
@@ -192,14 +195,43 @@ def couper_demi_tours(L, angle=110):
 
 def accrocher_regards(L, regards, dist):
     """Prolonge chaque bout de ligne jusqu'au centre du regard le plus proche (<= dist)."""
-    for idx in (0, -1):
-        p = L[idx]; best = None
+    def proche(p):
+        best = None
         for r in regards:
             d = math.dist(p, r)
             if d <= dist and (best is None or d < best[0]): best = (d, r)
-        if best and best[0] > 1e-6:
-            if idx == 0: L.insert(0, best[1])
-            else: L.append(best[1])
+        return best
+    b0, b1 = proche(L[0]), proche(L[-1])
+    if b0 and b1 and b0[1] == b1[1]:          # les deux bouts pres du meme regard : seulement le plus proche
+        if b0[0] <= b1[0]: b1 = None
+        else: b0 = None
+    if b0 and b0[0] > 1e-6: L.insert(0, b0[1])
+    if b1 and b1[0] > 1e-6: L.append(b1[1])
     return L
 
 def longueur(L): return sum(math.dist(L[i], L[i + 1]) for i in range(len(L) - 1))
+
+def retirer_symboles(Ls, court, tol, boite):
+    """Retire les petits symboles dessines sur le calque du tuyau (ex. cadre de compteur) : groupes d'au
+    moins 3 lignes courtes reliees bout a bout, qui tiennent dans une petite boite et ne touchent aucune
+    longue ligne."""
+    n = len(Ls); lg = [longueur(L) for L in Ls]
+    courtes = [i for i in range(n) if lg[i] < court]
+    bouts = lambda i: (Ls[i][0], Ls[i][-1])
+    par = {i: i for i in courtes}
+    def f(i):
+        while par[i] != i: par[i] = par[par[i]]; i = par[i]
+        return i
+    for a in courtes:
+        for b in courtes:
+            if a < b and any(math.dist(p, q) <= tol for p in bouts(a) for q in bouts(b)): par[f(a)] = f(b)
+    G = {}
+    for i in courtes: G.setdefault(f(i), []).append(i)
+    retire = set()
+    for g in G.values():
+        if len(g) < 3: continue
+        P = [p for i in g for p in Ls[i]]
+        if max(p[0] for p in P) - min(p[0] for p in P) > boite or max(p[1] for p in P) - min(p[1] for p in P) > boite: continue
+        touche = any(math.dist(p, q) <= tol for i in g for p in bouts(i) for j in range(n) if lg[j] >= court for q in Ls[j])
+        if not touche: retire.update(g)
+    return [L for i, L in enumerate(Ls) if i not in retire]

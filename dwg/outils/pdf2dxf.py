@@ -123,6 +123,7 @@ def main():
             Ls=[L for L in Ls if AX.longueur(L)*k>0.3]
             if avecR: Ls=[AX.accrocher_regards(L, R, m(1.6)) for L in Ls]
             Ls=[M for L in Ls for M in AX.couper_demi_tours(L)]
+            Ls=AX.retirer_symboles(Ls, m(3), m(0.3), m(3.5))
             Ls=[L for L in Ls if AX.longueur(L)*k>0.3]
             sortieJson[nomc]=[[T(*q) for q in L] for L in Ls]
             for L in sortieJson[nomc]: msp.add_lwpolyline(L, dxfattribs={'layer':lay}); na+=1

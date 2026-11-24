@@ -649,7 +649,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Intitulés – v2";
+const VERSION = "Intitulés – v3";
 </script>
 <script>
 "use strict";
@@ -1425,10 +1425,19 @@ function dessinerMesuresGardees(c){
     if(m.type==='surf'){ c.closePath(); c.globalAlpha=0.12; c.fillStyle=col; c.fill(); c.globalAlpha=1; }
     if(im===selMes && outil==='mesure' && voirGardees){ c.strokeStyle='rgba(31,95,168,0.45)'; c.lineWidth=10; c.lineJoin='round'; c.stroke(); }
     c.strokeStyle=col; c.lineWidth=2; c.stroke();
-    for(const e of E){ c.beginPath(); c.arc(e[0],e[1],3,0,DEUXPI); c.fillStyle=col; c.fill(); }
-    let pos; if(m.type==='dist') pos=[(E[0][0]+E[1][0])/2,(E[0][1]+E[1][1])/2]; else { let gx=0,gy=0; for(const e of E){gx+=e[0];gy+=e[1];} pos=[gx/E.length,gy/E.length]; }
-    if(pos[0]<-100||pos[1]<-50||pos[0]>W+100||pos[1]>H+50) return;
+    E.forEach((e,k)=>{ const bout=k===0||k===E.length-1; c.beginPath(); c.arc(e[0],e[1],bout?3:1.8,0,DEUXPI); c.fillStyle=col; c.fill(); });
     const t=(m.etat?ETATS_TX[m.etat].e+' ':'')+texteMesure(m); c.font='bold 13px Arial'; const w=c.measureText(t).width+10;
+    if(m.type==='dist'){ // longueur écrite dans l'axe, au milieu de la ligne
+      let tot=0; for(let k=1;k<E.length;k++) tot+=Math.hypot(E[k][0]-E[k-1][0],E[k][1]-E[k-1][1]);
+      let reste=tot/2, k=1; for(;k<E.length;k++){ const l=Math.hypot(E[k][0]-E[k-1][0],E[k][1]-E[k-1][1]); if(reste<=l||k===E.length-1) break; reste-=l; }
+      const a0=E[k-1], a1=E[k], l=Math.hypot(a1[0]-a0[0],a1[1]-a0[1])||1, px=a0[0]+(a1[0]-a0[0])*Math.min(1,reste/l), py=a0[1]+(a1[1]-a0[1])*Math.min(1,reste/l);
+      if(px<-100||py<-50||px>W+100||py>H+50) return;
+      let ang=Math.atan2(a1[1]-a0[1],a1[0]-a0[0]); if(ang>Math.PI/2) ang-=Math.PI; if(ang<-Math.PI/2) ang+=Math.PI;
+      c.save(); c.translate(px,py); c.rotate(ang);
+      c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(-w/2,-9,w,18); c.strokeStyle=m.etat?ETATS_TX[m.etat].c:col; c.lineWidth=m.etat?2:1; c.strokeRect(-w/2,-9,w,18);
+      c.fillStyle=col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,0,1); c.restore(); return; }
+    let gx=0,gy=0; for(const e of E){gx+=e[0];gy+=e[1];} const pos=[gx/E.length,gy/E.length];
+    if(pos[0]<-100||pos[1]<-50||pos[0]>W+100||pos[1]>H+50) return;
     c.fillStyle='rgba(255,255,255,0.9)'; c.fillRect(pos[0]-w/2,pos[1]-21,w,18); c.strokeStyle=m.etat?ETATS_TX[m.etat].c:col; c.lineWidth=m.etat?2:1; c.strokeRect(pos[0]-w/2,pos[1]-21,w,18);
     c.fillStyle=col; c.textAlign='center'; c.textBaseline='middle'; c.fillText(t,pos[0],pos[1]-12);
   });
