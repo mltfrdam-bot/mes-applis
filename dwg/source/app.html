@@ -393,6 +393,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn prim" id="bProfil">📈 Profil</button>
   </div>
   <div id="resultat"></div>
+  <div class="ligneCalque" id="lImpLigne"><span>Longueur imposée :</span><input id="lImp" inputmode="decimal" placeholder="libre" style="width:80px;height:34px;font-size:16px;text-align:right"> m<button class="btn petitb" id="lPerp" title="Partir d'équerre (90°)">⟂ 90°</button><button class="btn petitb" id="lInv" title="Sens inverse (prolonger)">⇄</button><span id="lImpInfo" style="font-size:12px;color:#555;flex:1 1 100%"></span></div>
   <div class="ligneCalque"><span id="lblCalqueMes">Calque :</span><select id="selCalqueMes"></select><span style="flex:1"></span><button class="btn petitb" id="bDuPlan" title="Prendre une surface du plan" style="display:none">⬚ Du plan</button><button class="btn petitb" id="bStruct" title="Quantités de la surface" style="display:none">🧱 Quantités</button><button class="btn petitb" id="bCoupe" title="Coupe de la surface" style="display:none">📐 Coupe</button><button class="btn petitb" id="b3D" title="Vue 3D de la surface" style="display:none">🧊 3D</button><button class="btn petitb" id="bTN" title="Terrain naturel : déblai / remblai" style="display:none">⛰ TN</button><button class="btn petitb" id="bMesVersPoints" title="Créer des points sur cette mesure" style="display:none">⟋ Points</button><button class="btn petitb" id="bModifMes" style="display:none">✎ Modifier</button><button class="btn petitb" id="bAnnulEdit" style="display:none">✕ Annuler</button><button class="btn petitb" id="bEcranMes" style="display:none">👁 À l'écran</button><button class="btn petitb" id="bVoirGardees">📋 Gardées (0)</button></div>
   <div class="ligneCalque" id="resLigne"><select id="selReseau"></select><input id="nomRes" style="display:none;height:32px;width:130px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px;font-size:14px"><button class="btn petitb" id="bRenRes" title="Renommer">✎</button><button class="btn petitb" id="bNouvRes" title="Nouveau réseau">＋</button><button class="btn petitb" id="bInvRes" title="Inverser le sens du réseau">⇄</button><button class="btn petitb" id="bConv" title="Transformer des traits du plan en réseau">🔁 Du plan</button><span style="flex:1"></span><button class="btn petitb" id="bCote">＋ Cote</button></div>
   <div id="convPanel"><div id="convInfo"></div><div class="convL"><button class="btn petitb" id="convZone">⬚ Zone</button><label><input type="checkbox" id="convMil"> Point au milieu</label><select id="convCalque" title="Calque des points"></select><span style="flex:1"></span><button class="btn petitb" id="convVider">Vider</button><button class="btn petitb" id="convAnn">✕</button><button class="btn prim petitb" id="convOk">✓ Convertir</button></div></div>
@@ -642,7 +643,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Calque points – v1";
+const VERSION = "Longueur – v1";
 </script>
 <script>
 "use strict";
@@ -1148,7 +1149,19 @@ function memoMes(){ histMes.push(JSON.stringify(mesure.pts)); if(histMes.length>
 // Côté de la surface en cours dont le milieu (repère ＋) est sous le doigt
 function coteSousDoigt(sx,sy){ if(mesure.mode!=='surf'||mesure.pts.length<3) return null; const P=mesure.pts, n=P.length; let k=null, dm=RAYON_PRISE; for(let i=0;i<n;i++){ const a=P[i], b=P[(i+1)%n], [x,y]=versEcran((a.x+b.x)/2,(a.y+b.y)/2), d=Math.hypot(x-sx,y-sy); if(d<dm){dm=d;k=i;} } return k; }
 const RAYON_PRISE=26; // px : doigt posé sur un point déjà placé → on le déplace
-function pointVise(){ if(!visee) return null; if(visee.acc) return visee.acc; const [x,y]=versPlan(visee.sx,visee.sy); return {x,y,z:NaN,t:0}; }
+function pointViseBrut(){ if(!visee) return null; if(visee.acc) return visee.acc; const [x,y]=versPlan(visee.sx,visee.sy); return {x,y,z:NaN,t:0}; }
+// Longueur imposée (📏 Distance) : le 2e point est à L m du 1er, dans la direction du doigt (⟂ = +90°, ⇄ = +180°)
+let lImpose=null, lRot=0;
+function longueurImposeeActive(){ return outil==='mesure' && mesure.mode==='dist' && !coupeMode && !voirGardees && mesure.pts.length===1 && deplace===null && lImpose>0; }
+function pointVise(){ const v=pointViseBrut(); if(!v||!longueurImposeeActive()) return v;
+  const a=mesure.pts[0], dx=v.x-a.x, dy=v.y-a.y, d=Math.hypot(dx,dy); if(d<1e-6) return null;
+  const r=lRot*Math.PI/180, ux=(dx*Math.cos(r)-dy*Math.sin(r))/d, uy=(dx*Math.sin(r)+dy*Math.cos(r))/d;
+  return {x:a.x+lImpose*ux, y:a.y+lImpose*uy, z:NaN, t:0, imp:true}; }
+function majLongueurImposee(){ const L=$('lImpLigne'); if(!L) return; L.style.display=(mesure.mode==='dist'&&!coupeMode&&!voirGardees)?'':'none';
+  $('lPerp').classList.toggle('on',lRot===90||lRot===270); $('lInv').classList.toggle('on',lRot===180||lRot===270);
+  $('lImpInfo').textContent = !(lImpose>0) ? 'Vide = libre. Tapez une longueur pour poser le 2ᵉ point pile à cette distance du 1ᵉʳ.'
+    : (mesure.pts.length===1 ? '👉 Montrez la direction avec le doigt (sur la ligne du plan pour la suivre) : le 2ᵉ point sera à '+fr(lImpose,2)+' m'+(lRot===90||lRot===270?', d\'équerre':'')+(lRot>=180?', sens inverse':'')+'.'
+       : 'Touchez le 1ᵉʳ point (l\'angle), puis la direction : le 2ᵉ point sera à '+fr(lImpose,2)+' m.'); }
 function ptsCalcul(){ if(mesure.mode==='res') return []; if(coupeMode) return mesure.pts.slice(); const p=mesure.pts.slice(); const v=outil==='mesure'?pointVise():null; if(v){ if(deplace!==null) p[deplace]=v; else if(!(mesure.mode==='dist'&&p.length>=2)) p.push(v); } return p; }
 function pointSousDoigt(sx,sy){ let k=null, dm=RAYON_PRISE; mesure.pts.forEach((q,i)=>{ const [x,y]=versEcran(q.x,q.y); const d=Math.hypot(x-sx,y-sy); if(d<=dm){dm=d;k=i;} }); return k; }
 const zOk=z=>Number.isFinite(z)&&z!==0;
@@ -1228,7 +1241,7 @@ function majLoupe(){
   loupeTxt.style.left=Math.max(4,Math.min(window.innerWidth-lw-4,cx-lw/2))+'px';
   loupeTxt.style.top=(top+T+4)+'px';
 }
-function majPanneau(){
+function majPanneau(){ majLongueurImposee();
   $('bEffacer').textContent = (coinSel!==null && coinSel<mesure.pts.length && mesure.mode!=='res') ? '🗑 '+(coinSel+1) : '🗑';
   if(mesure.mode==='res'){ if(scene) majReseau(!!visee); return; }
   const p=ptsCalcul(), r=calculs(p), o=scene?scene.origine:{x:0,y:0};
@@ -1293,7 +1306,7 @@ function choisirOutil(o){
   $('bMesure').classList.toggle('actif',outil==='mesure'); $('bPoints').classList.toggle('actif',outil==='points'); $('bMain').classList.toggle('actif',outil==='main'); document.body.classList.toggle('outil-main',outil==='main'); mainSel=null; majMain();
   visee=null; deplace=null; redim(); majPanneau(); if(outil==='points'){ majTablePoints(); majVueLigne(); } majBandeau(); $('listeArticles').style.display='none'; demanderDessin(false);
 }
-function choisirMode(m){ if(edition) finEdition(); coupeMode=false; coupeAB=[]; $('bCoupe').classList.remove('actif'); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
+function choisirMode(m){ setTimeout(majLongueurImposee); if(edition) finEdition(); coupeMode=false; coupeAB=[]; $('bCoupe').classList.remove('actif'); mesure={mode:m,pts:[]}; histMes=[]; coinSel=null; $('mDist').classList.toggle('on',m==='dist'); $('mSurf').classList.toggle('on',m==='surf'); $('mRes').classList.toggle('on',m==='res'); $('mesure').classList.toggle('modeRes',m==='res'); if(m==='res'){ voirGardees=false; selMes=null; } else { ajoutCote=false; lectureRes=null; } majPanneau(); demanderDessin(false); }
 
 // ================= Calques perso (créés dans l'appli) =================
 const CALQUE_PTS='POINTS_EXPORT', CALQUE_MES='MESURES', ROSE='#c2185b';
@@ -3992,6 +4005,7 @@ function brancherGarde(){
 const AIDE=[
  {r:'Plan', t:'Ouvrir un plan (DWG, DXF)', txt:'📂 en haut à gauche, puis choisissez le fichier. Le plan s\'ouvre tel quel, coordonnées réelles. Il est gardé : il se rouvre tout seul, en moins d\'une seconde la fois suivante.', mots:'ouvrir fichier dwg dxf', go:()=>$('fichier').click(), sansPlan:true},
  {r:'Plan', t:'Ouvrir un PDF (conversion en DXF)', txt:'📂 puis choisissez un PDF de plan (pas un scan). Indiquez l\'échelle écrite sur le plan (ex. 200 pour 1/200) ou « je mesurerai une cote connue ». Case Léger : enlève les textures grises. Le DXF est enregistré (Téléchargements) et ouvert dans un nouvel onglet ; le PDF n\'est pas modifié. Échelle inconnue : mesurez une cote connue avec 📏 (2 points), tapez sa vraie longueur dans la barre jaune, ✓ Appliquer. Les coordonnées ne sont pas celles du terrain : 📐 Caler avant d\'implanter.', mots:'pdf convertir conversion dxf echelle cote', go:()=>$('fichier').click(), sansPlan:true},
+ {r:'Mesure', t:'Ligne de longueur imposée (partir d\'un angle à 5 m)', txt:'📏 Mesure → Distance. Tapez la longueur dans « Longueur imposée » (ex. 5). Touchez l\'angle (1er point, accroché), puis montrez la direction avec le doigt : sur une ligne du plan, la direction suit cette ligne. Le 2e point tombe pile à la longueur tapée. ⟂ 90° : partir d\'équerre. ⇄ : sens inverse (prolonger la ligne au-delà de l\'angle). Puis 📌 Garder ou ⟋ Points pour implanter le bout. Case vide = mesure libre.', mots:'longueur imposee 5 m angle equerre perpendiculaire prolonger direction implanter'},
  {r:'Points', t:'⟋ Points du calque entier', txt:'☰ Calques → appui sur un calque → ⟋ Points du calque. ▢ Coins : un point à chaque coin et bout de trait (bâtiment, bordures). ⋯ Pas : les coins + un point tous les X m. ⊙ Altimétriques : un point au centre de chaque petit rond ou croix du calque ; Z repris de la cote écrite à moins de 2 m si elle est lisible, sinon à taper dans le tableau (Entrée = point suivant). ⬚ Zone : seulement dans un rectangle. Aperçu orange, puis ✓ Créer. Points sur le calque <nom>_PTS, numérotation qui continue, pas de double avec les points existants (< 1 cm). ↶ des Points annule tout.', mots:'calque entier points coins bordure batiment altimetrique niveau pas zone'},
  {r:'Plan', t:'Classeur : plusieurs plans ouverts', txt:'Chaque plan ouvert devient un onglet sous la barre (＋ pour en ajouter, ✕ pour le retirer). 3 plans restent en mémoire vive.', mots:'onglet classeur plusieurs'},
  {r:'Plan', t:'Calques : afficher / masquer', txt:'☰ Calques : cochez ou décochez. Appui sur un nom → fiche du calque : voir seul, geler, verrouiller, supprimer.', mots:'calque masquer geler verrouiller', go:()=>$('calques').classList.add('ouvert')},
@@ -4583,6 +4597,10 @@ function remplirCalques(){
 }
 $('bMesure').onclick=()=>choisirOutil('mesure');
 $('bPoints').onclick=()=>choisirOutil('points');
+  $('lImp').onchange=()=>{ const v=lireNombre($('lImp').value); lImpose=(v>0)?v:null; if(!(v>0)) $('lImp').value=''; majLongueurImposee(); majPanneau(); demanderDessin(false); };
+  $('lImp').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('lImp').blur(); } };
+  $('lPerp').onclick=()=>{ lRot=(lRot+(lRot%180===0?90:-90)+360)%360; majLongueurImposee(); majPanneau(); demanderDessin(false); };
+  $('lInv').onclick=()=>{ lRot=(lRot+180)%360; majLongueurImposee(); majPanneau(); demanderDessin(false); };
 $('mDist').onclick=()=>choisirMode('dist');
 $('mSurf').onclick=()=>choisirMode('surf');
 $('bRetour').onclick=()=>{ if(mesure.mode==='res'){ const h=histRes.pop(); if(h){ fermerBulle(); const d=JSON.parse(h); if(d && d.__conv){ reseaux=d.reseaux; pointsExp=d.points; sauverPoints(); majComptesPerso(); remplirCalques(); $('etat').textContent='↶ Conversion annulée.'; } else reseaux=d; resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); noeudSel=null; sauverReseaux(); } } else { const h=histMes.pop(); coinSel=null; if(h!==undefined) mesure.pts=JSON.parse(h).map(q=>({...q,z:q.z===null?NaN:q.z,ff:vOkN(q.ff)?q.ff:NaN})); else mesure.pts.pop(); } majPanneau(); demanderDessin(false); };
