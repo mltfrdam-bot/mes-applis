@@ -767,6 +767,9 @@ public class MainActivity extends Activity {
             RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this);
             if (json != null && !sansMaj(json).equals(sansMaj(avant))) RappelEau.rafraichir(MainActivity.this);   // widget et notification permanente
         }
+        @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
+        /** Boissons notées avec la manette pendant la séance : la page les range dans la séance, puis vide la liste. */
+        @JavascriptInterface public String manetteEvts() { SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); String t = p.getString("manetteEvts", "[]"); p.edit().putString("manetteEvts", "[]").apply(); return t; }
         @JavascriptInterface public void santeEtat(String json) { RappelEau.prefs(MainActivity.this).edit().putString("sante", json).apply(); }
         @JavascriptInterface public String santeLire() { return RappelEau.prefs(MainActivity.this).getString("sante", "{}"); }
         @JavascriptInterface public boolean santeNoter(String json) { boolean ok = RappelEau.noter(MainActivity.this, json); if (webCarnet != null) runOnUiThread(() -> webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null)); return ok; }

@@ -46,7 +46,7 @@ import java.util.Locale;
  * - Fantôme de course (version 1.10) : la page écrit la course de référence dans « fantome-en-cours.json » ; le service compare
  *   chaque seconde et annonce l'écart à la voix, écran éteint. Le calcul est dans Fantome.
  */
-public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.Ecoute {
+public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.Ecoute, LienManettes.Ecoute {
     static final String ACTION_CONNECTER = "fr.mesapplis.activite.CONNECTER";
     static final String ACTION_DEMARRER = "fr.mesapplis.activite.DEMARRER";
     static final String ACTION_REPRENDRE = "fr.mesapplis.activite.REPRENDRE";
@@ -79,6 +79,9 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     private volatile Fantome fantome;                   // la course contre laquelle on court, s'il y en a une
     private TextToSpeech voix;
     private boolean voixPrete = false, fantomeArriveDit = false;
+    private LienManettes manettes;                      // 🎮 manettes Zwift (essai 16)
+    private final java.util.Set<Integer> finDits = new java.util.HashSet<>();
+    private long dernierCoaching = 0;
     private String aDire = null, rythme = "m500";
     private volatile boolean voixOn = true, prevOn = true;
     // 1.14 : home-trainer (activité « ht »)
@@ -173,6 +176,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
         if (gps != null) chargerFantome();
         kickr = new LienKickr(this, this);
+        manettes = new LienManettes(this, this);
+        if (e != null) demarrerManettes();
         if (e != null && ACT_HT.equals(e.activite())) {
             try { velo = Velo.reprendre(Velo.fichierDe(dossierEnregistrements(dossier), e.debut), e.debut); } catch (Exception x) { velo = null; }
             if (velo == null) velo = Velo.nouveau(Velo.fichierDe(dossierEnregistrements(dossier), e.debut), e.debut);
@@ -202,6 +207,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
                     voixOn = p.getBoolean("voixOn", true); prevOn = p.getBoolean("prevOn", true);
                     if (gps != null) chargerFantome();
                 }
+                demarrerManettes();
                 if (ACT_HT.equals(act)) {
                     SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
                     velo = Velo.nouveau(Velo.fichierDe(dossierEnregistrements(dossier), debut), debut);
@@ -240,6 +246,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         h.removeCallbacksAndMessages(null);
         try { lien.arreter(); } catch (Exception ignored) {}
         try { if (kickr != null) kickr.arreter(); } catch (Exception ignored) {}
+        try { if (manettes != null) manettes.arreter(); } catch (Exception ignored) {}
         Enregistreur e = enr;
         if (e != null) e.fermerJournal(false);          // le journal reste sur le téléphone : la séance pourra reprendre
         enr = null;
@@ -433,6 +440,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         fantome = lireFantome(dossier);
         annonceRang = -1;
         fantomeArriveDit = false;
+        finDits.clear();
         if (fantome != null && voix == null) {
             try {
                 voix = new TextToSpeech(this, etat -> {
@@ -526,12 +534,112 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
             annonceRang = rang(sec, d);
             return;
         }
+        annoncesFin(f, sec, d);
         long r = rang(sec, d);
         if (annonceRang < 0) { annonceRang = r; return; }   // départ ou reprise : pas d'annonce tout de suite
         if (r > annonceRang) {
             annonceRang = r;
             double[] pv = prevOn ? f.prevision(sec, d) : null;
             if (!"non".equals(rythme)) dire(("km1".equals(rythme) ? "Kilomètre " + r + ". " : "") + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)) + (pv != null ? " " + Fantome.phrasePrev(pv[0], pv[1]) : ""));
+        }
+    }
+
+    // ---------- 🎮 Manettes et 🏁 fin de fantôme (essai 16) ----------
+    private org.json.JSONObject cfgManettes() { try { return new org.json.JSONObject(getSharedPreferences("reglages", MODE_PRIVATE).getString("manettes", "{}")); } catch (Exception e) { return new org.json.JSONObject(); } }
+
+    private void demarrerManettes() { try { if (manettes != null && cfgManettes().optBoolean("on", false)) manettes.demarrer(); } catch (Exception ignored) {} }
+
+    @Override public void etatManettesChange() { }
+
+    /** Un bouton de manette : l'action choisie dans ⚙️ Réglages → 🎮 Manettes. */
+    @Override public void bouton(String nom) {
+        if (enr == null) return;
+        org.json.JSONObject c = cfgManettes();
+        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "tour" : "rien";
+        String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
+        long now = System.currentTimeMillis();
+        switch (action) {
+            case "boisson": {
+                int ml = c.optInt("ml", 150); String type = c.optString("gourde", "eau"); double su = c.optDouble("s", 0), sl = c.optDouble("sl", 0);
+                try {
+                    org.json.JSONObject o = new org.json.JSONObject().put("ts", now).put("ml", ml).put("type", type).put("note", "Pendant la séance (manette)");
+                    if (!"eau".equals(type)) o.put("kcal", Math.round(ml * su * 4)).put("glucides", Math.round(ml * su * 10) / 10.0);
+                    RappelEau.noter(this, o.toString());
+                    org.json.JSONArray l = new org.json.JSONArray(getSharedPreferences("reglages", MODE_PRIVATE).getString("manetteEvts", "[]"));
+                    l.put(new org.json.JSONObject().put("ts", now).put("k", type).put("q", ml).put("s", su).put("sl", sl));
+                    getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manetteEvts", l.toString()).apply();
+                } catch (Exception ignored) {}
+                vibrer(new long[]{0, 70});
+                break;
+            }
+            case "tour": tour(); break;
+            case "fantome": parler(phraseFantome()); break;
+            case "etat": parler(phraseEtat(c)); break;
+            case "conseil": parler(phraseConseil(true)); break;
+            default: break;
+        }
+    }
+
+    /** Parole demandée par un bouton : dite même si les annonces automatiques sont coupées. */
+    private void parler(String t) {
+        if (t == null || t.isEmpty()) return;
+        initVoix();
+        try { if (voixPrete && voix != null) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "manette"); else aDire = t; } catch (Exception ignored) {}
+    }
+
+    private static String km(double m) { return String.format(Locale.FRANCE, "%.1f", m / 1000.0).replace(",0", "") + (m >= 1950 ? " kilomètres" : " kilomètre"); }
+    private static String allure(double sParKm) { long s = Math.round(sParKm); return (s / 60) + " minutes " + (s % 60 > 0 ? String.valueOf(s % 60) : ""); }
+    private static String duree(long s) { return s < 60 ? s + " secondes" : (s / 60) + (s / 60 > 1 ? " minutes" : " minute") + (s % 60 > 0 ? " " + (s % 60) : ""); }
+
+    private String phraseEtat(org.json.JSONObject c) {
+        Enregistreur e = enr; if (e == null) return "";
+        long sec = (System.currentTimeMillis() - e.debut) / 1000;
+        StringBuilder t = new StringBuilder(duree(sec).replace(" secondes", " secondes") + ". ");
+        Parcours g = gps;
+        if (g != null && g.aPosition() && g.distance() > 50) t.append(km(g.distance())).append(", allure ").append(allure(sec / (g.distance() / 1000.0))).append(". ");
+        int f = fcFraiche();
+        if (f > 0) { int max = c.optInt("fcMax", 185); double p = f / (double) max; int z = p < 0.6 ? 1 : p < 0.7 ? 2 : p < 0.8 ? 3 : p < 0.9 ? 4 : 5; t.append("Cœur ").append(f).append(", zone ").append(z).append("."); }
+        else t.append("Pas de cœur.");
+        return t.toString();
+    }
+
+    private String phraseFantome() {
+        Parcours g = gps; Fantome f = fantome;
+        if (g == null || !g.aPosition()) return "Pas de GPS pour l'instant.";
+        double sec = (System.currentTimeMillis() - g.debut) / 1000.0 - g.premier(), d = g.distance();
+        String base = km(d) + ", allure " + allure(sec / Math.max(0.05, d / 1000.0)) + ".";
+        if (f == null) return "Pas de fantôme. " + base;
+        return Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)) + " " + base;
+    }
+
+    /** Conseil pour finir devant le fantôme. « demande » = bouton (toujours une réponse) ; sinon annonce automatique. */
+    private String phraseConseil(boolean demande) {
+        Parcours g = gps; Fantome f = fantome;
+        if (g == null || !g.aPosition()) return demande ? "Pas de GPS pour l'instant." : null;
+        if (f == null) return demande ? "Pas de fantôme." : null;
+        double sec = (System.currentTimeMillis() - g.debut) / 1000.0 - g.premier(), d = g.distance(), reste = f.dist - d;
+        if (reste <= 0 || f.fini(sec)) return demande ? "Le fantôme est arrivé. " + Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)) : null;
+        double ecart = f.ecartS(sec, d), budget = f.temps() - sec;
+        String debut = "Reste " + (reste >= 1000 ? km(reste) : (Math.round(reste / 10) * 10) + " mètres") + ", " + (Math.abs(ecart) < 1 ? "à égalité" : duree(Math.round(Math.abs(ecart))) + (ecart > 0 ? " d'avance" : " de retard")) + ". ";
+        double moyActuelle = sec / Math.max(0.05, d / 1000.0);
+        double[] pv = f.prevision(sec, d);
+        double tenir = pv != null && pv[2] > 0 ? pv[2] : (budget > 0 ? budget / (reste / 1000.0) : -1);
+        if (tenir <= 0 || tenir < moyActuelle * 0.8) return debut + "Le fantôme est loin, termine à ton rythme.";
+        if (ecart >= 5) return debut + "Maintiens ton allure, autour de " + allure(Math.min(tenir, moyActuelle)) + ".";
+        return debut + "Accélère : vise " + allure(tenir) + " au kilomètre.";
+    }
+
+    /** Annonces automatiques avant l'arrivée du fantôme : 1 = à 2 km et 1 km ; 2 = + 500 m et 200 m ; 3 = + toutes les 30 s dans le dernier km si en retard. */
+    private void annoncesFin(Fantome f, double sec, double d) {
+        int niveau = cfgManettes().optInt("finFantome", 1);
+        if (niveau <= 0 || f.dist < 2500 || f.fini(sec)) return;
+        double reste = f.dist - d;
+        int[] seuils = niveau >= 2 ? new int[] { 2000, 1000, 500, 200 } : new int[] { 2000, 1000 };
+        for (int s : seuils) {
+            if (reste <= s && !finDits.contains(s)) { finDits.add(s); if (reste > s - 250) { String t = phraseConseil(false); if (t != null) parler(t); dernierCoaching = System.currentTimeMillis(); } return; }
+        }
+        if (niveau >= 3 && reste < 1000 && f.ecartS(sec, d) < 0 && System.currentTimeMillis() - dernierCoaching >= 30000) {
+            dernierCoaching = System.currentTimeMillis(); String t = phraseConseil(false); if (t != null) parler(t);
         }
     }
 
@@ -718,6 +826,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
           .append(",\"fc\":").append(fcFraiche()).append(",\"depuis\":").append(Math.max(0, (maintenant - lien.depuis()) / 1000)).append('}');
         sb.append(",\"acc\":{\"present\":").append(lien.pmdPresent()).append(",\"actif\":").append(lien.accActif()).append(",\"taux\":").append(accTaux)
           .append(",\"erreur\":").append(Json.texte(lien.accErreur())).append('}');
+        if (manettes != null) sb.append(",\"man\":").append(manettes.etatJson());
         sb.append(",\"imp\":{\"seuil\":").append(suivi.seuil).append(",\"rearme\":").append(suivi.rearme).append(",\"bip\":").append(suivi.bip).append('}');
         sb.append(",\"dernier\":");
         if (suivi.dernierM > 0) sb.append("{\"m\":").append(Math.round(suivi.dernierM)).append(",\"compte\":").append(suivi.dernierM > suivi.seuil).append('}'); else sb.append("null");
@@ -824,6 +933,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         velo = null;
         if (v != null) { try { kickr.arreter(); } catch (Exception ignored) {} }
         fantome = null;
+        try { manettes.arreter(); } catch (Exception ignored) {}
         new File(dossier, FANTOME).delete();
         enr = null;
         e.fermerJournal(true);
