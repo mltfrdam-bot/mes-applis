@@ -1594,15 +1594,52 @@ function resumeExport(pts){
   if(doublons.length) r+=' <b style="color:#a11">⚠ Noms en double : '+doublons.join(', ')+'</b>';
   return r;
 }
-let exportEnAttente=null;
+let exportEnAttente=null, choixExport=null;
+// Noms en double : on met le début du calque devant (ex. CLO221) ; si encore en double, _2, _3…
+function nomsUniques(pts){
+  const cpt={}; for(const p of pts) cpt[p.nom]=(cpt[p.nom]||0)+1;
+  const pris=new Set(pts.filter(p=>cpt[p.nom]===1).map(p=>p.nom));
+  return pts.map(p=>{ if(cpt[p.nom]===1) return p;
+    const pre=(nomCalqueNormalise(calqueDe(p))||'PT').replace(/[^A-Za-z0-9]/g,'').slice(0,3).toUpperCase();
+    let n=pre+p.nom, k=2; while(pris.has(n)) n=pre+p.nom+'_'+(k++);
+    pris.add(n); return {...p, nom:n}; });
+}
+function verifierExport(pts){
+  const noms=pts.map(p=>p.nom), dbl=[...new Set(noms.filter((n,i)=>noms.indexOf(n)!==i))];
+  const sansZ=pts.filter(p=>p.z===null||p.z===undefined).length;
+  if(!dbl.length && !sansZ) return true;
+  const c={dbl: dbl.length?'pre':null, z: sansZ?'tous':null};
+  const b=$('exportResultat'); b.innerHTML='';
+  const ligne=(titre,opts,cle)=>{ const d=document.createElement('div'); d.style.cssText='margin:6px 0;padding:6px;border:1px solid #e0a0a0;background:#fff5f5'; d.innerHTML=titre+'<br>';
+    for(const [v,lab] of opts){ const bt=document.createElement('button'); bt.className='btn petitb'; bt.textContent=lab; bt.dataset.v=v; bt.style.margin='4px 4px 0 0';
+      const maj=()=>d.querySelectorAll('button').forEach(x=>{ x.style.background=x.dataset.v===c[cle]?'#1565c0':''; x.style.color=x.dataset.v===c[cle]?'#fff':''; });
+      bt.onclick=()=>{ c[cle]=v; maj(); }; d.appendChild(bt); setTimeout(maj); }
+    b.appendChild(d); };
+  if(dbl.length) ligne('<b style="color:#a11">⚠ Noms en double : '+dbl.slice(0,12).join(', ')+(dbl.length>12?'…':'')+'</b> — la TS11 garderait un seul point par nom.',
+    [['pre','Ajouter le calque devant (ex. CLO'+dbl[0]+')'],['tel','Garder les noms']],'dbl');
+  if(sansZ) ligne('<b style="color:#a11">⚠ '+sansZ+' point(s) sans Z</b> — dans la TS11 leur altitude serait 0,000.',
+    [['tous','Exporter tout (Z = 0)'],['avecZ','Seulement les points avec Z']],'z');
+  const fin=document.createElement('div'); fin.style.marginTop='6px';
+  const ok=document.createElement('button'); ok.className='btn'; ok.style.cssText='background:#2e7d32;color:#fff;margin-right:6px'; ok.textContent='✓ Exporter';
+  const an=document.createElement('button'); an.className='btn'; an.textContent='Annuler';
+  ok.onclick=()=>{ choixExport=c; enregistrerExport(); }; an.onclick=()=>{ choixExport=null; b.innerHTML='Export annulé.'; };
+  fin.append(ok,an); b.appendChild(fin);
+  return false;
+}
 function enregistrerExport(){
-  const pts=pointsAExporter();
+  let pts=pointsAExporter();
   if(!pts.length){ $('exportResultat').innerHTML='⚠ Aucun calque coché.'; return; }
+  if(!choixExport && !verifierExport(pts)) return;
+  const ch=choixExport||{}; 
+  if(ch.z==='avecZ') pts=pts.filter(p=>!(p.z===null||p.z===undefined));
+  if(ch.dbl==='pre') pts=nomsUniques(pts);
+  if(!exportEnAttente) choixExport=null;
+  if(!pts.length){ $('exportResultat').innerHTML='⚠ Aucun point avec Z à exporter.'; return; }
   const nom=($('expNom').value.trim()||nomExportDefaut()).replace(/[^A-Za-z0-9_-]+/g,'_');
   const dxf=dxfPoints(pts), txt=texteTS11(pts);
   if(APPLI && APPLI.ecrireDansDossier){
     const r1=APPLI.ecrireDansDossier(nom+'.dxf',dxf);
-    if(r1==='absent'){ exportEnAttente=true; $('exportResultat').innerHTML='📁 Choisissez le dossier (clé USB ou dossier du téléphone / de la tablette)…'; APPLI.choisirDossier(); return; }
+    if(r1==='absent'){ exportEnAttente=true; choixExport=ch; $('exportResultat').innerHTML='📁 Choisissez le dossier (clé USB ou dossier du téléphone / de la tablette)…'; APPLI.choisirDossier(); return; }
     const r2 = r1==='ok' ? APPLI.ecrireDansDossier(nom+'.txt',txt) : r1;
     $('exportResultat').innerHTML = (r1==='ok'&&r2==='ok')
       ? `✓ <b>${nom}.dxf</b> et <b>${nom}.txt</b> enregistrés dans <b>${APPLI.nomDossier()}</b>. ${resumeExport(pts)}<br>Sur la clé USB, ils doivent être dans le dossier <b>DATA</b>.`
@@ -1617,8 +1654,8 @@ function enregistrerExport(){
 // Appelé par l'appli Android après le choix du dossier
 window.dossierChoisi=function(nomD){
   majDossierExport();
-  if(!nomD){ $('exportResultat').innerHTML='Aucun dossier choisi.'; exportEnAttente=null; return; }
-  if(exportEnAttente){ exportEnAttente=null; enregistrerExport(); }
+  if(!nomD){ $('exportResultat').innerHTML='Aucun dossier choisi.'; exportEnAttente=null; choixExport=null; return; }
+  if(exportEnAttente){ exportEnAttente=null; enregistrerExport(); choixExport=null; }
   else $('exportResultat').innerHTML='📁 Dossier choisi : <b>'+nomD+'</b>';
 };
 
