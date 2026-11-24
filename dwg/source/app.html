@@ -247,6 +247,8 @@ table.xl td.sup{cursor:pointer}
 #pdfBoite .lig{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 #barreEchelle{position:fixed;left:6px;right:62px;top:94px;z-index:6;display:none;background:#fff8d6;border:1px solid #d9b100;border-radius:6px;padding:6px 8px;font-size:14px;align-items:center;gap:6px;flex-wrap:wrap}
 #barreEchelle input{width:80px;height:32px;font-size:16px;text-align:right}
+#modBloc .mbL{display:flex;align-items:center;gap:6px;padding:4px;font-size:14px;flex-wrap:wrap}
+#modBloc input[type=checkbox]{width:22px;height:22px;margin:0}
 #exportBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
 #exportBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
 #exportBoite h3{margin:0 0 8px;font-size:17px;color:#c2185b}
@@ -379,7 +381,10 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
     <button class="btn" id="bAucun">Tout masquer</button>
     <button class="btn" id="bFermer">✕</button>
     <input id="recherche" type="search" placeholder="Rechercher un calque…" autocomplete="off">
-    <button class="btn prim" id="bNouveauCalque" style="flex:1 1 100%">＋ Nouveau calque</button>
+    <button class="btn prim" id="bNouveauCalque" style="flex:1 1 auto">＋ Nouveau calque</button>
+    <button class="btn" id="bModif" style="flex:1 1 auto">✏ Lignes modifiables</button>
+    <button class="btn" id="bLongueurs" style="flex:0 0 auto">☑ Longueurs</button>
+    <div id="modBloc" style="display:none;flex:1 1 100%;border:1px solid #1f5fa8;border-radius:5px;padding:6px;background:#f5f9ff"></div>
   </div>
   <div id="tabWrap"><table class="xl"><thead><tr><th>Vis.</th><th>Coul.</th><th>Nom du calque</th><th title="Verrouillé">🔒</th><th style="text-align:right">Objets</th></tr></thead><tbody id="tbCalques"></tbody></table></div>
   <div class="pied" id="piedCalques"></div>
@@ -624,7 +629,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <button id="bOeil" title="Œil : glissez-le sur le plan pour savoir à quel calque appartient ce qui est dessous">👁</button>
 <div id="ficheCalque">
   <div class="fl1"><span class="pastille" id="fcCoul"></span><b id="fcNom"></b><span id="fcInfo"></span><span style="flex:1"></span><button class="btn" id="fcFermer">✕</button></div>
-  <div class="fl2" id="fcBoutons"><button class="btn" id="fcSeul">◎ Voir seul</button><button class="btn" id="fcGeler">❄ Geler</button><button class="btn" id="fcVerrou">🔒 Verrouiller</button><button class="btn" id="fcSuppr" style="color:#a11">🗑 Supprimer</button><button class="btn" id="fcPoints">⟋ Points du calque</button></div>
+  <div class="fl2" id="fcBoutons"><button class="btn" id="fcSeul">◎ Voir seul</button><button class="btn" id="fcGeler">❄ Geler</button><button class="btn" id="fcVerrou">🔒 Verrouiller</button><button class="btn" id="fcSuppr" style="color:#a11">🗑 Supprimer</button><button class="btn" id="fcPoints">⟋ Points du calque</button><button class="btn" id="fcModif">✏ Modifiable</button></div>
   <div id="fcPts" style="display:none;flex-direction:column;gap:6px"><div class="fl2" style="align-items:center"><button class="btn" data-pc="coins">▢ Coins</button><button class="btn" data-pc="pas">⋯ Pas</button><button class="btn" data-pc="alti">⊙ Altimétriques</button><span id="pcPasL">tous les <input id="pcPas" inputmode="decimal" value="5" style="width:60px;height:34px;font-size:16px;text-align:right"> m</span></div><div class="fl2"><button class="btn" id="pcZone">⬚ Zone</button><button class="btn prim" id="pcCreer">✓ Créer</button><button class="btn" id="pcAnnuler">Annuler</button></div><div id="pcInfo" style="font-size:14px"></div></div>
   <div class="fl2" id="fcValider" style="display:none;align-items:center"><span style="font-size:14px;color:#a11;font-weight:bold;flex:1 1 100%">🗑 Retiré du plan — regardez ce qui a disparu :</span><button class="btn prim" id="fcOk">✓ Valider la suppression</button><button class="btn" id="fcAnnulSup">↶ Remettre</button></div>
   <div id="fcEtat"></div>
@@ -643,7 +648,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Longueur – v1";
+const VERSION = "Lignes – v1";
 </script>
 <script>
 "use strict";
@@ -1094,6 +1099,7 @@ function rendreScene(c){
       for(let i=0;i<nl;i++) c.fillText(t.l[i],0,y0l+i*pas);
     }
   }
+  dessinerModifs(c);
   c.setTransform(1,0,0,1,0,0);
   dernierTemps=performance.now()-t0;
 }
@@ -1138,6 +1144,7 @@ function accrocher(sx,sy){
       const x=ax+t*bx, y=ay+t*by, d=Math.hypot(x-lx,y-ly); if(d>r) continue;
       const sc=d*vue.s+PENALITE[4]; if(sc<bestScore){bestScore=sc; best={x,y,z:NaN,t:4};}
     } }
+  [best,bestScore]=accrocherModifs(lx,ly,r,best,bestScore);
   if(outil!=='points'){ const o=scene.origine; for(const q of pointsExp){ if(!calqueVisible(calqueDe(q)) || calqueDe(q)==='POINTS_TN') continue; const x=q.x-o.x, y=q.y-o.y, d=Math.hypot(x-lx,y-ly); if(d>r) continue;
     const sc=d*vue.s+PENALITE[5]; if(sc<bestScore){ bestScore=sc; best={x,y,z:vOkN(q.z)?+q.z:NaN,ff:vOkN(q.ff)?+q.ff:NaN,t:5,nom:q.nom}; } } }
   return best;
@@ -1340,6 +1347,7 @@ function majComptesPerso(){
   for(const p of pointsExp) plus(p.calque||CALQUE_PTS);
   for(const m of mesuresGardees) plus(m.calque||CALQUE_MES);
   for(const r of (typeof reseaux!=='undefined'?reseaux:[])) plus(r.calque||'RESEAUX');
+  for(const l of (typeof modifs!=='undefined'?modifs.l:[])) plus(l.c);
 }
 function remplirSelectsCalques(){
   for(const [id,actif] of [['selCalquePts',calqueActifPts],['selCalqueMes',edition?edition.calque:calqueActifMes]]){
@@ -1713,6 +1721,7 @@ function objetSousDoigt(sx,sy){
     for(const k of ls){ if(vus.has(k)) continue; vus.add(k); const o=S.o[k]; if(o<0||!lotsAccroch[S.l[k]]) continue;
       const x1=S.x1[k],y1=S.y1[k],dx=S.x2[k]-x1,dy=S.y2[k]-y1,L2=dx*dx+dy*dy; let t=L2?((lx-x1)*dx+(ly-y1)*dy)/L2:0; t=Math.max(0,Math.min(1,t));
       const d=Math.hypot(x1+t*dx-lx,y1+t*dy-ly); if(d<bd){bd=d;best=o;} } }
+  { const m=ligneModifSousDoigt(sx,sy,RAYON_ACC); if(m && (best<0 || m.d/vue.s<bd)) return objetModif(m.i); }
   return best>=0 ? scene.objets[best] : null;
 }
 // Cotes connues le long de la ligne (départ, intermédiaires, arrivée) → interpolation par morceaux
@@ -1982,7 +1991,7 @@ function majFiche(){
   $('fcInfo').textContent=info;
   $('fcGeler').textContent = c.visible ? '❄ Geler' : '☀ Dégeler'; $('fcGeler').classList.toggle('on',!c.visible);
   $('fcVerrou').textContent = c.verrou ? '🔓 Déverrouiller' : '🔒 Verrouiller'; $('fcVerrou').classList.toggle('on',!!c.verrou);
-  $('fcSuppr').disabled = !!c.perso;
+  $('fcSuppr').disabled = !!c.perso; $('fcModif').textContent=c.modif?'↩ Revenir à l\'origine':'✏ Modifiable'; $('fcModif').disabled=!!c.perso&&!c.modif;
   $('fcSeul').textContent = (isole && isole.calque===c.nom) ? '◉ Tout réafficher' : '◎ Voir seul'; $('fcSeul').classList.toggle('on',!!(isole && isole.calque===c.nom));
   const enAttente = supprEnAttente===c.nom; $('fcBoutons').style.display=enAttente?'none':''; $('fcValider').style.display=enAttente?'flex':'none';
   if(enAttente){ $('fcEtat').textContent='Le calque « '+c.nom+' » ('+c.nb+' objets) est retiré. Validez, ou « ↶ Remettre » s\'il manque quelque chose. (Fichier d\'origine intact, restaurable dans ☰ Calques.)'; return; }
@@ -2004,6 +2013,87 @@ function sauverReglagesCalques(){
   sauverEtatBientot();
 }
 
+
+// ================= ✏ Lignes modifiables (copie de calques du plan, avec longueurs) =================
+// modifs = {cal:{copie:{src,couleur}}, l:[{id,c,p:[x,y,…] (coord. réelles), f:fermée}]}
+let modifs={cal:{},l:[]}, longueursVisibles=true, modIdx=null, ligIgnore=null;
+try{ longueursVisibles=localStorage.getItem('lgVis')!=='0'; }catch(e){}
+const cleModPlan=()=>'modifs:'+(scene?scene.nom:'');
+const nomCopieCalque=src=>src+'_MODIF';
+function installerCalquesModif(){ if(!scene) return; for(const [n,d] of Object.entries(modifs.cal)){ let c=scene.calques.get(n); if(!c){ c={nom:n,couleur:d.couleur||'#000',visible:true,nb:0}; scene.calques.set(n,c); } c.perso=true; c.modif=true; c.aci=d.aci||7; } }
+async function chargerModifs(){ const r=await Memoire.lire(cleModPlan()); modifs=(r&&Array.isArray(r.l))?r:{cal:{},l:[]}; if(!modifs.cal) modifs.cal={}; installerCalquesModif(); indexerModifs(); }
+function sauverModifs(){ marquerModifie(); Memoire.ecrire(cleModPlan(), modifs); indexerModifs(); sceneSale=true; demanderDessin(); }
+function indexerModifs(){ const B=[]; for(const l of modifs.l){ let a=Infinity,b=Infinity,c=-Infinity,d=-Infinity; for(let i=0;i<l.p.length;i+=2){ const x=l.p[i], y=l.p[i+1]; if(x<a)a=x; if(x>c)c=x; if(y<b)b=y; if(y>d)d=y; } B.push([a,b,c,d]); } modIdx={B, faux:new Map()}; }
+function ligneVisible(l){ return calqueVisible(l.c); }
+const longLigne=l=>{ let L=0; const P=l.p, n=P.length/2; for(let i=0;i+1<n;i++) L+=Math.hypot(P[2*i+2]-P[2*i],P[2*i+3]-P[2*i+1]); if(l.f&&n>2) L+=Math.hypot(P[0]-P[2*n-2],P[1]-P[2*n-1]); return L; };
+const nbSegs=l=>{ const n=l.p.length/2; return l.f&&n>2?n:n-1; };
+const segLig=(l,k)=>{ const n=l.p.length/2, a=k, b=(k+1)%n; return [l.p[2*a],l.p[2*a+1],l.p[2*b],l.p[2*b+1]]; };
+function nouvelId(){ return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function rendreModifiable(srcs){ if(!scene) return 0; let n=0, nc=0;
+  for(const src of srcs){ const k=scene.calques.get(src); if(!k||k.perso) continue; const copie=nomCopieCalque(src); if(modifs.cal[copie]) continue;
+    modifs.cal[copie]={src, couleur:k.couleur, aci:k.aci||7}; nc++;
+    for(const t of scene.objets){ if(t.calque!==src||!t.els.length) continue; let P=[];
+      const fin=()=>{ if(P.length>=4){ const m=P.length; const f=m>=6&&Math.hypot(P[0]-P[m-2],P[1]-P[m-1])<0.001; if(f){ P.length=m-2; } modifs.l.push({id:nouvelId(), c:copie, p:P.map(v=>Math.round(v*1e4)/1e4), f}); n++; } P=[]; };
+      for(const e of t.els){ const Q=e.t==='L'?[[e.x1,e.y1],[e.x2,e.y2]]:(()=>{ const m=Math.max(2,Math.ceil(Math.abs(e.sw)/(Math.PI/18))), R=[]; for(let i=0;i<=m;i++) R.push(elPt(e,i/m)); return R; })();
+        if(P.length && Math.hypot(P[P.length-2]-Q[0][0],P[P.length-1]-Q[0][1])>0.001) fin();
+        for(let i=(P.length?1:0);i<Q.length;i++) P.push(Q[i][0],Q[i][1]); }
+      fin(); }
+    k.visible=false; }
+  installerCalquesModif(); sauverModifs(); majComptesPerso(); majVisibles(); remplirCalques(); sauverEtatBientot(); remplirSelectsCalques();
+  $('etat').textContent='✏ '+nc+' calque(s) rendu(s) modifiable(s) : '+n+' ligne(s) copiée(s). Le calque d\'origine est masqué (plan d\'origine intact). ✋ pour modifier une ligne.';
+  return n; }
+function revenirOrigine(copie){ const d=modifs.cal[copie]; if(!d) return; const n0=modifs.l.length; modifs.l=modifs.l.filter(l=>l.c!==copie); delete modifs.cal[copie];
+  const k=scene.calques.get(d.src); if(k){ k.visible=true; k.supprime=false; } scene.calques.delete(copie); mainSel=null;
+  sauverModifs(); majComptesPerso(); majVisibles(); remplirCalques(); remplirSelectsCalques(); majMain(); sauverEtatBientot();
+  $('etat').textContent='↩ « '+d.src+' » revenu à l\'origine ('+(n0-modifs.l.length)+' ligne(s) de la copie effacée(s)).'; }
+// Dessin (dans l'image du plan : rapide au déplacement)
+function dessinerModifs(c){ if(!scene||!modifs.l.length) return; const o=scene.origine, s=vue.s, parCal=new Map();
+  const x0=(-vue.tx)/s+o.x, x1=(W-vue.tx)/s+o.x, y1=(vue.ty)/s+o.y, y0=(vue.ty-H)/s+o.y;
+  modifs.l.forEach((l,i)=>{ if(!ligneVisible(l)) return; const b=modIdx.B[i]; if(!b||b[2]<x0||b[0]>x1||b[3]<y0||b[1]>y1) return; if(!parCal.has(l.c)) parCal.set(l.c,[]); parCal.get(l.c).push(l); });
+  c.setTransform(dpr*s,0,0,-dpr*s,dpr*vue.tx,dpr*vue.ty); c.lineWidth=1.6/s; c.lineJoin='round'; c.lineCap='round';
+  for(const [n,L] of parCal){ const k=scene.calques.get(n); c.strokeStyle=k?k.couleur:'#000'; c.beginPath();
+    for(const l of L){ const P=l.p; c.moveTo(P[0]-o.x,P[1]-o.y); for(let i=2;i<P.length;i+=2) c.lineTo(P[i]-o.x,P[i+1]-o.y); if(l.f) c.closePath(); } c.stroke(); }
+  if(!longueursVisibles) return;
+  c.setTransform(dpr,0,0,dpr,0,0); c.font='bold 11px Arial'; c.textAlign='center'; c.textBaseline='bottom'; c.lineWidth=3; c.strokeStyle='#fff'; let nb=0;
+  for(const [n,L] of parCal){ const k=scene.calques.get(n); c.fillStyle=k?k.couleur:'#000';
+    for(const l of L){ const ns=nbSegs(l); for(let j=0;j<ns&&nb<1500;j++){ const [ax,ay,bx,by]=segLig(l,j), len=Math.hypot(bx-ax,by-ay); if(len<0.2||len*s<70) continue;
+      const [sx1,sy1]=versEcran(ax-o.x,ay-o.y), [sx2,sy2]=versEcran(bx-o.x,by-o.y), mx=(sx1+sx2)/2, my=(sy1+sy2)/2; if(mx<-20||my<-20||mx>W+20||my>H+20) continue;
+      let a=Math.atan2(sy2-sy1,sx2-sx1); if(a>Math.PI/2) a-=Math.PI; if(a<-Math.PI/2) a+=Math.PI;
+      c.save(); c.translate(mx,my); c.rotate(a); const t=fr(len,2); c.strokeText(t,0,-2); c.fillText(t,0,-2); c.restore(); nb++; } } } }
+// Accrochage sur les sommets et milieux des lignes modifiables
+function accrocherModifs(lx,ly,r,best,bestScore){ if(!modifs.l.length) return [best,bestScore]; const o=scene.origine, X=lx+o.x, Y=ly+o.y;
+  modifs.l.forEach((l,i)=>{ if(!ligneVisible(l)) return; const b=modIdx.B[i]; if(!b||X<b[0]-r||X>b[2]+r||Y<b[1]-r||Y>b[3]+r) return; const P=l.p, n=P.length/2;
+    for(let j=0;j<n;j++){ if(ligIgnore&&ligIgnore.i===i&&(ligIgnore.j===null||ligIgnore.j===j)) continue; const d=Math.hypot(P[2*j]-X,P[2*j+1]-Y); if(d>r) continue; const sc=d*vue.s+PENALITE[1]; if(sc<bestScore){ bestScore=sc; best={x:P[2*j]-o.x,y:P[2*j+1]-o.y,z:NaN,t:1}; } }
+    if(ligIgnore&&ligIgnore.i===i) return;
+    for(let j=0;j<nbSegs(l);j++){ const [ax,ay,bx,by]=segLig(l,j), mx=(ax+bx)/2, my=(ay+by)/2, d=Math.hypot(mx-X,my-Y); if(d>r) continue; const sc=d*vue.s+PENALITE[2]; if(sc<bestScore){ bestScore=sc; best={x:mx-o.x,y:my-o.y,z:NaN,t:2}; } } });
+  return [best,bestScore]; }
+// Ligne modifiable sous le doigt → {i, seg, x, y (point le plus proche, coord. réelles), d (écran)}
+function ligneModifSousDoigt(sx,sy,rayon){ if(!scene||!modifs.l.length) return null; const o=scene.origine, [lx,ly]=versPlan(sx,sy), X=lx+o.x, Y=ly+o.y, r=(rayon||14)/vue.s; let best=null;
+  modifs.l.forEach((l,i)=>{ if(!ligneVisible(l)) return; const b=modIdx.B[i]; if(!b||X<b[0]-r||X>b[2]+r||Y<b[1]-r||Y>b[3]+r) return;
+    for(let j=0;j<nbSegs(l);j++){ const [ax,ay,bx,by]=segLig(l,j), dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy; let t=L2?((X-ax)*dx+(Y-ay)*dy)/L2:0; t=Math.max(0,Math.min(1,t)); const px=ax+t*dx, py=ay+t*dy, d=Math.hypot(px-X,py-Y);
+      if(d<=r&&(!best||d<best.d)) best={i,seg:j,x:px,y:py,d}; } });
+  return best; }
+// Objet « comme du plan » pour Tronçon, Ligne, 🔁 Du plan, Axe
+function objetModif(i){ const l=modifs.l[i]; if(!l) return null; let f=modIdx.faux.get(l.id); if(f&&f.ver===l.p.length+':'+l.p[0]+':'+l.p[l.p.length-1]) return f;
+  const els=[]; for(let j=0;j<nbSegs(l);j++){ const [ax,ay,bx,by]=segLig(l,j); els.push({t:'L',x1:ax,y1:ay,x2:bx,y2:by}); }
+  f={type:'LWPOLYLINE', calque:l.c, haut:l.c, eff:l.c, els, modId:l.id, ver:l.p.length+':'+l.p[0]+':'+l.p[l.p.length-1]}; modIdx.faux.set(l.id,f); return f; }
+function majLongueursBouton(){ const b=$('bLongueurs'); if(b){ b.classList.toggle('on',longueursVisibles); b.textContent=(longueursVisibles?'☑':'☐')+' Longueurs'; } }
+// Choix des calques à rendre modifiables (☰ Calques → ✏ Lignes modifiables)
+function ouvrirChoixModif(){ const B=$('modBloc'); if(B.style.display==='block'){ B.style.display='none'; return; } B.style.display='block';
+  const L=[...scene.calques.values()].filter(c=>!c.perso&&!c.supprime&&c.nb>0&&scene.objets.some(t=>t.calque===c.nom)).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  const cop=Object.entries(modifs.cal);
+  let h='<div style="font-weight:bold;margin-bottom:4px">✏ Lignes modifiables</div>';
+  if(cop.length){ h+='<div style="font-size:13px;margin-bottom:4px">Copies en cours :</div>'; for(const [n,d] of cop){ const nb=modifs.l.filter(l=>l.c===n).length; h+='<div class="mbL"><span style="flex:1">'+echapper(n)+' <span style="color:#777">('+nb+' lignes)</span></span><button class="btn petitb" data-ret="'+echapper(n)+'">↩ Revenir à l\'origine</button></div>'; } }
+  const libres=L.filter(c=>!modifs.cal[nomCopieCalque(c.nom)]);
+  if(libres.length){ h+='<div style="font-size:13px;margin:6px 0 4px">Cochez les calques à copier pour les modifier :</div><div style="max-height:200px;overflow:auto;border:1px solid #ccc">';
+    for(const c of libres) h+='<label class="mbL"><input type="checkbox" data-src="'+echapper(c.nom)+'"><span class="pastille" style="background:'+c.couleur+'"></span>'+echapper(c.nom)+'</label>';
+    h+='</div><div class="mbL" style="margin-top:6px"><button class="btn petitb" id="modTous">☑ Tous</button><button class="btn prim petitb" id="modOk">✓ Rendre modifiables</button><button class="btn petitb" id="modAnn">Fermer</button></div>'; }
+  else h+='<div class="mbL"><button class="btn petitb" id="modAnn">Fermer</button></div>';
+  B.innerHTML=h;
+  B.querySelectorAll('[data-ret]').forEach(b=>b.onclick=()=>{ if(b.dataset.c!=='1'){ b.dataset.c='1'; b.textContent='Sûr ? (efface la copie)'; setTimeout(()=>{ b.dataset.c=''; b.textContent='↩ Revenir à l\'origine'; },3000); return; } revenirOrigine(b.dataset.ret); B.style.display='none'; ouvrirChoixModif(); });
+  if($('modTous')) $('modTous').onclick=()=>{ const C=B.querySelectorAll('[data-src]'), tous=[...C].every(x=>x.checked); C.forEach(x=>x.checked=!tous); };
+  if($('modOk')) $('modOk').onclick=async()=>{ const S=[...B.querySelectorAll('[data-src]:checked')].map(x=>x.dataset.src); if(!S.length){ $('etat').textContent='Cochez au moins un calque.'; return; } voile('Copie des lignes…'); await attendreAffichage(); rendreModifiable(S); finVoile(); B.style.display='none'; };
+  $('modAnn').onclick=()=>{ B.style.display='none'; }; }
 // ================= ⟋ Points du calque entier =================
 let pcSel=null; // {calque, mode, pas, zone:[X1,Y1,X2,Y2]|null, zoneMode, rect, apercu}
 function calcPointsCalque(){ if(!pcSel||!scene) return []; const {calque,mode,pas,zone}=pcSel, o=scene.origine;
@@ -2071,6 +2161,9 @@ function dessinerFiche(c){
 }
 function brancherFiche(){
   $('fcFermer').onclick=fermerFiche;
+  $('bModif').onclick=()=>{ if(scene) ouvrirChoixModif(); }; majLongueursBouton();
+  $('bLongueurs').onclick=()=>{ longueursVisibles=!longueursVisibles; try{ localStorage.setItem('lgVis',longueursVisibles?'1':'0'); }catch(e){} majLongueursBouton(); sceneSale=true; demanderDessin(); };
+  $('fcModif').onclick=()=>{ const c=calqueFiche(); if(!c) return; if(c.modif){ revenirOrigine(c.nom); fermerFiche(); return; } if(c.perso) return; rendreModifiable([c.nom]); fermerFiche(); };
   $('fcPoints').onclick=()=>{ const c=calqueFiche(); if(!c) return; if(pcSel){ pcSel=null; majPc(); demanderDessin(false); return; } let pas=5; try{ pas=+localStorage.getItem('pcPas')||5; }catch(e){}
     pcSel={calque:c.nom, mode:'coins', pas, zone:null, zoneMode:false, rect:null, apercu:[]}; $('pcPas').value=String(pas).replace('.',','); majPc(); };
   $('fcPts').querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{ if(!pcSel) return; pcSel.mode=b.dataset.pc; majPc(); });
@@ -2103,7 +2196,7 @@ function contenuSauvegarde(){
   const cs=[...scene.calques.values()], o=scene.origine;
   return JSON.stringify({format:'plansdwg', version:1, appli:VERSION, date:new Date().toISOString(),
     plan:{nom:scene.nom, octets: scene.octets?enBase64(scene.octets):null}, calage:scene.calage||null,
-    points:pointsExp, troncons, axes, mesures:mesuresGardees, reseaux, devis, fouilles:F, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
+    points:pointsExp, troncons, axes, mesures:mesuresGardees, modifs, reseaux, devis, fouilles:F, calquesPerso, modelesStructure:modelesPerso, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes},
     reglages:{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)},
     vue:{cx:(W/2-vue.tx)/vue.s+o.x, cy:(vue.ty-H/2)/vue.s+o.y, s:vue.s}});
 }
@@ -2185,6 +2278,8 @@ function fusionner(d){
   const deja=new Set(mesuresGardees.map(cle));
   const rangE=e=>e==='fait'?2:e==='encours'?1:0; R.mesEtat=0;
   for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; const ex=mesuresGardees.find(x=>cle(x)===cle(m)); if(ex && rangE(m.etat)>rangE(ex.etat)){ ex.etat=m.etat; R.mesEtat++; } continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
+  R.ligAjout=0; if(d.modifs && Array.isArray(d.modifs.l)){ const ids=new Set(modifs.l.map(l=>l.id)); for(const [n,c] of Object.entries(d.modifs.cal||{})){ if(!modifs.cal[n]){ modifs.cal[n]=c; const k=scene.calques.get(c.src); if(k) k.visible=false; } }
+    for(const l of d.modifs.l){ if(l&&l.id&&!ids.has(l.id)){ modifs.l.push(JSON.parse(JSON.stringify(l))); R.ligAjout++; } } installerCalquesModif(); if(R.ligAjout) sauverModifs(); }
   R.axAjout=0; for(const a of (d.axes||[])){ if(a&&a.id&&!axes.some(x=>x.id===a.id)){ axes.push(JSON.parse(JSON.stringify(a))); R.axAjout++; } } if(R.axAjout) sauverAxes();
   R.trAjout=0; for(const t of (d.troncons||[])){ if(t&&t.id&&!troncons.some(x=>x.id===t.id)){ troncons.push(JSON.parse(JSON.stringify(t))); R.trAjout++; } } if(R.trAjout) sauverTroncons();
   R.resAjout=[]; R.resIdem=0;
@@ -2205,7 +2300,7 @@ function fusionner(d){
     if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(!t||!t.id) continue; const ex=T.find(x=>x.id===t.id); if(!ex){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); continue; }
         if(t.chrono&&Array.isArray(t.chrono.sessions)){ const c=chronoDe(ex); let n=0; for(const x of t.chrono.sessions) if(!c.sessions.some(y=>y.d===x.d)){ c.sessions.push(x); n++; } if(n){ c.sessions.sort((a,b)=>a.d-b.d); (R.seancesAj=R.seancesAj||[]).push(ex.titre+' (+'+n+')'); } } } }
     sauverDevis(); }
-  R.total=(R.axAjout||0)+(R.trAjout||0)+(R.tachesAj?R.tachesAj.length:0)+(R.tarifsAj?R.tarifsAj.length:0)+(R.seancesAj?R.seancesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+(R.mesEtat||0)+R.calAjout.length+R.supAjout.length+R.verAjout.length;
+  R.total=(R.ligAjout||0)+(R.axAjout||0)+(R.trAjout||0)+(R.tachesAj?R.tachesAj.length:0)+(R.tarifsAj?R.tarifsAj.length:0)+(R.seancesAj?R.seancesAj.length:0)+(R.lotsAj?R.lotsAj.length:0)+(R.devAj?R.devAj.length:0)+(R.ptsFF?R.ptsFF.length:0)+R.resAjout.length+R.ptsAjout.length+R.ptsZ.length+R.ptsRenom.length+R.mesAjout+(R.mesEtat||0)+R.calAjout.length+R.supAjout.length+R.verAjout.length;
   return R;
 }
 function montrerDescriptif(nomFichier,d,R,dejaLa){
@@ -2214,6 +2309,7 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   L.push('Sauvegarde : '+nomFichier+(d.date?' (du '+new Date(d.date).toLocaleString('fr-FR')+')':''));
   if(R.noteCal) L.push(R.noteCal);
   if(R.trAjout) L.push('Tronçons ajoutés : '+R.trAjout);
+  if(R.ligAjout) L.push('Lignes modifiables ajoutées : '+R.ligAjout);
   if(R.axAjout) L.push('Axes ajoutés : '+R.axAjout);
   L.push('Plan : '+d.plan.nom+(dejaLa?' — fusion avec ce qui était déjà dans l\'appli':' — ouvert tel quel'));
   L.push('Points ajoutés : '+R.ptsAjout.length+(R.ptsAjout.length?' ('+lim(R.ptsAjout)+')':''));
@@ -2908,17 +3004,18 @@ function transformerDonneesObjet(d,S){ const ech=Math.hypot(S[0],S[1]); const t=
   for(const m of (d.mesures||[])){ for(const q of (m.pts||[])) t(q); if(Math.abs(ech-1)>1e-12 && typeof recalcMesure==='function') recalcMesure(m); }
   for(const r of (d.reseaux||[])) for(const n of (r.noeuds||[])) t(n);
   for(const a of (d.axes||[])) for(const q of (a.pts||[])) t(q);
+  if(d.modifs&&Array.isArray(d.modifs.l)) for(const l of d.modifs.l) for(let i=0;i<l.p.length;i+=2){ const [x,y]=appliquerS(S,l.p[i],l.p[i+1]); l.p[i]=x; l.p[i+1]=y; }
   const rot=Math.atan2(S[1],S[0]); for(const tr of (d.troncons||[])) for(const e of (tr.els||[])){ if(e.t==='L'){ const a=appliquerS(S,e.x1,e.y1), b=appliquerS(S,e.x2,e.y2); e.x1=a[0]; e.y1=a[1]; e.x2=b[0]; e.y2=b[1]; } else { const c=appliquerS(S,e.cx,e.cy); e.cx=c[0]; e.cy=c[1]; e.r*=ech; e.a0+=rot; } }
   if(d.devis && Array.isArray(d.devis.taches)) for(const k of d.devis.taches) if(k.x!==undefined) t(k); }
-async function transformerMemoire(nom,S){ const d={axes:await Memoire.lire('axes:'+nom)||[], troncons:await Memoire.lire('troncons:'+nom)||[], points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[], devis:await Memoire.lire('devis:'+nom)||null};
-  transformerDonneesObjet(d,S); await Memoire.ecrire('points:'+nom,d.points); await Memoire.ecrire('troncons:'+nom,d.troncons); await Memoire.ecrire('axes:'+nom,d.axes); await Memoire.ecrire('mesures:'+nom,d.mesures); await Memoire.ecrire('reseaux:'+nom,d.reseaux); if(d.devis) await Memoire.ecrire('devis:'+nom,d.devis); await Memoire.effacer('etat:'+nom); }
+async function transformerMemoire(nom,S){ const d={modifs:await Memoire.lire('modifs:'+nom)||null, axes:await Memoire.lire('axes:'+nom)||[], troncons:await Memoire.lire('troncons:'+nom)||[], points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[], devis:await Memoire.lire('devis:'+nom)||null};
+  transformerDonneesObjet(d,S); if(d.modifs) await Memoire.ecrire('modifs:'+nom,d.modifs); await Memoire.ecrire('points:'+nom,d.points); await Memoire.ecrire('troncons:'+nom,d.troncons); await Memoire.ecrire('axes:'+nom,d.axes); await Memoire.ecrire('mesures:'+nom,d.mesures); await Memoire.ecrire('reseaux:'+nom,d.reseaux); if(d.devis) await Memoire.ecrire('devis:'+nom,d.devis); await Memoire.effacer('etat:'+nom); }
 async function appliquerCalage(){ const c=calageCalcule(); if(!c) return; const nom=scene.nom, ancien=await Memoire.lire('calage:'+nom);
-  sauverPointsMaintenant(); await Memoire.ecrire('axes:'+nom,axes); await Memoire.ecrire('troncons:'+nom,troncons); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
+  sauverPointsMaintenant(); await Memoire.ecrire('modifs:'+nom,modifs); await Memoire.ecrire('axes:'+nom,axes); await Memoire.ecrire('troncons:'+nom,troncons); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
   await Memoire.ecrire('calage:'+nom, mul(c.S, ancien||[1,0,0,1,0,0])); await transformerMemoire(nom,c.S);
   fermerCalage(); await rouvrirPlanCourant(); marquerModifie();
   $('etat').textContent='📐 Plan calé ('+c.L.length+' point'+(c.L.length>1?'s':'')+(c.L.length>=2?', rotation '+frN(c.rot,2)+'°, échelle × '+frN(c.ech,5):'')+'). Vos points sont dans le repère du théodolite. ⋮ → Caler pour retirer.'; }
 async function retirerCalage(){ const nom=scene.nom, M=await Memoire.lire('calage:'+nom); if(!M) return;
-  sauverPointsMaintenant(); await Memoire.ecrire('axes:'+nom,axes); await Memoire.ecrire('troncons:'+nom,troncons); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
+  sauverPointsMaintenant(); await Memoire.ecrire('modifs:'+nom,modifs); await Memoire.ecrire('axes:'+nom,axes); await Memoire.ecrire('troncons:'+nom,troncons); await Memoire.ecrire('mesures:'+nom,mesuresGardees); await Memoire.ecrire('reseaux:'+nom,reseaux); if(devis) await Memoire.ecrire('devis:'+nom,devis);
   await transformerMemoire(nom,inverseS(M)); await Memoire.effacer('calage:'+nom);
   fermerCalage(); await rouvrirPlanCourant(); marquerModifie(); $('etat').textContent='Calage retiré : le plan et vos points sont revenus aux coordonnées d\'origine.'; }
 async function rouvrirPlanCourant(){ const nom=scene.nom, oct=scene.octets; cacheScenes.delete(nom); scene=null; await ouvrirOctets(nom, oct, {nom:null}); }
@@ -2945,23 +3042,38 @@ function pointMainSousDoigt(sx,sy){ if(!scene) return null; const o=scene.origin
   pointsExp.forEach((q,i)=>{ if(calqueVisible(calqueDe(q))) essai(dE(q.x,q.y),{k:'pt',i}); });
   mesuresGardees.forEach((m,i)=>{ if(!calqueVisible(m.calque||CALQUE_MES)) return; m.pts.forEach((q,j)=>essai(dE(q.x,q.y),{k:'mes',i,j})); });
   if(calqueVisible(CALQUE_RES)) reseaux.forEach((r,ri)=>{ if(r.calque&&!calqueVisible(r.calque)) return; r.noeuds.forEach((n,ni)=>essai(dE(n.x,n.y)-(n.t==='R'?1:0),{k:'res',ri,ni})); });
+  modifs.l.forEach((l,i)=>{ if(!ligneVisible(l)) return; const b=modIdx.B[i], [ax,ay]=versPlan(sx-RAYON_PRISE,sy+RAYON_PRISE), [bx,by]=versPlan(sx+RAYON_PRISE,sy-RAYON_PRISE); if(!b||bx+o.x<b[0]||ax+o.x>b[2]||by+o.y<b[1]||ay+o.y>b[3]) return; for(let j=0;j<l.p.length/2;j++) essai(dE(l.p[2*j],l.p[2*j+1])+2,{k:'lig',i,j}); });
   if(!best){ const i=mesureGardeeSousDoigt(sx,sy); if(i!==null){ const [lx,ly]=versPlan(sx,sy); best={k:'mes',i,j:null,x0:lx+o.x,y0:ly+o.y,d:RAYON_PRISE}; } }
+  if(!best){ const m=ligneModifSousDoigt(sx,sy,14); if(m){ const [lx,ly]=versPlan(sx,sy); best={k:'lig',i:m.i,j:null,seg:m.seg,px:m.x,py:m.y,x0:lx+o.x,y0:ly+o.y,d:m.d}; } }
   return best; }
+function memoLig(put,rem){ histMain.push(JSON.stringify({lig:{put:put.map(i=>({i,l:modifs.l[i]?JSON.parse(JSON.stringify(modifs.l[i])):null})), rem:rem||0}})); if(histMain.length>60) histMain.shift(); }
 function memoMain(){ histMain.push(JSON.stringify({p:pointsExp,m:mesuresGardees,r:reseaux})); if(histMain.length>60) histMain.shift(); }
-function annulerMain(){ const h=histMain.pop(); if(!h){ $('etat').textContent='Rien à annuler.'; return; } fermerBulle(); const d=JSON.parse(h); pointsExp=d.p; mesuresGardees=d.m; reseaux=d.r; resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); mainSel=null; sauverPoints(); sauverMesuresGardees(); sauverReseaux(); majComptesPerso(); remplirCalques(); majMain(); demanderDessin(false); $('etat').textContent='↶ Annulé.'; }
+function annulerMain(){ const h=histMain.pop(); if(!h){ $('etat').textContent='Rien à annuler.'; return; } fermerBulle(); const d=JSON.parse(h);
+  if(d.lig){ for(let k=0;k<d.lig.rem;k++) modifs.l.pop(); for(const e of d.lig.put.slice().sort((a,b)=>a.i-b.i)){ if(!e.l) continue; if(e.ins) modifs.l.splice(e.i,0,e.l); else if(modifs.l[e.i]&&modifs.l[e.i].id===e.l.id) modifs.l[e.i]=e.l; else modifs.l.splice(e.i,0,e.l); } mainSel=null; sauverModifs(); majComptesPerso(); majMain(); $('etat').textContent='↶ Annulé.'; return; } pointsExp=d.p; mesuresGardees=d.m; reseaux=d.r; resActif=Math.min(resActif,Math.max(0,reseaux.length-1)); mainSel=null; sauverPoints(); sauverMesuresGardees(); sauverReseaux(); majComptesPerso(); remplirCalques(); majMain(); demanderDessin(false); $('etat').textContent='↶ Annulé.'; }
 function recalcMesure(m){ const P=m.pts; if(m.type==='dist'){ const a=P[0], b=P[1]; if(!a||!b) return; m.valeur=Math.hypot(b.x-a.x,b.y-a.y); delete m.dz; delete m.pente; if(zOk(a.z)&&zOk(b.z)){ m.dz=b.z-a.z; if(m.valeur>0) m.pente=m.dz/m.valeur*100; } }
   else { let per=0, aire=0; for(let i=0;i<P.length;i++){ const a=P[i], b=P[(i+1)%P.length]; per+=Math.hypot(b.x-a.x,b.y-a.y); aire+=a.x*b.y-b.x*a.y; } m.valeur=Math.abs(aire)/2; m.perim=per; } m.modifie=Date.now(); }
-function objetMain(h){ if(!h) return null; if(h.k==='pt') return pointsExp[h.i]; if(h.k==='mes') return mesuresGardees[h.i]; if(h.k==='res'){ const r=reseaux[h.ri]; return r&&r.noeuds[h.ni]; } return null; }
+function objetMain(h){ if(!h) return null; if(h.k==='lig') return modifs.l[h.i]; if(h.k==='pt') return pointsExp[h.i]; if(h.k==='mes') return mesuresGardees[h.i]; if(h.k==='res'){ const r=reseaux[h.ri]; return r&&r.noeuds[h.ni]; } return null; }
 function deplacerMain(h,v,brut){ if(!h||!v) return; const o=scene.origine;
   // accroché sur lui-même (sa position de départ) → on prend la position du doigt
   const ob=objetMain(h), ori=h.k==='mes'&&h.j!==null?ob&&ob.pts[h.j]:(h.k==='mes'?null:ob); if(ori && brut && Math.hypot(v.x+o.x-ori.x,v.y+o.y-ori.y)<0.001) v=brut;
   const xw=v.x+o.x, yw=v.y+o.y;
   if(h.k==='res'){ memoMain(); resActif=h.ri; deplace=h.ni; poserReseau(v); deplace=null; mainSel={k:'res',ri:resActif,ni:h.ni}; }
   else if(h.k==='pt'){ const q=pointsExp[h.i]; if(!q) return; memoMain(); q.x=xw; q.y=yw; if(q.tr) q.manu=true; sauverPoints(); mainSel=h; }
+  else if(h.k==='lig'){ const l=modifs.l[h.i]; if(!l) return; memoLig([h.i]);
+    if(h.j===null){ const dx=xw-h.x0, dy=yw-h.y0; for(let k=0;k<l.p.length;k+=2){ l.p[k]=Math.round((l.p[k]+dx)*1e4)/1e4; l.p[k+1]=Math.round((l.p[k+1]+dy)*1e4)/1e4; } } else { l.p[2*h.j]=xw; l.p[2*h.j+1]=yw; }
+    sauverModifs(); mainSel={k:'lig',i:h.i,j:h.j}; }
   else if(h.k==='mes'){ const m=mesuresGardees[h.i]; if(!m) return; memoMain();
     if(h.j===null){ const dx=xw-h.x0, dy=yw-h.y0; for(const q of m.pts){ q.x+=dx; q.y+=dy; } } else { const q=m.pts[h.j]; q.x=xw; q.y=yw; if(vOk(v.z)&&v.z!==0&&!zOk(q.z)) q.z=v.z; }
     recalcMesure(m); sauverMesuresGardees(); mainSel={k:'mes',i:h.i,j:h.j}; }
   $('etat').textContent='✥ Déplacé. ↶ pour annuler.'; majMain(); demanderDessin(false); }
+function couperLigne(h){ const l=modifs.l[h.i]; if(!l) return; const n=l.p.length/2, k=h.seg;
+  memoLig([h.i]); const e=JSON.parse(histMain.pop()); e.lig.rem=l.f?0:1; histMain.push(JSON.stringify(e));
+  if(l.f){ // ligne fermée : on l'ouvre au point coupé
+    const P=[h.px,h.py]; for(let m=1;m<=n;m++){ const q=(k+m)%n; P.push(l.p[2*q],l.p[2*q+1]); } P.push(h.px,h.py); l.p=P; l.f=false; }
+  else { const A=l.p.slice(0,2*(k+1)).concat([h.px,h.py]), B=[h.px,h.py].concat(l.p.slice(2*(k+1))); l.p=A; modifs.l.push({id:nouvelId(), c:l.c, p:B, f:false}); }
+  mainSel=null; sauverModifs(); majComptesPerso(); majMain(); $('etat').textContent='✂ Ligne coupée en deux.'; }
+function ligneVersReseau(i){ const f=objetModif(i); if(!f) return; choisirOutil('mesure'); choisirMode('res'); if(!convSel) ouvrirConversion(); convSel.traits.add(f); majConv(); demanderDessin(false);
+  $('etat').textContent='🔁 Ligne sélectionnée pour un réseau. Touchez d\'autres traits (plan ou lignes modifiables) si besoin, puis ✓ Convertir.'; }
 function choisirMain(h){ mainSel=h||null; majMain(); demanderDessin(false); }
 function majMain(){ const b=$('mainBar'); if(!b) return; if(outil!=='main'){ b.innerHTML=''; return; }
   const h=mainSel, ob=objetMain(h), o=scene?scene.origine:{x:0,y:0}; let t='', bt=[];
@@ -2973,6 +3085,12 @@ function majMain(){ const b=$('mainBar'); if(!b) return; if(outil!=='main'){ b.i
     bouton((ETATS_TX[ob.etat||''].e)+' '+ETATS_TX[ob.etat||''].t,()=>{ memoMain(); const e=etatSuivant(ob.etat||''); if(e) ob.etat=e; else delete ob.etat; sauverMesuresGardees(); majMain(); demanderDessin(false); });
     if(h.j!==null && ob.type==='surf' && ob.pts.length>3) bouton('🗑 Ce coin',()=>{ memoMain(); ob.pts.splice(h.j,1); recalcMesure(ob); mainSel={k:'mes',i:h.i,j:null}; sauverMesuresGardees(); majMain(); demanderDessin(false); },'rouge');
     bouton('🗑 La mesure',()=>{ memoMain(); mesuresGardees.splice(h.i,1); mainSel=null; sauverMesuresGardees(); majComptesPerso(); remplirCalques(); majMain(); demanderDessin(false); },'rouge'); }
+  else if(h.k==='lig'){ const ns=nbSegs(ob);
+    t='✏ Ligne <b>'+echapper(ob.c)+'</b> · '+fr(longLigne(ob),2)+' m'+(ns>1?' ('+ns+' côtés)':'')+(h.j!==null?' · sommet '+(h.j+1)+'/'+(ob.p.length/2):'')+' · calque <select id="ligCal"></select>';
+    if(h.j===null && h.px!==undefined) bouton('✂ Couper ici',()=>couperLigne(h));
+    if(h.j!==null && ob.p.length>4) bouton('🗑 Ce sommet',()=>{ memoLig([h.i]); ob.p.splice(2*h.j,2); if(ob.p.length<6) ob.f=false; mainSel={k:'lig',i:h.i,j:null}; sauverModifs(); majMain(); });
+    bouton('→ Réseau',()=>ligneVersReseau(h.i));
+    bouton('🗑 La ligne',()=>{ memoLig([h.i]); const e=JSON.parse(histMain.pop()); e.lig.put[0].ins=true; histMain.push(JSON.stringify(e)); modifs.l.splice(h.i,1); mainSel=null; sauverModifs(); majComptesPerso(); majMain(); },'rouge'); }
   else if(h.k==='res'){ const r=reseaux[h.ri], m=maitre(ob);
     if(ob.t==='R'){ t='⭕ Regard <b>'+echapper(m.nom)+'</b> · '+echapper(r.nom)+' · X '+fr(m.x,3)+' · Y '+fr(m.y,3);
       bouton('🏷 Étiquette',()=>{ bulleReg={m}; construireBulle(); demanderDessin(false); }); }
@@ -2983,11 +3101,16 @@ function majMain(){ const b=$('mainBar'); if(!b) return; if(outil!=='main'){ b.i
   const sp=document.createElement('span'); sp.style.flex='1'; z.appendChild(sp);
   const u=document.createElement('button'); u.className='btn petitb'; u.textContent='↶'; u.title='Annuler'; u.onclick=annulerMain; z.appendChild(u);
   const f=document.createElement('button'); f.className='btn petitb'; f.textContent='✕'; f.onclick=()=>choisirOutil('main'); z.appendChild(f);
+  if(h&&ob&&h.k==='lig'){ const sc=$('ligCal'), noms=[...new Set([...Object.keys(modifs.cal), ...tousCalquesPerso().map(c=>c.nom), ob.c])];
+    for(const n of noms){ const o2=document.createElement('option'); o2.value=n; o2.textContent=n; sc.appendChild(o2); } sc.value=ob.c;
+    sc.onchange=()=>{ memoLig([h.i]); ob.c=sc.value; sauverModifs(); majComptesPerso(); remplirCalques(); majMain(); $('etat').textContent='🏷 Ligne mise sur « '+ob.c+' ».'; }; }
   if(h&&ob&&h.k==='pt'){ const n=$('mNom'); n.value=ob.nom; n.onchange=()=>{ const v=n.value.trim(); if(!v) return; memoMain(); ob.nom=v; sauverPoints(); demanderDessin(false); }; n.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('mZ').focus(); } };
     const iz=$('mZ'); iz.value=vOk(ob.z)?frN(ob.z,3):''; iz.onchange=()=>{ const v=lireNombre(iz.value); if(Number.isNaN(v)) return; memoMain(); ob.z=v; sauverPoints(); }; iz.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); iz.blur(); } }; } }
 function dessinerMain(c){ if(outil!=='main'||!mainSel||!scene) return; const ob=objetMain(mainSel); if(!ob) return; const o=scene.origine; c.save(); c.strokeStyle='#6a1b9a'; c.lineWidth=3;
   const anneau=(x,y)=>{ const [a,b]=versEcran(x-o.x,y-o.y); c.beginPath(); c.arc(a,b,16,0,DEUXPI); c.stroke(); };
-  if(mainSel.k==='mes'){ if(mainSel.j===null){ c.setLineDash([6,4]); c.beginPath(); ob.pts.forEach((q,i)=>{ const [a,b]=versEcran(q.x-o.x,q.y-o.y); i?c.lineTo(a,b):c.moveTo(a,b); }); if(ob.type==='surf') c.closePath(); c.lineWidth=6; c.strokeStyle='rgba(106,27,154,0.5)'; c.stroke(); c.setLineDash([]); } else anneau(ob.pts[mainSel.j].x,ob.pts[mainSel.j].y); }
+  if(mainSel.k==='lig'){ const P=ob.p; c.setLineDash([6,4]); c.beginPath(); for(let i=0;i<P.length;i+=2){ const [a,b]=versEcran(P[i]-o.x,P[i+1]-o.y); i?c.lineTo(a,b):c.moveTo(a,b); } if(ob.f) c.closePath(); c.lineWidth=6; c.strokeStyle='rgba(106,27,154,0.45)'; c.stroke(); c.setLineDash([]);
+    c.fillStyle='#6a1b9a'; for(let i=0;i<P.length;i+=2){ const [a,b]=versEcran(P[i]-o.x,P[i+1]-o.y); c.fillRect(a-4,b-4,8,8); } c.strokeStyle='#6a1b9a'; c.lineWidth=3; if(mainSel.j!==null) anneau(P[2*mainSel.j],P[2*mainSel.j+1]); }
+  else if(mainSel.k==='mes'){ if(mainSel.j===null){ c.setLineDash([6,4]); c.beginPath(); ob.pts.forEach((q,i)=>{ const [a,b]=versEcran(q.x-o.x,q.y-o.y); i?c.lineTo(a,b):c.moveTo(a,b); }); if(ob.type==='surf') c.closePath(); c.lineWidth=6; c.strokeStyle='rgba(106,27,154,0.5)'; c.stroke(); c.setLineDash([]); } else anneau(ob.pts[mainSel.j].x,ob.pts[mainSel.j].y); }
   else anneau(ob.x,ob.y);
   c.restore(); }
 // ================= 🔁 Traits du plan → réseau (regards au centre des symboles, points partagés) =================
@@ -3009,6 +3132,7 @@ function selZone(){ const R=convSel.rect, o=scene.origine; const [x1,y1]=versPla
   const cals=new Set([...convSel.traits].map(t=>t.calque).concat([...convSel.symb].map(q=>q.calque))); const ok=c=>cals.size?cals.has(c):calqueVisible(c);
   let n=0; for(const t of scene.objets){ if(n>3000) break; if(!ok(t.calque)||convSel.traits.has(t)) continue; if(dedans(boiteEls(t.els))){ convSel.traits.add(t); n++; } }
   for(const q of (scene.symboles||[])){ if(!ok(q.calque)||convSel.symb.has(q)) continue; if(dedans(q.b)){ convSel.symb.add(q); n++; } }
+  modifs.l.forEach((l,i)=>{ if(!ligneVisible(l)||!ok(l.c)) return; const b=modIdx.B[i]; if(b&&dedans(b)){ const f=objetModif(i); if(f&&!convSel.traits.has(f)){ convSel.traits.add(f); n++; } } });
   convSel.zone=false; $('etat').textContent='⬚ '+n+' objet(s) ajouté(s)'+(cals.size?' (calque'+(cals.size>1?'s ':' ')+[...cals].join(', ')+')':'')+'.'; majConv(); demanderDessin(false); }
 function majConv(){ const P=$('convPanel'); if(!P) return; P.classList.toggle('ouvert',!!convSel); $('bConv').classList.toggle('actif',!!convSel); if(!convSel) return;
   const nt=convSel.traits.size, ns=convSel.symb.size;
@@ -4006,6 +4130,7 @@ const AIDE=[
  {r:'Plan', t:'Ouvrir un plan (DWG, DXF)', txt:'📂 en haut à gauche, puis choisissez le fichier. Le plan s\'ouvre tel quel, coordonnées réelles. Il est gardé : il se rouvre tout seul, en moins d\'une seconde la fois suivante.', mots:'ouvrir fichier dwg dxf', go:()=>$('fichier').click(), sansPlan:true},
  {r:'Plan', t:'Ouvrir un PDF (conversion en DXF)', txt:'📂 puis choisissez un PDF de plan (pas un scan). Indiquez l\'échelle écrite sur le plan (ex. 200 pour 1/200) ou « je mesurerai une cote connue ». Case Léger : enlève les textures grises. Le DXF est enregistré (Téléchargements) et ouvert dans un nouvel onglet ; le PDF n\'est pas modifié. Échelle inconnue : mesurez une cote connue avec 📏 (2 points), tapez sa vraie longueur dans la barre jaune, ✓ Appliquer. Les coordonnées ne sont pas celles du terrain : 📐 Caler avant d\'implanter.', mots:'pdf convertir conversion dxf echelle cote', go:()=>$('fichier').click(), sansPlan:true},
  {r:'Mesure', t:'Ligne de longueur imposée (partir d\'un angle à 5 m)', txt:'📏 Mesure → Distance. Tapez la longueur dans « Longueur imposée » (ex. 5). Touchez l\'angle (1er point, accroché), puis montrez la direction avec le doigt : sur une ligne du plan, la direction suit cette ligne. Le 2e point tombe pile à la longueur tapée. ⟂ 90° : partir d\'équerre. ⇄ : sens inverse (prolonger la ligne au-delà de l\'angle). Puis 📌 Garder ou ⟋ Points pour implanter le bout. Case vide = mesure libre.', mots:'longueur imposee 5 m angle equerre perpendiculaire prolonger direction implanter'},
+ {r:'Plan', t:'✏ Lignes modifiables (copie de calques) et longueurs', txt:'☰ Calques → ✏ Lignes modifiables : cochez les calques (☑ Tous) → ✓ Rendre modifiables (ou fiche d\'un calque → ✏ Modifiable). Une copie « NOM_MODIF » est créée, le calque d\'origine est masqué (plan d\'origine intact). La longueur de chaque côté s\'affiche sur la ligne (☑ Longueurs pour couper ; cachée si la ligne est trop petite à l\'écran). ✋ : glisser un sommet pour le déplacer, glisser la ligne pour la déplacer entière ; appui = ✂ Couper ici, 🗑 Ce sommet, 🗑 La ligne, calque, → Réseau. Les lignes copiées servent aussi pour Tronçon, Points sur une ligne, 🔁 Du plan et l\'accrochage. ↩ Revenir à l\'origine efface la copie. Gardé dans la sauvegarde et la fusion.', mots:'modifiable copie calque ligne longueur cote deplacer couper supprimer reseau modif'},
  {r:'Points', t:'⟋ Points du calque entier', txt:'☰ Calques → appui sur un calque → ⟋ Points du calque. ▢ Coins : un point à chaque coin et bout de trait (bâtiment, bordures). ⋯ Pas : les coins + un point tous les X m. ⊙ Altimétriques : un point au centre de chaque petit rond ou croix du calque ; Z repris de la cote écrite à moins de 2 m si elle est lisible, sinon à taper dans le tableau (Entrée = point suivant). ⬚ Zone : seulement dans un rectangle. Aperçu orange, puis ✓ Créer. Points sur le calque <nom>_PTS, numérotation qui continue, pas de double avec les points existants (< 1 cm). ↶ des Points annule tout.', mots:'calque entier points coins bordure batiment altimetrique niveau pas zone'},
  {r:'Plan', t:'Classeur : plusieurs plans ouverts', txt:'Chaque plan ouvert devient un onglet sous la barre (＋ pour en ajouter, ✕ pour le retirer). 3 plans restent en mémoire vive.', mots:'onglet classeur plusieurs'},
  {r:'Plan', t:'Calques : afficher / masquer', txt:'☰ Calques : cochez ou décochez. Appui sur un nom → fiche du calque : voir seul, geler, verrouiller, supprimer.', mots:'calque masquer geler verrouiller', go:()=>$('calques').classList.add('ouvert')},
@@ -4170,7 +4295,7 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   if(pcSel && pcSel.zoneMode && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,pc:true}; pcSel.rect=[p.x,p.y,p.x,p.y]; return; }
   if(convSel && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,conv:true}; if(convSel.zone) convSel.rect=[p.x,p.y,p.x,p.y]; else debutGeste(); return; }
   // ✋ : doigt sur un de vos points → le prendre (glisser = déplacer, appui = actions), sinon déplacer le plan
-  if(outil==='main' && pointeurs.size===1 && !sequenceMulti){ const h=pointMainSousDoigt(p.x,p.y); if(h){ if(bulleReg) fermerBulle(); mainPrise=h; appui={x:p.x,y:p.y,bouge:false,main:true}; viser(p); return; } }
+  if(outil==='main' && pointeurs.size===1 && !sequenceMulti){ const h=pointMainSousDoigt(p.x,p.y); if(h){ if(bulleReg) fermerBulle(); mainPrise=h; ligIgnore=h.k==='lig'?{i:h.i,j:h.j}:null; appui={x:p.x,y:p.y,bouge:false,main:true}; viser(p); return; } }
   // Étiquette d'un regard touchée (ou bulle ouverte) : un appui ouvre / ferme la bulle, un glissé déplace le plan
   if(pointeurs.size===1 && !sequenceMulti && outil!=='oeil' && !placementTache){ const e=etiquetteSousDoigt(p.x,p.y), surNoeud=(outil==='mesure'&&mesure.mode==='res'&&noeudProcheTous(p.x,p.y,16)) || (outil==='points'&&ptsMode==='point'&&pointExportSousDoigt(p.x,p.y)!==null&&(!e||!e.pt||Math.hypot(e.x0-9-p.x,0)<12)); if(surNoeud && bulleReg) fermerBulle(); if(!surNoeud && (e||bulleReg)){ appui={x:p.x,y:p.y,bouge:false,etiq:e||null,bulle:true}; debutGeste(); return; } }
   if(pointeurs.size>=2){ sequenceMulti=true; if(visee){ visee=null; deplace=null; majPanneau(); demanderDessin(false);} debutGeste(); }
@@ -4191,7 +4316,7 @@ cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return;
 const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.pointerId);
   if(pointeurs.size){ debutGeste(); return; }
   const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
-  if(appui && appui.main){ const h=mainPrise; mainPrise=null; if(tap) choisirMain(h); else if(visee && !sequenceMulti && ev.type==='pointerup'){ const [rx,ry]=versPlan(visee.sx,visee.sy); deplacerMain(h, pointVise(), {x:rx,y:ry,z:NaN}); } }
+  if(appui && appui.main){ const h=mainPrise; mainPrise=null; ligIgnore=null; if(tap) choisirMain(h); else if(visee && !sequenceMulti && ev.type==='pointerup'){ const [rx,ry]=versPlan(visee.sx,visee.sy); deplacerMain(h, pointVise(), {x:rx,y:ry,z:NaN}); } }
   else if(appui && appui.pc){ if(pcSel){ if(pcSel.rect && appui.bouge && !sequenceMulti) finZonePc(); else { pcSel.rect=null; demanderDessin(false); } } }
   else if(appui && appui.conv){ if(convSel){ if(convSel.rect && appui.bouge && !sequenceMulti) selZone(); else if(tap) basculerSel(appui.x,appui.y); convSel.rect=null; } }
   else if(appui && appui.bulle && !visee){ if(tap){ if(appui.etiq) ouvrirBulle(appui.etiq); else fermerBulle(); } }
@@ -4268,9 +4393,9 @@ async function retirerDuClasseur(nom){ classeur.plans=classeur.plans.filter(n=>n
   if(scene && scene.nom===nom){ if(classeur.plans.length) { const n=classeur.plans[classeur.plans.length-1]; scene=null; await basculerPlan(n); } else location.reload(); } else majOnglets(); }
 // ---- Sauvegarde du classeur entier (un seul fichier) ----
 async function contenuPlanDepuisMemoire(nom){ const f=await Memoire.lire('fichier:'+nom); if(!f) return null; const e=await Memoire.lire('etat:'+nom), rg=await Memoire.lire('reglagesCalques:'+nom)||{};
-  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, calage:await Memoire.lire('calage:'+nom)||null, troncons:await Memoire.lire('troncons:'+nom)||[], axes:await Memoire.lire('axes:'+nom)||[], devis:await Memoire.lire('devis:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], reseaux:await Memoire.lire('reseaux:'+nom)||[],
+  return {plan:{nom, octets:enBase64(new Uint8Array(f.octets))}, calage:await Memoire.lire('calage:'+nom)||null, troncons:await Memoire.lire('troncons:'+nom)||[], axes:await Memoire.lire('axes:'+nom)||[], devis:await Memoire.lire('devis:'+nom)||null, points:await Memoire.lire('points:'+nom)||[], mesures:await Memoire.lire('mesures:'+nom)||[], modifs:await Memoire.lire('modifs:'+nom)||null, reseaux:await Memoire.lire('reseaux:'+nom)||[],
     reglages:{supprimes:rg.supprimes||[], verrous:rg.verrous||[]}, vue:e&&e.s>0?{cx:e.cx,cy:e.cy,s:e.s}:null}; }
-async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, calage:d.calage, troncons:d.troncons, axes:d.axes, devis:d.devis, fouilles:d.fouilles, points:d.points, mesures:d.mesures, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
+async function contenuClasseur(){ const L=[]; for(const nom of classeur.plans){ if(scene && nom===scene.nom){ const d=JSON.parse(contenuSauvegarde()); L.push({plan:d.plan, calage:d.calage, troncons:d.troncons, axes:d.axes, devis:d.devis, fouilles:d.fouilles, points:d.points, mesures:d.mesures, modifs:d.modifs, reseaux:d.reseaux, reglages:d.reglages, vue:d.vue}); } else { const d=await contenuPlanDepuisMemoire(nom); if(d) L.push(d); } }
   return JSON.stringify({format:'plansdwg', version:2, type:'classeur', appli:VERSION, date:new Date().toISOString(), actif:scene?scene.nom:null, calquesPerso, modelesStructure:modelesPerso, typesProfil, calquesActifs:{pts:calqueActifPts,mes:calqueActifMes}, plans:L}); }
 function nomClasseurDefaut(){ const d=new Date(); return 'Classeur_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'.plansdwg'; }
 let attenteClasseur=false;
@@ -4439,7 +4564,7 @@ $('echOk').onclick=async()=>{ if(!scene) return; const nom=scene.nom, vraie=lire
   const k=vraie/d, f=await Memoire.lire('fichier:'+nom); if(!f||!f.octets) return;
   voile('Mise à l\'échelle…'); await attendreAffichage();
   const texte=dxfAEchelle(new TextDecoder().decode(new Uint8Array(f.octets)), k), oct=new TextEncoder().encode(texte);
-  for(const p of pointsExp){ p.x*=k; p.y*=k; } sauverPointsMaintenant();
+  for(const p of pointsExp){ p.x*=k; p.y*=k; } sauverPointsMaintenant(); for(const l of modifs.l) for(let i=0;i<l.p.length;i++) l.p[i]*=k; await Memoire.ecrire('modifs:'+nom,modifs);
   mesure={mode:'dist',pts:[]}; cacheScenes.delete(nom); await Memoire.effacer?.('prepare:'+nom); await Memoire.effacer?.('etat:'+nom);
   await Memoire.ecrire('fichier:'+nom,{nom, octets:oct.slice().buffer, date:Date.now()}); await Memoire.ecrire('echelleAFaire:'+nom, false);
   scene=null; const ok=await ouvrirOctets(nom, oct, null); enregistrerDxfConverti(nom, texte);
@@ -4501,7 +4626,7 @@ async function ouvrirOctets(nom, octets, etat){
     majVisibles();
     $('accueil').style.display='none';
     for(const id of ['bAjuster','bCalques','bMesure','bPoints','bMetre','bMain']) $(id).disabled=false; document.body.classList.add('planOuvert');
-    await chargerPointsExport(); await chargerTroncons(); await chargerAxes(); await chargerMesuresGardees(); chutesSale=true; chutesNbAnnonce=-1; await chargerReseaux(); await chargerDevis(); majComptesPerso(); majPastille();
+    await chargerPointsExport(); await chargerTroncons(); await chargerAxes(); await chargerMesuresGardees(); await chargerModifs(); chutesSale=true; chutesNbAnnonce=-1; await chargerReseaux(); await chargerDevis(); majComptesPerso(); majPastille();
     redim();
     if(etat && etat.nom===nom && etat.s>0){ const o=scene.origine; vue.s=etat.s; vue.tx=W/2-(etat.cx-o.x)*vue.s; vue.ty=H/2+(etat.cy-o.y)*vue.s; demanderDessin(); }
     else cadrer(scene.zone, 0.96);
