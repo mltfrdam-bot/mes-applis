@@ -506,6 +506,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div class="tete"><b>🧾 Métré du chantier</b><button class="btn" id="mtFermer">✕ Fermer</button></div>
   <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;flex-wrap:wrap;border-bottom:1px solid #eee;font-size:14px">Lot actif : <select id="mtLot" style="max-width:150px"></select><button class="btn petitb" id="mtAjLot">＋ Lot</button><input id="mtNomLot" style="display:none;height:32px;width:120px;border:1px solid #1f5fa8;border-radius:4px;padding:0 6px">
     <span style="flex:1"></span>Afficher : <select id="mtFiltre" style="max-width:150px"></select></div>
+  <div style="display:flex;gap:6px;align-items:center;padding:6px 8px 0;flex-wrap:wrap;font-size:14px">📁 Chantier : <select id="mtChantier" style="max-width:190px;font-weight:bold"></select><span id="mtChantierInfo" class="petit" style="flex:1;color:#555"></span></div>
   <div id="mtLotInfo" class="petit" style="padding:3px 8px;color:#555"></div>
   <div id="mtOnglets" class="seg" style="margin:4px 8px;display:flex"><button data-o="demande" class="on">Demande</button><button data-o="mesure">Mesuré</button><button data-o="attente">En attente</button><button data-o="fouilles">Fouilles</button><button data-o="planning">Planning</button></div>
   <div id="zonePlanning" style="display:none;flex:1;overflow:auto;flex-direction:column">
@@ -648,7 +649,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Murs et F70 – v1";
+const VERSION = "Chantiers – v1";
 </script>
 <script>
 "use strict";
@@ -1352,7 +1353,7 @@ function majComptesPerso(){
 function remplirSelectsCalques(){
   for(const [id,actif] of [['selCalquePts',calqueActifPts],['selCalqueMes',edition?edition.calque:calqueActifMes]]){
     const s=$(id); s.replaceChildren();
-    for(const d of tousCalquesPerso()){ const o=document.createElement('option'); o.value=d.nom; o.textContent='■ '+d.nom; o.style.color=d.couleur; if(d.nom===actif) o.selected=true; s.appendChild(o); }
+    for(const d of tousCalquesPerso()){ if(!calquePersoVisible(d) && d.nom!==actif) continue; const o=document.createElement('option'); o.value=d.nom; o.textContent='■ '+d.nom; o.style.color=d.couleur; if(d.nom===actif) o.selected=true; s.appendChild(o); }
     s.style.color=couleurCalque(actif); s.style.fontWeight='bold';
   }
 }
@@ -2285,7 +2286,7 @@ function fusionner(d){
   R.resAjout=[]; R.resIdem=0;
   for(const r of (d.reseaux||[])){ const ex=reseaux.find(x=>x.id===r.id); if(ex && JSON.stringify(ex.noeuds)===JSON.stringify(r.noeuds)){ R.resIdem++; for(const k of ['artTuyau','artRegard','lot']) if(r[k] && !ex[k]) ex[k]=r[k]; if(r.dessus){ ex.dessus=ex.dessus||{}; for(const [k,v] of Object.entries(r.dessus)) if(!ex.dessus[k]) ex.dessus[k]=v; } if(r.larg){ ex.larg=ex.larg||{}; for(const [k,v] of Object.entries(r.larg)) if(!Number.isFinite(ex.larg[k])) ex.larg[k]=v; } continue; }
     const cp=JSON.parse(JSON.stringify(r)); if(ex){ cp.id='r'+Date.now().toString(36)+reseaux.length; cp.nom=r.nom+' (2)'; } reseaux.push(cp); R.resAjout.push(cp.nom); }
-  for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; if(tousCalquesPerso().some(x=>x.nom===c.nom)) continue; calquesPerso.push(c); R.calAjout.push(c.nom); }
+  for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; const ex=tousCalquesPerso().find(x=>x.nom===c.nom); if(ex){ if(ex.devis&&c.devis&&c.devis.chantier&&!ex.devis.chantier){ ex.devis.chantier=c.devis.chantier; R.artChantier=(R.artChantier||0)+1; } continue; } calquesPerso.push(c); R.calAjout.push(c.nom); }
   for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); (R.modAjout=R.modAjout||[]).push(m.nom); } } if(R.modAjout) Memoire.ecrire('modelesStructure',modelesPerso);
   installerCalquesPerso(null);
   const rg=d.reglages||{};
@@ -2295,6 +2296,7 @@ function fusionner(d){
     for(const t of (d.fouilles.tarifs||[])){ if(!t||!t.mat) continue; const e=F.tarifs.find(x=>x.mat===t.mat); if(!e){ F.tarifs.push(t); (R.tarifsAj=R.tarifsAj||[]).push(t.mat); ch=true; } else { if(!Number.isFinite(e.pu)&&Number.isFinite(t.pu)){ e.pu=t.pu; (R.tarifsAj=R.tarifsAj||[]).push(t.mat+' (prix)'); ch=true; } if(!e.four&&t.four){ e.four=t.four; ch=true; } } }
     for(const [k,v] of Object.entries(d.fouilles.tuyaux||{})) if(!F.tuyaux[k]){ F.tuyaux[k]=v; ch=true; }
     if(ch) sauverFouilles(); }
+  if(d.devis && d.devis.chantier && !devis.chantier){ devis.chantier=d.devis.chantier; R.chantier=d.devis.chantier; }
   if(d.devis && d.devis.arts){ for(const l of (d.devis.lots||[])) if(!devis.lots.includes(l)){ devis.lots.push(l); (R.lotsAj=R.lotsAj||[]).push(l); }
     for(const [k,v] of Object.entries(d.devis.arts)){ const e=devis.arts[k]=devis.arts[k]||{}; let a=false; if(Number.isFinite(v.qte)&&!Number.isFinite(e.qte)){ e.qte=v.qte; a=true; } if(Number.isFinite(v.pu)&&!Number.isFinite(e.pu)){ e.pu=v.pu; a=true; } if(a){ const cp=calquesPerso.find(x=>x.nom===k); (R.devAj=R.devAj||[]).push(cp&&cp.devis&&cp.devis.des||k.replace(/^DEVIS_/,'')); } }
     if(Array.isArray(d.devis.taches)){ const T=tachesDe(); for(const t of d.devis.taches){ if(!t||!t.id) continue; const ex=T.find(x=>x.id===t.id); if(!ex){ T.push(t); (R.tachesAj=R.tachesAj||[]).push(t.titre); continue; }
@@ -2321,6 +2323,8 @@ function montrerDescriptif(nomFichier,d,R,dejaLa){
   if(R.resAjout.length||R.resIdem) L.push('Réseaux ajoutés : '+R.resAjout.length+(R.resAjout.length?' ('+R.resAjout.join(', ')+')':'')+' · déjà identiques : '+R.resIdem);
   if(R.calAjout.length) L.push('Calques perso ajoutés : '+R.calAjout.join(', '));
   if(R.lotsAj) L.push('Lots ajoutés : '+R.lotsAj.join(', '));
+  if(R.chantier) L.push('Chantier du plan : '+R.chantier);
+  if(R.artChantier) L.push('Articles rangés dans leur chantier : '+R.artChantier);
   if(R.tachesAj) L.push('Tâches ajoutées : '+R.tachesAj.join(', '));
   if(R.tarifsAj) L.push('Tarifs d\'achat ajoutés : '+R.tarifsAj.join(', '));
   if(R.seancesAj) L.push('Séances de chrono ajoutées : '+R.seancesAj.join(', '));
@@ -3752,8 +3756,42 @@ function lignesArticle(art,lot){ const L=[];
     L.push({sorte:'p', i, lot:p.lot||'', q:art.devis.base==='U'?qteMesure(art,{}):0, txt:'Point '+p.nom+(prof!==null?' · prof. '+frN(prof,2)+' m':'')}); });
   for(const l of lignesReseauArticle(art)) if(!lot || l.lot===lot) L.push(l);
   return L; }
+// ===== Chantiers : chaque plan peut appartenir à un chantier (devis.chantier) ; un article attaché à un chantier (devis.chantier de l'article) n'apparaît que sur les plans de ce chantier =====
+const chantierPlan=()=>(devis&&devis.chantier)||'';
+function articleUtilise(nom){ const d=devis&&devis.arts&&devis.arts[nom]; if(d&&(Number.isFinite(d.qte)||Number.isFinite(d.pu))) return true;
+  return mesuresGardees.some(m=>m.calque===nom) || pointsExp.some(p=>p.calque===nom) || reseaux.some(r=>r.artTuyau===nom||r.artRegard===nom) || (Array.isArray(devis.taches)&&devis.taches.some(t=>t.art===nom)); }
+function artVisible(a){ return ((a.devis&&a.devis.chantier)||'')===chantierPlan() || articleUtilise(a.nom); }
+const articlesPlan=()=>articles().filter(artVisible);
+const calquePersoVisible=d=>!estArticle(d)||!scene||artVisible(d);
+let listeChantiers=[];
+function nomsChantiers(){ const S=new Set(listeChantiers); for(const a of articles()) if(a.devis.chantier) S.add(a.devis.chantier); if(chantierPlan()) S.add(chantierPlan()); return [...S].sort((x,y)=>x.localeCompare(y,'fr')); }
+function remplirChantier(){ const sel=$('mtChantier'); if(!sel) return; sel.replaceChildren(); const C=chantierPlan();
+  const op=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); };
+  op('','(aucun : articles communs)'); for(const n of nomsChantiers()) op(n,n); op('\u0001','＋ Nouveau chantier…'); sel.value=C;
+  const nbC=articles().filter(a=>(a.devis.chantier||'')===C).length, nbV=articlesPlan().length;
+  $('mtChantierInfo').textContent= C ? nbV+' article(s) affiché(s) sur ce plan · les plans des autres chantiers ne les voient pas.' : 'Articles communs à tous les plans sans chantier.'; }
+async function changerChantier(C){ C=String(C||'').trim(); if(!scene) return; const ancien=chantierPlan();
+  if(C && !listeChantiers.includes(C)){ listeChantiers.push(C); Memoire.ecrire('chantiers',listeChantiers); }
+  voile('Rangement du chantier…'); await attendreAffichage();
+  // 1. tous les plans du classeur passent dans ce chantier
+  devis.chantier=C||undefined; sauverDevis(); let nbP=1;
+  for(const p of classeur.plans){ if(p===scene.nom) continue; const d=(await Memoire.lire('devis:'+p))||{arts:{}, lots:[], lotActif:''}; if(C) d.chantier=C; else delete d.chantier; await Memoire.ecrire('devis:'+p,d); nbP++; }
+  // 2. articles : ceux qui ne servent à aucun plan hors de ce classeur suivent le chantier
+  let nbA=0, nbCom=0;
+  if(C){ const dans=new Set(classeur.plans), ailleurs=new Set();
+    for(const k of await Memoire.cles()){ const m=/^(devis|mesures|points|reseaux):(.+)$/.exec(k); if(!m||dans.has(m[2])) continue; const v=await Memoire.lire(k); if(!v) continue;
+      if(m[1]==='devis'){ for(const [n,e] of Object.entries(v.arts||{})) if(e&&(Number.isFinite(e.qte)||Number.isFinite(e.pu))) ailleurs.add(n); for(const t of (v.taches||[])) if(t&&t.art) ailleurs.add(t.art); }
+      else if(m[1]==='reseaux'){ for(const r of (v||[])){ if(r.artTuyau) ailleurs.add(r.artTuyau); if(r.artRegard) ailleurs.add(r.artRegard); } }
+      else for(const x of (v||[])) if(x&&x.calque) ailleurs.add(x.calque); }
+    for(const a of articles()){ const ac=a.devis.chantier||''; if(ac===C) continue; if(ac && ac!==ancien) continue; if(ailleurs.has(a.nom)){ nbCom++; continue; } a.devis.chantier=C; nbA++; }
+    sauverCalquesPerso(); }
+  finVoile(); remplirMetre(); remplirSelectsCalques(); remplirCalques();
+  $('etat').textContent= C ? '📁 Chantier « '+C+' » : '+nbP+' plan(s) du classeur, '+nbA+' article(s) attaché(s)'+(nbCom?', '+nbCom+' laissé(s) commun(s) (utilisés sur d\'autres plans)':'')+'.' : '📁 Ce classeur n\'a plus de chantier : seuls les articles communs s\'affichent.'; }
+function ligneChantierArticle(art){ const r=document.createElement('tr'); r.className='detail'; const c=document.createElement('td'); c.colSpan=7; c.style.paddingLeft='22px'; c.append('📁 Chantier de l\'article : ');
+  const sel=document.createElement('select'); const op=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); }; op('','(commun à tous)'); for(const n of nomsChantiers()) op(n,n); sel.value=art.devis.chantier||'';
+  sel.onchange=()=>{ if(sel.value) art.devis.chantier=sel.value; else delete art.devis.chantier; sauverCalquesPerso(); majTableMetre(); remplirChantier(); }; c.appendChild(sel); r.appendChild(c); return r; }
 function ouvrirMetre(){ if(!scene) return; $('metreBoite').style.display='flex'; remplirMetre(); choisirOngletMetre(ongletMetre); }
-function remplirMetre(){
+function remplirMetre(){ remplirChantier();
   const sel=$('mtLot'); sel.replaceChildren(); const o0=document.createElement('option'); o0.value=''; o0.textContent='(aucun lot)'; sel.appendChild(o0);
   for(const l of devis.lots){ const o=document.createElement('option'); o.value=l; o.textContent=l; if(l===devis.lotActif) o.selected=true; sel.appendChild(o); }
   const f=$('mtFiltre'), fv=f.value; f.replaceChildren(); const t=document.createElement('option'); t.value=''; t.textContent='Tout le chantier'; f.appendChild(t);
@@ -3761,7 +3799,7 @@ function remplirMetre(){
   majTableMetre(); }
 function majTableMetre(){
   const lot=$('mtFiltre').value, tb=$('tbMetre'), frag=document.createDocumentFragment(); let total=0, totalDevis=0, avecPrix=false;
-  const A=articles().filter(a=>{ if(ongletMetre==='demande') return true; const nb=estForfait(a)?0:lignesArticle(a,lot).length; return ongletMetre==='mesure' ? nb>0 : (nb===0 && !estForfait(a)); }); if(!A.length && ongletMetre!=='demande'){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">'+(ongletMetre==='mesure'?'Aucun article mesuré pour l\'instant.':'Rien en attente : tout le devis a été trouvé sur le plan 👍')+'</td>'; frag.appendChild(tr); }
+  const A=articlesPlan().filter(a=>{ if(ongletMetre==='demande') return true; const nb=estForfait(a)?0:lignesArticle(a,lot).length; return ongletMetre==='mesure' ? nb>0 : (nb===0 && !estForfait(a)); }); if(!A.length && ongletMetre!=='demande'){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">'+(ongletMetre==='mesure'?'Aucun article mesuré pour l\'instant.':'Rien en attente : tout le devis a été trouvé sur le plan 👍')+'</td>'; frag.appendChild(tr); }
   else if(!A.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="7" style="color:#777;text-align:center;height:40px">Aucun article : ＋ Article ou 📥 Coller le devis</td>'; frag.appendChild(tr); }
   for(const art of A){ const D=art.devis, dv=devis.arts[art.nom]||{}, L=estForfait(art)?[]:lignesArticle(art,lot), fo=estForfait(art), q=fo?(Number.isFinite(dv.qte)?dv.qte:1):L.reduce((s,x)=>s+x.q,0);
     const qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), ec=qd!==null?q-qd:null, pu=Number.isFinite(dv.pu)?dv.pu:null, tf=fo?tachesDe().find(x=>x.art===art.nom):null, faitF=!fo||(tf&&tf.etat==='fait'); if(pu!==null){ avecPrix=true; if(faitF) total+=q*pu; if(qd!==null) totalDevis+=qd*pu; }
@@ -3776,6 +3814,7 @@ function majTableMetre(){
     if(fo){ const t=tachesDe().find(x=>x.art===art.nom), et=t?(ETATS.find(e=>e[0]===t.etat)||ETATS[0])[1]:'⬜ À faire'; tEc.textContent=''; tr.append(tNom, td('Ft',''), td('<span class="petit">'+et+'</span>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?(faitF?'':'<span class="petit">(à faire)</span> ')+frN(q*pu,2):'','num')); tNom.querySelector('.petit').textContent=''; tNom.querySelector('.fl').onclick=null; tNom.querySelector('.des').onclick=ev=>{ ev.stopPropagation(); choisirOngletMetre('planning'); }; }
     else tr.append(tNom, td(D.unite,''), td('<b>'+frN(q,2)+'</b>','num'), lot?td('—','num'):inp(qd,'qte'), tEc, inp(pu,'pu'), td(pu!==null?frN(q*pu,2):'','num'));
     frag.appendChild(tr);
+    if(metreOuvert.has(art.nom)) frag.appendChild(ligneChantierArticle(art));
     if(metreOuvert.has(art.nom) && D.base==='ml' && D.unite==='m³') frag.appendChild(ligneRegleMur(art));
     if(metreOuvert.has(art.nom)){ if(!L.length){ const r=document.createElement('tr'); r.innerHTML='<td colspan="7" class="petit" style="padding-left:24px;color:#777">Aucune mesure sur ce calque'+(lot?' pour '+echapper(lot):'')+'.</td>'; frag.appendChild(r); }
       for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':l.sorte==='r'?'🔧 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯</button></td>';
@@ -3817,7 +3856,7 @@ function champTuyau(val,cb){ const i=document.createElement('input'); i.classNam
 function boutonEtat(e,cb){ const b=document.createElement('button'); const E=ETATS_TX[e||'']; b.className='btnEtat'; b.textContent=E.e+' '+E.t; b.style.color=E.c; b.style.borderColor=E.c; b.title='Appui : état suivant'; b.onclick=ev=>{ ev.stopPropagation(); cb(); }; return b; }
 function majArtsReseau(){ if(!scene||!$('selArtTuyau')) return; const r=reseaux[resActif];
   const remplir=(sel,base,cle)=>{ sel.replaceChildren(); const o=document.createElement('option'); o.value=''; o.textContent=(base==='ml'?'Tuyau':'Regards')+' : hors métré'; sel.appendChild(o);
-    for(const a of articles()) if(a.devis.base===base){ const e=document.createElement('option'); e.value=a.nom; e.textContent=(base==='ml'?'Tuyau : ':'Regards : ')+a.devis.des; sel.appendChild(e); }
+    for(const a of articlesPlan()) if(a.devis.base===base){ const e=document.createElement('option'); e.value=a.nom; e.textContent=(base==='ml'?'Tuyau : ':'Regards : ')+a.devis.des; sel.appendChild(e); }
     sel.value=r&&r[cle]&&articles().some(a=>a.nom===r[cle])?r[cle]:''; };
   remplir($('selArtTuyau'),'ml','artTuyau'); remplir($('selArtRegard'),'U','artRegard');
   const sc=$('selCalqueRes'); if(sc){ sc.replaceChildren(); for(const c of tousCalquesPerso()){ if(c.nom===CALQUE_PTS||c.nom===CALQUE_MES||c.nom==='POINTS_TN') continue; const op=document.createElement('option'); op.value=c.nom; op.textContent='📍 '+c.nom; sc.appendChild(op); } sc.value=(r&&r.calque)||CALQUE_RES; if(!sc.value) sc.value=CALQUE_RES; } }
@@ -3826,7 +3865,7 @@ function lierArtReseau(cle,val){ const r=resCourant(); memoRes(); if(val) r[cle]
 function creerArticle(des,unite,base,k1,k1lib,k2,k2lib){ des=String(des).trim(); if(!des) return null;
   const nom=nomCalqueNormalise('DEVIS_'+des); let d=calquesPerso.find(x=>x.nom===nom); if(d){ if(!d.devis) d.devis={}; return d; }
   const prises=new Set(tousCalquesPerso().map(x=>x.couleur)); const c=COULEURS_PERSO.find(x=>!prises.has(x[0]))||COULEURS_PERSO[articles().length%COULEURS_PERSO.length];
-  d={nom, couleur:c[0], aci:c[1], devis:{des, unite, base, k1, k1lib, k2, k2lib}}; calquesPerso.push(d); sauverCalquesPerso(); installerCalquesPerso(null); majComptesPerso(); majVisibles(); remplirCalques(); return d; }
+  d={nom, couleur:c[0], aci:c[1], devis:{des, unite, base, k1, k1lib, k2, k2lib}}; if(chantierPlan()) d.devis.chantier=chantierPlan(); calquesPerso.push(d); sauverCalquesPerso(); installerCalquesPerso(null); majComptesPerso(); majVisibles(); remplirCalques(); return d; }
 function baseDeUnite(u){ u=String(u||'').toLowerCase().replace('2','²').replace('3','³'); if(/^(ft|f|ff|fft|ens|forfait|forf\.?)$/.test(u.trim())) return ['Ft','F']; if(/^m?l$|^ml$|^m$/.test(u)) return ['ml','ml']; if(u==='m²') return ['m²','m2']; if(u==='m³') return ['m³','m2']; return ['U','U']; }
 function collerDevis(txt){ let n=0, maj=0; const ign=[];
   for(const ligne of txt.split(/\r?\n/)){ const c=ligne.split('\t').map(x=>x.trim()); if(c.length<2 || !c[0]) continue;
@@ -3835,11 +3874,13 @@ function collerDevis(txt){ let n=0, maj=0; const ign=[];
     const e=devis.arts[art.nom]=devis.arts[art.nom]||{}; if(Number.isFinite(q)) e.qte=q; if(Number.isFinite(pu)) e.pu=pu; }
   tachesDesForfaits(); sauverDevis(); remplirSelectsCalques(); return {n,maj,ign}; }
 function texteMetre(){ const lot=$('mtFiltre').value; const L=['Métré — '+scene.nom+(lot?' — '+lot:' — tout le chantier'), ['Article','Unité','Mesuré','Devis','Écart','PU','Montant'].join('\t')];
-  for(const art of articles()){ const dv=devis.arts[art.nom]||{}, q=lignesArticle(art,lot).reduce((s,x)=>s+x.q,0), qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), pu=Number.isFinite(dv.pu)?dv.pu:null;
+  for(const art of articlesPlan()){ const dv=devis.arts[art.nom]||{}, q=lignesArticle(art,lot).reduce((s,x)=>s+x.q,0), qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), pu=Number.isFinite(dv.pu)?dv.pu:null;
     L.push([art.devis.des||art.nom, art.devis.unite, frN(q,2), qd!==null?frN(qd,2):'', qd!==null?frN(q-qd,2):'', pu!==null?frN(pu,2):'', pu!==null?frN(q*pu,2):''].join('\t')); }
   return L.join('\n'); }
 function brancherMetre(){
   $('bMetre').onclick=ouvrirMetre; $('mtFermer').onclick=()=>{ $('metreBoite').style.display='none'; };
+  Memoire.lire('chantiers').then(v=>{ if(Array.isArray(v)) listeChantiers=v; });
+  $('mtChantier').onchange=async e=>{ let v=e.target.value; if(v==='\u0001'){ v=(prompt('Nom du chantier (ex. ALIZEA) :','')||'').trim(); if(!v){ remplirChantier(); return; } } await changerChantier(v); };
   $('mtLot').onchange=e=>{ devis.lotActif=e.target.value; sauverDevis(); majTableMetre(); };
   $('mtFiltre').onchange=()=>{ ongletMetre==='fouilles'?majFouilles():majTableMetre(); };
   $('mtAjLot').onclick=()=>{ const b=$('mtNomLot'); b.style.display=''; b.value='Lot '+(devis.lots.length+1); b.focus(); b.select(); };
@@ -3869,7 +3910,7 @@ function majBandeau(){ setTimeout(majPastille,0); const b=$("bandeauArticle"); i
   else { b.style.background='#fff'; b.style.color='#444'; b.innerHTML='🧾 Article : <b>aucun</b>'+echapper(lot)+' ▾'; }
   if(outil==='mesure' && !edition) $('bGarder').textContent= a ? '✓ '+a.devis.des : '📌 Garder'; }
 function ouvrirListeArticles(){ const z=$('listeArticles'); z.replaceChildren();
-  const A=articles().filter(a=>!estForfait(a)).slice().sort((x,y)=>{ const ix=articlesRecents.indexOf(x.nom), iy=articlesRecents.indexOf(y.nom); return (ix<0?999:ix)-(iy<0?999:iy) || (x.devis.des||'').localeCompare(y.devis.des||'','fr'); });
+  const A=articlesPlan().filter(a=>!estForfait(a)).slice().sort((x,y)=>{ const ix=articlesRecents.indexOf(x.nom), iy=articlesRecents.indexOf(y.nom); return (ix<0?999:ix)-(iy<0?999:iy) || (x.devis.des||'').localeCompare(y.devis.des||'','fr'); });
   const bt=(txt,coul,f)=>{ const b=document.createElement('button'); b.className='btn'; b.style.cssText='display:block;width:100%;text-align:left;margin:3px 0;border-left:8px solid '+coul; b.innerHTML=txt; b.onclick=()=>{ z.style.display='none'; f(); }; z.appendChild(b); };
   bt('Aucun (mesure simple, hors métré)','#bbb',()=>choisirArticle(null));
   for(const a of A) bt('<b>'+echapper(a.devis.des)+'</b> <span class="petit">('+a.devis.unite+(a.devis.base==='U'?' · un point par élément':a.devis.base==='m2'?' · surface':' · distance')+')</span>',a.couleur,()=>choisirArticle(a.nom));
@@ -3892,7 +3933,7 @@ const ETATS=[['afaire','⬜ À faire'],['encours','🔄 En cours'],['fait','✅ 
 function tachesDe(){ if(!Array.isArray(devis.taches)) devis.taches=[]; return devis.taches; }
 function idTache(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 // chaque forfait a sa tâche (créée une seule fois)
-function tachesDesForfaits(){ const T=tachesDe(); let n=0; for(const a of articles()) if(estForfait(a) && !T.some(t=>t.art===a.nom)){ T.push({id:idTache(), titre:a.devis.des, art:a.nom, etat:'afaire', date:''}); n++; } if(n) sauverDevis(); return n; }
+function tachesDesForfaits(){ const T=tachesDe(); let n=0; for(const a of articlesPlan()) if(estForfait(a) && !T.some(t=>t.art===a.nom)){ T.push({id:idTache(), titre:a.devis.des, art:a.nom, etat:'afaire', date:''}); n++; } if(n) sauverDevis(); return n; }
 function majPlanning(){ const T=tachesDe(), tb=$('tbPlanning'), frag=document.createDocumentFragment();
   if(!T.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="4" style="color:#777;text-align:center;height:40px">Aucune tâche : ＋ Tâche, ou collez un devis avec des forfaits (Ft).</td>'; frag.appendChild(tr); }
   T.forEach((t,i)=>{ const tr=document.createElement('tr'); if(t.etat==='fait') tr.className='fait';
@@ -4048,7 +4089,7 @@ function majFouilles(){ const sR=$('fqRegle'); if(sR){ sR.value=F.regle==='f70'?
   h+='</tbody></table>'; $('fqTotaux').innerHTML=h+(tot?'<div style="padding:6px 8px;font-size:14.5px">Total achats et évacuation : <b>'+f2(tot)+' €</b></div>':'<div class="petit" style="padding:4px 8px">Remplissez les tarifs d\'achat plus bas pour avoir les montants.</div>')+(T.nonCalc?'<div class="petit" style="padding:4px 8px;color:#d32f2f">⚠ '+T.nonCalc+' tronçon(s) sans profondeur, non comptés.</div>':'');
   // 3. tuyaux
   const tt=$('tbFqTuyaux'), f3=document.createDocumentFragment();
-  for(const a of articles().filter(estTuyau)){ const t=infoTuyau(a), tr=document.createElement('tr'); const c0=document.createElement('td'); c0.innerHTML='<span style="color:'+a.couleur+'">■</span> '+echapper(a.devis.des);
+  for(const a of articlesPlan().filter(estTuyau)){ const t=infoTuyau(a), tr=document.createElement('tr'); const c0=document.createElement('td'); c0.innerHTML='<span style="color:'+a.couleur+'">■</span> '+echapper(a.devis.des);
     const c1=document.createElement('td'); c1.appendChild(champ(t.d*1000,n=>{ if(n>0) t.d=n/1000; },54));
     const c2=document.createElement('td'); const sT=document.createElement('select'); for(const [v,lb] of [['autre','Autre (sable 0/6)'],['EDF','EDF (sable 0/4)']]){ const o=document.createElement('option'); o.value=v; o.textContent=lb; sT.appendChild(o); } sT.value=t.type; sT.onchange=()=>{ t.type=sT.value; sauverFouilles(); majFouilles(); }; c2.appendChild(sT);
     const c3=document.createElement('td'); const sN=document.createElement('select'); for(const n of F.natures){ const o=document.createElement('option'); o.textContent=n.nom; sN.appendChild(o); } sN.value=t.nat; sN.onchange=()=>{ t.nat=sN.value; sauverFouilles(); majFouilles(); }; c3.appendChild(sN);
@@ -4190,6 +4231,7 @@ const AIDE=[
  {r:'Métré', t:'Lots (logements)', txt:'＋ Lot, puis choisissez le lot actif : chaque nouvelle mesure et chaque point y sont rangés. « Afficher » filtre par lot.', mots:'lot logement filtre'},
  {r:'Fouilles', t:'Fouilles des tranchées', txt:'🧾 Métré → Fouilles : largeur auto selon la profondeur (tapez une largeur pour la forcer), talus au-delà de 1,30 m, sable autour du tuyau, remblai, déblai foisonné. Menu Dessus : espace vert ou structure, non comptés deux fois.', mots:'fouille tranchee largeur talus sable remblai deblai foisonnement dessus espace vert', go:()=>{ ouvrirMetre(); choisirOngletMetre('fouilles'); }},
  {r:'Fouilles', t:'Largeur : ma règle ou Fascicule 70', txt:'En haut de Fouilles, choisissez « Largeur : ma règle » (0,40 / 0,60 / 0,80 m selon la profondeur, réglable dans ⚙ Règles) ou « Fascicule 70 » quand le CCTP l\'impose : Ø extérieur + 0,40 m jusqu\'au Ø 225, + 0,50 jusqu\'au Ø 350, + 0,70 jusqu\'au Ø 700 ; au moins 0,80 m entre 1 et 1,75 m de profondeur, 0,90 m au-delà. La plus grande des deux est gardée. Une largeur tapée à la main reste prioritaire.', mots:'fascicule 70 largeur tranchee norme cctp NF EN 1610'},
+ {r:'Métré', t:'Chantiers : séparer les articles', txt:'🧾 Métré → 📁 Chantier : choisissez ou créez le chantier (ex. ALIZEA). Tous les plans du classeur ouvert passent dans ce chantier, et les articles qui ne servent qu\'à ces plans y sont rangés : les plans des autres chantiers ne les voient plus (ni dans le Métré, ni dans ☰ Calques). Un nouvel article va dans le chantier du plan. Pour changer un article : ouvrez sa ligne (▸) → 📁 Chantier de l\'article. Rien n\'est effacé.', mots:'chantier separer articles classeur alizea projet'},
  {r:'Métré', t:'Murs en moellons : règle base / tête', txt:'Article en m³ mesuré en distance : ouvrez sa ligne (▸) et cochez 🧱 Règle mur. Base = 0,5 × hauteur (au moins la tête), tête 0,50 m, réglables. Mesurez le mur en 📏 Distance avec Z = tête et FF = pied à chaque bout : volume = longueur × section moyenne. Ex. 3 m de haut : base 1,50, tête 0,50 → 3 m³/ml. Nouvel article : ＋ Article → Mesuré par « Mur ».', mots:'mur moellon soutenement volume base tete m3 section'},
  {r:'Fouilles', t:'Coupe de tranchée pour le client', txt:'Fouilles → ✂ sur un tronçon (ou ✂ Coupe d\'un tuyau) : dessin coté, 0,40 / 0,80 / 1,50 m, 💾 Enregistrer l\'image (SVG, à joindre à un mail).', mots:'coupe tranchee image client svg'},
  {r:'Fouilles', t:'Tarifs d\'achat et règles de calcul', txt:'Fouilles → Tarifs d\'achat : prix et fournisseur, montants calculés. ⚙ Règles : largeurs, talus, sable, foisonnement, coefficients de remblai.', mots:'tarif prix fournisseur regle coefficient'},
@@ -4373,6 +4415,7 @@ const Memoire={
   ouvrir(){ if(this.bd) return Promise.resolve(this.bd); return new Promise((ok,ko)=>{ try{ const r=indexedDB.open('LecteurDWGchantier',1);
     r.onupgradeneeded=()=>r.result.createObjectStore('donnees'); r.onsuccess=()=>{this.bd=r.result; ok(this.bd);}; r.onerror=()=>ko(r.error); }catch(e){ko(e);} }); },
   async lire(k){ try{ const bd=await this.ouvrir(); return await new Promise((ok,ko)=>{ const q=bd.transaction('donnees').objectStore('donnees').get(k); q.onsuccess=()=>ok(q.result); q.onerror=()=>ko(q.error); }); }catch(e){ return null; } },
+  async cles(){ try{ const bd=await this.ouvrir(); return await new Promise((ok,ko)=>{ const q=bd.transaction('donnees').objectStore('donnees').getAllKeys(); q.onsuccess=()=>ok(q.result||[]); q.onerror=()=>ko(q.error); }); }catch(e){ return []; } },
   async effacer(k){ try{ const bd=await this.ouvrir(); await new Promise((ok,ko)=>{ const t=bd.transaction('donnees','readwrite'); t.objectStore('donnees').delete(k); t.oncomplete=ok; t.onerror=()=>ko(t.error); }); return true; }catch(e){ return false; } },
   async ecrire(k,v){ try{ const bd=await this.ouvrir(); await new Promise((ok,ko)=>{ const t=bd.transaction('donnees','readwrite'); t.objectStore('donnees').put(v,k); t.oncomplete=ok; t.onerror=()=>ko(t.error); }); return true; }catch(e){ return false; } }
 };
@@ -4427,7 +4470,8 @@ async function enregistrerClasseur(){ if(!classeur.plans.length) return; voile('
 async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+nomFichier+(d.date?' (du '+new Date(d.date).toLocaleString('fr-FR')+')':''), 'Plans dans le classeur : '+(d.plans||[]).length];
   if(scene) quitterPlanCourant();
   // réglages communs
-  const Rc={calAjout:[]}; for(const c of (d.calquesPerso||[])){ if(c&&c.nom&&!calquesPerso.some(x=>x.nom===c.nom)&&!CALQUES_BASE.some(x=>x.nom===c.nom)){ calquesPerso.push(c); Rc.calAjout.push(c.nom); } }
+  const Rc={calAjout:[]}; let nbCh=0; for(const c of (d.calquesPerso||[])){ if(!c||!c.nom) continue; const ex=calquesPerso.find(x=>x.nom===c.nom); if(ex){ if(ex.devis&&c.devis&&c.devis.chantier&&!ex.devis.chantier){ ex.devis.chantier=c.devis.chantier; nbCh++; } continue; } if(!CALQUES_BASE.some(x=>x.nom===c.nom)){ calquesPerso.push(c); Rc.calAjout.push(c.nom); } }
+  if(nbCh){ sauverCalquesPerso(); lignes.push('Articles rangés dans leur chantier : '+nbCh); }
   if(Rc.calAjout.length){ sauverCalquesPerso(); lignes.push('Calques perso ajoutés : '+Rc.calAjout.join(', ')); }
   const mAj=[]; for(const m of (d.modelesStructure||[])){ if(m&&m.nom&&!modelesPerso.some(x=>x.nom===m.nom)){ modelesPerso.push(m); mAj.push(m.nom); } } if(mAj.length){ Memoire.ecrire('modelesStructure',modelesPerso); lignes.push('Modèles de structure ajoutés : '+mAj.join(', ')); }
   if(Array.isArray(d.typesProfil) && typesProfil){ const tAj=[]; for(const t of d.typesProfil){ if(t&&t.nom&&!typesProfil.some(x=>x.nom===t.nom)){ typesProfil.push(t); tAj.push(t.nom); } } if(tAj.length){ sauverTypesProfil(); lignes.push('Types de profil ajoutés : '+tAj.join(', ')); } }
@@ -4704,13 +4748,14 @@ function calquesChanges(){ remplirCalques(); majVisibles(); demanderDessin(); sa
 function calquesFiltres(){
   if(!scene) return [];
   const q=$('recherche').value.trim().toLowerCase();
-  return [...scene.calques.values()].filter(c=>(c.nb>0||c.perso) && !c.supprime && (!q || c.nom.toLowerCase().includes(q)))
+  const cache=new Set(articles().filter(a=>!artVisible(a)).map(a=>a.nom));
+  return [...scene.calques.values()].filter(c=>(c.nb>0||c.perso) && !c.supprime && !cache.has(c.nom) && (!q || c.nom.toLowerCase().includes(q)))
     .sort((a,b)=>a.nom.localeCompare(b.nom,'fr',{numeric:true,sensitivity:'base'}));
 }
 function remplirCalques(){
   if(!scene) return;
   const liste=calquesFiltres(), tb=$('tbCalques');
-  const tous=[...scene.calques.values()].filter(c=>!c.supprime), utilises=tous.filter(c=>c.nb>0||c.perso);
+  const cache=new Set(articles().filter(a=>!artVisible(a)).map(a=>a.nom)), tous=[...scene.calques.values()].filter(c=>!c.supprime&&!cache.has(c.nom)), utilises=tous.filter(c=>c.nb>0||c.perso);
   const vis=utilises.filter(c=>c.visible).length;
   $('titreCalques').textContent=`Calques (${vis}/${utilises.length} affichés)`;
   const q=$('recherche').value.trim();
