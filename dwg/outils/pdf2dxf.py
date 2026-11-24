@@ -8,9 +8,16 @@ Usage : python3 -I pdf2dxf.py plan.pdf sortie.dxf <metres_par_point> [--leger] [
  - --textes : ecrit aussi les textes du PDF (TEXT, calque TEXTES_<couleur>), utiles pour les cotes
    (niveaux, diametres, longueurs) lues par l'appli.
  - --sans MOT1,MOT2 : calques du PDF dont le nom contient un de ces mots : pas copies (vegetation, vehicules...).
+ - --axes "CALQUE1;CALQUE2" : tuyaux dessines en morceaux de largeur -> une ligne d'axe par troncon
+   (sauf dans les cadres de legende et le cartouche, laisses tels quels).
+   --regards "CALQUE_R1;..." + --axes-regards "CALQUE1;..." : ces axes sont coupes aux regards et
+   prolonges jusqu'au centre du regard. --axes-json fichier.json : les lignes (coordonnees du DXF).
 """
 import sys, math
+import os, json
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pymupdf, ezdxf
+import axes_reseaux as AX
 from ezdxf.colors import rgb2int
 
 NOMS = {(0,0,0):'NOIR',(1,0,0):'ROUGE',(0,0,1):'BLEU',(0,1,0):'VERT',(0,1,1):'CYAN',(1,0,1):'MAGENTA',(1,1,0):'JAUNE'}
@@ -46,6 +53,11 @@ def main():
     if '--sans' in a: i=a.index('--sans'); sans=set(a[i+1].split(',')); del a[i:i+2]
     page=0
     if '--page' in a: i=a.index('--page'); page=int(a[i+1])-1; del a[i:i+2]
+    def opt(nom):
+        if nom in a: i=a.index(nom); v=a[i+1]; del a[i:i+2]; return v
+        return None
+    axes=set(x for x in (opt('--axes') or '').split(';') if x); axesReg=set(x for x in (opt('--axes-regards') or '').split(';') if x)
+    calReg=set(x for x in (opt('--regards') or '').split(';') if x); axesJson=opt('--axes-json')
     src, dst, mpp = a[0], a[1], float(a[2])
     doc=pymupdf.open(src); p=doc[page]; H=p.rect.height
     T=lambda x,y:(x*mpp,(H-y)*mpp)
@@ -58,7 +70,16 @@ def main():
         calques.setdefault(nom,None)
         return nom
     nb=0; ignores=0
-    for d in p.get_drawings():
+    dessins=p.get_drawings()
+    cadres=[d['rect'] for d in dessins if d.get('layer') in ('_PCI_CADRES ET TITRES LEGENDES','_PCI_CARTOUCHE')]
+    dansCadre=lambda r: any(c.x0<=(r.x0+r.x1)/2<=c.x1 and c.y0<=(r.y0+r.y1)/2<=c.y1 for c in cadres)
+    pourAxes={}; pourRegards=[]
+    for d in dessins:
+        if d.get('layer') in calReg: pourRegards.append(d)
+        if d.get('layer') in axes and not dansCadre(d['rect']):
+            pourAxes.setdefault(d['layer'],[]).append(d)
+    for d in dessins:
+        if d.get('layer') in axes and not dansCadre(d['rect']): continue
         c=d.get('color'); fc=d.get('fill')
         if leger and c and abs(c[0]-c[1])<0.03 and abs(c[1]-c[2])<0.03 and 0.55<c[0]<0.97: ignores+=1; continue
         nomc = (d.get('layer') if d.get('layer') not in (None,'','0') else None) or nom_couleur(c if c else fc)
@@ -87,6 +108,21 @@ def main():
         if d['type'] in ('s','fs') and c:
             for ch in chemins:
                 msp.add_lwpolyline([T(*q) for q in ch], dxfattribs={'layer':lay}); nb+=1
+    na=0; sortieJson={}
+    if pourAxes:
+        k=mpp; m=lambda v: v/k
+        R=AX.centres_regards(pourRegards, m(0.4), m(2.2)) if pourRegards else []
+        for nomc,ds in pourAxes.items():
+            c0=ds[0].get('color') or ds[0].get('fill'); lay=calque(propre(nomc), c0)
+            S=AX.axes_morceaux(ds, m(1.5)); avecR=nomc in axesReg
+            Ls=AX.chainer(S, m(1.2), R if avecR else (), m(0.9))
+            Ls=[AX.simplifier(L, m(0.02)) for L in Ls]
+            if avecR: Ls=[AX.accrocher_regards(L, R, m(1.6)) for L in Ls]
+            Ls=[L for L in Ls if AX.longueur(L)*k>0.3]
+            sortieJson[nomc]=[[T(*q) for q in L] for L in Ls]
+            for L in sortieJson[nomc]: msp.add_lwpolyline(L, dxfattribs={'layer':lay}); na+=1
+        print('Axes :', na, 'lignes ;', len(R), 'regards')
+        if axesJson: json.dump(sortieJson, open(axesJson,'w'))
     nt=0
     if textes:
         for b in p.get_text('rawdict')['blocks']:

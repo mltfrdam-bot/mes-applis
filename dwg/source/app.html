@@ -649,7 +649,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Chantiers – v1";
+const VERSION = "Intitulés – v1";
 </script>
 <script>
 "use strict";
@@ -3818,7 +3818,10 @@ function majTableMetre(){
     if(metreOuvert.has(art.nom) && D.base==='ml' && D.unite==='m³') frag.appendChild(ligneRegleMur(art));
     if(metreOuvert.has(art.nom)){ if(!L.length){ const r=document.createElement('tr'); r.innerHTML='<td colspan="7" class="petit" style="padding-left:24px;color:#777">Aucune mesure sur ce calque'+(lot?' pour '+echapper(lot):'')+'.</td>'; frag.appendChild(r); }
       for(const l of L){ const r=document.createElement('tr'); r.className='detail'; r.innerHTML='<td colspan="2" style="padding-left:22px">'+(l.sorte==='m'?'📏 ':l.sorte==='r'?'🔧 ':'📍 ')+echapper(l.txt)+(l.lot?' <span class="petit">· '+echapper(l.lot)+'</span>':'')+'</td><td class="num">'+frN(l.q,2)+'</td><td colspan="4"><button class="btn petitb">🎯</button></td>';
-        r.querySelector('button').onclick=()=>voirLigneMetre(l); frag.appendChild(r); } } }
+        r.querySelector('button').onclick=()=>voirLigneMetre(l);
+        if(l.sorte==='m'){ const m=mesuresGardees[l.i], e=document.createElement('input'); e.value=m.lib||''; e.placeholder='Intitulé (commande)'; e.style.cssText='width:150px;height:30px;margin-right:6px;font-weight:bold';
+          e.onchange=()=>{ const v=e.value.trim(); if(v) m.lib=v; else delete m.lib; sauverMesuresGardees(); }; e.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); e.blur(); } }; r.children[0].insertBefore(e,r.children[0].firstChild); }
+        frag.appendChild(r); } } }
   tb.replaceChildren(frag);
   $('mtTotal').innerHTML= avecPrix ? 'Total réalisé : <b>'+frN(total,2)+' €</b>'+(!lot&&totalDevis?' · devis : '+frN(totalDevis,2)+' € · écart '+(total-totalDevis>=0?'+':'')+frN(total-totalDevis,2)+' €':'') : '<span class="petit">Tapez les prix unitaires (PU) pour avoir les montants.</span>';
   $('mtLotInfo').textContent= devis.lotActif ? 'Les nouvelles mesures et les nouveaux points iront dans « '+devis.lotActif+' ».' : 'Les nouvelles mesures ne sont rangées dans aucun lot.'; }
@@ -3875,7 +3878,8 @@ function collerDevis(txt){ let n=0, maj=0; const ign=[];
   tachesDesForfaits(); sauverDevis(); remplirSelectsCalques(); return {n,maj,ign}; }
 function texteMetre(){ const lot=$('mtFiltre').value; const L=['Métré — '+scene.nom+(lot?' — '+lot:' — tout le chantier'), ['Article','Unité','Mesuré','Devis','Écart','PU','Montant'].join('\t')];
   for(const art of articlesPlan()){ const dv=devis.arts[art.nom]||{}, q=lignesArticle(art,lot).reduce((s,x)=>s+x.q,0), qd=lot?null:(Number.isFinite(dv.qte)?dv.qte:null), pu=Number.isFinite(dv.pu)?dv.pu:null;
-    L.push([art.devis.des||art.nom, art.devis.unite, frN(q,2), qd!==null?frN(qd,2):'', qd!==null?frN(q-qd,2):'', pu!==null?frN(pu,2):'', pu!==null?frN(q*pu,2):''].join('\t')); }
+    L.push([art.devis.des||art.nom, art.devis.unite, frN(q,2), qd!==null?frN(qd,2):'', qd!==null?frN(q-qd,2):'', pu!==null?frN(pu,2):'', pu!==null?frN(q*pu,2):''].join('\t'));
+    for(const l of lignesArticle(art,lot)) if(l.sorte==='m' && mesuresGardees[l.i] && mesuresGardees[l.i].lib) L.push(['   · '+mesuresGardees[l.i].lib, art.devis.unite, frN(l.q,2)].join('\t')); }
   return L.join('\n'); }
 function brancherMetre(){
   $('bMetre').onclick=ouvrirMetre; $('mtFermer').onclick=()=>{ $('metreBoite').style.display='none'; };
@@ -4231,6 +4235,7 @@ const AIDE=[
  {r:'Métré', t:'Lots (logements)', txt:'＋ Lot, puis choisissez le lot actif : chaque nouvelle mesure et chaque point y sont rangés. « Afficher » filtre par lot.', mots:'lot logement filtre'},
  {r:'Fouilles', t:'Fouilles des tranchées', txt:'🧾 Métré → Fouilles : largeur auto selon la profondeur (tapez une largeur pour la forcer), talus au-delà de 1,30 m, sable autour du tuyau, remblai, déblai foisonné. Menu Dessus : espace vert ou structure, non comptés deux fois.', mots:'fouille tranchee largeur talus sable remblai deblai foisonnement dessus espace vert', go:()=>{ ouvrirMetre(); choisirOngletMetre('fouilles'); }},
  {r:'Fouilles', t:'Largeur : ma règle ou Fascicule 70', txt:'En haut de Fouilles, choisissez « Largeur : ma règle » (0,40 / 0,60 / 0,80 m selon la profondeur, réglable dans ⚙ Règles) ou « Fascicule 70 » quand le CCTP l\'impose : Ø extérieur + 0,40 m jusqu\'au Ø 225, + 0,50 jusqu\'au Ø 350, + 0,70 jusqu\'au Ø 700 ; au moins 0,80 m entre 1 et 1,75 m de profondeur, 0,90 m au-delà. La plus grande des deux est gardée. Une largeur tapée à la main reste prioritaire.', mots:'fascicule 70 largeur tranchee norme cctp NF EN 1610'},
+ {r:'Métré', t:'Intitulé d\'une mesure (commandes)', txt:'🧾 Métré → ouvrez la ligne d\'un article (▸) : chaque mesure a une case « Intitulé » (ex. « EP Ø160 · T03 » ou « Commande Serge 28/11 »). Tapez, Entrée : c\'est gardé, et 📋 Copier ajoute la liste des mesures avec leur intitulé sous l\'article.', mots:'intitule nom mesure troncon commande libelle'},
  {r:'Métré', t:'Chantiers : séparer les articles', txt:'🧾 Métré → 📁 Chantier : choisissez ou créez le chantier (ex. ALIZEA). Tous les plans du classeur ouvert passent dans ce chantier, et les articles qui ne servent qu\'à ces plans y sont rangés : les plans des autres chantiers ne les voient plus (ni dans le Métré, ni dans ☰ Calques). Un nouvel article va dans le chantier du plan. Pour changer un article : ouvrez sa ligne (▸) → 📁 Chantier de l\'article. Rien n\'est effacé.', mots:'chantier separer articles classeur alizea projet'},
  {r:'Métré', t:'Murs en moellons : règle base / tête', txt:'Article en m³ mesuré en distance : ouvrez sa ligne (▸) et cochez 🧱 Règle mur. Base = 0,5 × hauteur (au moins la tête), tête 0,50 m, réglables. Mesurez le mur en 📏 Distance avec Z = tête et FF = pied à chaque bout : volume = longueur × section moyenne. Ex. 3 m de haut : base 1,50, tête 0,50 → 3 m³/ml. Nouvel article : ＋ Article → Mesuré par « Mur ».', mots:'mur moellon soutenement volume base tete m3 section'},
  {r:'Fouilles', t:'Coupe de tranchée pour le client', txt:'Fouilles → ✂ sur un tronçon (ou ✂ Coupe d\'un tuyau) : dessin coté, 0,40 / 0,80 / 1,50 m, 💾 Enregistrer l\'image (SVG, à joindre à un mail).', mots:'coupe tranchee image client svg'},
