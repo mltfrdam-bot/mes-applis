@@ -623,7 +623,8 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <button id="bOeil" title="Œil : glissez-le sur le plan pour savoir à quel calque appartient ce qui est dessous">👁</button>
 <div id="ficheCalque">
   <div class="fl1"><span class="pastille" id="fcCoul"></span><b id="fcNom"></b><span id="fcInfo"></span><span style="flex:1"></span><button class="btn" id="fcFermer">✕</button></div>
-  <div class="fl2" id="fcBoutons"><button class="btn" id="fcSeul">◎ Voir seul</button><button class="btn" id="fcGeler">❄ Geler</button><button class="btn" id="fcVerrou">🔒 Verrouiller</button><button class="btn" id="fcSuppr" style="color:#a11">🗑 Supprimer</button></div>
+  <div class="fl2" id="fcBoutons"><button class="btn" id="fcSeul">◎ Voir seul</button><button class="btn" id="fcGeler">❄ Geler</button><button class="btn" id="fcVerrou">🔒 Verrouiller</button><button class="btn" id="fcSuppr" style="color:#a11">🗑 Supprimer</button><button class="btn" id="fcPoints">⟋ Points du calque</button></div>
+  <div id="fcPts" style="display:none;flex-direction:column;gap:6px"><div class="fl2" style="align-items:center"><button class="btn" data-pc="coins">▢ Coins</button><button class="btn" data-pc="pas">⋯ Pas</button><button class="btn" data-pc="alti">⊙ Altimétriques</button><span id="pcPasL">tous les <input id="pcPas" inputmode="decimal" value="5" style="width:60px;height:34px;font-size:16px;text-align:right"> m</span></div><div class="fl2"><button class="btn" id="pcZone">⬚ Zone</button><button class="btn prim" id="pcCreer">✓ Créer</button><button class="btn" id="pcAnnuler">Annuler</button></div><div id="pcInfo" style="font-size:14px"></div></div>
   <div class="fl2" id="fcValider" style="display:none;align-items:center"><span style="font-size:14px;color:#a11;font-weight:bold;flex:1 1 100%">🗑 Retiré du plan — regardez ce qui a disparu :</span><button class="btn prim" id="fcOk">✓ Valider la suppression</button><button class="btn" id="fcAnnulSup">↶ Remettre</button></div>
   <div id="fcEtat"></div>
 </div>
@@ -641,7 +642,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "PDF – v1";
+const VERSION = "Calque points – v1";
 </script>
 <script>
 "use strict";
@@ -1950,8 +1951,8 @@ function fondSousDoigt(lx,ly){
   const lt=scene.lots[best.l]; return {calque:lt.eff, haut:lt.haut, obj:null, fond:best, lx, ly};
 }
 let isole=null, supprEnAttente=null;
-function ouvrirFiche(sel){ if(supprEnAttente) validerSuppr(); ficheSel=sel; majFiche(); $('ficheCalque').classList.add('ouvert'); demanderDessin(false); }
-function fermerFiche(){ if(supprEnAttente) validerSuppr(); ficheSel=null; $('ficheCalque').classList.remove('ouvert'); demanderDessin(false); }
+function ouvrirFiche(sel){ if(supprEnAttente) validerSuppr(); if(pcSel&&sel&&sel.calque!==pcSel.calque){ pcSel=null; majPc(); } ficheSel=sel; majFiche(); $('ficheCalque').classList.add('ouvert'); demanderDessin(false); }
+function fermerFiche(){ if(supprEnAttente) validerSuppr(); ficheSel=null; pcSel=null; majPc(); $('ficheCalque').classList.remove('ouvert'); demanderDessin(false); }
 function validerSuppr(){ const n=supprEnAttente; supprEnAttente=null; if(n) $('etat').textContent='🗑 Calque « '+n+' » supprimé de ce plan. Récupérable dans ☰ Calques.'; }
 function voirSeul(c){
   if(isole && isole.calque===c.nom){ for(const [n,v] of isole.avant){ const k=scene.calques.get(n); if(k && !k.supprime) k.visible=v; } isole=null; }
@@ -1989,7 +1990,61 @@ function sauverReglagesCalques(){
   Memoire.ecrire('reglagesCalques:'+scene.nom,{supprimes:cs.filter(c=>c.supprime).map(c=>c.nom), verrous:cs.filter(c=>c.verrou).map(c=>c.nom)});
   sauverEtatBientot();
 }
+
+// ================= ⟋ Points du calque entier =================
+let pcSel=null; // {calque, mode, pas, zone:[X1,Y1,X2,Y2]|null, zoneMode, rect, apercu}
+function calcPointsCalque(){ if(!pcSel||!scene) return []; const {calque,mode,pas,zone}=pcSel, o=scene.origine;
+  const dans=(x,y)=>!zone||(x>=zone[0]&&x<=zone[2]&&y>=zone[1]&&y<=zone[3]);
+  const G=new Map(), R=[], cle=(i,j)=>i+','+j;
+  const pris=(x,y)=>{ const i=Math.floor(x/0.01), j=Math.floor(y/0.01); for(let a=-1;a<=1;a++) for(let b=-1;b<=1;b++){ const L=G.get(cle(i+a,j+b)); if(L) for(const q of L) if(Math.hypot(q[0]-x,q[1]-y)<0.01) return true; } return false; };
+  const noter=(x,y)=>{ const k=cle(Math.floor(x/0.01),Math.floor(y/0.01)); if(!G.has(k)) G.set(k,[]); G.get(k).push([x,y]); };
+  for(const p of pointsExp) noter(p.x,p.y); // pas de double avec les points déjà là
+  const aj=(x,y,z)=>{ if(!dans(x,y)||pris(x,y)) return; noter(x,y); R.push({x,y,z:Number.isFinite(z)?z:null}); };
+  const objs=scene.objets.filter(t=>t.calque===calque&&t.els.length);
+  if(mode==='alti'){
+    const it=[]; for(const q of (scene.symboles||[])) if(q.calque===calque) it.push(q.b.slice());
+    for(const t of objs){ const b=boiteEls(t.els); if(Math.max(b[2]-b[0],b[3]-b[1])<=1) it.push(b); }
+    // regroupe les petits morceaux qui se touchent (rond en quartiers, croix…)
+    const n=it.length, par=it.map((_,i)=>i), f=i=>{ while(par[i]!==i){ par[i]=par[par[i]]; i=par[i]; } return i; };
+    const ord=it.map((b,i)=>i).sort((a,b)=>it[a][0]-it[b][0]);
+    for(let a=0;a<n;a++){ const A=it[ord[a]]; for(let b=a+1;b<n;b++){ const B=it[ord[b]]; if(B[0]>A[2]+0.01) break; if(B[1]<=A[3]+0.01&&B[3]>=A[1]-0.01) par[f(ord[a])]=f(ord[b]); } }
+    const grp=new Map(); for(let i=0;i<n;i++){ const r=f(i), b=it[i]; const g=grp.get(r); if(!g) grp.set(r,b.slice()); else { g[0]=Math.min(g[0],b[0]); g[1]=Math.min(g[1],b[1]); g[2]=Math.max(g[2],b[2]); g[3]=Math.max(g[3],b[3]); } }
+    // on garde les formes carrées (rond, croix) de la taille la plus fréquente : pas les chiffres ni les points décimaux
+    const C=[...grp.values()].map(b=>({b,w:b[2]-b[0],h:b[3]-b[1]})).filter(q=>q.w>0.02&&q.h>0.02&&q.w/q.h>0.7&&q.w/q.h<1.43);
+    const cpt=new Map(); for(const q of C){ const k=Math.round(Math.max(q.w,q.h)*50); cpt.set(k,(cpt.get(k)||0)+1); }
+    let km=0, nm=0; for(const [k,v] of cpt) if(v>nm||(v===nm&&k>km)){ nm=v; km=k; } const t=km/50;
+    for(const q of C){ const d=Math.max(q.w,q.h); if(d<t*0.6||d>t*1.6) continue; const x=(q.b[0]+q.b[2])/2, y=(q.b[1]+q.b[3])/2, c=coteProche(x-o.x,y-o.y,2); aj(x,y,c?c.v:null); }
+  } else {
+    for(const t of objs){ for(const e of t.els){ const a=elPt(e,0), b=elPt(e,1); aj(a[0],a[1]); aj(b[0],b[1]); }
+      if(mode==='pas'&&pas>0){ let d=0, suiv=pas; for(const e of t.els){ const L=elLong(e); while(suiv<=d+L-1e-6){ const q=elPt(e,(suiv-d)/L); aj(q[0],q[1]); suiv+=pas; } d+=L; } } }
+  }
+  return R; }
+function majPc(){ const P=$('fcPts'); if(!pcSel){ P.style.display='none'; $('fcPoints').classList.remove('on'); return; }
+  P.style.display='flex'; $('fcPoints').classList.add('on');
+  P.querySelectorAll('[data-pc]').forEach(b=>b.classList.toggle('on',b.dataset.pc===pcSel.mode)); $('pcPasL').style.display=pcSel.mode==='pas'?'':'none';
+  $('pcZone').classList.toggle('on',!!(pcSel.zone||pcSel.zoneMode)); $('pcZone').textContent=pcSel.zoneMode?'⬚ Glissez le doigt…':pcSel.zone?'⬚ Zone ✕':'⬚ Zone';
+  pcSel.apercu=calcPointsCalque(); const n=pcSel.apercu.length, nz=pcSel.apercu.filter(q=>q.z!==null).length;
+  $('pcCreer').textContent='✓ Créer '+n+' point'+(n>1?'s':''); $('pcCreer').disabled=!n;
+  $('pcInfo').innerHTML=(n?'Aperçu en orange sur le plan. ':'Aucun point trouvé'+(pcSel.zone?' dans la zone':'')+' pour ce mode. ')+(pcSel.mode==='alti'&&n?(nz+' Z lu(s) sur le plan'+(n-nz?', '+(n-nz)+' à taper ensuite':'')+'.'):'')+' Calque des points : <b>'+nomPtsCalque(pcSel.calque)+'</b>.';
+  demanderDessin(false); }
+const nomPtsCalque=c=>c+'_PTS';
+function dessinerPc(c){ if(!pcSel||!scene) return; const o=scene.origine; c.save();
+  if(pcSel.zone){ const [a,b]=versEcran(pcSel.zone[0]-o.x,pcSel.zone[3]-o.y), [d,e]=versEcran(pcSel.zone[2]-o.x,pcSel.zone[1]-o.y); c.setLineDash([6,4]); c.lineWidth=2; c.strokeStyle='#e65100'; c.strokeRect(a,b,d-a,e-b); c.setLineDash([]); }
+  if(pcSel.rect){ const R=pcSel.rect; c.setLineDash([6,4]); c.lineWidth=2; c.strokeStyle='#e65100'; c.fillStyle='rgba(230,81,0,0.08)'; c.fillRect(Math.min(R[0],R[2]),Math.min(R[1],R[3]),Math.abs(R[2]-R[0]),Math.abs(R[3]-R[1])); c.strokeRect(Math.min(R[0],R[2]),Math.min(R[1],R[3]),Math.abs(R[2]-R[0]),Math.abs(R[3]-R[1])); c.setLineDash([]); }
+  c.lineWidth=2; c.strokeStyle='#e65100'; c.fillStyle='rgba(255,152,0,0.55)';
+  for(const q of (pcSel.apercu||[])){ const [x,y]=versEcran(q.x-o.x,q.y-o.y); if(x<-10||y<-10||x>W+10||y>H+10) continue; c.beginPath(); c.arc(x,y,5,0,7); c.fill(); c.stroke(); }
+  c.restore(); }
+function finZonePc(){ const R=pcSel.rect, o=scene.origine; const [x1,y1]=versPlan(Math.min(R[0],R[2]),Math.max(R[1],R[3])), [x2,y2]=versPlan(Math.max(R[0],R[2]),Math.min(R[1],R[3]));
+  pcSel.zone=[x1+o.x,y1+o.y,x2+o.x,y2+o.y]; pcSel.zoneMode=false; pcSel.rect=null; majPc(); }
+function creerPointsCalque(){ if(!pcSel) return; const L=pcSel.apercu||[]; if(!L.length) return;
+  memoriserPourAnnuler(); const cal=calqueReseauType(nomPtsCalque(pcSel.calque)); let n=+prochainNom(); const premier=pointsExp.length;
+  for(const q of L) pointsExp.push({nom:String(n++), x:q.x, y:q.y, z:q.z===null?null:Math.round(q.z*1000)/1000, calque:cal});
+  const nz=L.filter(q=>q.z===null).length, mode=pcSel.mode;
+  sauverPoints(); majCompteCalque(); remplirCalques(); pcSel=null; fermerFiche(); choisirOutil('points'); majTablePoints(); demanderDessin(false);
+  $('etat').textContent='⟋ '+L.length+' points créés sur « '+cal+' » (n° '+pointsExp[premier].nom+' à '+pointsExp[pointsExp.length-1].nom+'). ↶ annule tout.'+(mode==='alti'&&nz?' Tapez les '+nz+' Z manquants dans le tableau : Entrée passe au suivant.':'');
+  if(mode==='alti'&&nz){ const i=pointsExp.findIndex((p,k)=>k>=premier&&p.z===null); setTimeout(()=>{ const inp=$('tbPtsExp').querySelector('tr[data-i="'+i+'"] input[data-c="z"]'); if(inp) inp.focus(); },80); } }
 function dessinerFiche(c){
+  dessinerPc(c);
   if(!ficheSel||!scene) return; const o=scene.origine;
   c.save();
   if(ficheSel.fond){ c.beginPath(); for(const q of ficheSel.fond.an){ for(let i=0;i<q.length;i+=2){ const [x,y]=versEcran(q[i],q[i+1]); if(i===0) c.moveTo(x,y); else c.lineTo(x,y); } c.closePath(); }
@@ -2003,6 +2058,14 @@ function dessinerFiche(c){
 }
 function brancherFiche(){
   $('fcFermer').onclick=fermerFiche;
+  $('fcPoints').onclick=()=>{ const c=calqueFiche(); if(!c) return; if(pcSel){ pcSel=null; majPc(); demanderDessin(false); return; } let pas=5; try{ pas=+localStorage.getItem('pcPas')||5; }catch(e){}
+    pcSel={calque:c.nom, mode:'coins', pas, zone:null, zoneMode:false, rect:null, apercu:[]}; $('pcPas').value=String(pas).replace('.',','); majPc(); };
+  $('fcPts').querySelectorAll('[data-pc]').forEach(b=>b.onclick=()=>{ if(!pcSel) return; pcSel.mode=b.dataset.pc; majPc(); });
+  $('pcPas').onchange=()=>{ const v=lireNombre($('pcPas').value); if(!(v>0)){ $('pcPas').value=String(pcSel?pcSel.pas:5).replace('.',','); return; } if(pcSel){ pcSel.pas=v; try{ localStorage.setItem('pcPas',v); }catch(e){} majPc(); } };
+  $('pcPas').onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); $('pcPas').blur(); } };
+  $('pcZone').onclick=()=>{ if(!pcSel) return; if(pcSel.zone&&!pcSel.zoneMode){ pcSel.zone=null; majPc(); return; } pcSel.zoneMode=!pcSel.zoneMode; majPc(); $('etat').textContent=pcSel.zoneMode?'⬚ Glissez le doigt pour tracer le rectangle.':''; };
+  $('pcCreer').onclick=creerPointsCalque;
+  $('pcAnnuler').onclick=()=>{ pcSel=null; majPc(); demanderDessin(false); };
   $('fcGeler').onclick=()=>{ const c=calqueFiche(); if(!c) return; c.visible=!c.visible; majVisibles(); remplirCalques(); majFiche(); demanderDessin(); sauverEtatBientot(); };
   $('fcVerrou').onclick=()=>{ const c=calqueFiche(); if(!c) return; c.verrou=!c.verrou; majVisibles(); remplirCalques(); majFiche(); sauverReglagesCalques(); };
   // Supprimer : on retire tout de suite (on voit ce qui disparaît), puis on valide ou on remet
@@ -3929,6 +3992,7 @@ function brancherGarde(){
 const AIDE=[
  {r:'Plan', t:'Ouvrir un plan (DWG, DXF)', txt:'📂 en haut à gauche, puis choisissez le fichier. Le plan s\'ouvre tel quel, coordonnées réelles. Il est gardé : il se rouvre tout seul, en moins d\'une seconde la fois suivante.', mots:'ouvrir fichier dwg dxf', go:()=>$('fichier').click(), sansPlan:true},
  {r:'Plan', t:'Ouvrir un PDF (conversion en DXF)', txt:'📂 puis choisissez un PDF de plan (pas un scan). Indiquez l\'échelle écrite sur le plan (ex. 200 pour 1/200) ou « je mesurerai une cote connue ». Case Léger : enlève les textures grises. Le DXF est enregistré (Téléchargements) et ouvert dans un nouvel onglet ; le PDF n\'est pas modifié. Échelle inconnue : mesurez une cote connue avec 📏 (2 points), tapez sa vraie longueur dans la barre jaune, ✓ Appliquer. Les coordonnées ne sont pas celles du terrain : 📐 Caler avant d\'implanter.', mots:'pdf convertir conversion dxf echelle cote', go:()=>$('fichier').click(), sansPlan:true},
+ {r:'Points', t:'⟋ Points du calque entier', txt:'☰ Calques → appui sur un calque → ⟋ Points du calque. ▢ Coins : un point à chaque coin et bout de trait (bâtiment, bordures). ⋯ Pas : les coins + un point tous les X m. ⊙ Altimétriques : un point au centre de chaque petit rond ou croix du calque ; Z repris de la cote écrite à moins de 2 m si elle est lisible, sinon à taper dans le tableau (Entrée = point suivant). ⬚ Zone : seulement dans un rectangle. Aperçu orange, puis ✓ Créer. Points sur le calque <nom>_PTS, numérotation qui continue, pas de double avec les points existants (< 1 cm). ↶ des Points annule tout.', mots:'calque entier points coins bordure batiment altimetrique niveau pas zone'},
  {r:'Plan', t:'Classeur : plusieurs plans ouverts', txt:'Chaque plan ouvert devient un onglet sous la barre (＋ pour en ajouter, ✕ pour le retirer). 3 plans restent en mémoire vive.', mots:'onglet classeur plusieurs'},
  {r:'Plan', t:'Calques : afficher / masquer', txt:'☰ Calques : cochez ou décochez. Appui sur un nom → fiche du calque : voir seul, geler, verrouiller, supprimer.', mots:'calque masquer geler verrouiller', go:()=>$('calques').classList.add('ouvert')},
  {r:'Plan', t:'Œil 👁 : à quel calque est ce trait ?', txt:'Glissez le bouton 👁 sur le plan : le nom du calque sous le doigt s\'affiche.', mots:'oeil calque trait'},
@@ -4089,6 +4153,7 @@ function posLocale(ev){ const r=cv.getBoundingClientRect(); return {x:ev.clientX
 function viser(p){ const enLigne=(outil==='points'&&modeLigne())||(outil==='axe'&&axeAttenteTrait); visee={sx:p.x, sy:p.y, acc:enLigne?null:accrocher(p.x,p.y), obj:enLigne?objetSousDoigt(p.x,p.y):null}; if(outil==='points') majInfoPoints(); else majPanneau(); demanderDessin(false); }
 cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(ev.pointerId); const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   // Sélection de traits pour 🔁 Du plan : appui = prendre / rendre, ⬚ Zone = rectangle
+  if(pcSel && pcSel.zoneMode && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,pc:true}; pcSel.rect=[p.x,p.y,p.x,p.y]; return; }
   if(convSel && pointeurs.size===1 && !sequenceMulti){ appui={x:p.x,y:p.y,bouge:false,conv:true}; if(convSel.zone) convSel.rect=[p.x,p.y,p.x,p.y]; else debutGeste(); return; }
   // ✋ : doigt sur un de vos points → le prendre (glisser = déplacer, appui = actions), sinon déplacer le plan
   if(outil==='main' && pointeurs.size===1 && !sequenceMulti){ const h=pointMainSousDoigt(p.x,p.y); if(h){ if(bulleReg) fermerBulle(); mainPrise=h; appui={x:p.x,y:p.y,bouge:false,main:true}; viser(p); return; } }
@@ -4104,6 +4169,7 @@ cv.addEventListener('pointerdown',ev=>{ if(!scene) return; cv.setPointerCapture(
   else { if((!outil||outil==='main') && !sequenceMulti) appui={x:p.x,y:p.y,bouge:false,vide:outil==='main'}; debutGeste(); } });
 cv.addEventListener('pointermove',ev=>{ if(!pointeurs.has(ev.pointerId)) return; const p=posLocale(ev); pointeurs.set(ev.pointerId,p);
   if(appui && !appui.bouge && Math.hypot(p.x-appui.x,p.y-appui.y)>SEUIL_TAP) appui.bouge=true;
+  if(appui && appui.pc && pcSel && pcSel.rect && pointeurs.size===1){ pcSel.rect[2]=p.x; pcSel.rect[3]=p.y; demanderDessin(false); return; }
   if(appui && appui.conv && convSel && convSel.rect && pointeurs.size===1){ convSel.rect[2]=p.x; convSel.rect[3]=p.y; demanderDessin(false); return; }
   if(visee && visee.modeOeil && pointeurs.size===1){ oeilViser(p); return; }
   if(appui && appui.autre && appui.bouge && deplace===null && visee){ resActif=appui.autre.ri; deplace=appui.autre.ni; noeudSel=deplace; lectureRes=null; $('etat').textContent='Déplacement de '+maitre(reseaux[resActif].noeuds[deplace]).nom+' ('+reseaux[resActif].nom+')'; majReseau(); }
@@ -4112,6 +4178,7 @@ const finP=ev=>{ if(!pointeurs.has(ev.pointerId)) return; pointeurs.delete(ev.po
   if(pointeurs.size){ debutGeste(); return; }
   const tap = appui && !appui.bouge && !sequenceMulti && ev.type==='pointerup';
   if(appui && appui.main){ const h=mainPrise; mainPrise=null; if(tap) choisirMain(h); else if(visee && !sequenceMulti && ev.type==='pointerup'){ const [rx,ry]=versPlan(visee.sx,visee.sy); deplacerMain(h, pointVise(), {x:rx,y:ry,z:NaN}); } }
+  else if(appui && appui.pc){ if(pcSel){ if(pcSel.rect && appui.bouge && !sequenceMulti) finZonePc(); else { pcSel.rect=null; demanderDessin(false); } } }
   else if(appui && appui.conv){ if(convSel){ if(convSel.rect && appui.bouge && !sequenceMulti) selZone(); else if(tap) basculerSel(appui.x,appui.y); convSel.rect=null; } }
   else if(appui && appui.bulle && !visee){ if(tap){ if(appui.etiq) ouvrirBulle(appui.etiq); else fermerBulle(); } }
   else if(outil==='mesure' && prendreSurface && !visee){ if(tap && surfaceDuPlan(appui.x,appui.y)){ prendreSurface=false; $('bDuPlan').classList.remove('actif'); } }
