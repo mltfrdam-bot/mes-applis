@@ -649,7 +649,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Intitulés – v1";
+const VERSION = "Intitulés – v2";
 </script>
 <script>
 "use strict";
@@ -2276,6 +2276,14 @@ function fusionner(d){
     const n2=nomLibre(q.nom); R.ptsRenom.push(q.nom+' → '+n2); q.nom=n2; pointsExp.push(q);
   }
   const cle=m=>m.type+'|'+(m.calque||CALQUE_MES)+'|'+m.pts.map(q=>(+q.x).toFixed(3)+','+(+q.y).toFixed(3)).join(';');
+  // Mesures générées automatiquement (ex. axes des réseaux tirés du PDF) : un fichier plus récent les remplace.
+  // L'intitulé, l'état et le lot que vous avez changés sont repris quand la nouvelle ligne a les mêmes bouts (à 1 m près).
+  if(d.remplaceAuto){ const vieilles=mesuresGardees.filter(m=>m.auto===d.remplaceAuto); if(vieilles.length){ R.mesRemp=vieilles.length; R.mesRepris=0;
+      const bouts=m=>[m.pts[0], m.pts[m.pts.length-1]], proche=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y)<=1;
+      for(const n of (d.mesures||[])){ if(n.auto!==d.remplaceAuto||!n.pts||n.pts.length<2) continue; const [a,b]=bouts(n);
+        const v=vieilles.find(o=>o.calque===n.calque && o.pts && o.pts.length>=2 && ((proche(bouts(o)[0],a)&&proche(bouts(o)[1],b))||(proche(bouts(o)[0],b)&&proche(bouts(o)[1],a))));
+        if(v){ let r=false; const libChange=v.lib && (v.libAuto!==undefined ? v.lib!==v.libAuto : !/ · T\d{2}$/.test(v.lib)); if(libChange&&v.lib!==n.lib){ n.lib=v.lib; r=true; } if(v.etat&&!n.etat){ n.etat=v.etat; r=true; } if(v.lot&&!n.lot){ n.lot=v.lot; r=true; } for(const k of [0,1]){ const q=k?n.pts[n.pts.length-1]:n.pts[0], o=proche(bouts(v)[0],q)?bouts(v)[0]:bouts(v)[1]; if(vOkN(o.z)&&!vOkN(q.z)) q.z=o.z; if(vOkN(o.ff)&&!vOkN(q.ff)) q.ff=o.ff; } if(r) R.mesRepris++; } }
+      mesuresGardees=mesuresGardees.filter(m=>m.auto!==d.remplaceAuto); } }
   const deja=new Set(mesuresGardees.map(cle));
   const rangE=e=>e==='fait'?2:e==='encours'?1:0; R.mesEtat=0;
   for(const m of (d.mesures||[])){ if(deja.has(cle(m))){ R.mesIdem++; const ex=mesuresGardees.find(x=>cle(x)===cle(m)); if(ex && rangE(m.etat)>rangE(ex.etat)){ ex.etat=m.etat; R.mesEtat++; } continue; } mesuresGardees.push(m); deja.add(cle(m)); R.mesAjout++; }
@@ -4488,7 +4496,7 @@ async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+
     await ajouterAuClasseur(nom,oct); const R=fusionner({...p, calquesPerso:[], modelesStructure:[]});
     if(!dejaLa && p.vue && p.vue.s>0){ const o=scene.origine; vue.s=p.vue.s; vue.tx=W/2-(p.vue.cx-o.x)*vue.s; vue.ty=H/2+(p.vue.cy-o.y)*vue.s; }
     enChargement=false; sauverPointsMaintenant(); sauverMesuresGardees(); Memoire.ecrire(cleResPlan(), reseaux); sauverReglagesCalques(); sauverEtat(); total+=R.total;
-    lignes.push('— '+nom+(dejaLa?' (fusion)':' (nouveau)')+' : '+R.ptsAjout.length+' point(s) ajouté(s)'+(R.ptsZ.length?', '+R.ptsZ.length+' Z complété(s)':'')+(R.ptsRenom.length?', '+R.ptsRenom.length+' renommé(s)':'')+', '+R.ptsIdem+' identique(s) · '+R.mesAjout+' mesure(s) · '+R.resAjout.length+' réseau(x)'); }
+    lignes.push('— '+nom+(dejaLa?' (fusion)':' (nouveau)')+' : '+R.ptsAjout.length+' point(s) ajouté(s)'+(R.ptsZ.length?', '+R.ptsZ.length+' Z complété(s)':'')+(R.ptsRenom.length?', '+R.ptsRenom.length+' renommé(s)':'')+', '+R.ptsIdem+' identique(s) · '+R.mesAjout+' mesure(s)'+(R.mesRemp?' ('+R.mesRemp+' ancienne(s) mesure(s) automatique(s) remplacée(s)'+(R.mesRepris?', vos changements repris sur '+R.mesRepris:'')+')':'')+' · '+R.resAjout.length+' réseau(x)'); }
   if(d.actif && classeur.plans.includes(d.actif) && (!scene||scene.nom!==d.actif)) await basculerPlan(d.actif);
   majComptesPerso(); majVisibles(); remplirSelectsCalques(); remplirCalques(); majTablePoints(); majPanneau(); demanderDessin(); majOnglets();
   lignes.push(total? '✓ Rien n\'a été perdu : tout ce qui manquait a été ajouté.' : '✓ Rien de nouveau : tout était déjà dans l\'appli.');

@@ -111,13 +111,18 @@ def main():
     na=0; sortieJson={}
     if pourAxes:
         k=mpp; m=lambda v: v/k
-        R=AX.centres_regards(pourRegards, m(0.4), m(2.2)) if pourRegards else []
+        BR=AX.boites_regards(pourRegards, m(0.4), m(2.2)) if pourRegards else []
+        R=[((b[0]+b[2])/2,(b[1]+b[3])/2) for b in BR]
         for nomc,ds in pourAxes.items():
             c0=ds[0].get('color') or ds[0].get('fill'); lay=calque(propre(nomc), c0)
-            S=AX.axes_morceaux(ds, m(1.5)); avecR=nomc in axesReg
+            avecR=nomc in axesReg
+            if avecR: ds=AX.hors_regards(ds, BR, m(0.10))
+            S=AX.axes_morceaux(ds, m(1.5))
             Ls=AX.chainer(S, m(1.2), R if avecR else (), m(0.9))
             Ls=[AX.simplifier(L, m(0.02)) for L in Ls]
+            Ls=[L for L in Ls if AX.longueur(L)*k>0.3]
             if avecR: Ls=[AX.accrocher_regards(L, R, m(1.6)) for L in Ls]
+            Ls=[M for L in Ls for M in AX.couper_demi_tours(L)]
             Ls=[L for L in Ls if AX.longueur(L)*k>0.3]
             sortieJson[nomc]=[[T(*q) for q in L] for L in Ls]
             for L in sortieJson[nomc]: msp.add_lwpolyline(L, dxfattribs={'layer':lay}); na+=1

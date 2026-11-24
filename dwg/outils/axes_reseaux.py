@@ -22,6 +22,25 @@ def _quads(dessins):
             q = it[0][1]; Q.append([(q.ul.x, q.ul.y), (q.ur.x, q.ur.y), (q.lr.x, q.lr.y), (q.ll.x, q.ll.y)])
     return Q
 
+def _polys(dessins):
+    """Polygones fermes de 6 a 12 traits (morceaux coudes) -> liste de sommets."""
+    Q = []
+    for d in dessins:
+        it = d['items']
+        if 6 <= len(it) <= 12 and len(it) % 2 == 0 and all(i[0] == 'l' for i in it):
+            P = [(i[1].x, i[1].y) for i in it]
+            if math.dist((it[-1][2].x, it[-1][2].y), P[0]) < 0.5: Q.append(P)
+    return Q
+
+def _axe_ruban(P):
+    """Axe d'un ruban (deux bords paralleles fermes par deux petits cotes)."""
+    n = len(P); E = [math.dist(P[i], P[(i + 1) % n]) for i in range(n)]
+    i = min(range(n), key=lambda k: E[k]); j = (i + n // 2) % n          # petits cotes opposes
+    A = [P[(i + 1 + k) % n] for k in range((j - i) % n)]                  # bord 1 : de la fin du cote i au debut du cote j
+    B = [P[(j + 1 + k) % n] for k in range((i - j) % n)][::-1]            # bord 2 dans le meme sens
+    if len(A) != len(B) or len(A) < 2: return None
+    return [_mil(a, b) for a, b in zip(A, B)]
+
 def _mil(a, b): return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
 def _cen(P): return (sum(p[0] for p in P) / 4, sum(p[1] for p in P) / 4)
 
@@ -44,7 +63,9 @@ def axes_morceaux(dessins, voisin_max):
                     if j == i: continue
                     d = math.dist(c, C[j])
                     if d < t and (best is None or d < best[0]): best = (d, j)
-        if best:
+        if max(la, lb) > 1.6 * min(la, lb):
+            S = A if la >= lb else B          # morceau allonge : l'axe est le grand cote
+        elif best:
             v = (C[best[1]][0] - c[0], C[best[1]][1] - c[1]); n = math.hypot(*v) or 1
             def cosv(S):
                 w = (S[1][0] - S[0][0], S[1][1] - S[0][1]); m = math.hypot(*w) or 1
@@ -52,7 +73,10 @@ def axes_morceaux(dessins, voisin_max):
             S = A if cosv(A) >= cosv(B) else B
         else:
             S = A if la >= lb else B
-        if math.dist(*S) > 1e-6: segs.append(S)
+        if math.dist(*S) > 1e-6: segs.append(list(S))
+    for P in _polys(dessins):
+        L = _axe_ruban(P)
+        if L and sum(math.dist(L[k], L[k + 1]) for k in range(len(L) - 1)) > 1e-6: segs.append(L)
     return segs
 
 def _angle(u, v):
@@ -66,8 +90,8 @@ def chainer(segs, ecart_max, regards=(), r_regard=0):
     n = len(segs); libre = [True] * n
     bouts = {}
     t = max(ecart_max, 1e-6)
-    for i, (a, b) in enumerate(segs):
-        for k, p in ((0, a), (1, b)): bouts.setdefault((int(p[0] // t), int(p[1] // t)), []).append((i, k))
+    for i, sg in enumerate(segs):
+        for k, p in ((0, sg[0]), (1, sg[-1])): bouts.setdefault((int(p[0] // t), int(p[1] // t)), []).append((i, k))
     def sur_regard(p, q):
         m = _mil(p, q)
         return any(math.dist(m, r) < r_regard for r in regards)
@@ -78,9 +102,9 @@ def chainer(segs, ecart_max, regards=(), r_regard=0):
             for dy in (-1, 0, 1):
                 for (j, k) in bouts.get((gx + dx, gy + dy), []):
                     if not libre[j]: continue
-                    q = segs[j][k]; d = math.dist(p, q)
+                    sg = segs[j]; q = sg[0] if k == 0 else sg[-1]; d = math.dist(p, q)
                     if d > ecart_max: continue
-                    o = segs[j][1 - k]; dj = (o[0] - q[0], o[1] - q[1])
+                    o = sg[1] if k == 0 else sg[-2]; dj = (o[0] - q[0], o[1] - q[1])
                     ang = _angle(dirp, dj)
                     lim = 60 if d < ecart_max * 0.35 else 30
                     if ang > lim: continue
@@ -92,15 +116,15 @@ def chainer(segs, ecart_max, regards=(), r_regard=0):
     lignes = []
     for i in range(n):
         if not libre[i]: continue
-        libre[i] = False; L = [segs[i][0], segs[i][1]]
+        libre[i] = False; L = list(segs[i])
         for sens in (1, 0):
             while True:
                 p, q = (L[-1], L[-2]) if sens else (L[0], L[1])
                 b = suivant(p, (p[0] - q[0], p[1] - q[1]))
                 if not b: break
                 _, j, k = b; libre[j] = False
-                a, o = segs[j][k], segs[j][1 - k]
-                pts = [a, o] if math.dist(a, p) > 1e-6 else [o]
+                sg = segs[j] if k == 0 else segs[j][::-1]
+                pts = sg if math.dist(sg[0], p) > 1e-6 else sg[1:]
                 if sens: L.extend(pts)
                 else: L[0:0] = pts[::-1]
         lignes.append(L)
@@ -120,6 +144,10 @@ def simplifier(L, tol):
 
 def centres_regards(dessins, tmin, tmax):
     """Centres des symboles de regard : boites des traits qui se touchent, taille entre tmin et tmax."""
+    return [((b[0] + b[2]) / 2, (b[1] + b[3]) / 2) for b in boites_regards(dessins, tmin, tmax)]
+
+def boites_regards(dessins, tmin, tmax):
+    """Boites [x0,y0,x1,y1] des symboles de regard."""
     B = []
     for d in dessins:
         r = d['rect']
@@ -138,11 +166,29 @@ def centres_regards(dessins, tmin, tmax):
     for i, b in enumerate(B):
         r = f(i); g = G.setdefault(r, [b[0], b[1], b[2], b[3]])
         g[0] = min(g[0], b[0]); g[1] = min(g[1], b[1]); g[2] = max(g[2], b[2]); g[3] = max(g[3], b[3])
-    C = []
-    for g in G.values():
-        w, h = g[2] - g[0], g[3] - g[1]
-        if tmin <= max(w, h) <= tmax: C.append(((g[0] + g[2]) / 2, (g[1] + g[3]) / 2))
-    return C
+    return [g for g in G.values() if tmin <= max(g[2] - g[0], g[3] - g[1]) <= tmax]
+
+def hors_regards(dessins, boites, marge):
+    """Retire les morceaux dont le centre tombe dans un regard (le symbole du regard est souvent
+    dessine sur le calque du tuyau : sinon il donne des allers-retours)."""
+    garde = []
+    for d in dessins:
+        r = d['rect']; cx, cy = (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2
+        if not any(b[0] - marge <= cx <= b[2] + marge and b[1] - marge <= cy <= b[3] + marge for b in boites):
+            garde.append(d)
+    return garde
+
+def couper_demi_tours(L, angle=110):
+    """Coupe une ligne la ou elle repart en arriere (securite)."""
+    res, cur = [], [L[0]]
+    for i in range(1, len(L)):
+        if len(cur) >= 2:
+            u = (cur[-1][0] - cur[-2][0], cur[-1][1] - cur[-2][1]); v = (L[i][0] - cur[-1][0], L[i][1] - cur[-1][1])
+            if _angle(u, v) > angle:
+                res.append(cur); cur = [cur[-1]]
+        cur.append(L[i])
+    res.append(cur)
+    return res
 
 def accrocher_regards(L, regards, dist):
     """Prolonge chaque bout de ligne jusqu'au centre du regard le plus proche (<= dist)."""
