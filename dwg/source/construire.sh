@@ -12,6 +12,7 @@ pages=1024
 b[k+4:k+7]=bytes([0x80|(pages&0x7f),0x80|((pages>>7)&0x7f),(pages>>14)&0x7f])
 open('build/reader.wasm','wb').write(b)
 PY
+cp node_modules/pdfjs-dist/legacy/build/pdf.min.mjs node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs build/
 python3 build.py
 cp build/Lecteur_DWG_chantier.html ../www/index.html
 echo "OK : dwg/www/index.html mis à jour"

@@ -238,6 +238,15 @@ table.xl td.sup{cursor:pointer}
 #pfEchelle{font-size:12px;color:#666;padding:2px 10px}
 #pfOutils{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid #eee;font-size:14px}
 #pfOutils input{height:34px;width:64px;border:1px solid #9a9a9a;border-radius:4px;padding:0 6px;font-size:15px;text-align:right}
+#pdfBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
+#pdfBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
+#pdfBoite h3{margin:0 0 8px;font-size:17px;color:#1f5fa8}
+#pdfBoite label{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:15px}
+#pdfBoite input[type=radio],#pdfBoite input[type=checkbox]{width:22px;height:22px;flex:none;margin:0}
+#pdfBoite input[type=text]{width:90px;height:34px;font-size:16px;text-align:right}
+#pdfBoite .lig{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#barreEchelle{position:fixed;left:6px;right:62px;top:94px;z-index:6;display:none;background:#fff8d6;border:1px solid #d9b100;border-radius:6px;padding:6px 8px;font-size:14px;align-items:center;gap:6px;flex-wrap:wrap}
+#barreEchelle input{width:80px;height:32px;font-size:16px;text-align:right}
 #exportBoite{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
 #exportBoite .boite{background:#fff;border:1px solid #999;border-radius:6px;max-width:520px;width:100%;padding:14px}
 #exportBoite h3{margin:0 0 8px;font-size:17px;color:#c2185b}
@@ -563,6 +572,19 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
   <div id="pfOutils">Pas <input id="pfPas" value="1" inputmode="decimal"> m · Z = <span class="seg"><button id="pfZfe" class="on">Fil d'eau</button><button id="pfZd">Dessus</button></span> Préfixe <input id="pfPre" value="F" style="width:46px;text-align:left"> <button class="btn prim" id="pfCreer">⟋ Créer les points</button></div>
   <div style="flex:1;overflow:auto"><table class="xl compact"><thead><tr><th>Regard</th><th style="text-align:right">Abscisse</th><th style="text-align:right">Dessus</th><th style="text-align:right">FE</th><th style="text-align:right">Prof.</th></tr></thead><tbody id="tbProfil"></tbody></table></div>
 </div>
+<div id="pdfBoite"><div class="boite">
+  <h3>📄 Convertir un PDF en plan DXF</h3>
+  <div id="pdfInfo" style="font-size:13px;color:#444"></div>
+  <label id="pdfPageLigne" style="display:none">Page : <select id="pdfPage" style="height:34px;font-size:15px"></select></label>
+  <div style="font-size:14px;font-weight:bold;margin-top:10px">Échelle du plan :</div>
+  <label><input type="radio" name="pdfEch" id="pdfEchConnue" checked> Échelle écrite sur le plan : 1 / <input type="text" id="pdfEchVal" inputmode="decimal" value="200"></label>
+  <label><input type="radio" name="pdfEch" id="pdfEchCote"> Je ne la connais pas : je mesurerai une cote connue</label>
+  <label><input type="checkbox" id="pdfLeger" checked> Léger (enlève les textures grises, plan plus rapide)</label>
+  <div style="font-size:12px;color:#666">Le PDF d'origine n'est pas modifié. Le DXF est enregistré et ouvert dans un nouvel onglet.</div>
+  <div class="lig"><button class="btn prim" id="pdfOk">✓ Convertir</button><button class="btn" id="pdfAnnuler">Annuler</button></div>
+  <div id="pdfResultat" style="margin-top:8px;font-size:14px"></div>
+</div></div>
+<div id="barreEchelle"><b>⚖ Échelle à régler :</b> mesurez une cote connue avec 📏 Mesure (2 points), puis tapez sa vraie longueur <input id="echVraie" inputmode="decimal" placeholder="m"> m <button class="btn petitb" id="echOk">✓ Appliquer</button><span id="echInfo" style="color:#a11"></span></div>
 <div id="exportBoite"><div class="boite">
   <h3>Exporter pour la TS11</h3>
   <div style="font-size:13px;color:#444;margin-bottom:4px">Nom des fichiers (sans accent ni espace) :</div>
@@ -619,7 +641,7 @@ tr:not(.masque) .coche::after{content:"";position:absolute;left:6px;top:1px;widt
 <script>/*__LIBJS__*/</script>
 <script>
 const WASM_GZ_B64 = "__WASM__";
-const VERSION = "Axe – v2";
+const VERSION = "PDF – v1";
 </script>
 <script>
 "use strict";
@@ -3906,6 +3928,7 @@ function brancherGarde(){
 // ================= Aide =================
 const AIDE=[
  {r:'Plan', t:'Ouvrir un plan (DWG, DXF)', txt:'📂 en haut à gauche, puis choisissez le fichier. Le plan s\'ouvre tel quel, coordonnées réelles. Il est gardé : il se rouvre tout seul, en moins d\'une seconde la fois suivante.', mots:'ouvrir fichier dwg dxf', go:()=>$('fichier').click(), sansPlan:true},
+ {r:'Plan', t:'Ouvrir un PDF (conversion en DXF)', txt:'📂 puis choisissez un PDF de plan (pas un scan). Indiquez l\'échelle écrite sur le plan (ex. 200 pour 1/200) ou « je mesurerai une cote connue ». Case Léger : enlève les textures grises. Le DXF est enregistré (Téléchargements) et ouvert dans un nouvel onglet ; le PDF n\'est pas modifié. Échelle inconnue : mesurez une cote connue avec 📏 (2 points), tapez sa vraie longueur dans la barre jaune, ✓ Appliquer. Les coordonnées ne sont pas celles du terrain : 📐 Caler avant d\'implanter.', mots:'pdf convertir conversion dxf echelle cote', go:()=>$('fichier').click(), sansPlan:true},
  {r:'Plan', t:'Classeur : plusieurs plans ouverts', txt:'Chaque plan ouvert devient un onglet sous la barre (＋ pour en ajouter, ✕ pour le retirer). 3 plans restent en mémoire vive.', mots:'onglet classeur plusieurs'},
  {r:'Plan', t:'Calques : afficher / masquer', txt:'☰ Calques : cochez ou décochez. Appui sur un nom → fiche du calque : voir seul, geler, verrouiller, supprimer.', mots:'calque masquer geler verrouiller', go:()=>$('calques').classList.add('ouvert')},
  {r:'Plan', t:'Œil 👁 : à quel calque est ce trait ?', txt:'Glissez le bouton 👁 sur le plan : le nom du calque sous le doigt s\'affiche.', mots:'oeil calque trait'},
@@ -4199,6 +4222,148 @@ async function ouvrirClasseurFichier(nomFichier,d){ const lignes=['Classeur : '+
 
 // ================= Ouverture d'un fichier =================
 const $=id=>document.getElementById(id);
+// ================= PDF → DXF (pdf.js intégré, sans internet) =================
+const PDFJS_GZ_B64="__PDFJS__", PDFWK_GZ_B64="__PDFWORKER__";
+let pdfjsPromesse=null;
+async function dezipB64(b64){ const bin=atob(b64), gz=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
+  return new Uint8Array(await new Response(new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()); }
+function chargerPdfjs(){ if(!pdfjsPromesse) pdfjsPromesse=(async()=>{ const lib=await dezipB64(PDFJS_GZ_B64), wk=await dezipB64(PDFWK_GZ_B64);
+    const uL=URL.createObjectURL(new Blob([lib],{type:'text/javascript'})), uW=URL.createObjectURL(new Blob([wk],{type:'text/javascript'}));
+    const m=await import(uL); m.GlobalWorkerOptions.workerSrc=uW; return m; })().catch(e=>{ pdfjsPromesse=null; throw e; }); return pdfjsPromesse; }
+const estPdf=o=>o.length>4 && o[0]===0x25 && o[1]===0x50 && o[2]===0x44 && o[3]===0x46; // %PDF
+// Noms des calques (OCG) : d'abord ceux déclarés dans le PDF, sinon lus directement dans le fichier
+function nomsOcgBruts(octets){ const R=new Map(); let t; try{ t=new TextDecoder('latin1').decode(octets); }catch(e){ return R; }
+  const re=/(\d+)\s+(\d+)\s+obj\s*<<([\s\S]{0,600}?)>>\s*endobj/g; let m;
+  while((m=re.exec(t))){ const d=m[3]; if(!/\/Type\s*\/OCG\b/.test(d)) continue; const n=d.match(/\/Name\s*(<([0-9A-Fa-f\s]+)>|\(((?:\\.|[^\\)])*)\))/); if(!n) continue;
+    let nom=''; if(n[2]){ const h=n[2].replace(/\s/g,''); const o=[]; for(let i=0;i<h.length;i+=2) o.push(parseInt(h.substr(i,2),16));
+      if(o[0]===0xfe&&o[1]===0xff){ for(let i=2;i+1<o.length;i+=2) nom+=String.fromCharCode((o[i]<<8)|o[i+1]); } else nom=String.fromCharCode(...o); }
+    else nom=n[3].replace(/\\(.)/g,'$1');
+    R.set(m[1]+'R', nom); }
+  return R; }
+const nomCalqueDxf=n=>String(n).normalize('NFC').replace(/[<>\/\\":;?*|=`\x00-\x1f]/g,'_').trim().slice(0,100)||'0';
+function nomCouleurPdf(c){ const r=c[0],g=c[1],b=c[2], N={'0,0,0':'NOIR','255,0,0':'ROUGE','0,0,255':'BLEU','0,255,0':'VERT','0,255,255':'CYAN','255,0,255':'MAGENTA','255,255,0':'JAUNE'};
+  if(N[r+','+g+','+b]) return N[r+','+g+','+b]; if(Math.abs(r-g)<8&&Math.abs(g-b)<8) return 'GRIS_'+Math.round(r/2.55);
+  return 'C_'+[r,g,b].map(v=>('0'+v.toString(16)).slice(-2)).join('').toUpperCase(); }
+function aciProche(c){ const A={1:[255,0,0],2:[255,255,0],3:[0,255,0],4:[0,255,255],5:[0,0,255],6:[255,0,255],7:[0,0,0],8:[128,128,128],9:[192,192,192]}; let k=7,dm=1e9;
+  for(const i in A){ const a=A[i], d=(a[0]-c[0])**2+(a[1]-c[1])**2+(a[2]-c[2])**2; if(d<dm){ dm=d; k=+i; } } return k; }
+async function ouvrirDocPdf(octets){ const pdfjs=await chargerPdfjs(); return {pdfjs, doc: await pdfjs.getDocument({data:octets.slice(), isEvalSupported:false, disableFontFace:true, verbosity:0}).promise}; }
+let pdfArret=false;
+// Convertit une page en texte DXF. mpp = mètres par point PDF.
+async function pdfEnDxf(octets, numPage, mpp, leger){
+  const {pdfjs, doc}=await ouvrirDocPdf(octets), O=pdfjs.OPS;
+  const noms=nomsOcgBruts(octets);
+  try{ const oc=await doc.getOptionalContentConfig(); for(const [id,g] of oc) if(g&&g.name&&!noms.has(id)) noms.set(id,g.name); }catch(e){}
+  const page=await doc.getPage(numPage), vp=page.getViewport({scale:1});
+  const T0=mul([mpp,0,0,-mpp,0,vp.height*mpp], vp.transform);
+  voile('Lecture du PDF…'); await attendreAffichage();
+  const ol=await page.getOperatorList(); const F=ol.fnArray, A=ol.argsArray;
+  const calques=new Map(), L=[]; const f4=v=>(Math.round(v*1e4)/1e4).toString();
+  const cal=(nom,c)=>{ nom=nomCalqueDxf(nom); if(!calques.has(nom)) calques.set(nom,c); return nom; };
+  const hexC=c=>(c[0]<<16)|(c[1]<<8)|c[2];
+  let ctm=T0, pile=[], trait=[0,0,0], fond=[0,0,0], sous=[], cour=null, px=0, py=0, mc=[], nb=0, gris=0, images=0;
+  const calqueActuel=c=>{ for(let i=mc.length-1;i>=0;i--) if(mc[i]) return mc[i]; return nomCouleurPdf(c); };
+  const pt=(x,y)=>[ctm[0]*x+ctm[2]*y+ctm[4], ctm[1]*x+ctm[3]*y+ctm[5]];
+  const nouveau=(x,y)=>{ cour={p:[...pt(x,y)], ferme:false, x0:x, y0:y}; sous.push(cour); px=x; py=y; };
+  const bez=(x1,y1,x2,y2,x3,y3)=>{ const x0=px,y0=py; for(let k=1;k<=8;k++){ const t=k/8, u=1-t, a=u*u*u, b=3*u*u*t, c=3*u*t*t, d=t*t*t; cour.p.push(...pt(a*x0+b*x1+c*x2+d*x3, a*y0+b*y1+c*y2+d*y3)); } px=x3; py=y3; };
+  const estGris=c=>Math.abs(c[0]-c[1])<8&&Math.abs(c[1]-c[2])<8&&c[0]>=140&&c[0]<=247;
+  const peindre=(trace,remplit,ferme)=>{
+    if(trace){ if(leger&&estGris(trait)) gris++; else { const lay=cal(calqueActuel(trait),trait);
+      for(const s of sous){ if(s.p.length<4) continue; const n=s.p.length/2;
+        L.push('0','LWPOLYLINE','8',lay,'420',String(hexC(trait)),'90',String(n),'70',(s.ferme||ferme)?'1':'0');
+        for(let i=0;i<s.p.length;i+=2) L.push('10',f4(s.p[i]),'20',f4(s.p[i+1])); nb++; } } }
+    if(remplit && !(fond[0]>=250&&fond[1]>=250&&fond[2]>=250) && !(leger&&estGris(fond))){ const ch=sous.filter(s=>s.p.length>=6);
+      if(ch.length){ const lay=cal(calqueActuel(fond),fond);
+        L.push('0','HATCH','8',lay,'420',String(hexC(fond)),'10','0','20','0','30','0','210','0','220','0','230','1','2','SOLID','70','1','71','0','91',String(ch.length));
+        for(const s of ch){ L.push('92','2','72','0','73','1','93',String(s.p.length/2)); for(let i=0;i<s.p.length;i+=2) L.push('10',f4(s.p[i]),'20',f4(s.p[i+1])); L.push('97','0'); }
+        L.push('75','0','76','1','98','0'); nb++; } }
+    sous=[]; cour=null; };
+  for(let i=0;i<F.length;i++){ const f=F[i], a=A[i];
+    if((i&16383)===0){ voile('Conversion du PDF : '+Math.round(100*i/F.length)+' %'); await attendreAffichage(); if(pdfArret) throw new Error('Conversion arrêtée.'); }
+    switch(f){
+      case O.save: pile.push([ctm,trait,fond]); break;
+      case O.restore: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
+      case O.transform: ctm=mul(ctm,a); break;
+      case O.paintFormXObjectBegin: pile.push([ctm,trait,fond]); if(a&&a[0]) ctm=mul(ctm,a[0]); break;
+      case O.paintFormXObjectEnd: if(pile.length) [ctm,trait,fond]=pile.pop(); break;
+      case O.setStrokeRGBColor: trait=[a[0],a[1],a[2]]; break;
+      case O.setFillRGBColor: fond=[a[0],a[1],a[2]]; break;
+      case O.beginMarkedContent: mc.push(null); break;
+      case O.beginMarkedContentProps: { const pr=a&&a[1]; mc.push(a&&a[0]==='OC'&&pr&&pr.type==='OCG'? (noms.get(pr.id)||null) : null); break; }
+      case O.endMarkedContent: mc.pop(); break;
+      case O.constructPath: { const ops=a[0], c=a[1]; let k=0;
+        for(const op of ops){
+          if(op===O.moveTo){ nouveau(c[k],c[k+1]); k+=2; }
+          else if(op===O.lineTo){ if(!cour) nouveau(px,py); cour.p.push(...pt(c[k],c[k+1])); px=c[k]; py=c[k+1]; k+=2; }
+          else if(op===O.curveTo){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+4],c[k+5]); k+=6; }
+          else if(op===O.curveTo2){ if(!cour) nouveau(px,py); bez(px,py,c[k],c[k+1],c[k+2],c[k+3]); k+=4; }
+          else if(op===O.curveTo3){ if(!cour) nouveau(px,py); bez(c[k],c[k+1],c[k+2],c[k+3],c[k+2],c[k+3]); k+=4; }
+          else if(op===O.rectangle){ const x=c[k],y=c[k+1],w=c[k+2],h=c[k+3]; k+=4; nouveau(x,y); cour.p.push(...pt(x+w,y),...pt(x+w,y+h),...pt(x,y+h)); cour.ferme=true; px=x; py=y; }
+          else if(op===O.closePath){ if(cour){ cour.ferme=true; px=cour.x0; py=cour.y0; } }
+        } break; }
+      case O.stroke: peindre(true,false,false); break;
+      case O.closeStroke: peindre(true,false,true); break;
+      case O.fill: case O.eoFill: peindre(false,true,true); break;
+      case O.fillStroke: case O.eoFillStroke: peindre(true,true,false); break;
+      case O.closeFillStroke: case O.closeEOFillStroke: peindre(true,true,true); break;
+      case O.endPath: sous=[]; cour=null; break;
+      case O.paintImageXObject: case O.paintInlineImageXObject: case O.paintImageMaskXObject: images++; break;
+    } }
+  page.cleanup(); try{ await doc.destroy(); }catch(e){}
+  const H=['0','SECTION','2','HEADER','9','$ACADVER','1','AC1015','9','$INSUNITS','70','6','0','ENDSEC',
+    '0','SECTION','2','TABLES','0','TABLE','2','LAYER','70',String(calques.size+1),'0','LAYER','2','0','70','0','62','7','6','CONTINUOUS'];
+  for(const [n,c] of calques) H.push('0','LAYER','2',n,'70','0','62',String(aciProche(c)),'420',String(hexC(c)),'6','CONTINUOUS');
+  H.push('0','ENDTAB','0','ENDSEC','0','SECTION','2','ENTITIES');
+  const texte=H.concat(L,['0','ENDSEC','0','EOF']).join('\r\n')+'\r\n';
+  return {texte, nb, calques:calques.size, gris, images};
+}
+// Mise à l'échelle d'un DXF fait par l'appli : toutes les coordonnées (codes 10/20/11/21) × k
+function dxfAEchelle(texte,k){ const l=texte.split(/\r?\n/); for(let i=0;i+1<l.length;i+=2){ const c=l[i].trim(); if(c==='10'||c==='20'||c==='11'||c==='21'){ const v=parseFloat(l[i+1]); if(Number.isFinite(v)) l[i+1]=(Math.round(v*k*1e4)/1e4).toString(); } } return l.join('\r\n'); }
+let pdfEnCours=null;
+async function ouvrirPdf(nomPdf, octets){
+  voile('Préparation du lecteur PDF…'); await attendreAffichage();
+  let nbPages=1;
+  try{ const {doc}=await ouvrirDocPdf(octets); nbPages=doc.numPages; try{ await doc.destroy(); }catch(e){} }
+  catch(e){ finVoile(); montrerErreur(nomPdf, new Error('Le PDF n\'a pas pu être lu ('+((e&&e.message)||e)+').')); return; }
+  finVoile(); pdfEnCours={nomPdf, octets};
+  $('pdfInfo').textContent='« '+nomPdf+' » — '+nbPages+' page'+(nbPages>1?'s':'');
+  const sp=$('pdfPage'); sp.replaceChildren(); for(let i=1;i<=nbPages;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; sp.appendChild(o); }
+  $('pdfPageLigne').style.display=nbPages>1?'':'none'; $('pdfResultat').textContent='';
+  try{ const r=await Memoire.lire('pdfReglages'); if(r){ $('pdfEchVal').value=r.ech||'200'; $('pdfLeger').checked=r.leger!==false; } }catch(e){}
+  $('pdfBoite').style.display='flex'; }
+$('pdfAnnuler').onclick=()=>{ $('pdfBoite').style.display='none'; pdfEnCours=null; };
+$('pdfEchVal').onfocus=()=>{ $('pdfEchConnue').checked=true; };
+$('pdfOk').onclick=async()=>{ if(!pdfEnCours) return;
+  const connue=$('pdfEchConnue').checked, E=lireNombre($('pdfEchVal').value);
+  if(connue && !(E>0)){ $('pdfResultat').innerHTML='<b style="color:#a11">⚠ Tapez l\'échelle (ex. 200 pour 1/200).</b>'; return; }
+  const leger=$('pdfLeger').checked, page=+$('pdfPage').value||1; Memoire.ecrire('pdfReglages',{ech:$('pdfEchVal').value, leger});
+  const mpp=0.0254/72*(connue?E:100);
+  $('pdfBoite').style.display='none'; pdfArret=false;
+  let r; try{ r=await pdfEnDxf(pdfEnCours.octets, page, mpp, leger); }catch(e){ finVoile(); montrerErreur(pdfEnCours.nomPdf, e); return; }
+  if(!r.nb){ finVoile(); montrerErreur(pdfEnCours.nomPdf, new Error(r.images?'Ce PDF ne contient que des images (plan scanné) : il n\'y a pas de traits à lire. Il faut le PDF exporté depuis le logiciel de dessin, ou le DWG.':'Ce PDF ne contient aucun trait.')); return; }
+  let base=pdfEnCours.nomPdf.replace(/\.pdf$/i,'')+(page>1?'_p'+page:''), nom=base+'.dxf', k=2; while(classeur.plans.includes(nom)) nom=base+'_'+(k++)+'.dxf';
+  const oct=new TextEncoder().encode(r.texte);
+  enregistrerDxfConverti(nom, r.texte);
+  if(scene) quitterPlanCourant();
+  const ok=await ouvrirOctets(nom, oct, null);
+  if(ok){ await ajouterAuClasseur(nom, oct); if(!connue){ await Memoire.ecrire('echelleAFaire:'+nom, true); } majBarreEchelle();
+    $('etat').textContent='✓ PDF converti : '+r.nb+' objets, '+r.calques+' calque(s)'+(r.gris?', '+r.gris+' traits gris enlevés':'')+(r.images?', '+r.images+' image(s) non lue(s)':'')+(connue?' — échelle 1/'+E:' — échelle à régler')+'.'; }
+  pdfEnCours=null; };
+function enregistrerDxfConverti(nom, texte){
+  try{ if(APPLI && APPLI.enregistrer){ APPLI.enregistrer(nom, texte, 'application/dxf'); return; } }catch(e){}
+  telecharger(nom, texte, 'application/dxf'); }
+async function majBarreEchelle(){ const b=$('barreEchelle'); let a=false; try{ a=!!(scene && await Memoire.lire('echelleAFaire:'+scene.nom)); }catch(e){} b.style.display=a?'flex':'none'; if(a) $('echInfo').textContent=''; }
+$('echOk').onclick=async()=>{ if(!scene) return; const nom=scene.nom, vraie=lireNombre($('echVraie').value);
+  const P=mesure.pts; if(mesure.mode!=='dist'||P.length<2){ $('echInfo').textContent=' ⚠ Mesurez d\'abord la cote avec 📏 (2 points).'; return; }
+  const d=Math.hypot(P[1].x-P[0].x,P[1].y-P[0].y); if(!(vraie>0)){ $('echInfo').textContent=' ⚠ Tapez la vraie longueur.'; return; } if(!(d>0)) return;
+  const k=vraie/d, f=await Memoire.lire('fichier:'+nom); if(!f||!f.octets) return;
+  voile('Mise à l\'échelle…'); await attendreAffichage();
+  const texte=dxfAEchelle(new TextDecoder().decode(new Uint8Array(f.octets)), k), oct=new TextEncoder().encode(texte);
+  for(const p of pointsExp){ p.x*=k; p.y*=k; } sauverPointsMaintenant();
+  mesure={mode:'dist',pts:[]}; cacheScenes.delete(nom); await Memoire.effacer?.('prepare:'+nom); await Memoire.effacer?.('etat:'+nom);
+  await Memoire.ecrire('fichier:'+nom,{nom, octets:oct.slice().buffer, date:Date.now()}); await Memoire.ecrire('echelleAFaire:'+nom, false);
+  scene=null; const ok=await ouvrirOctets(nom, oct, null); enregistrerDxfConverti(nom, texte);
+  $('echVraie').value=''; majBarreEchelle(); if(ok) $('etat').textContent='✓ Échelle appliquée (× '+fr(k,5)+') : la cote mesure maintenant '+fr(vraie,2)+' m. DXF enregistré de nouveau.'; };
+
 $('bOuvrir').onclick=()=>{ $('fichier').value=''; $('fichier').click(); };
 $('fichier').onchange=ev=>{ const f=ev.target.files[0]; if(f) ouvrir(f); };
 function voile(txt){ $('voileTxt').textContent=txt; $('voile').style.display='flex'; }
@@ -4209,6 +4374,7 @@ async function ouvrir(f){
   let octets;
   try{ octets=new Uint8Array(await f.arrayBuffer()); }catch(err){ finVoile(); montrerErreur(f.name,err); return; }
   if(estSauvegarde(octets)){ finVoile(); await ouvrirSauvegarde(f.name, octets); return; }
+  if(estPdf(octets)){ await ouvrirPdf(f.name, octets); return; }
   if(scene && scene.nom!==f.name) quitterPlanCourant();
   const ok=await ouvrirOctets(f.name, octets, (await Memoire.lire('etat:'+f.name))||null);
   if(ok){ Memoire.ecrire('plan',{nom:f.name, octets:octets.slice().buffer, date:Date.now()}); await ajouterAuClasseur(f.name,octets); }
@@ -4261,7 +4427,7 @@ async function ouvrirOctets(nom, octets, etat){
     remplirCalques(); majPanneau();
     const nbCal=[...scene.calques.values()].filter(c=>c.nb>0).length;
     $('etat').textContent=`${nom} · ${scene.version} · ${scene.nbObjets} objets · ${nbCal} calques · ${((performance.now()-t0)/1000).toFixed(1)} s${scene.prepare?' (plan préparé)':''}`;
-    finVoile(); majOnglets();
+    finVoile(); majOnglets(); majBarreEchelle();
     return true;
   }catch(err){
     finVoile();
