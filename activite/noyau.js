@@ -418,7 +418,7 @@ function recParDebut(base, debut) { for (const x of paires(base.courses)) if (x.
 function fantPour(base, act) { const d = fantLire(base).refs[act], R = d ? recParDebut(base, d) : null; return R && gpsUtile(R) ? R : null; }
 /* Le fantôme à donner au service. G = le résumé GPS recalculé depuis le tracé complet quand il existe, sinon celui gardé dans la séance. */
 function fantFabriquer(R, G) { const recalcule = !!G && G !== R.gps; G = G || R.gps; if (!G || !(G.premier >= 0) || !Array.isArray(G.prof) || G.prof.length < 3 || !(G.dist >= 50) || G.duree - G.premier < 30) return null;
-  return { ref: R.debut, nom: (actInfo(R.act).nom + " du " + dateHeure(R.debut)).replace(/["\\]/g, ""), premier: G.premier, duree: G.duree, dist: G.dist, pas: G.pas || 5, recalcule, prof: G.prof.slice() }; }
+  return { ref: R.debut, nom: (actInfo(R.act).nom + " du " + dateHeure(R.debut)).replace(/["\\]/g, ""), premier: G.premier, duree: G.duree, dist: G.dist, pas: G.pas || 5, recalcule, prof: G.prof.map(v => Math.round(Number(v) || 0)) }; }
 /* mêmes calculs que Fantome.java */
 function fantBrute(F, s) { const p = F.prof, x = s / F.pas, i = Math.floor(x); if (i < 0) return p[0]; if (i >= p.length - 1) { const t0 = (p.length - 1) * F.pas, reste = F.duree - t0; return reste > 0 && s < F.duree ? p[p.length - 1] + (F.dist - p[p.length - 1]) * (s - t0) / reste : F.dist; } return p[i] + (p[i + 1] - p[i]) * (x - i); }
 const fantTotal = (F) => F.dist, fantTemps = (F) => Math.max(0, F.duree - F.premier);

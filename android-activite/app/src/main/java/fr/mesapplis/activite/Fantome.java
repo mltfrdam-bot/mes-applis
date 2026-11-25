@@ -33,7 +33,7 @@ final class Fantome {
             if (b < 0) return null;
             String[] x = json.substring(a + 8, b).split(",");
             int[] prof = new int[x.length];
-            for (int i = 0; i < x.length; i++) prof[i] = Integer.parseInt(x[i].trim());
+            for (int i = 0; i < x.length; i++) prof[i] = (int) Math.round(Double.parseDouble(x[i].trim()));   // une sortie de montre (.fit) donne des mètres à virgule
             int pas = (int) nombre(json, "pas", 5), premier = (int) Math.max(0, nombre(json, "premier", 0)), duree = (int) nombre(json, "duree", (prof.length - 1) * pas), dist = (int) nombre(json, "dist", prof[prof.length - 1]);
             if (prof.length < 3 || pas < 1 || dist < 50 || duree - premier < 30) return null;
             return new Fantome((long) nombre(json, "ref", 0), texte(json, "nom"), premier, duree, dist, pas, prof, json);
