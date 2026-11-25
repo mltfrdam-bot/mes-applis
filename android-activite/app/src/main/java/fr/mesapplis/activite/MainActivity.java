@@ -72,6 +72,37 @@ import java.util.regex.Pattern;
  */
 public class MainActivity extends Activity {
     LienManettes manTest;
+    private android.speech.tts.TextToSpeech voixTest; private boolean voixTestPrete = false; private String voixTestAttente = null;
+    private android.media.ToneGenerator bipTest;
+
+    /** 🎮 Essai : bip (si choisi) et exemple de ce que la voix dira pendant le footing. */
+    void essaiBouton(String nom) {
+        org.json.JSONObject c; try { c = new org.json.JSONObject(getSharedPreferences("reglages", MODE_PRIVATE).getString("manettes", "{}")); } catch (Exception e) { c = new org.json.JSONObject(); }
+        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "tour" : "rien";
+        String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
+        if ("rien".equals(action)) return;
+        if (c.optBoolean("bip", false)) { try { if (bipTest == null) bipTest = new android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 90); bipTest.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {} }
+        String t;
+        switch (action) {
+            case "boisson": t = "Exemple. Boisson notée : " + (c.optInt("ml", 150) / 10) + " centilitres. Pendant la course, juste une vibration."; break;
+            case "fantome": t = "Exemple. 25 mètres d'avance sur le fantôme. 3,2 kilomètres, allure 6 minutes 10."; break;
+            case "etat": t = "Exemple. 21 minutes 30. 3,2 kilomètres, allure 6 minutes 10. Cœur 142, zone 3."; break;
+            case "conseil": t = "Exemple. Reste 1 kilomètre, 8 secondes de retard. Accélère : vise 5 minutes 52 au kilomètre."; break;
+            case "tour": t = "Exemple. Tour noté. Pendant la course, juste une vibration."; break;
+            default: t = null;
+        }
+        if (t == null) return;
+        if (voixTest == null) {
+            voixTestAttente = t;
+            voixTest = new android.speech.tts.TextToSpeech(this, etat -> {
+                if (etat != android.speech.tts.TextToSpeech.SUCCESS || voixTest == null) return;
+                try { voixTest.setLanguage(java.util.Locale.FRANCE); voixTest.setSpeechRate(1.1f); } catch (Exception ignored) {}
+                voixTestPrete = true;
+                if (voixTestAttente != null) { voixTest.speak(voixTestAttente, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "essai"); voixTestAttente = null; }
+            });
+        } else if (voixTestPrete) voixTest.speak(t, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "essai");
+        else voixTestAttente = t;
+    }
 
     private static final int CHOIX_FICHIER = 41;
     private static final int CHOIX_CARNET = 42;
@@ -774,7 +805,7 @@ public class MainActivity extends Activity {
             if (marche) {
                 if (!LienH10.droit(MainActivity.this)) { btDemander(); return "{\"droit\":false}"; }
                 if (manTest == null) manTest = new LienManettes(MainActivity.this, new LienManettes.Ecoute() {
-                    @Override public void bouton(String nom) { runOnUiThread(() -> { if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui(" + Json.texte(nom) + ")", null); }); }
+                    @Override public void bouton(String nom) { runOnUiThread(() -> { essaiBouton(nom); if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui(" + Json.texte(nom) + ")", null); }); }
                     @Override public void etatManettesChange() { }
                 });
                 manTest.demarrer();
@@ -929,6 +960,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         try { if (manTest != null) manTest.arreter(); } catch (Exception ignored) {}
+        try { if (voixTest != null) voixTest.shutdown(); if (bipTest != null) bipTest.release(); } catch (Exception ignored) {}
         if (voix != null) voix.shutdown();
         try { if (son != null) son.release(); } catch (Exception ignored) {}
         super.onDestroy();

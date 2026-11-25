@@ -558,6 +558,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "tour" : "rien";
         String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
         long now = System.currentTimeMillis();
+        if (c.optBoolean("bip", false) && !"rien".equals(action)) { try { if (son != null) son.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {} }
         switch (action) {
             case "boisson": {
                 int ml = c.optInt("ml", 150); String type = c.optString("gourde", "eau"); double su = c.optDouble("s", 0), sl = c.optDouble("sl", 0);
