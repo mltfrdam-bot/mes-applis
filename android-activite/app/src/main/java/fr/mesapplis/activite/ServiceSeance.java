@@ -436,8 +436,18 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         return parcours.substring(0, parcours.length() - 1) + ",\"fantome\":" + f.json() + "}";
     }
 
+    /** 🔧 Pourquoi le fantôme est (ou n'est pas) chargé : affiché dans le détail de la séance et dit par la voix. */
+    private volatile String fantomeDiag = "";
+
     private void chargerFantome() {
         fantome = lireFantome(dossier);
+        try {
+            File ff = new File(dossier, FANTOME);
+            if (fantome != null) fantomeDiag = "fantôme chargé : " + fantome.nom + ", " + fantome.dist + " m en " + fantome.temps() + " s";
+            else if (!ff.exists()) fantomeDiag = "aucun fichier de fantôme (pas de fantôme choisi pour cette activité)";
+            else if (ff.length() < 20) fantomeDiag = "fichier de fantôme vide (" + ff.length() + " octets) : pas de fantôme choisi, ou fantôme sans tracé GPS";
+            else { byte[] b = new byte[(int) Math.min(160, ff.length())]; try (FileInputStream in = new FileInputStream(ff)) { in.read(b); } fantomeDiag = "fichier de fantôme illisible (" + ff.length() + " octets) : " + new String(b, StandardCharsets.UTF_8).replace("\"", "'"); }
+        } catch (Exception e) { fantomeDiag = "erreur en lisant le fantôme : " + e; }
         annonceRang = -1;
         fantomeArriveDit = false;
         finDits.clear();
@@ -616,7 +626,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         if (g == null || !g.aPosition()) return "Pas de GPS pour l'instant.";
         double sec = (System.currentTimeMillis() - g.debut) / 1000.0 - g.premier(), d = g.distance();
         String base = km(d) + ", allure " + allure(sec / Math.max(0.05, d / 1000.0)) + ".";
-        if (f == null) return "Pas de fantôme. " + base;
+        if (f == null) return "Pas de fantôme : " + (fantomeDiag.startsWith("aucun") ? "aucun fantôme choisi." : fantomeDiag.startsWith("fichier de fantôme vide") ? "fantôme vide." : "fantôme illisible.") + " " + base;
         return Fantome.phrase(f.ecartM(sec, d), f.ecartS(sec, d)) + " " + base;
     }
 
@@ -835,6 +845,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         sb.append(",\"acc\":{\"present\":").append(lien.pmdPresent()).append(",\"actif\":").append(lien.accActif()).append(",\"taux\":").append(accTaux)
           .append(",\"erreur\":").append(Json.texte(lien.accErreur())).append('}');
         if (manettes != null) sb.append(",\"man\":").append(manettes.etatJson());
+        sb.append(",\"fdiag\":").append(Json.texte(fantomeDiag));
         sb.append(",\"imp\":{\"seuil\":").append(suivi.seuil).append(",\"rearme\":").append(suivi.rearme).append(",\"bip\":").append(suivi.bip).append('}');
         sb.append(",\"dernier\":");
         if (suivi.dernierM > 0) sb.append("{\"m\":").append(Math.round(suivi.dernierM)).append(",\"compte\":").append(suivi.dernierM > suivi.seuil).append('}'); else sb.append("null");

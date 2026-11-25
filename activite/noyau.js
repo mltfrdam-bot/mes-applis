@@ -806,6 +806,7 @@ function ravitoDetail(T, evts, R, mlH) { if (!evts.length) return; const st = sc
     if (R && R.debut) { const sec = ((R.l || []).length ? R.l[R.l.length - 1][0] : 0); if (sec > 0) T.push("Eau par heure : " + Math.round(o.eau / (sec / 3600)) + " ml/h (objectif " + (mlH || 700) + ")"); } }
   T.push("Heure | Quoi | Score à ce moment | Total bu / sucre");
   let cum = []; evts.forEach(e => { if (e.k === "match") { T.push(h(e.ts) + " | début du match contre " + (e.adv || "?") + " | | "); return; } if (e.k === "set" || e.k === "stb") { T.push(h(e.ts) + " | " + (e.k === "set" ? "set suivant" : "super tie-break") + " | " + scoreA(st, e.ts) + " | "); return; }
+    if (e.k === "diag") { T.push(h(e.ts) + " | 🔧 " + e.t + " | | "); return; }
     cum.push(e); const R0 = RAVITO[e.k], tot = ravitoTotaux(cum);
     if (e.k === "jeu") { T.push(h(e.ts) + " | jeu " + (e.qui ? (st ? st.adv : "adversaire") : (st ? st.moi : "moi")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); return; }
     if (R0) T.push(h(e.ts) + " | " + R0.icone + " " + R0.nom.toLowerCase() + " " + (R0.unite === "ml" ? (e.q / 10) + " cl" : (e.n ? e.n + " (" + Math.round(e.q) + " g)" : Math.round(e.q) + " g")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); }); }
