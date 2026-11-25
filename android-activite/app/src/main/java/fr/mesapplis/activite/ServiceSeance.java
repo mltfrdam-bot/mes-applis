@@ -551,6 +551,13 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
 
     @Override public void etatManettesChange() { }
 
+    /** 🎮 Manette reconnectée après sa mise en veille : double vibration (+ bip si choisi) → tu peux réappuyer. */
+    @Override public void reconnectee() {
+        if (enr == null) return;
+        vibrer(new long[]{0, 60, 120, 60});
+        if (cfgManettes().optBoolean("bip", false)) { try { if (son != null) son.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 160); } catch (Exception ignored) {} }
+    }
+
     /** Un bouton de manette : l'action choisie dans ⚙️ Réglages → 🎮 Manettes. */
     @Override public void bouton(String nom) {
         if (enr == null) return;

@@ -13,6 +13,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.location.Location;
 import android.location.LocationManager;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
@@ -72,6 +73,38 @@ import java.util.regex.Pattern;
  */
 public class MainActivity extends Activity {
     LienManettes manTest;
+    private android.location.LocationListener chaufEcoute; private volatile Location chaufPos; private volatile long chaufT = 0; private volatile int chaufSat = -1;
+    private android.location.GnssStatus.Callback chaufGnss;
+    private final Runnable chaufStop = () -> chauffer(false);
+
+    /** GPS allumé pendant le sas (arrêt automatique après 10 min, ou 20 s après le départ de la séance, quand le service a pris le relais). */
+    @SuppressWarnings("MissingPermission")
+    void chauffer(boolean marche) {
+        LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+        if (lm == null) return;
+        android.os.Handler hh = new android.os.Handler(android.os.Looper.getMainLooper());
+        hh.removeCallbacks(chaufStop);
+        if (!marche) {
+            if (chaufEcoute != null) { hh.postDelayed(() -> { try { if (chaufEcoute != null) lm.removeUpdates(chaufEcoute); if (chaufGnss != null) lm.unregisterGnssStatusCallback(chaufGnss); } catch (Exception ignored) {} chaufEcoute = null; chaufGnss = null; }, 20000); }
+            return;
+        }
+        if (!ServiceSeance.droitGps(this)) return;
+        hh.postDelayed(chaufStop, 10 * 60000L);
+        if (chaufEcoute != null) return;
+        try {
+            chaufEcoute = new android.location.LocationListener() {
+                @Override public void onLocationChanged(Location l) { chaufPos = l; chaufT = System.currentTimeMillis(); }
+                @Override public void onProviderEnabled(String p) { }
+                @Override public void onProviderDisabled(String p) { }
+                @Override public void onStatusChanged(String p, int s, android.os.Bundle b) { }
+            };
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, chaufEcoute, android.os.Looper.getMainLooper());
+            chaufGnss = new android.location.GnssStatus.Callback() {
+                @Override public void onSatelliteStatusChanged(android.location.GnssStatus st) { int n = 0; for (int i = 0; i < st.getSatelliteCount(); i++) if (st.usedInFix(i)) n++; chaufSat = n; }
+            };
+            lm.registerGnssStatusCallback(chaufGnss, hh);
+        } catch (Exception e) { chaufEcoute = null; }
+    }
     private android.speech.tts.TextToSpeech voixTest; private boolean voixTestPrete = false; private String voixTestAttente = null;
     private android.media.ToneGenerator bipTest;
 
@@ -564,6 +597,14 @@ public class MainActivity extends Activity {
             return "{\"droit\":" + droit + ",\"toujours\":" + toujours + ",\"allume\":" + allume + "}";
         }
 
+        /** 📍 Préchauffage du GPS pendant le sas : le GPS cherche les satellites avant « C'est parti ». Renvoie l'état (précision, âge du dernier point). */
+        @JavascriptInterface public String gpsChauffer(boolean marche) {
+            runOnUiThread(() -> chauffer(marche));
+            Location l = chaufPos;
+            long age = l == null ? -1 : (System.currentTimeMillis() - chaufT) / 1000;
+            return "{\"droit\":" + ServiceSeance.droitGps(MainActivity.this) + ",\"actif\":" + (chaufEcoute != null) + ",\"precision\":" + (l == null || !l.hasAccuracy() ? -1 : Math.round(l.getAccuracy())) + ",\"age\":" + age + ",\"sat\":" + chaufSat + "}";
+        }
+
         /** Demande l'autorisation de position (1re fois : la question d'Android ; ensuite : l'écran de l'appli), puis d'allumer la position. */
         @JavascriptInterface public void gpsDemander() {
             runOnUiThread(() -> {
@@ -807,6 +848,7 @@ public class MainActivity extends Activity {
                 if (manTest == null) manTest = new LienManettes(MainActivity.this, new LienManettes.Ecoute() {
                     @Override public void bouton(String nom) { runOnUiThread(() -> { essaiBouton(nom); if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui(" + Json.texte(nom) + ")", null); }); }
                     @Override public void etatManettesChange() { }
+                    @Override public void reconnectee() { runOnUiThread(() -> { try { if (bipTest == null) bipTest = new android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 90); bipTest.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 160); } catch (Exception ignored) {} if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui('RECO')", null); }); }
                 });
                 manTest.demarrer();
                 return manTest.etatJson();

@@ -291,7 +291,7 @@ function htmlManTest() { let e = {}; try { e = JSON.parse(window.AndroidApp && A
   return '<div style="font-size:26px;font-weight:900;margin:6px 0">' + (MAN_DERNIER ? "👉 " + esc(MAN_DERNIER) : "Appuie sur un bouton…") + '</div>' +
     '<div>' + (l.length ? l.map(m => (m.prete ? "✅ " : "⏳ ") + esc(m.nom) + (m.prete ? " prête" : " connexion…") + (m.batt >= 0 ? " · " + m.batt + " %" : "")).join("<br>") : (e.cherche ? "🔎 Recherche… appuie sur un bouton de chaque manette pour la réveiller." : "⏳ Recherche dans quelques secondes…")) + '</div>' +
     '<div class="gris" style="font-size:13px;margin-top:4px">Appareils Bluetooth vus : ' + esc(e.vus || "aucun pour l\'instant") + '</div>'; }
-window.manetteAppui = (nom) => { MAN_DERNIER = (MAN_BOUTONS.find(x => x[0] === nom) || [0, nom])[1] + " → " + ((MAN_ACTIONS.find(x => x[0] === (manCfg().b[nom] || "rien")) || [0, "rien"])[1]); Pont.vibrer(40); const z = $("#manTestZone"); if (z) z.innerHTML = htmlManTest(); };
+window.manetteAppui = (nom) => { if (nom === "RECO") { MAN_DERNIER = "🔄 manette reconnectée : tu peux réappuyer"; const z = $("#manTestZone"); if (z) z.innerHTML = htmlManTest(); return; } MAN_DERNIER = (MAN_BOUTONS.find(x => x[0] === nom) || [0, nom])[1] + " → " + ((MAN_ACTIONS.find(x => x[0] === (manCfg().b[nom] || "rien")) || [0, "rien"])[1]); Pont.vibrer(40); const z = $("#manTestZone"); if (z) z.innerHTML = htmlManTest(); };
 function manTestBasculer() { if (!(window.AndroidApp && AndroidApp.manettesTest)) { toast("Seulement dans l'APK."); return; }
   if (MAN_TEST) { clearInterval(MAN_TEST); MAN_TEST = null; AndroidApp.manettesTest(false); dessiner(); return; }
   if (S.enr) { toast("Une séance est en cours : les manettes y sont déjà connectées."); return; }
@@ -387,14 +387,20 @@ function vueSas() { if (!SAS) { aller("activites"); return; } const act = SAS.ac
       '<div style="display:flex;justify-content:center;gap:22px;font-size:20px;font-weight:800"><span id="sFc">❤️ –</span><span id="sImp">💥 0</span></div><div id="sEtat" class="aide"></div><div id="sDer" style="font-size:15px;font-weight:700;line-height:1.7;margin-top:4px"></div></div>' +
     '<h2>Réglages du jour</h2><table class="milieu"><tbody>' +
       '<tr><td>💥 Impacts</td><td>' + (imp.auto ? '<span class="gris">Réglage automatique pour cette activité.</span>' : 'Fais quelques frappes : regarde ce qui est compté (✅) ou pas (✗), puis ajuste.' + htmlReglage("essai")) + '</td></tr>' +
-      (gps ? '<tr><td>📍 GPS</td><td>Il démarre avec la séance. <button class="sec petit" data-do="sasSansGps">Sans GPS cette fois</button></td></tr>' : "") +
+      (gps ? '<tr><td>📍 GPS</td><td><span id="sasGps">' + htmlSasGps() + '</span> <button class="sec petit" data-do="sasSansGps">Sans GPS cette fois</button></td></tr>' : "") +
       (gps ? '<tr><td>👻 Fantôme</td><td>' + (htmlFantome(act) || '<span class="gris">Aucun. Pour en choisir un : Historique, touche une course, « 👻 Prendre comme fantôme ».</span>') + '</td></tr>' : "") +
       htmlMaterielSas(act) + (act === "tennis" ? '<div id="sasMatch">' + htmlMatchSas() + '</div>' : "") +
       '<tr><td>⚡ Démarrage</td><td><label style="display:flex;gap:8px;align-items:center;font-size:16px"><input type="checkbox" data-do="sasDirect"' + (N.sasDirect(BASE, act) ? " checked" : "") + ' style="width:24px;height:24px"> Pour ' + esc(N.actNom(act)) + ', démarrer directement la prochaine fois (sans préparation)</label></td></tr>' +
       '<tr><td>🎮 🥤 ⏭</td><td class="gris" style="font-size:14px">Bientôt ici : boutons des manettes, boissons prévues, séance suivante.</td></tr>' +
     '</tbody></table>' +
     '<div class="ligne"><button class="main" data-do="sasGo" style="min-height:72px;font-size:22px">▶ C\'est parti</button></div><div class="ligne"><button class="sec" data-do="sasAnnuler">Annuler</button></div>'; majSas(); }
-function majSas() { if (!SAS || !$("#sChrono")) return; const now = Date.now(), imp = N.impPour(BASE, SAS.act); $("#sChrono").textContent = N.gm((now - SAS.debut) / 1000);
+/* 📍 Préchauffage du GPS dans le sas (essai 19) */
+function gpsChauffe(marche) { try { return window.AndroidApp && AndroidApp.gpsChauffer ? JSON.parse(AndroidApp.gpsChauffer(marche) || "{}") : null; } catch (e) { return null; } }
+function htmlSasGps() { const g = gpsChauffe(true); if (!g) return "Il démarre avec la séance.";
+  if (g.droit === false) return '⚠️ Position non autorisée <button class="sec petit" data-do="gpsAutoriser">Autoriser</button>';
+  if (g.precision > 0 && g.age >= 0 && g.age < 5) return (g.precision <= 10 ? "✅ prêt" : "🟡 presque prêt") + " · précision " + g.precision + " m" + (g.sat > 0 ? " · " + g.sat + " satellites" : "");
+  return "🔎 recherche des satellites…" + (g.sat > 0 ? " (" + g.sat + " captés)" : "") + " Reste dehors, ciel dégagé."; }
+function majSas() { const zg = $("#sasGps"); if (zg && SAS) zg.innerHTML = htmlSasGps(); if (!SAS || !$("#sChrono")) return; const now = Date.now(), imp = N.impPour(BASE, SAS.act); $("#sChrono").textContent = N.gm((now - SAS.debut) / 1000);
   if (S.h10.fc && now - SAS.dernierFc >= 5000) { SAS.fc.push(S.h10.fc); SAS.dernierFc = now; }
   $("#sFc").textContent = "❤️ " + (S.h10.fc || "–");
   if (!SAS.essai && S.service && S.h10.etat === H10.CONNECTE) SAS.essai = Pont.essaiDemarrer();
@@ -403,7 +409,7 @@ function majSas() { if (!SAS || !$("#sChrono")) return; const now = Date.now(), 
   $("#sDer").innerHTML = d ? d.derniers.slice(-10).map(x => x.compte ? '<span class="ok">' + N.gg(x.m) + '✅</span>' : '<span class="al">' + N.gg(x.m) + '✗</span>').join(" · ") : ""; majReglage(); }
 function sasFinir() { if (!SAS) return false; Pont.essaiArreter(); const e = N.echauffementNoter(BASE, { act: SAS.act, debut: SAS.debut, fin: Date.now(), fc: SAS.fc, impacts: SAS.impacts }); if (e) sauver(); const c = SAS.connecte; SAS = null; return c; }
 function sasGo() { sasFinir(); Pont.vibrer(80); lancerSeance(); }
-function sasAnnuler() { const c = sasFinir(); if (c && !S.enr) Pont.h10Arreter(); aller("activites"); setTimeout(tic, 500); }
+function sasAnnuler() { gpsChauffe(false); const c = sasFinir(); if (c && !S.enr) Pont.h10Arreter(); aller("activites"); setTimeout(tic, 500); }
 
 /* ===== 📜 Historique ===== */
 const H = { filtre: "", tri: "t", sens: -1, ouverts: new Set() };
@@ -595,7 +601,7 @@ function tic() { if (!manPousse && BASE) { manPousse = true; manPousser(); } lir
   if (fenetreH10) majFenetreH10(); }
 
 /* ----- séance ----- */
-function lancerSeance() { fermerFenetre(); manPousser(); if (MAN_TEST) { clearInterval(MAN_TEST); MAN_TEST = null; try { AndroidApp.manettesTest(false); } catch (e) {} } { const m = matchAttente(); if (m && actCourante() === "tennis") { delete m.prep; N.evtAjouter(BASE, Object.assign({ ts: Date.now() }, m)); } delete BASE.reglages["match-attente"]; sauver(); } const act = actCourante(), o = N.gpsLire(BASE), gps = o.acts.includes(act) && !DEPART.sansGps && Pont.gpsEtat().droit; pousserReglage(act); if (gps) Pont.gpsRegler(o);
+function lancerSeance() { fermerFenetre(); manPousser(); gpsChauffe(false); if (MAN_TEST) { clearInterval(MAN_TEST); MAN_TEST = null; try { AndroidApp.manettesTest(false); } catch (e) {} } { const m = matchAttente(); if (m && actCourante() === "tennis") { delete m.prep; N.evtAjouter(BASE, Object.assign({ ts: Date.now() }, m)); } delete BASE.reglages["match-attente"]; sauver(); } const act = actCourante(), o = N.gpsLire(BASE), gps = o.acts.includes(act) && !DEPART.sansGps && Pont.gpsEtat().droit; pousserReglage(act); if (gps) Pont.gpsRegler(o);
   const fant = gps ? fantomePret(act) : null; Pont.ecrire("fantome-en-cours.json", fant ? JSON.stringify(fant) : "{}"); if (fant) Pont.fantomeRegler(N.fantLire(BASE).rythme);
   if (!(gps ? Pont.seanceDemarrerGps(act) : Pont.seanceDemarrer(act))) { info("⚠️ Démarrage impossible", "<p>Le service d'enregistrement n'a pas pu démarrer. Vérifie l'autorisation " + (gps ? "de la position" : "Bluetooth") + ".</p>"); return; }
   N.matUsageNoter(BASE, act, Date.now()); sauver();
@@ -986,6 +992,7 @@ const ACTIONS = {
   stb: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "stb" }); sauver(); majRavito(true); },
   gourdeDosage, gourdeDosageOk,
   manTest: manTestBasculer,
+  gpsAutoriser: () => { try { AndroidApp.gpsDemander(); } catch (e) {} },
   manR: (b) => { const v = b.dataset.v; manRegler({ [b.dataset.k]: v === "true" ? true : v === "false" ? false : Number(v) }); dessiner(); },
   gourde: (b) => { setTimeout(manPousser, 50); BASE.reglages["gourde"] = b.dataset.v; sauver(); majRavito(true); },
   fermer: fermerFenetre, retour: retourEcran, act: (b) => choisirAct(b.dataset.a), nouvelle: nouvelleAct, creerAct, creerExoFiche, eauPerm: (b) => { const R = Pont.eauReglages() || {}; R.permanente = b.dataset.v === "1"; Pont.eauRegler(R); Pont.eauPermanente(R.permanente); dessiner(); toast(R.permanente ? "💧 Notification permanente activée." : "Notification permanente retirée."); },

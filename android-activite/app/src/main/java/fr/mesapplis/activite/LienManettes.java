@@ -36,7 +36,7 @@ import java.util.UUID;
  * La manette de gauche répète les appuis de celle de droite au même instant : un même bouton n'est compté qu'une fois en 300 ms.
  */
 final class LienManettes {
-    interface Ecoute { void bouton(String nom); void etatManettesChange(); }
+    interface Ecoute { void bouton(String nom); void etatManettesChange(); default void reconnectee() { } }
 
     private static final UUID S_FC82 = UUID.fromString("0000fc82-0000-1000-8000-00805f9b34fb");
     private static final UUID S_ZWIFT = UUID.fromString("00000001-19ca-4651-86e5-fa29dcdd09d1");
@@ -64,7 +64,7 @@ final class LienManettes {
     private final Runnable finRecherche = this::arreterRecherche;
 
     private final class Manette {
-        final String adresse; String nom = "Manette"; BluetoothGatt gatt; boolean prete = false; int batterie = -1; int carte = 0xFFFFFFFF;
+        final String adresse; String nom = "Manette"; BluetoothGatt gatt; boolean prete = false, perdue = false; int batterie = -1; int carte = 0xFFFFFFFF;
         final ArrayDeque<Runnable> file = new ArrayDeque<>(); boolean occupe = false;
         Manette(String a) { adresse = a; }
     }
@@ -83,7 +83,16 @@ final class LienManettes {
         return sb.append("]}").toString();
     }
 
-    void demarrer() { if (voulu) return; voulu = true; chercher(); }
+    void demarrer() { if (voulu) return; voulu = true; chercher(); h.postDelayed(entretien, 20000); }
+
+    private final Runnable entretien = new Runnable() { @Override public void run() {
+        if (!voulu) return;
+        synchronized (LienManettes.this) { for (Manette m : manettes) if (m.prete && m.gatt != null) { final BluetoothGatt g = m.gatt; commande(m, () -> { if (!lireBatterie(g)) suite(m); }); } }
+        h.postDelayed(this, 20000);
+    } };
+
+    private static final UUID S_BATT = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb"), C_BATT = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb");
+    private static boolean lireBatterie(BluetoothGatt g) { try { BluetoothGattService s = g.getService(S_BATT); BluetoothGattCharacteristic c = s == null ? null : s.getCharacteristic(C_BATT); return c != null && g.readCharacteristic(c); } catch (Exception e) { return false; } }
 
     void arreter() {
         voulu = false;
@@ -170,12 +179,15 @@ final class LienManettes {
         m.prete = false; m.file.clear(); m.occupe = false;
         try { if (g != null) g.close(); } catch (Exception ignored) {}
         m.gatt = null;
+        m.perdue = true;
+        // La manette s'endort après ~60 s sans appui (comportement normal des Zwift Click) : on reste en connexion directe,
+        // relancée en boucle, pour qu'elle soit reprise dès qu'un appui la réveille.
         h.postDelayed(() -> {
-            if (!voulu) return;
+            if (!voulu || m.gatt != null) return;
             BluetoothAdapter a = LienH10.adaptateur(ctx);
             if (a == null) return;
-            try { m.gatt = a.getRemoteDevice(m.adresse).connectGatt(ctx, true, new Rappel(m), BluetoothDevice.TRANSPORT_LE); } catch (Exception ignored) {}
-        }, 1500);
+            try { m.gatt = a.getRemoteDevice(m.adresse).connectGatt(ctx, false, new Rappel(m), BluetoothDevice.TRANSPORT_LE); } catch (Exception ignored) {}
+        }, 300);
         ecoute.etatManettesChange();
     }
 
@@ -207,13 +219,16 @@ final class LienManettes {
                 if (a != null) commande(m, () -> { if (!abonner(g, a, indique(a))) suite(m); });
                 if (sy != null) commande(m, () -> { if (!abonner(g, sy, indique(sy))) suite(m); });
                 if (rx != null) commande(m, () -> { if (!ecrire(g, rx, "RideOn".getBytes(StandardCharsets.US_ASCII))) suite(m); });
-                commande(m, () -> { m.prete = true; ecoute.etatManettesChange(); suite(m); });
+                commande(m, () -> { m.prete = true; boolean retour = m.perdue; m.perdue = false; ecoute.etatManettesChange(); if (retour) h.post(ecoute::reconnectee); suite(m); });
                 ecoute.etatManettesChange();
             });
         }
 
         @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int statut) { h.post(() -> suite(m)); }
         @Override public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic c, int statut) { h.post(() -> suite(m)); }
+        @SuppressWarnings("deprecation")
+        @Override public void onCharacteristicRead(BluetoothGatt g, BluetoothGattCharacteristic c, int statut) { try { byte[] v = c.getValue(); if (v != null && v.length > 0) m.batterie = v[0] & 0xFF; } catch (Exception ignored) {} h.post(() -> suite(m)); }
+        @Override public void onCharacteristicRead(BluetoothGatt g, BluetoothGattCharacteristic c, byte[] v, int statut) { if (v != null && v.length > 0) m.batterie = v[0] & 0xFF; h.post(() -> suite(m)); }
 
         @SuppressWarnings("deprecation")
         @Override public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic c) { recu(m, c.getValue()); }
