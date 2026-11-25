@@ -571,8 +571,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     /** Un bouton de manette : l'action choisie dans ⚙️ Réglages → 🎮 Manettes. */
     @Override public void bouton(String nom) {
         if (enr == null) return;
+        NoteVocale nv = NoteVocale.actif;
+        if (nv != null) { if (nom.equals(nv.lettre)) { vibrer(new long[]{0, 60, 100, 60}); nv.runOnUiThread(nv::terminer); } return; }   // pendant une note : seul le même bouton la termine
         org.json.JSONObject c = cfgManettes();
-        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "tour" : "rien";
+        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "note" : "rien";
         String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
         long now = System.currentTimeMillis();
         if (c.optBoolean("bip", false) && !"rien".equals(action)) { try { if (son != null) son.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {} }
@@ -591,11 +593,23 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
                 break;
             }
             case "tour": tour(); break;
+            case "note": vibrer(new long[]{0, 80}); ServiceTelecommande.ouvrirNote(this, "seance", nom, contexte()); break;
             case "fantome": parler(phraseFantome()); break;
             case "etat": parler(phraseEtat(c)); break;
             case "conseil": parler(phraseConseil(true)); break;
             default: break;
         }
+    }
+
+    /** Le moment de la note : temps, distance, allure, cœur (le score du tennis est ajouté par la page). */
+    String contexte() {
+        Enregistreur e = enr; if (e == null) return "";
+        long sec = (System.currentTimeMillis() - e.debut) / 1000;
+        StringBuilder t = new StringBuilder(String.format(Locale.FRANCE, "%d:%02d", sec / 60, sec % 60));
+        Parcours g = gps;
+        if (g != null && g.aPosition() && g.distance() > 50) { double km = g.distance() / 1000.0; long a = Math.round(sec / km); t.append(String.format(Locale.FRANCE, " · %.2f km · %d:%02d/km", km, a / 60, a % 60)); }
+        int f = fcFraiche(); if (f > 0) t.append(" · FC ").append(f);
+        return t.toString();
     }
 
     /** Parole demandée par un bouton : dite même si les annonces automatiques sont coupées. */

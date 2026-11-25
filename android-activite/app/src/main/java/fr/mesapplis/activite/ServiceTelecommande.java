@@ -138,18 +138,21 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
     }
 
     /** L'écran de dictée s'ouvre par une notification « plein écran » (seule façon autorisée par Android depuis l'arrière-plan). */
-    private void ouvrirNote(String cat, String lettre) {
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+    private void ouvrirNote(String cat, String lettre) { ouvrirNote(this, cat, lettre, ""); }
+
+    /** Ouvre l'écran de dictée depuis un service (télécommande ou séance) : notification « plein écran » + ouverture directe si permise. */
+    static void ouvrirNote(Service sv, String cat, String lettre, String ctx) {
+        NotificationManager nm = (NotificationManager) sv.getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
         NotificationChannel c = new NotificationChannel(CANAL_NOTE, "Télécommande : note vocale", NotificationManager.IMPORTANCE_HIGH);
         c.setSound(null, null); c.enableVibration(false); c.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(c);
-        Intent ecran = new Intent(this, NoteVocale.class).putExtra("cat", cat).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        PendingIntent pi = PendingIntent.getActivity(this, 2203, ecran, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Notification n = new Notification.Builder(this, CANAL_NOTE).setSmallIcon(R.drawable.ic_seance).setContentTitle("🎙️ Note vocale").setContentText("Touche pour dicter ta note")
+        Intent ecran = new Intent(sv, NoteVocale.class).putExtra("cat", cat).putExtra("lettre", lettre).putExtra("ctx", ctx).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pi = PendingIntent.getActivity(sv, 2203, ecran, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification n = new Notification.Builder(sv, CANAL_NOTE).setSmallIcon(R.drawable.ic_seance).setContentTitle("🎙️ Note vocale").setContentText("Touche pour dicter ta note")
                 .setCategory(Notification.CATEGORY_CALL).setVisibility(Notification.VISIBILITY_PUBLIC).setFullScreenIntent(pi, true).setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(60000).build();
         nm.notify(ID_NOTE, n);
-        try { startActivity(ecran); Bug.note(this, "Télécommande", "écran de note : ouverture demandée (par-dessus les applis " + (android.provider.Settings.canDrawOverlays(this) ? "autorisé" : "NON autorisé") + ", notification plein écran " + (android.os.Build.VERSION.SDK_INT >= 34 ? (nm.canUseFullScreenIntent() ? "autorisée" : "NON autorisée") : "ok") + ")"); } catch (Exception e) { Bug.note(this, "Télécommande", "ouverture directe refusée : " + e); }   // écran allumé et appli visible : ouverture directe
+        try { sv.startActivity(ecran); Bug.note(sv, "Note vocale", "écran demandé (" + cat + ", par-dessus les applis " + (android.provider.Settings.canDrawOverlays(sv) ? "autorisé" : "NON autorisé") + ")"); } catch (Exception e) { Bug.note(sv, "Note vocale", "ouverture directe refusée : " + e); }
     }
 
     private void vibrer(long[] m) { try { Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE); if (v != null) v.vibrate(VibrationEffect.createWaveform(m, -1)); } catch (Exception ignored) {} }

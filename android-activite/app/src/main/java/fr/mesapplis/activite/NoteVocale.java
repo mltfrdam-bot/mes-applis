@@ -39,14 +39,14 @@ public class NoteVocale extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         setShowWhenLocked(true);
-        if (getIntent() != null) { cat = "btp".equals(getIntent().getStringExtra("cat")) ? "btp" : "claude"; lettre = "A".equals(getIntent().getStringExtra("lettre")) ? "A" : "Y"; }
+        if (getIntent() != null) { String c = getIntent().getStringExtra("cat"); cat = "btp".equals(c) || "seance".equals(c) ? c : "claude"; String l = getIntent().getStringExtra("lettre"); lettre = l == null || l.isEmpty() ? "Y" : l; String x = getIntent().getStringExtra("ctx"); ctx = x == null ? "" : x; }
         setTurnScreenOn(true);
         try { ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).cancel(ServiceTelecommande.ID_NOTE); } catch (Exception ignored) {}
         float d = getResources().getDisplayMetrics().density;
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL); l.setGravity(Gravity.CENTER); l.setBackgroundColor(Color.WHITE);
         l.setPadding((int) (20 * d), (int) (24 * d), (int) (20 * d), (int) (24 * d));
-        TextView t = new TextView(this); t.setText("btp".equals(cat) ? "🏗️ Note pour 4B BTP" : "🤖 Note pour Claude"); t.setTextSize(24); t.setTypeface(Typeface.DEFAULT_BOLD); t.setTextColor(0xFF1F6FB2); t.setGravity(Gravity.CENTER);
+        TextView t = new TextView(this); t.setText("btp".equals(cat) ? "🏗️ Note pour 4B BTP" : "seance".equals(cat) ? "🏃 Note de séance" : "🤖 Note pour Claude"); t.setTextSize(24); t.setTypeface(Typeface.DEFAULT_BOLD); t.setTextColor(0xFF1F6FB2); t.setGravity(Gravity.CENTER);
         etat = new TextView(this); etat.setTextSize(20); etat.setTextColor(0xFF1b1f23); etat.setGravity(Gravity.CENTER); etat.setPadding(0, (int) (16 * d), 0, (int) (16 * d));
         Button fermer = new Button(this); fermer.setText("✅ Terminer"); fermer.setAllCaps(false); fermer.setTextSize(20); fermer.setOnClickListener(v -> { if (actif == this) terminer(); else finish(); });
         l.addView(t); l.addView(etat); l.addView(fermer);
@@ -67,7 +67,7 @@ public class NoteVocale extends Activity {
     // ---------- Dictée continue (essai 24) : on écoute par morceaux et on relance tout seul après chaque pause ;
     // c'est TOI qui termines : 🔵 Y à nouveau, ou le bouton « ✅ Terminer ». Arrêt automatique après 5 minutes. ----------
     static volatile NoteVocale actif;
-    String cat = "claude", lettre = "Y";
+    String cat = "claude", lettre = "Y", ctx = "";
     private final StringBuilder texte = new StringBuilder();
     private String partiel = "";
     private boolean finir = false, gardee = false;
@@ -128,9 +128,11 @@ public class NoteVocale extends Activity {
         try { reco.startListening(i); } catch (Exception e) { Bug.note(this, "Note vocale", "ERREUR au démarrage : " + e); if (++erreursSuivies > 5) garderEtFermer(); else h.postDelayed(this::demarrer, 800); }
     }
 
+    private String nomLettre() { switch (lettre) { case "A": return "🟢 A"; case "B": return "🟣 B"; case "Z": return "🔴 Z"; case "PLUS": return "➕"; case "MOINS": return "➖"; case "ECRAN": return "le bouton"; default: return "🔵 Y"; } }
+
     private void afficher() {
         String t = (texte + (partiel.isEmpty() ? "" : (texte.length() > 0 ? " " : "") + partiel)).trim();
-        etat.setText(finir ? "J'écris…" : "🎙️ Je t'écoute… prends ton temps.\nPour finir : " + ("A".equals(lettre) ? "🟢 A" : "🔵 Y") + " ou « ✅ Terminer ».\n\n" + (t.isEmpty() ? "" : "« " + t + " »"));
+        etat.setText(finir ? "J'écris…" : "🎙️ Je t'écoute… prends ton temps.\nPour finir : " + nomLettre() + " ou « ✅ Terminer ».\n\n" + (t.isEmpty() ? "" : "« " + t + " »"));
     }
 
     /** 🔵 Y appuyé à nouveau, ou bouton « Terminer » : on récupère le dernier morceau puis on garde la note. */
@@ -185,7 +187,7 @@ public class NoteVocale extends Activity {
         try {
             android.content.SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
             JSONArray l = new JSONArray(p.getString("notesVocales", "[]"));
-            l.put(new JSONObject().put("ts", System.currentTimeMillis()).put("t", txt).put("cat", cat));
+            l.put(new JSONObject().put("ts", System.currentTimeMillis()).put("t", txt).put("cat", cat).put("ctx", ctx));
             p.edit().putString("notesVocales", l.toString()).apply();
             Bug.note(this, "Note vocale", "note gardée (" + l.length() + " en attente de rangement)");
         } catch (Exception ignored) {}

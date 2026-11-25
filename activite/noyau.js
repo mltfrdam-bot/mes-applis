@@ -794,7 +794,8 @@ function scoreEtat(evts) { const m = evts.filter(e => e.k === "match").pop(); if
   return st; }
 function scoreTxt(st) { if (!st) return ""; const t = st.sets.map(x => x.stb ? "[" + x.a + "-" + x.b + "]" : x.a + "-" + x.b); if (st.cur[0] || st.cur[1]) t.push((st.stb ? "[" : "") + st.cur[0] + "-" + st.cur[1] + (st.stb ? "]" : "") + " en cours"); return t.join(" "); }
 function scoreA(st, ts) { if (!st) return ""; let txt = ""; st.jeux.forEach(j => { if (j.ts <= ts) txt = "set " + j.set + " : " + j.a + "-" + j.b + (j.stb ? " (super tie-break)" : ""); }); return txt; }
-function ravitoLigne(evts) { const o = ravitoTotaux(evts), st = scoreEtat(evts), t = [];
+function ravitoLigne(evts) { const o = ravitoTotaux(evts), st = scoreEtat(evts), t = [], nv = evts.filter(e => e.k === "vnote").length;
+  if (nv) t.push("🎙️ " + nv + " note" + (nv > 1 ? "s" : ""));
   if (st) t.push("🎾 " + scoreTxt(st) + " contre " + st.adv + (st.advCl ? " (" + st.advCl + ")" : ""));
   if (o.eau || o.sucre) t.push("💧 bu " + (o.eau / 1000).toFixed(2).replace(".", ",") + " L" + (o.sucre ? " · sucre " + o.sucre + " g" : "") + (o.sel ? " · sel " + String(o.sel).replace(".", ",") + " g" : ""));
   return t; }
@@ -807,6 +808,7 @@ function ravitoDetail(T, evts, R, mlH) { if (!evts.length) return; const st = sc
   T.push("Heure | Quoi | Score à ce moment | Total bu / sucre");
   let cum = []; evts.forEach(e => { if (e.k === "match") { T.push(h(e.ts) + " | début du match contre " + (e.adv || "?") + " | | "); return; } if (e.k === "set" || e.k === "stb") { T.push(h(e.ts) + " | " + (e.k === "set" ? "set suivant" : "super tie-break") + " | " + scoreA(st, e.ts) + " | "); return; }
     if (e.k === "diag") { T.push(h(e.ts) + " | 🔧 " + e.t + " | | "); return; }
+    if (e.k === "vnote") { T.push(h(e.ts) + " | 🎙️ « " + e.t + " »" + (e.ctx ? " (" + e.ctx + ")" : "") + " | " + scoreA(st, e.ts) + " | "); return; }
     cum.push(e); const R0 = RAVITO[e.k], tot = ravitoTotaux(cum);
     if (e.k === "jeu") { T.push(h(e.ts) + " | jeu " + (e.qui ? (st ? st.adv : "adversaire") : (st ? st.moi : "moi")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); return; }
     if (R0) T.push(h(e.ts) + " | " + R0.icone + " " + R0.nom.toLowerCase() + " " + (R0.unite === "ml" ? (e.q / 10) + " cl" : (e.n ? e.n + " (" + Math.round(e.q) + " g)" : Math.round(e.q) + " g")) + " | " + scoreA(st, e.ts) + " | " + (tot.eau / 1000).toFixed(2).replace(".", ",") + " L / " + tot.sucre + " g"); }); }
@@ -877,7 +879,8 @@ function rapportPeriode(base, sante, nb, maintenant) { const now = maintenant ||
       dj = ((S.douleurs) || []).map(x => ({ zone: x.zone, s: (x.suivi || []).filter(v => v.date === d) })).filter(x => x.s.length), sj = ((S.sante) || []).find(e => e.date === d);
     if (!lj.length && !mj.length && !dj.length && !(jj && jj.eau)) return;
     T.push("", "▸ " + jourTxt(d).toUpperCase());
-    lj.forEach(x => { T.push("- " + hhmm(x.t) + " " + actNom(x.act) + " · " + dureeCourte(x.duree || 0) + " · " + x.resultat); const rs = x.ref && x.ref.n && x.ref.n.ressenti; if (rs) T.push("  Ressenti : " + ressentiTxt(rs)); });
+    lj.forEach(x => { T.push("- " + hhmm(x.t) + " " + actNom(x.act) + " · " + dureeCourte(x.duree || 0) + " · " + x.resultat); const rs = x.ref && x.ref.n && x.ref.n.ressenti; if (rs) T.push("  Ressenti : " + ressentiTxt(rs));
+      (x.evts || []).filter(e => e.k === "vnote").forEach(e => T.push("  🎙️ " + hhmm(e.ts) + (e.ctx ? " (" + e.ctx + ")" : "") + " : « " + e.t + " »")); });
     if (jj) T.push("- 💧 Eau : " + (jj.eau / 1000).toFixed(2).replace(".", ",") + " L / " + (jj.objectif / 1000).toFixed(1).replace(".", ",") + " L (" + Math.round(jj.eau / Math.max(1, jj.objectif) * 100) + " %)");
     mj.forEach(m => T.push("- 🩺 Tension " + (m.heure ? m.heure + " " : "") + m.sys + "/" + m.dia + (m.pouls ? " · pouls " + m.pouls : "") + " (" + m.niv.t + ")"));
     dj.forEach(x => x.s.forEach(v => T.push("- 😣 " + x.zone + " " + v.niveau + "/10" + (v.heure ? " à " + v.heure : "") + (v.note ? " · " + v.note : ""))));

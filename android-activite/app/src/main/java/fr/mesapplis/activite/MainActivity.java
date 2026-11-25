@@ -895,6 +895,7 @@ public class MainActivity extends Activity {
             boolean ok = checkSelfPermission("android.permission.CALL_PHONE") == PackageManager.PERMISSION_GRANTED, rac = checkSelfPermission("android.permission.ANSWER_PHONE_CALLS") == PackageManager.PERMISSION_GRANTED;
             return c.length() > 2 ? c.substring(0, c.length() - 1) + ",\"appel\":" + ok + ",\"raccrocher\":" + rac + "}" : "{\"appel\":" + ok + ",\"raccrocher\":" + rac + "}";
         }
+        @JavascriptInterface public void noteSeance(String ctx) { runOnUiThread(() -> { try { startActivity(new Intent(MainActivity.this, NoteVocale.class).putExtra("cat", "seance").putExtra("lettre", "ECRAN").putExtra("ctx", ctx == null ? "" : ctx)); } catch (Exception e) { Bug.note(MainActivity.this, "Note vocale", "séance : " + e); } }); }
         @JavascriptInterface public void bugsEffacer() { Bug.effacer(MainActivity.this); }
         @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
