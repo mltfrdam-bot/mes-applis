@@ -819,8 +819,9 @@ function ressentiNoter(n, txt) { if (!n) return null; const rs = Object.assign({
 
 /* ===== 📝 Notes « à regarder plus tard » (dictées à la manette ou écrites) — essai 22 ===== */
 function notesLire(base) { return lireListe(base.reglages["notes-plus-tard"]).filter(n => n && n.ts && n.t).sort((a, b) => b.ts - a.ts); }
-function noteAjouter(base, ts, t, source) { const l = notesLire(base); if (l.some(n => n.ts === ts && n.t === t)) return null; const n = { ts, t: String(t).slice(0, 2000), src: source || "voix" }; l.push(n); base.reglages["notes-plus-tard"] = JSON.stringify(l); return n; }
-function rapportNotes(base, toutes) { const L = notesLire(base).filter(n => toutes || !n.fait).slice().reverse(), T = ["📝 NOTES « À REGARDER PLUS TARD » — " + (toutes ? "toutes" : "pas encore traitées") + " (" + L.length + ") — Journal d'activité"];
+function noteAjouter(base, ts, t, source, cat) { const l = notesLire(base); if (l.some(n => n.ts === ts && n.t === t)) return null; const n = { ts, t: String(t).slice(0, 2000), src: source || "voix", cat: cat === "btp" ? "btp" : "claude" }; l.push(n); base.reglages["notes-plus-tard"] = JSON.stringify(l); return n; }
+const noteCat = (n) => n.cat === "btp" ? "btp" : "claude";
+function rapportNotes(base, toutes, cat) { cat = cat === "btp" ? "btp" : "claude"; const L = notesLire(base).filter(n => noteCat(n) === cat && (toutes || !n.fait)).slice().reverse(), T = [(cat === "btp" ? "🏗️ NOTES POUR 4B BTP" : "🤖 NOTES POUR CLAUDE") + " — " + (toutes ? "toutes" : "pas encore traitées") + " (" + L.length + ") — Journal d'activité"];
   let j = ""; L.forEach(n => { const d = isoJour(n.ts); if (d !== j) { j = d; T.push("", "▸ " + jourTxt(d).toUpperCase()); } T.push("- " + hhmm(n.ts) + (n.src === "voix" ? " 🎙️" : " ✍️") + (n.fait ? " ✅" : "") + " : " + n.t); });
   if (!L.length) T.push("", "(aucune note)"); return T.join("\n"); }
 function noteRegler(base, ts, ch) { const l = notesLire(base).map(n => n.ts === ts ? Object.assign({}, n, ch) : n).filter(n => !n.suppr); base.reglages["notes-plus-tard"] = JSON.stringify(l); }
@@ -870,7 +871,7 @@ function rapportPeriode(base, sante, nb, maintenant) { const now = maintenant ||
     T.push("Tension : " + M.length + " mesure" + (M.length > 1 ? "s" : "") + " · moyenne " + ms + "/" + md + " (" + tensionNiveau(ms, md).t + ")" + (hautes ? " · " + hautes + " élevée" + (hautes > 1 ? "s" : "") : "")); }
   const DA = douleursActives(S); if (DA.length) T.push("Douleurs en cours : " + DA.map(d => d.zone + (d.dernier ? " " + d.dernier.niveau + "/10 (" + jourTxt(d.dernier.date) + ")" : d.intensite ? " (" + d.intensite.toLowerCase() + ")" : "")).join(" · "));
   { const P = ((S.sante) || []).filter(e => e.poids && jours.includes(e.date)).sort((a, b) => a.date.localeCompare(b.date)); if (P.length) T.push("Poids : " + P.map(e => jourTxt(e.date) + " " + String(e.poids).replace(".", ",") + " kg").join(" · ")); }
-  { const NL = notesLire(base).filter(n => jours.includes(isoJour(n.ts)) && !n.fait); if (NL.length) T.push("📝 Notes « à regarder plus tard » : " + NL.length + " (rapport à part, dans 📝)"); }
+  { const NL = notesLire(base).filter(n => jours.includes(isoJour(n.ts)) && !n.fait && n.cat !== "btp"); if (NL.length) T.push("📝 Notes « à regarder plus tard » : " + NL.length + " (rapport à part, dans 📝)"); }
   /* Jour par jour */
   jours.forEach(d => { const lj = L.filter(x => isoJour(x.t) === d).sort((a, b) => a.t - b.t), jj = J.find(j => j.date === d), mj = M.filter(m => m.date === d).reverse(),
       dj = ((S.douleurs) || []).map(x => ({ zone: x.zone, s: (x.suivi || []).filter(v => v.date === d) })).filter(x => x.s.length), sj = ((S.sante) || []).find(e => e.date === d);
@@ -943,7 +944,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
-  notesLire, noteAjouter, noteRegler, rapportNotes,
+  notesLire, noteAjouter, noteRegler, rapportNotes, noteCat,
   CLASSEMENTS, advLire, advTrouver, advEnregistrer, advResultats, ecartCl, advTxt,
   tensionNiveau, isoJour, santeMesures, douleursActives, rapportPeriode,
   GOURDE_DEFAUT, gourdeRecette, gourdeRegler, RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,

@@ -25,7 +25,7 @@ public class WidgetTelecommande extends AppWidgetProvider {
             int[] ids = m.getAppWidgetIds(new ComponentName(c, WidgetTelecommande.class));
             if (ids == null || ids.length == 0) return;
             RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_telecommande);
-            v.setTextViewText(R.id.wtBouton, ServiceTelecommande.active ? "🎮 Télécommande : ON\n🔵 Y = 🎙️ note · toucher pour arrêter" : "🎮 Télécommande : OFF\ntoucher pour allumer");
+            v.setTextViewText(R.id.wtBouton, ServiceTelecommande.active ? "🎮 Télécommande : ON\nY Claude · A 4B BTP · B Gemini" : "🎮 Télécommande : OFF\ntoucher pour allumer");
             v.setOnClickPendingIntent(R.id.wtBouton, PendingIntent.getBroadcast(c, 2205, new Intent(c, WidgetTelecommande.class).setAction(ACTION), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
             m.updateAppWidget(ids, v);
         } catch (Exception ignored) {}

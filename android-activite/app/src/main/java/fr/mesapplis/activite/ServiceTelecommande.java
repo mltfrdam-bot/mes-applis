@@ -41,7 +41,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
         if (i != null && ACTION_ARRET.equals(i.getAction())) { stopSelf(); return START_NOT_STICKY; }
-        try { startForeground(ID, notif("Réveille la manette d'un appui. 🔵 Y = 🎙️ note vocale"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
+        try { startForeground(ID, notif("Réveille la manette. 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B Gemini"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
         catch (Exception e) { stopSelf(); return START_NOT_STICKY; }
         active = true;
         Bug.note(this, "Télécommande", "allumée");
@@ -66,31 +66,44 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public void etatManettesChange() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null && lien != null) nm.notify(ID, notif(lien.pretes() > 0 ? "✅ Manette prête · 🔵 Y = 🎙️ note vocale" : "🔎 Réveille la manette d'un appui…"));
+        if (nm != null && lien != null) nm.notify(ID, notif(lien.pretes() > 0 ? "✅ Prête · 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B Gemini" : "🔎 Réveille la manette d'un appui…"));
     }
 
     @Override public void reconnectee() { vibrer(new long[]{0, 60, 120, 60}); }
 
     @Override public void bouton(String nom) {
         Bug.note(this, "Télécommande", "bouton " + nom);
-        if (!"Y".equals(nom)) return;
         NoteVocale n = NoteVocale.actif;
-        if (n != null) { vibrer(new long[]{0, 60, 100, 60}); n.runOnUiThread(n::terminer); return; }   // 2e appui = fin de la note
+        if (n != null) {   // une note est en cours : on la termine avec la MÊME lettre que celle qui l'a commencée
+            if (nom.equals(n.lettre)) { vibrer(new long[]{0, 60, 100, 60}); n.runOnUiThread(n::terminer); }
+            return;
+        }
+        if ("B".equals(nom)) { vibrer(new long[]{0, 80}); ouvrirGemini(); return; }
+        if (!"Y".equals(nom) && !"A".equals(nom)) return;
         h.removeCallbacks(finAuto);
         h.postDelayed(finAuto, 3 * 3600 * 1000L);
         vibrer(new long[]{0, 80});
         try { if (bip == null) bip = new ToneGenerator(AudioManager.STREAM_MUSIC, 90); bip.startTone(ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {}
-        ouvrirNote();
+        ouvrirNote("A".equals(nom) ? "btp" : "claude", nom);
+    }
+
+    /** 🟣 B : l'assistant d'Android (Gemini) en écoute. */
+    private void ouvrirGemini() {
+        Intent[] essais = { new Intent(Intent.ACTION_VOICE_COMMAND), new Intent("android.intent.action.ASSIST"), new Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE) };
+        for (Intent i : essais) {
+            try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); Bug.note(this, "Télécommande", "Gemini ouvert (" + i.getAction() + ")"); return; }
+            catch (Exception e) { Bug.note(this, "Télécommande", "Gemini : " + i.getAction() + " refusé : " + e.getClass().getSimpleName()); }
+        }
     }
 
     /** L'écran de dictée s'ouvre par une notification « plein écran » (seule façon autorisée par Android depuis l'arrière-plan). */
-    private void ouvrirNote() {
+    private void ouvrirNote(String cat, String lettre) {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
         NotificationChannel c = new NotificationChannel(CANAL_NOTE, "Télécommande : note vocale", NotificationManager.IMPORTANCE_HIGH);
         c.setSound(null, null); c.enableVibration(false); c.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(c);
-        Intent ecran = new Intent(this, NoteVocale.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        Intent ecran = new Intent(this, NoteVocale.class).putExtra("cat", cat).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         PendingIntent pi = PendingIntent.getActivity(this, 2203, ecran, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification n = new Notification.Builder(this, CANAL_NOTE).setSmallIcon(R.drawable.ic_seance).setContentTitle("🎙️ Note vocale").setContentText("Touche pour dicter ta note")
                 .setCategory(Notification.CATEGORY_CALL).setVisibility(Notification.VISIBILITY_PUBLIC).setFullScreenIntent(pi, true).setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(60000).build();
