@@ -78,6 +78,7 @@ public class NoteVocale extends Activity {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) { Bug.note(this, "Note vocale", "ERREUR : aucune reconnaissance vocale sur l'appareil"); etat.setText("La reconnaissance vocale n'est pas disponible sur cet appareil (appli Google manquante ?)."); return; }
         actif = this;
         sonner(1);
+        h.postDelayed(() -> muet(true), 300);   // après NOTRE bip : on coupe les bips de Google à chaque reprise d'écoute
         h.postDelayed(this::terminer, 5 * 60000L);
         nouveauReco();
         demarrer();
@@ -147,12 +148,29 @@ public class NoteVocale extends Activity {
         h.removeCallbacksAndMessages(null);
         String t = (texte + (partiel.isEmpty() ? "" : (texte.length() > 0 ? " " : "") + partiel)).trim();
         try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
+        muet(false);
         sonner(2);
         if (t.isEmpty()) { etat.setText("Rien n'a été noté." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Rien noté."); h.postDelayed(this::finish, 2500); return; }
         garder(t);
         etat.setText("✅ Noté :\n« " + t + " »");
         dire("Noté.");
         h.postDelayed(this::finish, 3000);
+    }
+
+    /** 🔇 (essai 27) Coupe les sons du système pendant la dictée (les bips de la reconnaissance de Google), puis les remet. */
+    private final java.util.List<Integer> coupes = new java.util.ArrayList<>();
+    private void muet(boolean oui) {
+        android.media.AudioManager am = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+        if (am == null) return;
+        if (oui) {
+            for (int f : new int[] { android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.STREAM_SYSTEM, android.media.AudioManager.STREAM_NOTIFICATION }) {
+                try { if (!am.isStreamMute(f)) { am.adjustStreamVolume(f, android.media.AudioManager.ADJUST_MUTE, 0); coupes.add(f); } } catch (Exception e) { Bug.note(this, "Note vocale", "son " + f + " pas coupé : " + e.getClass().getSimpleName()); }
+            }
+            Bug.note(this, "Note vocale", "sons système coupés pendant la dictée (" + coupes.size() + ")");
+        } else {
+            for (int f : coupes) { try { am.adjustStreamVolume(f, android.media.AudioManager.ADJUST_UNMUTE, 0); } catch (Exception ignored) {} }
+            coupes.clear();
+        }
     }
 
     private void sonner(int n) {
@@ -174,6 +192,7 @@ public class NoteVocale extends Activity {
     }
 
     @Override protected void onDestroy() {
+        muet(false);
         if (actif == this) { actif = null; String t = (texte + " " + partiel).trim(); if (!gardee && !t.isEmpty()) { gardee = true; garder(t); } }
         try { if (bip != null) bip.release(); } catch (Exception ignored) {}
         h.removeCallbacksAndMessages(null);
