@@ -557,7 +557,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     // ---------- 🎮 Manettes et 🏁 fin de fantôme (essai 16) ----------
     private org.json.JSONObject cfgManettes() { try { return new org.json.JSONObject(getSharedPreferences("reglages", MODE_PRIVATE).getString("manettes", "{}")); } catch (Exception e) { return new org.json.JSONObject(); } }
 
-    private void demarrerManettes() { try { if (manettes != null && cfgManettes().optBoolean("on", false)) manettes.demarrer(); } catch (Exception ignored) {} }
+    private void demarrerManettes() { try { if (manettes != null && cfgManettes().optBoolean("on", false)) { ServiceTelecommande.arreter(this); manettes.demarrer(); } } catch (Exception ignored) {} }
 
     @Override public void etatManettesChange() { }
 

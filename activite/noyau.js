@@ -10,7 +10,7 @@ const CLE_COURSES = "footing-courses";
 /* clés du Journal dans le Hub (v31) */
 const CLES_HUB = ["footing-courses", "act-courante", "acts-perso", "acts-masquees", "pompes-journee", "pompes-jour-opt", "pompes-opt", "pompes-encours",
   "pompes-det-niveau", "pompes-det-log", "h10-rec", "impact-reglage", "impact-essais", "fant-opt", "frac-opt"];
-const CLES_LISTES = ["adversaires", "seance-evts", "acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
+const CLES_LISTES = ["notes-plus-tard", "adversaires", "seance-evts", "acts-perso", "acts-masquees", "acts-supprimees", "sas-direct", "echauffements", "materiel-usage", "pompes-det-log", "impact-essais"];   // listes : on complète
 const CLES_EN_COURS = ["pompes-journee", "pompes-encours", "h10-rec"];                    // séance non terminée dans le Hub
 
 /* ===== Activités ===== */
@@ -816,6 +816,12 @@ function ressentiNoter(n, txt) { if (!n) return null; const rs = Object.assign({
 
 
 
+
+/* ===== 📝 Notes « à regarder plus tard » (dictées à la manette ou écrites) — essai 22 ===== */
+function notesLire(base) { return lireListe(base.reglages["notes-plus-tard"]).filter(n => n && n.ts && n.t).sort((a, b) => b.ts - a.ts); }
+function noteAjouter(base, ts, t, source) { const l = notesLire(base); if (l.some(n => n.ts === ts && n.t === t)) return null; const n = { ts, t: String(t).slice(0, 2000), src: source || "voix" }; l.push(n); base.reglages["notes-plus-tard"] = JSON.stringify(l); return n; }
+function noteRegler(base, ts, ch) { const l = notesLire(base).map(n => n.ts === ts ? Object.assign({}, n, ch) : n).filter(n => !n.suppr); base.reglages["notes-plus-tard"] = JSON.stringify(l); }
+
 /* ===== 🎾 Fiches adversaires (essai 15) ===== */
 const CLASSEMENTS = ["NC", "40", "30/5", "30/4", "30/3", "30/2", "30/1", "30", "15/5", "15/4", "15/3", "15/2", "15/1", "15", "5/6", "4/6", "3/6", "2/6", "1/6", "0", "-2/6", "-4/6", "-15", "-30", "Top 60 / 100"];
 const normNom = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -861,6 +867,7 @@ function rapportPeriode(base, sante, nb, maintenant) { const now = maintenant ||
     T.push("Tension : " + M.length + " mesure" + (M.length > 1 ? "s" : "") + " · moyenne " + ms + "/" + md + " (" + tensionNiveau(ms, md).t + ")" + (hautes ? " · " + hautes + " élevée" + (hautes > 1 ? "s" : "") : "")); }
   const DA = douleursActives(S); if (DA.length) T.push("Douleurs en cours : " + DA.map(d => d.zone + (d.dernier ? " " + d.dernier.niveau + "/10 (" + jourTxt(d.dernier.date) + ")" : d.intensite ? " (" + d.intensite.toLowerCase() + ")" : "")).join(" · "));
   { const P = ((S.sante) || []).filter(e => e.poids && jours.includes(e.date)).sort((a, b) => a.date.localeCompare(b.date)); if (P.length) T.push("Poids : " + P.map(e => jourTxt(e.date) + " " + String(e.poids).replace(".", ",") + " kg").join(" · ")); }
+  { const NL = notesLire(base).filter(n => jours.includes(isoJour(n.ts))); if (NL.length) { T.push("", "📝 NOTES « À REGARDER PLUS TARD »"); NL.slice().reverse().forEach(n => T.push("- " + jourTxt(isoJour(n.ts)) + " " + hhmm(n.ts) + (n.fait ? " ✅" : "") + " : " + n.t)); } }
   /* Jour par jour */
   jours.forEach(d => { const lj = L.filter(x => isoJour(x.t) === d).sort((a, b) => a.t - b.t), jj = J.find(j => j.date === d), mj = M.filter(m => m.date === d).reverse(),
       dj = ((S.douleurs) || []).map(x => ({ zone: x.zone, s: (x.suivi || []).filter(v => v.date === d) })).filter(x => x.s.length), sj = ((S.sante) || []).find(e => e.date === d);
@@ -933,6 +940,7 @@ function fitImporter(base, octets, nom) { const R = fitEnregistrement(fitLire(oc
   return { ajoute, R, resume: actInfo(R.act).nom + " du " + dateHeure(R.debut) + " (" + R.importe.montre + ") : " + kmTxt(g.dist) + " en " + chrono(g.temps) + " · allure " + g.allure + (R.res.fcMoy ? " · ❤️ " + R.res.fcMoy + " / " + R.res.fcMax : "") + " · " + nb(R.gps.points) + " points" }; }
 
 const N = { FORMAT, CLES_HUB, ACTS, actInfo, actNom, toutesActs, actsVisibles, lireListe, jourCourt, dateFr, heure, heureS, dateHeure, horodatage, gm, hm, nb, pl, v1, libelle,
+  notesLire, noteAjouter, noteRegler,
   CLASSEMENTS, advLire, advTrouver, advEnregistrer, advResultats, ecartCl, advTxt,
   tensionNiveau, isoJour, santeMesures, douleursActives, rapportPeriode,
   GOURDE_DEFAUT, gourdeRecette, gourdeRegler, RAVITO, evtsLire, evtAjouter, evtAnnuler, evtsSeance, ravitoTotaux, ravitoConseil, rehydratation, scoreEtat, scoreTxt, ravitoLigne, ressentiNoter,

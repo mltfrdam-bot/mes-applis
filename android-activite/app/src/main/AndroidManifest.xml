@@ -19,6 +19,7 @@
     <!-- 💧 rappels d'eau : l'alarme est remise en route après un redémarrage du téléphone -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
@@ -60,6 +61,17 @@
         </receiver>
 
         <!-- 💧 Widget de l'eau sur l'écran d'accueil -->
+        <receiver android:name=".WidgetTelecommande" android:exported="false" android:label="🎮 Télécommande">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="fr.mesapplis.activite.TELECOMMANDE_BASCULER" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_telecommande_info" />
+        </receiver>
+        <service android:name=".ServiceTelecommande" android:exported="false" android:foregroundServiceType="connectedDevice" />
+        <activity android:name=".NoteVocale" android:exported="false" android:excludeFromRecents="true" android:taskAffinity=".note"
+            android:showWhenLocked="true" android:turnScreenOn="true" android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar" />
+
         <receiver android:name=".WidgetEau" android:exported="false" android:label="💧 Eau du jour">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_eau_info" />

@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Journal d\'activité</string>
     <string name="widget_eau_desc">💧 Eau du jour : ajoute ce que tu bois en une touche</string>
+    <string name="widget_telecommande_desc">🎮 Télécommande : la manette Zwift hors séance (note vocale)</string>
 </resources>

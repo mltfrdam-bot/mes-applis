@@ -845,6 +845,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String manettesTest(boolean marche) {
             if (marche) {
                 if (!LienH10.droit(MainActivity.this)) { btDemander(); return "{\"droit\":false}"; }
+                ServiceTelecommande.arreter(MainActivity.this);
                 if (manTest == null) manTest = new LienManettes(MainActivity.this, new LienManettes.Ecoute() {
                     @Override public void bouton(String nom) { runOnUiThread(() -> { essaiBouton(nom); if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui(" + Json.texte(nom) + ")", null); }); }
                     @Override public void etatManettesChange() { }
@@ -856,6 +857,10 @@ public class MainActivity extends Activity {
             if (manTest != null) { manTest.arreter(); manTest = null; }
             return "{}";
         }
+        /** 🎙️ Notes vocales dictées avec la télécommande : la page les range, puis la liste est vidée. */
+        @JavascriptInterface public String notesVocales() { SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); String t = p.getString("notesVocales", "[]"); p.edit().putString("notesVocales", "[]").apply(); return t; }
+        @JavascriptInterface public void telecommande(boolean marche) { if (marche != ServiceTelecommande.active) ServiceTelecommande.basculer(MainActivity.this); }
+        @JavascriptInterface public boolean telecommandeActive() { return ServiceTelecommande.active; }
         @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
         /** Boissons notées avec la manette pendant la séance : la page les range dans la séance, puis vide la liste. */
