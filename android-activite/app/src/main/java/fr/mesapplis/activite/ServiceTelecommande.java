@@ -44,6 +44,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         try { startForeground(ID, notif("Réveille la manette d'un appui. 🔵 Y = 🎙️ note vocale"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
         catch (Exception e) { stopSelf(); return START_NOT_STICKY; }
         active = true;
+        Bug.note(this, "Télécommande", "allumée");
         WidgetTelecommande.majTous(this);
         if (lien == null) { lien = new LienManettes(this, this); lien.demarrer(); }
         h.removeCallbacks(finAuto);
@@ -53,6 +54,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public void onDestroy() {
         active = false;
+        Bug.note(this, "Télécommande", "arrêtée");
         h.removeCallbacksAndMessages(null);
         try { if (lien != null) lien.arreter(); } catch (Exception ignored) {}
         try { if (bip != null) bip.release(); } catch (Exception ignored) {}
@@ -70,6 +72,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
     @Override public void reconnectee() { vibrer(new long[]{0, 60, 120, 60}); }
 
     @Override public void bouton(String nom) {
+        Bug.note(this, "Télécommande", "bouton " + nom);
         if (!"Y".equals(nom)) return;
         h.removeCallbacks(finAuto);
         h.postDelayed(finAuto, 3 * 3600 * 1000L);
@@ -90,7 +93,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         Notification n = new Notification.Builder(this, CANAL_NOTE).setSmallIcon(R.drawable.ic_seance).setContentTitle("🎙️ Note vocale").setContentText("Touche pour dicter ta note")
                 .setCategory(Notification.CATEGORY_CALL).setVisibility(Notification.VISIBILITY_PUBLIC).setFullScreenIntent(pi, true).setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(60000).build();
         nm.notify(ID_NOTE, n);
-        try { startActivity(ecran); } catch (Exception ignored) {}   // écran allumé et appli visible : ouverture directe
+        try { startActivity(ecran); Bug.note(this, "Télécommande", "écran de note : ouverture demandée (notification plein écran " + (android.os.Build.VERSION.SDK_INT >= 34 ? (nm.canUseFullScreenIntent() ? "autorisée" : "NON autorisée") : "ok") + ")"); } catch (Exception e) { Bug.note(this, "Télécommande", "ouverture directe refusée : " + e); }   // écran allumé et appli visible : ouverture directe
     }
 
     private void vibrer(long[] m) { try { Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE); if (v != null) v.vibrate(VibrationEffect.createWaveform(m, -1)); } catch (Exception ignored) {} }

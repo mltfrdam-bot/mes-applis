@@ -205,6 +205,7 @@ final class LienManettes {
 
         @Override public void onConnectionStateChange(BluetoothGatt g, int statut, int etat) {
             h.post(() -> {
+                Bug.note(ctx, "Manette", m.nom + " : " + (etat == BluetoothProfile.STATE_CONNECTED ? "connectée" : etat == BluetoothProfile.STATE_DISCONNECTED ? "déconnectée" : "état " + etat) + " (statut " + statut + ")");
                 if (etat == BluetoothProfile.STATE_CONNECTED) { m.gatt = g; try { g.discoverServices(); } catch (Exception ignored) {} }
                 else if (etat == BluetoothProfile.STATE_DISCONNECTED) perdue(m);
             });
@@ -214,7 +215,7 @@ final class LienManettes {
             h.post(() -> {
                 BluetoothGattService s = g.getService(S_FC82);
                 if (s == null) s = g.getService(S_ZWIFT);
-                if (s == null) { ecoute.etatManettesChange(); return; }   // manette verrouillée par Zwift
+                if (s == null) { Bug.note(ctx, "Manette", m.nom + " : service Zwift absent (manette verrouillée ?)"); ecoute.etatManettesChange(); return; }
                 final BluetoothGattCharacteristic a = s.getCharacteristic(C_ASYNC), sy = s.getCharacteristic(C_SYNC), rx = s.getCharacteristic(C_ECRIRE);
                 if (a != null) commande(m, () -> { if (!abonner(g, a, indique(a))) suite(m); });
                 if (sy != null) commande(m, () -> { if (!abonner(g, sy, indique(sy))) suite(m); });

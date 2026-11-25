@@ -116,6 +116,9 @@
 <script src="donnees-integrees.js"></script>
 <script src="noyau.js"></script>
 <script>
+window.addEventListener("error", (e) => { try { if (window.AndroidApp && AndroidApp.bugNoter) AndroidApp.bugNoter("Page", (e.message || "erreur") + " @" + (e.lineno || "?") + ":" + (e.colno || "?")); } catch (x) {} });
+window.addEventListener("unhandledrejection", (e) => { try { if (window.AndroidApp && AndroidApp.bugNoter) AndroidApp.bugNoter("Page", "promesse : " + (e.reason && e.reason.message || e.reason)); } catch (x) {} });
+
 "use strict";
 /* Journal d'activité (APK) — étape 1 : socle. Écrans : Activités, Historique, Bilans, Aide, Réglages, Descriptif d'import.
    Les données sont dans le téléphone (fichier base.json), écrites par la partie Android. */
@@ -510,6 +513,7 @@ function vueReglages() { titre("⚙️ Réglages", "version " + Pont.version());
       '<tr><td>Si toujours en retard, rappeler toutes les</td><td><div class="chips">' + c("intervalle", 10, "10 min") + c("intervalle", 15, "15 min") + c("intervalle", 30, "30 min") + c("intervalle", 60, "1 h") + '</div></td></tr>' +
       '<tr><td>Rappel : bouton 1</td><td><div class="chips">' + [150, 200, 250].map(v => c("ml1", v, v / 10 + " cl")).join("") + '</div></td></tr>' +
       '<tr><td>Rappel : bouton 2</td><td><div class="chips">' + [330, 500, 750].map(v => c("ml2", v, v / 10 + " cl")).join("") + '</div></td></tr></tbody></table>' +
+      '<h2>🐞 Rapport de bug</h2><p class="aide">Quand quelque chose ne marche pas : touche 📋 Copier et colle le texte dans la conversation avec Claude. Il contient ton appareil, les autorisations et les dernières étapes notées par l\'appli (note vocale, manettes, télécommande, erreurs de la page).</p><div class="ligne"><button class="main" data-do="bugsCopier">📋 Copier le rapport de bug</button><button class="sec" data-do="bugsEffacer">🗑 Effacer le journal</button></div>' +
       htmlManettesReglages() +
       '<h2>💧 Widget et notification permanente</h2><p class="aide">Widget : appui long sur l\'écran d\'accueil → Widgets → Journal → « 💧 Eau du jour ». « +… » ouvre une petite fenêtre pour une autre quantité ; toucher le total ouvre le 📒 carnet.</p><table class="milieu"><tbody>' +
       '<tr><td>Notification permanente</td><td><div class="chips"><button class="chip" data-do="eauPerm" data-v="1" aria-pressed="' + !!R.permanente + '">✅ Oui</button><button class="chip" data-do="eauPerm" data-v="0" aria-pressed="' + !R.permanente + '">Non</button></div><div class="gris" style="font-size:13px;margin-top:4px">Toujours visible en haut de l\'écran, avec les 3 boutons. Elle garde aussi l\'appli active : elle se rouvre sans recharger.</div></td></tr>' +
@@ -1015,6 +1019,8 @@ const ACTIONS = {
   stb: () => { N.evtAjouter(BASE, { ts: Date.now(), k: "stb" }); sauver(); majRavito(true); },
   gourdeDosage, gourdeDosageOk,
   manTest: manTestBasculer,
+  bugsCopier: () => { if (!(window.AndroidApp && AndroidApp.bugs)) { toast("Seulement dans l'APK."); return; } copie(AndroidApp.bugs(), "Rapport de bug"); },
+  bugsEffacer: () => { try { AndroidApp.bugsEffacer(); toast("🗑 Journal effacé : refais l'essai, puis copie le rapport.", 3000); } catch (e) {} },
   gpsAutoriser: () => { try { AndroidApp.gpsDemander(); } catch (e) {} },
   manR: (b) => { const v = b.dataset.v; manRegler({ [b.dataset.k]: v === "true" ? true : v === "false" ? false : Number(v) }); dessiner(); },
   gourde: (b) => { setTimeout(manPousser, 50); BASE.reglages["gourde"] = b.dataset.v; sauver(); majRavito(true); },

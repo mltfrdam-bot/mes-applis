@@ -861,6 +861,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String notesVocales() { SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); String t = p.getString("notesVocales", "[]"); p.edit().putString("notesVocales", "[]").apply(); return t; }
         @JavascriptInterface public void telecommande(boolean marche) { if (marche != ServiceTelecommande.active) ServiceTelecommande.basculer(MainActivity.this); }
         @JavascriptInterface public boolean telecommandeActive() { return ServiceTelecommande.active; }
+        /** 🐞 Rapport de bug : en-tête (appareil, version, autorisations) + journal. */
+        @JavascriptInterface public String bugs() {
+            String v = ""; try { v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) {}
+            StringBuilder t = new StringBuilder("🐞 RAPPORT DE BUG — " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n");
+            t.append("Appli : ").append(getPackageName()).append(" ").append(v).append(" · Android ").append(android.os.Build.VERSION.SDK_INT).append(" · ").append(android.os.Build.MANUFACTURER).append(" ").append(android.os.Build.MODEL).append("\n");
+            t.append("Autorisations : micro ").append(checkSelfPermission("android.permission.RECORD_AUDIO") == PackageManager.PERMISSION_GRANTED ? "oui" : "NON")
+             .append(" · Bluetooth ").append(LienH10.droit(MainActivity.this) ? "oui" : "NON").append(" · position ").append(ServiceSeance.droitGps(MainActivity.this) ? "oui" : "NON");
+            try { android.app.NotificationManager nm = (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE); t.append(" · notifications ").append(nm.areNotificationsEnabled() ? "oui" : "NON"); if (android.os.Build.VERSION.SDK_INT >= 34) t.append(" · plein écran ").append(nm.canUseFullScreenIntent() ? "oui" : "NON"); } catch (Exception ignored) {}
+            t.append(" · reconnaissance vocale ").append(android.speech.SpeechRecognizer.isRecognitionAvailable(MainActivity.this) ? "oui" : "NON").append("\n\n");
+            String j = Bug.lire(MainActivity.this);
+            String[] l = j.split("\n"); int d = Math.max(0, l.length - 200);
+            t.append("Journal (").append(l.length - d).append(" dernières lignes) :\n");
+            for (int i = d; i < l.length; i++) if (!l[i].isEmpty()) t.append(l[i]).append("\n");
+            return t.toString();
+        }
+        @JavascriptInterface public void bugNoter(String source, String texte) { Bug.note(MainActivity.this, source == null ? "Page" : source, texte == null ? "" : texte.length() > 600 ? texte.substring(0, 600) : texte); }
+        @JavascriptInterface public void bugsEffacer() { Bug.effacer(MainActivity.this); }
         @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
         /** Boissons notées avec la manette pendant la séance : la page les range dans la séance, puis vide la liste. */

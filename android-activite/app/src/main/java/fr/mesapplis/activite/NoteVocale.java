@@ -34,6 +34,7 @@ public class NoteVocale extends Activity {
     private TextView etat;
     private final Handler h = new Handler(Looper.getMainLooper());
     private int essais = 0;
+    private boolean horsLigne = true;   // on essaie d'abord sans internet, puis avec si la langue n'est pas téléchargée
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -50,7 +51,9 @@ public class NoteVocale extends Activity {
         l.addView(t); l.addView(etat); l.addView(fermer);
         setContentView(l);
         voix = new TextToSpeech(this, s -> { try { voix.setLanguage(Locale.FRANCE); } catch (Exception ignored) {} });
+        Bug.note(this, "Note vocale", "écran ouvert (Android " + android.os.Build.VERSION.SDK_INT + ", " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + ")");
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) {
+            Bug.note(this, "Note vocale", "micro non autorisé : demande envoyée");
             etat.setText("Autorise le micro, puis réappuie sur 🔵 Y.");
             requestPermissions(new String[]{"android.permission.RECORD_AUDIO"}, 1);
             return;
@@ -58,10 +61,11 @@ public class NoteVocale extends Activity {
         ecouter();
     }
 
-    @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) { if (r.length > 0 && r[0] == PackageManager.PERMISSION_GRANTED) ecouter(); }
+    @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) { boolean ok = r.length > 0 && r[0] == PackageManager.PERMISSION_GRANTED; Bug.note(this, "Note vocale", "micro " + (ok ? "autorisé" : "REFUSÉ")); if (ok) ecouter(); }
 
     private void ecouter() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) { etat.setText("La reconnaissance vocale n'est pas disponible sur cet appareil (Google)."); return; }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { Bug.note(this, "Note vocale", "ERREUR : aucune reconnaissance vocale sur l'appareil"); etat.setText("La reconnaissance vocale n'est pas disponible sur cet appareil (appli Google manquante ?)."); return; }
+        Bug.note(this, "Note vocale", "écoute lancée (" + (horsLigne ? "hors ligne d'abord" : "avec internet") + ", essai " + (essais + 1) + ")");
         etat.setText("Je t'écoute… parle maintenant.");
         try { if (reco != null) reco.destroy(); } catch (Exception ignored) {}
         reco = SpeechRecognizer.createSpeechRecognizer(this);
@@ -69,32 +73,39 @@ public class NoteVocale extends Activity {
             @Override public void onResults(Bundle r) {
                 ArrayList<String> l = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 String txt = l != null && !l.isEmpty() ? l.get(0).trim() : "";
+                Bug.note(NoteVocale.this, "Note vocale", "résultat : " + (txt.isEmpty() ? "VIDE" : "« " + txt + " »") + " (" + (l == null ? 0 : l.size()) + " proposition(s))");
                 if (txt.isEmpty()) { rate(); return; }
                 garder(txt);
                 etat.setText("✅ Noté :\n« " + txt + " »");
                 dire("Noté : " + txt);
                 h.postDelayed(NoteVocale.this::finish, 3500);
             }
-            @Override public void onError(int e) { rate(); }
-            @Override public void onReadyForSpeech(Bundle p) { }
-            @Override public void onBeginningOfSpeech() { etat.setText("J'écoute…"); }
+            @Override public void onError(int e) {
+                Bug.note(NoteVocale.this, "Note vocale", "ERREUR " + Bug.erreurVoix(e));
+                if ((e == 12 || e == 13) && horsLigne) { horsLigne = false; h.postDelayed(NoteVocale.this::ecouter, 300); return; }   // français pas téléchargé : on passe par internet
+                rateErr = Bug.erreurVoix(e); rate(); }
+            @Override public void onReadyForSpeech(Bundle p) { Bug.note(NoteVocale.this, "Note vocale", "prêt à écouter"); }
+            @Override public void onBeginningOfSpeech() { Bug.note(NoteVocale.this, "Note vocale", "voix détectée"); etat.setText("J'écoute…"); }
             @Override public void onRmsChanged(float v) { }
             @Override public void onBufferReceived(byte[] b) { }
-            @Override public void onEndOfSpeech() { etat.setText("J'écris…"); }
+            @Override public void onEndOfSpeech() { Bug.note(NoteVocale.this, "Note vocale", "fin de la parole"); etat.setText("J'écris…"); }
             @Override public void onPartialResults(Bundle b) { }
             @Override public void onEvent(int t, Bundle b) { }
         });
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
-                .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, horsLigne)
+                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName())
                 .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L);
-        try { reco.startListening(i); } catch (Exception e) { rate(); }
+        try { reco.startListening(i); } catch (Exception e) { Bug.note(this, "Note vocale", "ERREUR au démarrage : " + e); rate(); }
     }
 
+    private String rateErr = "";
+
     private void rate() {
-        if (++essais <= 1) { etat.setText("Je n'ai pas compris, recommence…"); dire("Je n'ai pas compris, recommence."); h.postDelayed(this::ecouter, 1800); return; }
-        etat.setText("Pas compris. Réappuie sur 🔵 Y pour recommencer.");
+        if (++essais <= 1) { etat.setText("Je n'ai pas compris, recommence…" + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Je n'ai pas compris, recommence."); h.postDelayed(this::ecouter, 1800); return; }
+        etat.setText("Pas compris. Réappuie sur 🔵 Y pour recommencer." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")"));
         dire("Pas compris.");
         h.postDelayed(this::finish, 3000);
     }
@@ -107,6 +118,7 @@ public class NoteVocale extends Activity {
             JSONArray l = new JSONArray(p.getString("notesVocales", "[]"));
             l.put(new JSONObject().put("ts", System.currentTimeMillis()).put("t", txt));
             p.edit().putString("notesVocales", l.toString()).apply();
+            Bug.note(this, "Note vocale", "note gardée (" + l.length() + " en attente de rangement)");
         } catch (Exception ignored) {}
     }
 
