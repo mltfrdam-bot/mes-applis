@@ -71,6 +71,8 @@ import java.util.regex.Pattern;
  * Pont « AndroidApp » : tout ce que la page ne sait pas faire seule (fichiers, presse-papiers, partage, batterie, voix).
  */
 public class MainActivity extends Activity {
+    LienManettes manTest;
+
     private static final int CHOIX_FICHIER = 41;
     private static final int CHOIX_CARNET = 42;
     /** 1.20 : le carnet intégré utilise un champ « fichier » classique (import de sauvegarde) : Android le sert ici. */
@@ -767,6 +769,21 @@ public class MainActivity extends Activity {
             RappelEau.prefs(MainActivity.this).edit().putString("etat", json == null ? "{}" : json).apply(); RappelEau.programmer(MainActivity.this);
             if (json != null && !sansMaj(json).equals(sansMaj(avant))) RappelEau.rafraichir(MainActivity.this);   // widget et notification permanente
         }
+        /** 🎮 Essai des manettes depuis ⚙️ Réglages, sans séance : connexion, boutons vus, appareils Bluetooth vus. */
+        @JavascriptInterface public String manettesTest(boolean marche) {
+            if (marche) {
+                if (!LienH10.droit(MainActivity.this)) { btDemander(); return "{\"droit\":false}"; }
+                if (manTest == null) manTest = new LienManettes(MainActivity.this, new LienManettes.Ecoute() {
+                    @Override public void bouton(String nom) { runOnUiThread(() -> { if (web != null) web.evaluateJavascript("window.manetteAppui && window.manetteAppui(" + Json.texte(nom) + ")", null); }); }
+                    @Override public void etatManettesChange() { }
+                });
+                manTest.demarrer();
+                return manTest.etatJson();
+            }
+            if (manTest != null) { manTest.arreter(); manTest = null; }
+            return "{}";
+        }
+        @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
         /** Boissons notées avec la manette pendant la séance : la page les range dans la séance, puis vide la liste. */
         @JavascriptInterface public String manetteEvts() { SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); String t = p.getString("manetteEvts", "[]"); p.edit().putString("manetteEvts", "[]").apply(); return t; }
@@ -911,6 +928,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        try { if (manTest != null) manTest.arreter(); } catch (Exception ignored) {}
         if (voix != null) voix.shutdown();
         try { if (son != null) son.release(); } catch (Exception ignored) {}
         super.onDestroy();

@@ -57,7 +57,9 @@ final class LienManettes {
     private final List<Manette> manettes = new ArrayList<>();
     private final Map<String, Long> dernierAppui = new HashMap<>();
     private BluetoothLeScanner scanner;
-    private boolean voulu = false, rechercheEnCours = false;
+    private boolean voulu = false, rechercheEnCours = false, sansFiltre = false;
+    private final java.util.LinkedHashSet<String> vus = new java.util.LinkedHashSet<>();   // diagnostic : appareils Bluetooth vus
+    private String derniere = "";
     private final Runnable relancer = this::chercher;
     private final Runnable finRecherche = this::arreterRecherche;
 
@@ -72,7 +74,10 @@ final class LienManettes {
     synchronized int pretes() { int n = 0; for (Manette m : manettes) if (m.prete) n++; return n; }
 
     synchronized String etatJson() {
-        StringBuilder sb = new StringBuilder("{\"voulu\":").append(voulu).append(",\"l\":[");
+        StringBuilder sb = new StringBuilder("{\"voulu\":").append(voulu).append(",\"droit\":").append(LienH10.droit(ctx)).append(",\"cherche\":").append(rechercheEnCours)
+                .append(",\"dernier\":").append(Json.texte(derniere));
+        synchronized (vus) { sb.append(",\"vus\":").append(Json.texte(String.join(", ", vus))); }
+        sb.append(",\"l\":[");
         for (int i = 0; i < manettes.size(); i++) { Manette m = manettes.get(i); if (i > 0) sb.append(',');
             sb.append("{\"nom\":").append(Json.texte(m.nom)).append(",\"prete\":").append(m.prete).append(",\"batt\":").append(m.batterie).append('}'); }
         return sb.append("]}").toString();
@@ -93,19 +98,22 @@ final class LienManettes {
         h.removeCallbacks(relancer);
         if (!voulu) return;
         synchronized (this) { if (manettes.size() >= MAX) return; }
-        if (!LienH10.droit(ctx)) { h.postDelayed(relancer, 10000); return; }
+        if (!LienH10.droit(ctx)) { h.postDelayed(relancer, 5000); ecoute.etatManettesChange(); return; }
         BluetoothAdapter a = LienH10.adaptateur(ctx);
         if (a == null || !a.isEnabled()) { h.postDelayed(relancer, 10000); return; }
         try {
             scanner = a.getBluetoothLeScanner();
             if (scanner == null) { h.postDelayed(relancer, 10000); return; }
-            List<ScanFilter> f = Arrays.asList(
-                    new ScanFilter.Builder().setManufacturerData(ZWIFT, new byte[0]).build(),
-                    new ScanFilter.Builder().setServiceUuid(new ParcelUuid(S_FC82)).build());
-            scanner.startScan(f, new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), recherche);
+            // essai 17 : recherche SANS filtre (avec filtre, les manettes n'apparaissaient pas), tri fait dans onScanResult.
+            // Écran éteint, Android met en pause les recherches sans filtre : on alterne donc avec une recherche filtrée.
+            sansFiltre = !sansFiltre;
+            ScanSettings reg = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
+            if (sansFiltre) scanner.startScan(null, reg, recherche);
+            else scanner.startScan(Arrays.asList(new ScanFilter.Builder().setDeviceName("Zwift Click").build(), new ScanFilter.Builder().setServiceUuid(new ParcelUuid(S_FC82)).build(),
+                    new ScanFilter.Builder().setManufacturerData(ZWIFT, new byte[] { 0 }, new byte[] { 0 }).build()), reg, recherche);
             rechercheEnCours = true;
             h.removeCallbacks(finRecherche);
-            h.postDelayed(finRecherche, 30000);
+            h.postDelayed(finRecherche, 20000);
         } catch (Exception e) { h.postDelayed(relancer, 10000); }
     }
 
@@ -114,13 +122,19 @@ final class LienManettes {
         boolean etait = rechercheEnCours;
         rechercheEnCours = false;
         try { if (scanner != null && etait) scanner.stopScan(recherche); } catch (Exception ignored) {}
-        if (voulu) { synchronized (this) { if (manettes.size() < MAX) h.postDelayed(relancer, 15000); } }
+        if (voulu) { synchronized (this) { if (manettes.size() < MAX) h.postDelayed(relancer, 3000); } }
     }
 
     private final ScanCallback recherche = new ScanCallback() {
         @Override public void onScanResult(int type, ScanResult r) {
             final BluetoothDevice d = r.getDevice();
-            String n = r.getScanRecord() != null ? r.getScanRecord().getDeviceName() : null;
+            android.bluetooth.le.ScanRecord rec = r.getScanRecord();
+            String n = rec != null ? rec.getDeviceName() : null;
+            boolean zwift = (n != null && n.toLowerCase(java.util.Locale.ROOT).contains("zwift"))
+                    || (rec != null && rec.getManufacturerSpecificData(ZWIFT) != null)
+                    || (rec != null && rec.getServiceUuids() != null && rec.getServiceUuids().contains(new ParcelUuid(S_FC82)));
+            if (n != null && !n.isEmpty()) synchronized (vus) { vus.add(n + (zwift ? " ✅" : "")); while (vus.size() > 12) vus.remove(vus.iterator().next()); }
+            if (!zwift) return;
             final String nom = n == null ? "Zwift Click" : n;
             h.post(() -> {
                 if (!voulu) return;
@@ -190,10 +204,11 @@ final class LienManettes {
                 if (s == null) s = g.getService(S_ZWIFT);
                 if (s == null) { ecoute.etatManettesChange(); return; }   // manette verrouillée par Zwift
                 final BluetoothGattCharacteristic a = s.getCharacteristic(C_ASYNC), sy = s.getCharacteristic(C_SYNC), rx = s.getCharacteristic(C_ECRIRE);
-                if (a != null) commande(m, () -> { if (!abonner(g, a, false)) suite(m); });
-                if (sy != null) commande(m, () -> { if (!abonner(g, sy, true)) suite(m); });
+                if (a != null) commande(m, () -> { if (!abonner(g, a, indique(a))) suite(m); });
+                if (sy != null) commande(m, () -> { if (!abonner(g, sy, indique(sy))) suite(m); });
                 if (rx != null) commande(m, () -> { if (!ecrire(g, rx, "RideOn".getBytes(StandardCharsets.US_ASCII))) suite(m); });
                 commande(m, () -> { m.prete = true; ecoute.etatManettesChange(); suite(m); });
+                ecoute.etatManettesChange();
             });
         }
 
@@ -224,6 +239,7 @@ final class LienManettes {
                 if (t != null && now - t < 300) continue;     // même appui répété par l'autre manette
                 dernierAppui.put(nom, now);
             }
+            derniere = nom + " (" + m.nom + ")";
             h.post(() -> ecoute.bouton(nom));
         }
     }
@@ -247,10 +263,14 @@ final class LienManettes {
         return -1;
     }
 
+    /** Comme Web Bluetooth : indications si la caractéristique ne sait faire que ça, sinon notifications. */
+    private static boolean indique(BluetoothGattCharacteristic c) { int p = c.getProperties(); return (p & BluetoothGattCharacteristic.PROPERTY_NOTIFY) == 0 && (p & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0; }
+
     @SuppressWarnings("deprecation")
     private static boolean ecrire(BluetoothGatt g, BluetoothGattCharacteristic c, byte[] valeur) {
-        if (Build.VERSION.SDK_INT >= 33) return g.writeCharacteristic(c, valeur, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == 0;
-        c.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        int type = (c.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) != 0 ? BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE : BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT;
+        if (Build.VERSION.SDK_INT >= 33) return g.writeCharacteristic(c, valeur, type) == 0;
+        c.setWriteType(type);
         c.setValue(valeur);
         return g.writeCharacteristic(c);
     }
