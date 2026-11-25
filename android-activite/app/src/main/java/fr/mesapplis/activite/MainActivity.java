@@ -877,6 +877,9 @@ public class MainActivity extends Activity {
             return t.toString();
         }
         @JavascriptInterface public void bugNoter(String source, String texte) { Bug.note(MainActivity.this, source == null ? "Page" : source, texte == null ? "" : texte.length() > 600 ? texte.substring(0, 600) : texte); }
+        /** Écran déverrouillé : pour que la note s'ouvre sans toucher l'écran, Android exige « Afficher par-dessus les autres applis ». */
+        @JavascriptInterface public boolean dessusOk() { return android.provider.Settings.canDrawOverlays(MainActivity.this); }
+        @JavascriptInterface public void dessusDemander() { try { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + getPackageName()))); } catch (Exception ignored) {} }
         @JavascriptInterface public void bugsEffacer() { Bug.effacer(MainActivity.this); }
         @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }

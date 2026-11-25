@@ -74,6 +74,8 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
     @Override public void bouton(String nom) {
         Bug.note(this, "Télécommande", "bouton " + nom);
         if (!"Y".equals(nom)) return;
+        NoteVocale n = NoteVocale.actif;
+        if (n != null) { vibrer(new long[]{0, 60, 100, 60}); n.runOnUiThread(n::terminer); return; }   // 2e appui = fin de la note
         h.removeCallbacks(finAuto);
         h.postDelayed(finAuto, 3 * 3600 * 1000L);
         vibrer(new long[]{0, 80});
@@ -93,7 +95,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         Notification n = new Notification.Builder(this, CANAL_NOTE).setSmallIcon(R.drawable.ic_seance).setContentTitle("🎙️ Note vocale").setContentText("Touche pour dicter ta note")
                 .setCategory(Notification.CATEGORY_CALL).setVisibility(Notification.VISIBILITY_PUBLIC).setFullScreenIntent(pi, true).setContentIntent(pi).setAutoCancel(true).setTimeoutAfter(60000).build();
         nm.notify(ID_NOTE, n);
-        try { startActivity(ecran); Bug.note(this, "Télécommande", "écran de note : ouverture demandée (notification plein écran " + (android.os.Build.VERSION.SDK_INT >= 34 ? (nm.canUseFullScreenIntent() ? "autorisée" : "NON autorisée") : "ok") + ")"); } catch (Exception e) { Bug.note(this, "Télécommande", "ouverture directe refusée : " + e); }   // écran allumé et appli visible : ouverture directe
+        try { startActivity(ecran); Bug.note(this, "Télécommande", "écran de note : ouverture demandée (par-dessus les applis " + (android.provider.Settings.canDrawOverlays(this) ? "autorisé" : "NON autorisé") + ", notification plein écran " + (android.os.Build.VERSION.SDK_INT >= 34 ? (nm.canUseFullScreenIntent() ? "autorisée" : "NON autorisée") : "ok") + ")"); } catch (Exception e) { Bug.note(this, "Télécommande", "ouverture directe refusée : " + e); }   // écran allumé et appli visible : ouverture directe
     }
 
     private void vibrer(long[] m) { try { Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE); if (v != null) v.vibrate(VibrationEffect.createWaveform(m, -1)); } catch (Exception ignored) {} }
