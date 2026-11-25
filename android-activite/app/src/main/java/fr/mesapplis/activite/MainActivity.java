@@ -139,6 +139,7 @@ public class MainActivity extends Activity {
 
     private static final int CHOIX_FICHIER = 41;
     private static final int CHOIX_CARNET = 42;
+    private static final int CHOIX_CONTACT = 43;
     /** 1.20 : le carnet intégré utilise un champ « fichier » classique (import de sauvegarde) : Android le sert ici. */
     private ValueCallback<Uri[]> choixCarnet;
     private static final int DEMANDE_NOTIF = 42;
@@ -880,6 +881,20 @@ public class MainActivity extends Activity {
         /** Écran déverrouillé : pour que la note s'ouvre sans toucher l'écran, Android exige « Afficher par-dessus les autres applis ». */
         @JavascriptInterface public boolean dessusOk() { return android.provider.Settings.canDrawOverlays(MainActivity.this); }
         @JavascriptInterface public void dessusDemander() { try { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + getPackageName()))); } catch (Exception ignored) {} }
+        /** 📞 Bouton B de la télécommande : choisir le contact (sélecteur de contacts d'Android) + autorisations d'appel et de raccrocher. */
+        @JavascriptInterface public void contactChoisir() {
+            runOnUiThread(() -> {
+                java.util.List<String> p = new java.util.ArrayList<>();
+                for (String x : new String[] { "android.permission.CALL_PHONE", "android.permission.ANSWER_PHONE_CALLS" }) if (checkSelfPermission(x) != PackageManager.PERMISSION_GRANTED) p.add(x);
+                if (!p.isEmpty()) requestPermissions(p.toArray(new String[0]), 44);
+                try { startActivityForResult(new Intent(Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI), CHOIX_CONTACT); } catch (Exception e) { Bug.note(MainActivity.this, "Télécommande", "sélecteur de contacts : " + e); }
+            });
+        }
+        @JavascriptInterface public String contactLire() {
+            String c = getSharedPreferences("reglages", MODE_PRIVATE).getString("teleContact", "{}");
+            boolean ok = checkSelfPermission("android.permission.CALL_PHONE") == PackageManager.PERMISSION_GRANTED, rac = checkSelfPermission("android.permission.ANSWER_PHONE_CALLS") == PackageManager.PERMISSION_GRANTED;
+            return c.length() > 2 ? c.substring(0, c.length() - 1) + ",\"appel\":" + ok + ",\"raccrocher\":" + rac + "}" : "{\"appel\":" + ok + ",\"raccrocher\":" + rac + "}";
+        }
         @JavascriptInterface public void bugsEffacer() { Bug.effacer(MainActivity.this); }
         @JavascriptInterface public String manettesEtat() { return manTest == null ? "{}" : manTest.etatJson(); }
         @JavascriptInterface public void manettesRegler(String json) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("manettes", json).apply(); }
@@ -959,6 +974,19 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int code, int res, Intent data) {
+        if (code == CHOIX_CONTACT) {
+            if (res == RESULT_OK && data != null && data.getData() != null) {
+                try (android.database.Cursor c = getContentResolver().query(data.getData(), new String[] { android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER }, null, null, null)) {
+                    if (c != null && c.moveToFirst()) {
+                        String nom = c.getString(0), num = c.getString(1);
+                        getSharedPreferences("reglages", MODE_PRIVATE).edit().putString("teleContact", new org.json.JSONObject().put("nom", nom).put("num", num).toString()).apply();
+                        Bug.note(this, "Télécommande", "contact du bouton B : " + nom);
+                    }
+                } catch (Exception e) { Bug.note(this, "Télécommande", "choix du contact : erreur " + e); }
+            }
+            js("window.surContact && window.surContact()");
+            return;
+        }
         if (code == CHOIX_CARNET) {
             ValueCallback<Uri[]> cb = choixCarnet; choixCarnet = null;
             if (cb != null) cb.onReceiveValue(res == RESULT_OK && data != null && data.getData() != null ? new Uri[] { data.getData() } : null);

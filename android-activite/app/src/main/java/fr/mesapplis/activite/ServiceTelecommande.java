@@ -41,7 +41,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
         if (i != null && ACTION_ARRET.equals(i.getAction())) { stopSelf(); return START_NOT_STICKY; }
-        try { startForeground(ID, notif("Réveille la manette. 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B Gemini"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
+        try { startForeground(ID, notif("Réveille la manette. 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B appel"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
         catch (Exception e) { stopSelf(); return START_NOT_STICKY; }
         active = true;
         Bug.note(this, "Télécommande", "allumée");
@@ -58,6 +58,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         h.removeCallbacksAndMessages(null);
         try { if (lien != null) lien.arreter(); } catch (Exception ignored) {}
         try { if (bip != null) bip.release(); } catch (Exception ignored) {}
+        try { if (voix != null) voix.shutdown(); } catch (Exception ignored) {}
         WidgetTelecommande.majTous(this);
         super.onDestroy();
     }
@@ -66,7 +67,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public void etatManettesChange() {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm != null && lien != null) nm.notify(ID, notif(lien.pretes() > 0 ? "✅ Prête · 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B Gemini" : "🔎 Réveille la manette d'un appui…"));
+        if (nm != null && lien != null) nm.notify(ID, notif(lien.pretes() > 0 ? "✅ Prête · 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B appel" : "🔎 Réveille la manette d'un appui…"));
     }
 
     @Override public void reconnectee() { vibrer(new long[]{0, 60, 120, 60}); }
@@ -78,7 +79,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
             if (nom.equals(n.lettre)) { vibrer(new long[]{0, 60, 100, 60}); n.runOnUiThread(n::terminer); }
             return;
         }
-        if ("B".equals(nom)) { vibrer(new long[]{0, 80}); ouvrirGemini(); return; }
+        if ("B".equals(nom)) { boutonAppel(); return; }
         if (!"Y".equals(nom) && !"A".equals(nom)) return;
         h.removeCallbacks(finAuto);
         h.postDelayed(finAuto, 3 * 3600 * 1000L);
@@ -87,7 +88,47 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         ouvrirNote("A".equals(nom) ? "btp" : "claude", nom);
     }
 
-    /** 🟣 B : l'assistant d'Android (Gemini) en écoute. */
+    // ---------- 📞 B = appel (essai 26) : 1er appui → « Appeler X ? appuie sur B pour confirmer » ; 2e appui (10 s) → appel ; pendant l'appel → raccrocher ----------
+    private long confirmerJusqua = 0;
+    private android.speech.tts.TextToSpeech voix; private boolean voixPrete = false; private String aDire = null;
+
+    private void parler(String t) {
+        if (voix == null) { aDire = t; voix = new android.speech.tts.TextToSpeech(this, e -> { if (e == android.speech.tts.TextToSpeech.SUCCESS && voix != null) { try { voix.setLanguage(java.util.Locale.FRANCE); } catch (Exception ignored) {} voixPrete = true; if (aDire != null) { voix.speak(aDire, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "tel"); aDire = null; } } }); return; }
+        if (voixPrete) voix.speak(t, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "tel"); else aDire = t;
+    }
+
+    private void boutonAppel() {
+        AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+        boolean enAppel = am != null && (am.getMode() == AudioManager.MODE_IN_CALL || am.getMode() == AudioManager.MODE_IN_COMMUNICATION);
+        if (enAppel) {
+            vibrer(new long[]{0, 60, 100, 60});
+            try { android.telecom.TelecomManager tm = (android.telecom.TelecomManager) getSystemService(TELECOM_SERVICE); boolean ok = tm != null && tm.endCall(); Bug.note(this, "Téléphone", ok ? "appel raccroché" : "raccrocher : refusé par Android"); }
+            catch (SecurityException e) { Bug.note(this, "Téléphone", "raccrocher : autorisation « gérer les appels » manquante"); parler("Je n'ai pas l'autorisation de raccrocher."); }
+            catch (Exception e) { Bug.note(this, "Téléphone", "raccrocher : erreur " + e); }
+            return;
+        }
+        String nom = "", num = "";
+        try { org.json.JSONObject c = new org.json.JSONObject(getSharedPreferences("reglages", MODE_PRIVATE).getString("teleContact", "{}")); nom = c.optString("nom"); num = c.optString("num"); } catch (Exception ignored) {}
+        if (num.isEmpty()) { vibrer(new long[]{0, 200}); parler("Aucun contact choisi pour le bouton B. Choisis-le dans l'appli."); Bug.note(this, "Téléphone", "B : aucun contact choisi"); return; }
+        long now = System.currentTimeMillis();
+        if (now > confirmerJusqua) {
+            confirmerJusqua = now + 10000;
+            vibrer(new long[]{0, 80});
+            parler("Appeler " + nom + " ? Appuie sur B pour confirmer.");
+            Bug.note(this, "Téléphone", "B : confirmation demandée pour " + nom);
+            return;
+        }
+        confirmerJusqua = 0;
+        vibrer(new long[]{0, 80, 100, 80});
+        if (checkSelfPermission("android.permission.CALL_PHONE") != android.content.pm.PackageManager.PERMISSION_GRANTED) { parler("Je n'ai pas l'autorisation d'appeler. Autorise-la dans l'appli."); Bug.note(this, "Téléphone", "appel : autorisation manquante"); return; }
+        try {
+            android.telecom.TelecomManager tm = (android.telecom.TelecomManager) getSystemService(TELECOM_SERVICE);
+            tm.placeCall(android.net.Uri.fromParts("tel", num, null), new android.os.Bundle());
+            Bug.note(this, "Téléphone", "appel lancé vers " + nom);
+        } catch (Exception e) { Bug.note(this, "Téléphone", "appel : erreur " + e); parler("L'appel n'a pas pu partir."); }
+    }
+
+    /** 🟣 (essai 25, remplacé par l'appel) : l'assistant d'Android (Gemini) en écoute. */
     private void ouvrirGemini() {
         Intent[] essais = { new Intent(Intent.ACTION_VOICE_COMMAND), new Intent("android.intent.action.ASSIST"), new Intent(android.speech.RecognizerIntent.ACTION_VOICE_SEARCH_HANDS_FREE) };
         for (Intent i : essais) {
