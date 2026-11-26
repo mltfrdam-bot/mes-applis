@@ -153,6 +153,14 @@ public class NoteVocale extends Activity {
         muet(false);
         sonner(2);
         if (t.isEmpty()) { etat.setText("Rien n'a été noté." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Rien noté."); h.postDelayed(this::finish, 2500); return; }
+        String repas = "claude".equals(cat) ? debutAlimentation(t) : null;
+        if (repas != null) {   // 🎙️ (essai 33) note qui commence par « alimentation » : elle part dans la dictée du carnet (relecture + 2e appui en 5 s)
+            Bug.note(this, "Note vocale", "« alimentation » entendu : dictée du carnet");
+            try { startActivity(new Intent(this, DicteeRepas.class).putExtra("texte", repas).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+            catch (Exception e) { Bug.note(this, "Note vocale", "ERREUR ouverture de la dictée : " + e); garder(t); }
+            h.postDelayed(this::finish, 300);
+            return;
+        }
         String sansEnvoi = "claude".equals(cat) ? finEnvoi(t) : null;
         if (sansEnvoi != null) {   // 🎙️ (essai 31) note finie par « envoyer à Claude » : on garde la note PUIS on ouvre l'appli Claude
             final String txt = sansEnvoi.isEmpty() ? t : sansEnvoi;
@@ -169,9 +177,15 @@ public class NoteVocale extends Activity {
         h.postDelayed(this::finish, 3000);
     }
 
+    /** Note qui commence par « alimentation » : renvoie la suite (ce qu'il a mangé ou bu), ou null. */
+    static String debutAlimentation(String t) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)^[\\s,.]*(?:alimentation|alimentations|aliments?)\\b[\\s,.:;!-]*").matcher(t);
+        return m.find() ? t.substring(m.end()).trim() : null;
+    }
+
     /** Fin « envoyer à Claude » (et ses variantes mal entendues) : renvoie le texte sans ces mots, ou null si la note ne finit pas ainsi. */
     static String finEnvoi(String t) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)[\\s,.;!-]*(?:et\\s+)?(?:envoie|envoies|envoyer|envoyé|envoyez|envoi|envoye)\\s+(?:à|a|au)\\s+(?:claude|clode|clôde|glaude|cloud|clod|claud|klaude|claudes)[\\s.!]*$").matcher(t);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)[\\s,.;!-]*(?:et\\s+)?(?:envoie|envoies|envoyer|envoyé|envoyée|envoyez|envoi|envoye)\\s+(?:(?:à|a|au|pour|chez)\\s+)?(?:claude|clode|clôde|glaude|cloud|clod|claud|klaude|claudes)[\\s.!]*$").matcher(t);
         return m.find() ? t.substring(0, m.start()).trim() : null;
     }
 

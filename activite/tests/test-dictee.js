@@ -29,6 +29,12 @@ const cas = [
   ["jeudi 20 cl", " | ?jeudi 20 cl"],
   ["lait 20 cl", " | ?lait 20 cl"],
   ["eau 20 cl, pain", "e=200 ; bg=125* | ?"],
+  ["alimentation 5h du matin eau 20 cl lait de vache 20 cl baguette 125 G", "e=200 ; lv=200 ; bg=125 | ? @05:00"],
+  ["alimentation 5h du matin au 20 cl les 20 cl baguette 125 G", "bg=125 | ?20 cl 20 cl @05:00"],
+  ["12 h 30 riz 90 g", "rz=90 | ? @12:30"],
+  ["à midi ratatouille", "ra=90* | ? @12:00"],
+  ["café 10 cl à 7 h du soir", "cf=100 | ? @19:00"],
+  ["à 6 heures 20 cl d'eau", "e=200 | ? @06:00"],
 ];
 fs.writeFileSync(path.join(tmp, "f.txt"), favs.join("\n") + "\n"); fs.writeFileSync(path.join(tmp, "p.txt"), cas.map(c => c[0]).join("\n") + "\n");
 const sortie = execFileSync("java", ["-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiDictee", path.join(tmp, "f.txt"), path.join(tmp, "p.txt")], { encoding: "utf8" }).trim().split("\n");

@@ -18,6 +18,7 @@ public class EssaiDictee {
             StringBuilder sb = new StringBuilder();
             for (Dictee.Item it : r.items) { if (sb.length() > 0) sb.append(" ; "); sb.append(it.id).append('=').append(Dictee.nb(it.q)).append(it.defaut ? "*" : ""); }
             sb.append(" | ?").append(String.join(" / ", r.incompris));
+            if (r.heure != null) sb.append(" @").append(r.heure);
             System.out.println(sb);
         }
     }

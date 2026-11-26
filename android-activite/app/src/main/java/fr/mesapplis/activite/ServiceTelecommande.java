@@ -80,6 +80,11 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     @Override public void bouton(String nom) {
         Bug.note(this, "Télécommande", "bouton " + nom);
+        DicteeRepas dr = DicteeRepas.actif;   // 🎙️ (essai 33) dictée du carnet ouverte : Y (ou la lettre qui l'a lancée) la termine ou la valide
+        if (dr != null && dr.enCours()) {
+            if (nom.equals(dr.lettre) || "Y".equals(nom)) { vibrer(new long[]{0, 60, 100, 60}); dr.runOnUiThread(dr::appuiExterne); }
+            return;
+        }
         NoteVocale n = NoteVocale.actif;
         if (n != null) {   // une note est en cours : on la termine avec la MÊME lettre que celle qui l'a commencée
             if (nom.equals(n.lettre)) { vibrer(new long[]{0, 60, 100, 60}); n.runOnUiThread(n::terminer); }

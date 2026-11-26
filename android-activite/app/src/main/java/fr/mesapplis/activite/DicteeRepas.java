@@ -50,6 +50,10 @@ public class DicteeRepas extends Activity {
 
     // étapes : 0 écoute, 1 relecture / attente de validation, 2 fini
     private int etape = 0;
+    String lettre = "";        // lettre de la télécommande si la dictée vient d'une note (« alimentation … »)
+    private String texteDonne = null;
+    boolean enCours() { return etape < 2; }
+    void appuiExterne() { appui(); }
     private String entendu = "", partiel = "";
     private long ts;
     private Dictee.Resultat res;
@@ -82,6 +86,15 @@ public class DicteeRepas extends Activity {
             @Override public void onError(String id) { if ("relecture".equals(id)) h.post(DicteeRepas.this::lancerCompte); }
         });
         Bug.note(this, "Dictée repas", "écran ouvert");
+        texteDonne = getIntent() != null ? getIntent().getStringExtra("texte") : null;
+        String lt = getIntent() != null ? getIntent().getStringExtra("lettre") : null; lettre = lt == null ? "" : lt;
+        if (texteDonne != null) {   // essai 33 : la phrase vient d'une note 🔵 Y « alimentation … » : pas besoin d'écouter
+            Bug.note(this, "Dictée repas", "phrase reçue d'une note : « " + texteDonne + " »");
+            entendu = texteDonne.trim();
+            bValider.setVisibility(android.view.View.VISIBLE);
+            finEcoute();
+            return;
+        }
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) {
             etat.setText("Autorise le micro, puis réappuie sur 🎙️.");
             requestPermissions(new String[]{"android.permission.RECORD_AUDIO"}, 1);
@@ -168,6 +181,7 @@ public class DicteeRepas extends Activity {
             noterJournal("rien compris"); fermerDans(4000); return;
         }
         Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
+        if (res.heure != null) { k.set(Calendar.HOUR_OF_DAY, Integer.parseInt(res.heure.substring(0, 2))); k.set(Calendar.MINUTE, Integer.parseInt(res.heure.substring(3))); }   // essai 33 : heure dite
         int min = k.get(Calendar.HOUR_OF_DAY) * 60 + k.get(Calendar.MINUTE);
         boolean deja = cfg.optBoolean("deja", false) && Dictee.aujourdhui(k).equals(cfg.optString("date"));
         String repas = Dictee.repas(min, !deja);
@@ -182,9 +196,10 @@ public class DicteeRepas extends Activity {
             ecrit.append("\n❓ Pas compris : « ").append(String.join(" », « ", res.incompris)).append(" »\n");
             oral.append(res.incompris.size() == 1 ? "Je n'ai pas compris « " + res.incompris.get(0) + " ». " : "Il y a " + res.incompris.size() + " passages que je n'ai pas compris. ");
         }
-        oral.append(res.items.size() > 1 ? "Appuie pour valider les " + res.items.size() + "." : "Appuie pour valider.");
+        String quoi = lettre.isEmpty() ? "Appuie" : "Appuie sur " + lettre;
+        oral.append(res.items.size() > 1 ? quoi + " pour valider les " + res.items.size() + "." : quoi + " pour valider.");
         etat.setText("« " + entendu + " »\n\n" + ecrit.toString().trim() + "\n\n🕒 " + heure + " · " + repas);
-        bValider.setText("✅ Valider (réappuie sur 🎙️)");
+        bValider.setText(lettre.isEmpty() ? "✅ Valider (réappuie sur 🎙️)" : "✅ Valider (réappuie sur 🔵 " + lettre + ")");
         compte.setText("");
         dire(oral.toString(), "relecture");
         h.postDelayed(this::lancerCompte, 15000);   // si la voix ne répond pas
@@ -211,6 +226,7 @@ public class DicteeRepas extends Activity {
         for (Dictee.Item it : res.items) {
             try {
                 JSONObject o = new JSONObject().put("ts", ts).put("vts", ts).put("note", "Noté à la voix");
+                if (res.heure != null) o.put("heure", res.heure);
                 if (it.eau) o.put("type", "eau").put("ml", (int) Math.round(it.q)); else o.put("type", "fav").put("fid", it.id).put("nom", it.nom).put("q", it.q);
                 if (RappelEau.noter(this, o.toString())) n++;
             } catch (Exception e) { Bug.note(this, "Dictée repas", "ERREUR en notant " + it.nom + " : " + e); }
@@ -249,6 +265,8 @@ public class DicteeRepas extends Activity {
                 for (String s : res.incompris) inc.put(s);
             }
             o.put("items", its).put("incompris", inc);
+            if (res != null && res.heure != null) o.put("heure", res.heure);
+            if (texteDonne != null) o.put("source", "note " + lettre);
             l.put(o);
             JSONArray garde = new JSONArray();
             for (int i = Math.max(0, l.length() - 300); i < l.length(); i++) garde.put(l.get(i));

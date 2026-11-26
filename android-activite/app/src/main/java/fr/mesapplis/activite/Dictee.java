@@ -26,7 +26,24 @@ public class Dictee {
 
     static class Item { String id, nom, u, dit = ""; double q; boolean defaut, eau; }
     static class Fav { final String id, nom, u, codes; final double q; final boolean eau; Fav(String id, String nom, String u, double q, String codes, boolean eau) { this.id = id; this.nom = nom; this.u = u == null || u.isEmpty() ? "portion" : u; this.q = q; this.codes = codes == null ? "" : codes; this.eau = eau; } }
-    static class Resultat { final List<Item> items = new ArrayList<>(); final List<String> incompris = new ArrayList<>(); }
+    static class Resultat { final List<Item> items = new ArrayList<>(); final List<String> incompris = new ArrayList<>(); String heure = null; }
+
+    /** Heure dite (« à 5 h du matin », « 12 h 30 », « 7 heures », « à midi ») : ôtée de la phrase, rangée dans r.heure (« HH:MM »). */
+    static String oterHeure(String n, Resultat r) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:\\b(?:a|vers)\\s+)?\\b(\\d{1,2})\\s*(?:h|heure|heures)\\b(?:\\s*(\\d{1,2})\\b(?!\\s*(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?)\\b))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l apres midi|cet apres midi))?").matcher(n);
+        if (m.find()) {
+            int hh = Integer.parseInt(m.group(1)), mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+            String moment = m.group(3) == null ? "" : m.group(3);
+            if (hh < 12 && (moment.contains("soir") || moment.contains("apres midi"))) hh += 12;
+            if (hh <= 23 && mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", hh, mm); return (n.substring(0, m.start()) + " , " + n.substring(m.end())).trim(); }
+        }
+        m = java.util.regex.Pattern.compile("(?:\\b(?:a|vers)\\s+)?\\b(midi|minuit)\\b(?:\\s*(\\d{1,2})\\b(?!\\s*(?:cl|ml|l|g|kg|gr)\\b))?").matcher(n);
+        if (m.find()) {
+            int mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+            if (mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", m.group(1).equals("midi") ? 12 : 0, mm); return (n.substring(0, m.start()) + " , " + n.substring(m.end())).trim(); }
+        }
+        return n;
+    }
 
     static String qte(Item it, boolean oral) {
         double q = it.q;
@@ -49,7 +66,7 @@ public class Dictee {
     }
 
     private static final java.util.Set<String> VIDES = new java.util.HashSet<>(java.util.Arrays.asList(
-            "l", "d", "de", "du", "des", "la", "le", "les", "j", "ai", "bu", "mange", "pris", "prends", "je", "c", "est", "en", "y", "a", "au", "aux", "mon", "ma", "mes", "un", "une"));
+            "l", "d", "de", "du", "des", "alimentation", "aliments", "aliment", "matin", "soir", "la", "le", "les", "j", "ai", "bu", "mange", "pris", "prends", "je", "c", "est", "en", "y", "a", "au", "aux", "mon", "ma", "mes", "un", "une"));
     private static final java.util.Set<String> SEPARE = new java.util.HashSet<>(java.util.Arrays.asList(",", "et", "puis", "plus", "avec", "ensuite"));
     private static final Map<String, String> UNITES = new HashMap<>();
     private static final Map<String, Double> NOMBRES = new HashMap<>();
@@ -71,7 +88,7 @@ public class Dictee {
 
     static Resultat comprendre(String phrase, List<Fav> favs) {
         Resultat r = new Resultat();
-        String[] mots = norm(phrase).split(" ");
+        String[] mots = oterHeure(norm(phrase), r).replaceAll("\\s+", " ").trim().split(" ");
         // noms et mots-codes des favoris, découpés en mots « utiles »
         List<String[]> noms = new ArrayList<>(); List<Fav> deQui = new ArrayList<>();
         for (Fav f : favs) {
@@ -128,9 +145,10 @@ public class Dictee {
         for (Morceau x : m) { if (x.k == 'Q') { qAvant = true; break; } if (x.k == 'F') { qAvant = false; break; } }
         for (int a = 0; a < m.size(); a++) {
             Morceau f = m.get(a); if (f.k != 'F') continue;
-            Morceau q = qAvant ? voisin(m, a, -1) : voisin(m, a, 1);
-            if (q == null) q = qAvant ? voisin(m, a, 1) : voisin(m, a, -1);
+            Morceau q1 = qAvant ? voisin(m, a, -1) : voisin(m, a, 1), q2 = qAvant ? voisin(m, a, 1) : voisin(m, a, -1);
             Item it = f.f;
+            // essai 33 : on préfère la quantité dont l'unité va avec l'aliment (cl pour une boisson, g pour un plat)
+            Morceau q = q1 != null && compatible(q1.u, it.u) ? q1 : q2 != null && compatible(q2.u, it.u) ? q2 : q1 != null ? q1 : q2;
             if (q != null) { q.pris = true; it.q = convertir(q.v, q.u, it); it.dit = qAvant ? q.txt + " " + f.txt : f.txt + " " + q.txt; }
             else { it.defaut = true; it.dit = f.txt; }
             if (it.q > 0) r.items.add(it);
@@ -143,6 +161,13 @@ public class Dictee {
         }
         if (g.length() > 0) r.incompris.add(g.toString());
         return r;
+    }
+
+    static boolean compatible(String u, String fu) {
+        if (u == null || "p".equals(u) || "portion".equals(fu)) return true;
+        if ("ml".equals(fu)) return u.equals("cl") || u.equals("ml") || u.equals("l");
+        if ("g".equals(fu)) return u.equals("g") || u.equals("kg");
+        return true;
     }
 
     /** Quantité libre la plus proche (sans traverser un séparateur ni un autre favori). */
