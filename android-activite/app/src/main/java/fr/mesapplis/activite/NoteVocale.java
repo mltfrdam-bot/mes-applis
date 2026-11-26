@@ -153,7 +153,8 @@ public class NoteVocale extends Activity {
         muet(false);
         sonner(2);
         if (t.isEmpty()) { etat.setText("Rien n'a été noté." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Rien noté."); h.postDelayed(this::finish, 2500); return; }
-        String repas = "claude".equals(cat) ? debutAlimentation(t) : null;
+        String repas = null;   // essai 35 : une erreur ici ne doit jamais faire perdre la note
+        try { repas = "claude".equals(cat) ? debutAlimentation(t) : null; } catch (Throwable e) { Bug.note(this, "Note vocale", "ERREUR mot-code : " + e); }
         if (repas != null) {   // 🎙️ (essai 33) note qui commence par « alimentation » : elle part dans la dictée du carnet (relecture + 2e appui en 5 s)
             Bug.note(this, "Note vocale", "mot-code entendu : dictée du carnet et de la santé");
             try { startActivity(new Intent(this, DicteeRepas.class).putExtra("texte", repas).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
@@ -161,7 +162,8 @@ public class NoteVocale extends Activity {
             h.postDelayed(this::finish, 300);
             return;
         }
-        String sansEnvoi = "claude".equals(cat) ? finEnvoi(t) : null;
+        String sansEnvoi = null;
+        try { sansEnvoi = "claude".equals(cat) ? finEnvoi(t) : null; } catch (Throwable e) { Bug.note(this, "Note vocale", "ERREUR envoyer à Claude : " + e); }
         if (sansEnvoi != null) {   // 🎙️ (essai 31) note finie par « envoyer à Claude » : on garde la note PUIS on ouvre l'appli Claude
             final String txt = sansEnvoi.isEmpty() ? t : sansEnvoi;
             final long ts = garder(txt);
@@ -180,7 +182,7 @@ public class NoteVocale extends Activity {
     /** Note qui commence par un mot-code (alimentation, tension, douleur, poids) : renvoie la phrase pour la dictée, ou null. */
     static String debutAlimentation(String t) {
         // essai 34 : aussi « tension », « douleur », « poids » (la phrase entière part dans la dictée, qui sait les enchaîner)
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iU)^[\\s,.]*(?:ma\\s+|mon\\s+|une\\s+)?(?:alimentations?|aliments?|tensions?|douleurs?|poids)\\b").matcher(t);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)^[\\s,.]*(?:ma\\s+|mon\\s+|une\\s+)?(?:alimentations?|aliments?|tensions?|douleurs?|poids)(?![\\p{L}\\p{N}_])").matcher(t);
         return m.find() ? t.trim() : null;
     }
 

@@ -1,6 +1,8 @@
 // 🎙️ Dictée de l'alimentation (essai 31) : la phrase dictée donne-t-elle les bons favoris et les bonnes quantités ?
 const { execFileSync } = require("child_process"), fs = require("fs"), path = require("path"), os = require("os");
 const racine = path.join(__dirname, "..", ".."), src = path.join(racine, "android-activite/app/src/main/java/fr/mesapplis/activite"), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dictee-"));
+// Android (ICU) refuse le drapeau U des expressions régulières (plantage de l'essai 34) : on l'interdit ici.
+for (const f of fs.readdirSync(src).filter(f => f.endsWith(".java"))) { const t = fs.readFileSync(path.join(src, f), "utf8"); if (/\(\?[a-zA-Z]*U[a-zA-Z]*[):]/.test(t) || /UNICODE_CHARACTER_CLASS/.test(t)) { console.log("❌ " + f + " : drapeau U interdit sur Android"); process.exit(1); } }
 execFileSync("javac", ["-encoding", "UTF-8", "-d", path.join(tmp, "classes"), path.join(src, "Dictee.java"), path.join(racine, "android-activite/tests/EssaiDictee.java")], { stdio: "inherit" });
 const favs = [
   "e|Eau|ml|200||1", "lv|Lait de vache|ml|200||0", "bg|Baguette|g|125|pain|0", "ra|Ratatouille|g|90||0", "rz|Riz basmati cuit|g|90||0",

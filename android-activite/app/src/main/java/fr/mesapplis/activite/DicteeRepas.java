@@ -174,7 +174,8 @@ public class DicteeRepas extends Activity {
         try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
         if (entendu.isEmpty()) { etat.setText("Je n'ai rien entendu."); dire("Je n'ai rien entendu."); noterJournal("rien entendu"); fermerDans(2500); return; }
         JSONObject cfg = favoris(this);
-        res = Dictee.analyser(entendu, liste(cfg.optJSONArray("favs")));
+        try { res = Dictee.analyser(entendu, liste(cfg.optJSONArray("favs"))); }
+        catch (Throwable e) { Bug.note(this, "Dictée repas", "ERREUR compréhension : " + e); res = new Dictee.Resultat(); res.incompris.add("erreur de l'appli : rien n'est noté"); }
         if (res.items.isEmpty() && res.sante.isEmpty()) {
             etat.setText("« " + entendu + " »\n\n❓ Je n'ai rien compris à noter." + (res.incompris.isEmpty() ? "" : "\n" + String.join("\n", res.incompris)));
             dire((res.incompris.size() == 1 && res.incompris.get(0).contains(" : ") ? res.incompris.get(0).replace(" : ", ", ") + ". " : "Je n'ai pas compris. ") + "Rien n'est noté.");

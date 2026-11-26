@@ -31,7 +31,7 @@ public class Dictee {
     /** 🩺 Mesure de santé dictée (essai 34) : tension, douleur ou poids. */
     static class Sante { String type, zone = "", note = ""; double sys, dia, pouls, kg, niveau; boolean fini; String ecrit, oral; }
 
-    private static final java.util.regex.Pattern MOT_CODE = java.util.regex.Pattern.compile("(?iU)\\b(alimentations?|aliments?|tensions?|douleurs?|poids)\\b");
+    private static final java.util.regex.Pattern MOT_CODE = java.util.regex.Pattern.compile("(?iu)(?<![\\p{L}\\p{N}_])(alimentations?|aliments?|tensions?|douleurs?|poids)(?![\\p{L}\\p{N}_])");
 
     /**
      * Note complète (essai 34) : plusieurs mots-codes à la suite — « poids 62,3, tension 13 8, alimentation eau 20 cl ».
@@ -61,14 +61,14 @@ public class Dictee {
 
     /** Heure dite, ôtée du texte d'origine (accents gardés pour la zone de la douleur). */
     static String oterHeureBrute(String t, Resultat r) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iU)(?:(?<![\\w])(?:à|a|vers)\\s+)?(?<![\\w,.])(\\d{1,2})\\s*(?:h|heures?)(?![\\w])(?:\\s*(\\d{1,2})(?![\\w,.])(?!\\s*(?:\\d|(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?|kilos?)(?![\\w]))))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l['’ ]?apr[eè]s[- ]midi|cet apr[eè]s[- ]midi))?").matcher(t);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)(?:(?<![\\p{L}\\p{N}_])(?:à|a|vers)\\s+)?(?<![\\p{L}\\p{N}_,.])(\\d{1,2})\\s*(?:h|heures?)(?![\\p{L}\\p{N}_])(?:\\s*(\\d{1,2})(?![\\p{L}\\p{N}_,.])(?!\\s*(?:\\d|(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?|kilos?)(?![\\p{L}\\p{N}_]))))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l['’ ]?apr[eè]s[- ]midi|cet apr[eè]s[- ]midi))?").matcher(t);
         if (m.find()) {
             int hh = Integer.parseInt(m.group(1)), mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
             String moment = m.group(3) == null ? "" : m.group(3).toLowerCase(Locale.FRANCE);
             if (hh < 12 && (moment.contains("soir") || moment.contains("midi"))) hh += 12;
             if (hh <= 23 && mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", hh, mm); return t.substring(0, m.start()) + " , " + t.substring(m.end()); }
         }
-        m = java.util.regex.Pattern.compile("(?iU)(?:(?<![\\w])(?:à|a|vers)\\s+)?(?<![\\w])(midi|minuit)(?![\\w])(?:\\s*(\\d{1,2})(?![\\w,.])(?!\\s*(?:cl|ml|l|g|kg|gr)(?![\\w])))?").matcher(t);
+        m = java.util.regex.Pattern.compile("(?iu)(?:(?<![\\p{L}\\p{N}_])(?:à|a|vers)\\s+)?(?<![\\p{L}\\p{N}_])(midi|minuit)(?![\\p{L}\\p{N}_])(?:\\s*(\\d{1,2})(?![\\p{L}\\p{N}_,.])(?!\\s*(?:cl|ml|l|g|kg|gr)(?![\\p{L}\\p{N}_])))?").matcher(t);
         if (m.find()) {
             int mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
             if (mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", m.group(1).equalsIgnoreCase("midi") ? 12 : 0, mm); return t.substring(0, m.start()) + " , " + t.substring(m.end()); }
@@ -126,14 +126,14 @@ public class Dictee {
     static void douleur(String seg, Resultat r) {
         String t = seg;
         boolean fini = false;
-        java.util.regex.Matcher mf = java.util.regex.Pattern.compile("(?iU)(?<![\\w])(finie?s?|termin[ée]e?s?|disparue?s?|partie?s?|pass[ée]e?s?|guérie?s?|plus mal)(?![\\w])").matcher(t);
+        java.util.regex.Matcher mf = java.util.regex.Pattern.compile("(?iu)(?<![\\p{L}\\p{N}_])(finie?s?|termin[ée]e?s?|disparue?s?|partie?s?|pass[ée]e?s?|guérie?s?|plus mal)(?![\\p{L}\\p{N}_])").matcher(t);
         if (mf.find()) { fini = true; t = t.substring(0, mf.start()) + " " + t.substring(mf.end()); }
         // niveau : un nombre de 0 à 10, en chiffres ou en lettres, éventuellement suivi de « sur 10 »
-        java.util.regex.Matcher mn = java.util.regex.Pattern.compile("(?iU)(?<![\\w,.])(10|\\d|zéro|zero|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)(?![\\w,.])(\\s*(?:sur|/)\\s*10)?").matcher(t);
+        java.util.regex.Matcher mn = java.util.regex.Pattern.compile("(?iu)(?<![\\p{L}\\p{N}_,.])(10|\\d|zéro|zero|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)(?![\\p{L}\\p{N}_,.])(\\s*(?:sur|/)\\s*10)?").matcher(t);
         Integer niv = null; int a = -1, b = -1;
         while (mn.find()) {
             String w = mn.group(1).toLowerCase(Locale.FRANCE);
-            boolean article = (w.equals("un") || w.equals("une")) && mn.group(2) == null && t.substring(mn.end()).trim().matches("(?sU)^\\p{L}.*");
+            boolean article = (w.equals("un") || w.equals("une")) && mn.group(2) == null && t.substring(mn.end()).trim().matches("(?su)^\\p{L}.*");
             if (article) continue;
             Double v = w.matches("\\d+") ? Double.valueOf(w) : NOMBRES.get(norm(w));
             if (v == null) continue;
@@ -142,8 +142,8 @@ public class Dictee {
         }
         String zone, note = "";
         if (niv != null) { zone = t.substring(0, a); note = t.substring(b); } else { zone = t; }
-        zone = zone.replaceAll("(?iU)(?<![\\w])(niveau|note|intensit[ée]|a|à|au|de|du|la|le|les|mon|ma|mes|j'ai|j ai|mal)(?![\\w])\\s*$", "").replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "").replaceAll("\\s+", " ");
-        zone = zone.replaceAll("(?iU)^(au|à la|à l'|a la|a l|à|a|de la|du|mon|ma|mes|le|la|les)\\s+", "").trim();
+        zone = zone.replaceAll("(?iu)(?<![\\p{L}\\p{N}_])(niveau|note|intensit[ée]|a|à|au|de|du|la|le|les|mon|ma|mes|j'ai|j ai|mal)(?![\\p{L}\\p{N}_])\\s*$", "").replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "").replaceAll("\\s+", " ");
+        zone = zone.replaceAll("(?iu)^(au|à la|à l'|a la|a l|à|a|de la|du|mon|ma|mes|le|la|les)\\s+", "").trim();
         note = note.replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "").replaceAll("\\s+", " ");
         if (zone.isEmpty()) { r.incompris.add("douleur : je n'ai pas compris où"); return; }
         if (niv == null && !fini) { r.incompris.add("douleur " + zone + " : je n'ai pas compris le niveau de 0 à 10"); return; }
