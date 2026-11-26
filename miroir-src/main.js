@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.11";
+const VERSION = "2.12";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -285,11 +285,14 @@ async function uneConnexion(tel, nouveau, essai) {
   const liaison = await avecDelai(tel.connect(), 8000);
   const minuterie = setTimeout(() => message(lireCleOrdi()
     ? "Le téléphone n'accepte pas la clé de l'ordinateur. Vérifie que scrcpy marche toujours sur l'ordinateur avec ce téléphone, puis réessaie."
-    : "👉 Sur le téléphone : coche « Toujours autoriser », puis appuie sur « Autoriser ». Si l'écran du téléphone est illisible, utilise le bouton « 🔑 Utiliser la clé de l'ordinateur » ci-dessous."), 2500);
+    : "👉 Regarde l'écran du téléphone (ou sa recopie sur la tablette) : coche « Toujours autoriser », puis appuie sur « Autoriser ». Tu as 90 secondes. Si l'écran du téléphone est illisible, utilise le bouton « 🔑 Utiliser la clé de l'ordinateur » ci-dessous."), 2500);
   let transport;
   try {
     // 90 s la première fois (le temps d'appuyer sur « Autoriser »), 12 s pour un téléphone déjà autorisé
-    transport = await avecDelai(AdbDaemonTransport.authenticate({ serial: tel.serial, connection: liaison, credentialStore: cles }), nouveau ? 90000 : 12000);
+    // Appareil jamais autorisé (ex. nouvel appareil en sans fil) : on attend aussi 90 s
+    const jamaisAutorise = !localStorage.getItem("miroir-autorise");
+    transport = await avecDelai(AdbDaemonTransport.authenticate({ serial: tel.serial, connection: liaison, credentialStore: cles }), (nouveau || jamaisAutorise) ? 90000 : 12000);
+    try { localStorage.setItem("miroir-autorise", "1"); } catch {}
   } finally { clearTimeout(minuterie); }
   if (essai !== numeroEssai) { try { await transport.close(); } catch {} throw new Error("annule"); }
   adb = new Adb(transport);
