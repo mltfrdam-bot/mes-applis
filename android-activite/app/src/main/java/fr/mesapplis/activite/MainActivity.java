@@ -861,6 +861,8 @@ public class MainActivity extends Activity {
         /** 🎙️ Notes vocales dictées avec la télécommande : la page les range, puis la liste est vidée. */
         @JavascriptInterface public String notesVocales() { SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE); String t = p.getString("notesVocales", "[]"); p.edit().putString("notesVocales", "[]").apply(); return t; }
         @JavascriptInterface public void telecommande(boolean marche) { if (marche != ServiceTelecommande.active) ServiceTelecommande.basculer(MainActivity.this); }
+        @JavascriptInterface public int teleHeures() { return getSharedPreferences("reglages", MODE_PRIVATE).getInt("teleHeures", 8); }
+        @JavascriptInterface public void teleHeuresRegler(int h) { getSharedPreferences("reglages", MODE_PRIVATE).edit().putInt("teleHeures", h).apply(); }
         @JavascriptInterface public boolean telecommandeActive() { return ServiceTelecommande.active; }
         /** 🐞 Rapport de bug : en-tête (appareil, version, autorisations) + journal. */
         @JavascriptInterface public String bugs() {

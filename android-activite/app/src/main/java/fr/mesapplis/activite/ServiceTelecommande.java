@@ -29,32 +29,38 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
 
     private LienManettes lien;
     private final Handler h = new Handler(Looper.getMainLooper());
-    private final Runnable finAuto = this::stopSelf;
+    private String raison = "arrêt par Android (batterie ?)";
+    private final Runnable finAuto = () -> { raison = "fin du délai sans appui"; stopSelf(); };
+
+    /** Durée sans appui avant l'arrêt automatique : 3 h, 8 h, ou 0 = jusqu'à ce que je l'arrête (réglage dans 📝). */
+    private long delai() { int hh = getSharedPreferences("reglages", MODE_PRIVATE).getInt("teleHeures", 8); return hh <= 0 ? 0 : hh * 3600 * 1000L; }
+    private void relancerDelai() { h.removeCallbacks(finAuto); long d = delai(); if (d > 0) h.postDelayed(finAuto, d); }
     private ToneGenerator bip;
 
+    static volatile String raisonExterne = null;
     static void basculer(Context c) {
-        if (active) c.stopService(new Intent(c, ServiceTelecommande.class));
+        if (active) { raisonExterne = "arrêt par toi (widget ou appli)"; c.stopService(new Intent(c, ServiceTelecommande.class)); }
         else try { c.startForegroundService(new Intent(c, ServiceTelecommande.class)); } catch (Exception ignored) {}
     }
 
-    static void arreter(Context c) { if (active) c.stopService(new Intent(c, ServiceTelecommande.class)); }
+    static void arreter(Context c) { if (active) { raisonExterne = "séance lancée ou essai des manettes (la manette passe à la séance)"; c.stopService(new Intent(c, ServiceTelecommande.class)); } }
 
     @Override public int onStartCommand(Intent i, int flags, int id) {
-        if (i != null && ACTION_ARRET.equals(i.getAction())) { stopSelf(); return START_NOT_STICKY; }
+        if (i != null && ACTION_ARRET.equals(i.getAction())) { raison = "arrêt par toi (notification)"; stopSelf(); return START_NOT_STICKY; }
         try { startForeground(ID, notif("Réveille la manette. 🔵 Y note Claude · 🟢 A note 4B BTP · 🟣 B appel"), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE); }
         catch (Exception e) { stopSelf(); return START_NOT_STICKY; }
         active = true;
         Bug.note(this, "Télécommande", "allumée");
         WidgetTelecommande.majTous(this);
         if (lien == null) { lien = new LienManettes(this, this); lien.demarrer(); }
-        h.removeCallbacks(finAuto);
-        h.postDelayed(finAuto, 3 * 3600 * 1000L);
+        relancerDelai();
         return START_NOT_STICKY;
     }
 
     @Override public void onDestroy() {
         active = false;
-        Bug.note(this, "Télécommande", "arrêtée");
+        if (raisonExterne != null) { raison = raisonExterne; raisonExterne = null; }
+        Bug.note(this, "Télécommande", "arrêtée : " + raison);
         h.removeCallbacksAndMessages(null);
         try { if (lien != null) lien.arreter(); } catch (Exception ignored) {}
         try { if (bip != null) bip.release(); } catch (Exception ignored) {}
@@ -81,8 +87,7 @@ public class ServiceTelecommande extends Service implements LienManettes.Ecoute 
         }
         if ("B".equals(nom)) { boutonAppel(); return; }
         if (!"Y".equals(nom) && !"A".equals(nom)) return;
-        h.removeCallbacks(finAuto);
-        h.postDelayed(finAuto, 3 * 3600 * 1000L);
+        relancerDelai();
         vibrer(new long[]{0, 80});
         try { if (bip == null) bip = new ToneGenerator(AudioManager.STREAM_MUSIC, 90); bip.startTone(ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {}
         ouvrirNote("A".equals(nom) ? "btp" : "claude", nom);

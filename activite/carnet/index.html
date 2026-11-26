@@ -7772,7 +7772,7 @@ table.pa td.ac { color: var(--accent); }
     async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
       try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0;
           for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau";
-            if (ty === "tension" || ty === "douleur") { try { await rangerSante(x); } catch (e) {} continue; }
+            if (ty === "tension" || ty === "douleur" || ty === "tensionModif" || ty === "tensionSuppr") { try { await rangerSante(x); } catch (e) {} continue; }
             var ff = ty === "eau" ? f : await favApk(ty), q = ff && ff.unite === "g" ? Math.round((Number(x.g) || 0) * 10) / 10 : Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
             var doc = ff ? Object.assign({ date: x.date, heure: x.t, repas: ty === "eau" ? repasFor(ff, x.t) : (ff.repas || "Pendant l'effort"), description: descFor(ff, q) + (x.n ? " (" + x.n + ")" : ""), fav: ff.id, quantite: q, unite: ff.unite }, calcFor(ff, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
             doc.saisi = Date.now(); doc.note = x.note || "Noté depuis la notification";
