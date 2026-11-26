@@ -63,7 +63,7 @@ public class ServiceEau extends Service {
         v.setOnClickPendingIntent(R.id.neB2, RappelEau.boissonDiscrete(c, q2, 92));
         v.setOnClickPendingIntent(R.id.neB3, RappelEau.boissonDiscrete(c, q3, 93));
         v.setOnClickPendingIntent(R.id.neAutre, autre);
-        v.setOnClickPendingIntent(R.id.neVoix, DicteeRepas.ouvrir(c, 95));
+        try { v.setOnClickPendingIntent(R.id.neVoix, DicteeRepas.ouvrir(c, 95)); } catch (Throwable e) { Bug.note(c, "Dictée repas", "bouton de la notification : " + e); }
         v.setOnClickPendingIntent(R.id.neTotal, PendingIntent.getActivity(c, 94, new Intent(c, MainActivity.class).putExtra("page", "carnet").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         return new Notification.Builder(c, CANAL)
                 .setCustomContentView(v)

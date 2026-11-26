@@ -26,7 +26,7 @@ public class WidgetEau extends AppWidgetProvider {
         v.setOnClickPendingIntent(R.id.weB1, RappelEau.boissonDiscrete(c, q1, 81));
         v.setOnClickPendingIntent(R.id.weB2, RappelEau.boissonDiscrete(c, q2, 82));
         v.setOnClickPendingIntent(R.id.weB3, RappelEau.boissonDiscrete(c, q3, 83));
-        v.setOnClickPendingIntent(R.id.weVoix, DicteeRepas.ouvrir(c, 86));
+        try { v.setOnClickPendingIntent(R.id.weVoix, DicteeRepas.ouvrir(c, 86)); } catch (Throwable e) { Bug.note(c, "Dictée repas", "bouton du widget : " + e); }
         v.setOnClickPendingIntent(R.id.weAutre, PendingIntent.getActivity(c, 84, new Intent(c, SaisieEau.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         v.setOnClickPendingIntent(R.id.weTotal, PendingIntent.getActivity(c, 85, new Intent(c, MainActivity.class).putExtra("page", "carnet").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         return v;

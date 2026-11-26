@@ -176,6 +176,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        if (Appli.fichier(this).exists()) { try { startActivity(new Intent(this, Plantage.class)); } catch (Exception ignored) {} finish(); return; }   // 🐞 essai 32
         courante = new java.lang.ref.WeakReference<>(this);
         dossier = new File(getFilesDir(), "donnees");
         if (!dossier.exists()) dossier.mkdirs();
