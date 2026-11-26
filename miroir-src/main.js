@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.6";
+const VERSION = "2.11";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Réglages gardés sur la tablette ----------
-const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "normale", memoCode: false, code: "", autoConnexion: true, adresseTel: "", deverrAuto: true };
+const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "auto", memoCode: false, code: "", autoConnexion: true, adresseTel: "", deverrAuto: true };
 let reglages = { ...REGLAGES_DEFAUT };
 try { reglages = { ...REGLAGES_DEFAUT, ...JSON.parse(localStorage.getItem("miroir-reglages") || "{}") }; } catch {}
 function sauverReglages() { try { localStorage.setItem("miroir-reglages", JSON.stringify(reglages)); } catch {} }
@@ -300,21 +300,33 @@ async function uneConnexion(tel, nouveau, essai) {
 }
 
 let tel_actuel = null;
+// Petit appareil (peu de mémoire ou petit écran, ex. Altice E25) : image allégée automatiquement
+function petitAppareil() {
+  const mem = navigator.deviceMemory || 4;
+  const cote = Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1);
+  return mem <= 2 || cote <= 1400;
+}
+function qualiteEffective() {
+  if (!reglages.qualite || reglages.qualite === "auto") return petitAppareil() ? "legere" : "normale";
+  return reglages.qualite;
+}
 async function lancerMiroir() {
   message("Envoi du petit programme de recopie sur le téléphone…");
   const rep = await fetch("scrcpy-server.jar", { cache: "no-cache" }).catch(() => caches.match("scrcpy-server.jar"));
   if (!rep || !rep.ok) throw new Error("Fichier scrcpy-server.jar introuvable");
   await AdbScrcpyClient.pushServer(adb, rep.body);
 
-  const taille = { normale: 1920, haute: 2560, economie: 1280 }[reglages.qualite] || 1920;
-  const debit = { normale: 8_000_000, haute: 16_000_000, economie: 4_000_000 }[reglages.qualite] || 8_000_000;
+  const q = qualiteEffective();
+  const taille = { legere: 960, normale: 1920, haute: 2560, economie: 1280 }[q] || 1920;
+  const debit = { legere: 2_000_000, normale: 8_000_000, haute: 16_000_000, economie: 4_000_000 }[q] || 8_000_000;
+  const images = q === "legere" ? 30 : 60;
   const options = new AdbScrcpyOptionsLatest({
     audio: false,              // le son reste sur le téléphone
     video: true,
     videoCodec: "h264",
     maxSize: taille,
     videoBitRate: debit,
-    maxFps: 60,
+    maxFps: images,
     stayAwake: true,           // le téléphone ne se met pas en veille tant qu'il est branché
     // Pendant le pilotage (même sans fil), le téléphone ne se met plus en veille au bout de 15 s.
     // Son réglage habituel est remis tout seul à la fin, même si la liaison est coupée.
