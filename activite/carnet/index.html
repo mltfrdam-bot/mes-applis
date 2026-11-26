@@ -7770,8 +7770,13 @@ table.pa td.ac { color: var(--accent); }
         await ref0.set(c0);
         if (x.type === "tensionModif") await rangerSante({ type: "tension", date: x.date, t: x.t, sys: x.sys, dia: x.dia, pouls: x.pouls, note: "corrigée" });
         return; }
+      if (x.type === "poids") { var kg = Number(x.kg); if (!(kg > 20 && kg < 300)) return;   /* ⚖️ essai 34 : poids dicté, comme la pesée du matin */
+        var sx = (state.sante || []).find(function (e) { return e && e.date === d; }), rp = db.collection("sante").doc(sx ? sx.id : dayId(d)), sp = await rp.get(), cp = sp.exists ? Object.assign({}, sp.data()) : { date: d };
+        cp.poids_kg = kg; cp.poids_heure = h; await rp.set(cp); try { if (d === todayStr()) asSet("as-pesee-" + d, "1"); } catch (e3) {} return; }
       if (x.type === "douleur") { var niv = Number(x.niveau) || 0, intens = niv >= 7 ? "Forte" : niv >= 4 ? "Moyenne" : "Légère", ligne = { date: d, heure: h, niveau: niv, note: x.note || null };
         var p = x.id ? (pains || []).find(function (q) { return q.id === x.id; }) : null;
+        if (!p && !x.id && x.zone) { var zn = normTxt(x.zone);   /* 🎙️ essai 34 : douleur dictée → même zone qu'une douleur en cours = son suivi */
+          p = (pains || []).filter(function (q) { return q && q.zone && !q.fin; }).find(function (q) { var qz = normTxt(q.zone); return qz === zn || (zn.length >= 4 && qz.indexOf(zn) >= 0) || (qz.length >= 4 && zn.indexOf(qz) >= 0); }) || null; }
         if (p) { var dd = Object.assign({}, p); delete dd.id; dd.suivi = (Array.isArray(p.suivi) ? p.suivi.slice() : []).concat([ligne]); dd.intensite = intens;
           if (x.fini) { var eps = episodesOf(p).map(function (e) { return Object.assign({}, e); }); eps[eps.length - 1].fin = d; dd.episodes = eps; dd.fin = d; }
           await db.collection("douleurs").doc(p.id).set(dd); return; }
@@ -7789,7 +7794,7 @@ table.pa td.ac { color: var(--accent); }
     async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
       try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0, nv = 0;
           for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau";
-            if (ty === "tension" || ty === "douleur" || ty === "tensionModif" || ty === "tensionSuppr") { try { await rangerSante(x); } catch (e) {} continue; }
+            if (ty === "tension" || ty === "douleur" || ty === "tensionModif" || ty === "tensionSuppr" || ty === "poids") { try { await rangerSante(x); } catch (e) {} continue; }
             if (ty === "fav") { var fv = (favs || []).find(function (z) { return z.id === x.fid; }) || (favs || []).find(function (z) { return normTxt(z.nom) === normTxt(x.nom || ""); }), qv = Number(x.q) || 0;
               if (!fv || !(qv > 0)) continue;
               var dv = Object.assign({ date: x.date, heure: x.t, repas: repasFor(fv, x.t), description: descFor(fv, qv), fav: fv.id, quantite: qv, unite: fv.unite }, calcFor(fv, qv));
@@ -7816,15 +7821,15 @@ table.pa td.ac { color: var(--accent); }
       var st = {}, corr = 0, mots = {}, recon = {}, lignes = [];
       l.forEach(function (x) { st[x.statut] = (st[x.statut] || 0) + 1;
         (x.incompris || []).forEach(function (m) { mots[m] = (mots[m] || 0) + 1; });
-        (x.items || []).forEach(function (it) { recon[it.nom] = (recon[it.nom] || 0) + 1; });
+        (x.items || []).forEach(function (it) { if (!it.sante) recon[it.nom] = (recon[it.nom] || 0) + 1; });
         var suite = "";
-        if (x.statut === "validée") { var ent = (state.alimentation || []).filter(function (e) { return e && e.voix === x.ts; });
-          (x.items || []).forEach(function (it) { var e = ent.find(function (z) { return z.fav === it.fid; });
+        if (x.statut === "validée" || x.statut === "notée") { var ent = (state.alimentation || []).filter(function (e) { return e && e.voix === x.ts; });
+          (x.items || []).forEach(function (it) { if (it.sante) return; var e = ent.find(function (z) { return z.fav === it.fid; });
             if (!e) { if (Date.now() - x.ts > 600000) { corr++; suite += " · 🗑 " + it.nom + " supprimé(e) ou changé(e) d'aliment ensuite"; } }
             else if (num(e.quantite) !== null && Math.abs(num(e.quantite) - it.q) > 0.01) { corr++; suite += " · ✏️ " + it.nom + " corrigé(e) : " + it.txt + " → " + (e.description || ""); } }); }
         lignes.push("- " + quand(x.ts) + " — entendu « " + (x.entendu || "") + " » → " + ((x.items || []).map(function (it) { return it.txt + (it.defaut ? " (quantité par défaut)" : ""); }).join(", ") || "rien") +
           ((x.incompris || []).length ? " · non compris : « " + x.incompris.join(" », « ") + " »" : "") + " · " + (x.statut || "?") + suite); });
-      var t = "🎙️ RAPPORT DES DICTÉES — carnet (7 derniers jours)\n" + l.length + " dictée" + (l.length > 1 ? "s" : "") + " : " + (Object.keys(st).map(function (k) { return st[k] + " " + k; }).join(", ") || "aucune") + ".\n";
+      var t = "🎙️ RAPPORT DES DICTÉES — carnet et santé (7 derniers jours)\n" + l.length + " dictée" + (l.length > 1 ? "s" : "") + " : " + (Object.keys(st).map(function (k) { return st[k] + " " + k; }).join(", ") || "aucune") + ".\n";
       t += "Corrigées ou supprimées ensuite : " + corr + ".\n";
       var mm = Object.keys(mots).sort(function (a, b) { return mots[b] - mots[a]; });
       t += "\nMots pas compris :\n" + (mm.length ? mm.slice(0, 20).map(function (m) { return "- « " + m + " » (" + mots[m] + " fois)"; }).join("\n") : "- aucun") + "\n";

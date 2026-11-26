@@ -35,6 +35,23 @@ const cas = [
   ["à midi ratatouille", "ra=90* | ? @12:00"],
   ["café 10 cl à 7 h du soir", "cf=100 | ? @19:00"],
   ["à 6 heures 20 cl d'eau", "e=200 | ? @06:00"],
+  // essai 34 : mots-codes santé (+ enchaînement)
+  ["tension 13 8 pouls 62", "tension=130/80p62 | ?"],
+  ["tension 130 sur 80", "tension=130/80 | ?"],
+  ["tension 13/8", "tension=130/80 | ?"],
+  ["tension treize huit", "tension=130/80 | ?"],
+  ["tension 138", "tension=130/80 | ?"],
+  ["tension à 7 h 13 8", "tension=130/80 | ? @07:00"],
+  ["tension 13", " | ?tension « 13 » : il me faut les 2 chiffres"],
+  ["poids 62,3", "poids=62,3 | ?"],
+  ["poids 62 kilos 300", "poids=62,3 | ?"],
+  ["poids soixante deux virgule trois", "poids=62,3 | ?"],
+  ["douleur genou droit 4", "douleur=Genou droit:4 | ?"],
+  ["douleur au genou droit 4 sur 10, après le tennis", "douleur=Genou droit:4:après le tennis | ?"],
+  ["douleur genou droit finie", "douleur=Genou droit:0:fini | ?"],
+  ["douleur épaule gauche", " | ?douleur épaule gauche : je n'ai pas compris le niveau de 0 à 10"],
+  ["poids 62,3, tension 13 8, alimentation eau 20 cl", "e=200 ; poids=62,3 ; tension=130/80 | ?"],
+  ["alimentation 5h du matin de l'eau 20 cl tension 12 7", "e=200 ; tension=120/70 | ? @05:00"],
 ];
 fs.writeFileSync(path.join(tmp, "f.txt"), favs.join("\n") + "\n"); fs.writeFileSync(path.join(tmp, "p.txt"), cas.map(c => c[0]).join("\n") + "\n");
 const sortie = execFileSync("java", ["-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiDictee", path.join(tmp, "f.txt"), path.join(tmp, "p.txt")], { encoding: "utf8" }).trim().split("\n");

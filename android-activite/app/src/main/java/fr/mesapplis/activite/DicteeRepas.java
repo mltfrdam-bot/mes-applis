@@ -70,13 +70,13 @@ public class DicteeRepas extends Activity {
         LinearLayout l = new LinearLayout(this);
         l.setOrientation(LinearLayout.VERTICAL); l.setGravity(Gravity.CENTER); l.setBackgroundColor(Color.WHITE);
         l.setPadding((int) (20 * d), (int) (22 * d), (int) (20 * d), (int) (22 * d));
-        titre = new TextView(this); titre.setText("🎙️ Dictée du carnet"); titre.setTextSize(24); titre.setTypeface(Typeface.DEFAULT_BOLD); titre.setTextColor(0xFF1F6FB2); titre.setGravity(Gravity.CENTER);
+        titre = new TextView(this); titre.setText("🎙️ Dictée du carnet et de la santé"); titre.setTextSize(24); titre.setTypeface(Typeface.DEFAULT_BOLD); titre.setTextColor(0xFF1F6FB2); titre.setGravity(Gravity.CENTER);
         etat = new TextView(this); etat.setTextSize(20); etat.setTextColor(0xFF1b1f23); etat.setGravity(Gravity.CENTER); etat.setPadding(0, (int) (14 * d), 0, (int) (10 * d));
         compte = new TextView(this); compte.setTextSize(18); compte.setTextColor(0xFF2E7D32); compte.setGravity(Gravity.CENTER); compte.setTypeface(Typeface.DEFAULT_BOLD);
-        bValider = new Button(this); bValider.setAllCaps(false); bValider.setTextSize(22); bValider.setText("✅ Valider"); bValider.setOnClickListener(v -> appui());
-        bAnnuler = new Button(this); bAnnuler.setAllCaps(false); bAnnuler.setTextSize(18); bAnnuler.setText("❌ Annuler"); bAnnuler.setOnClickListener(v -> annuler("annulée"));
+        bValider = new Button(this); bValider.setAllCaps(false); bValider.setTextSize(20); bValider.setText("✅ Noter tout de suite"); bValider.setOnClickListener(v -> { if (etape == 0) appui(); else valider(); });
+        bAnnuler = new Button(this); bAnnuler.setAllCaps(false); bAnnuler.setTextSize(22); bAnnuler.setText("❌ Annuler"); bAnnuler.setOnClickListener(v -> annuler("annulée"));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (int) (74 * d));
-        l.addView(titre); l.addView(etat); l.addView(compte); l.addView(bValider, lp); l.addView(bAnnuler);
+        l.addView(titre); l.addView(etat); l.addView(compte); l.addView(bAnnuler, lp); l.addView(bValider);
         setContentView(l);
         bValider.setVisibility(android.view.View.GONE);
         voix = new TextToSpeech(this, s -> { try { voix.setLanguage(Locale.FRANCE); } catch (Exception ignored) {} voixPrete = true; if (aDire != null) { String t = aDire; aDire = null; dire(t); } });
@@ -108,10 +108,10 @@ public class DicteeRepas extends Activity {
     /** Nouvel appui sur 🎙️ (notification, widget, carnet) pendant que la fenêtre est ouverte. */
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); appui(); }
 
-    /** Un appui : pendant l'écoute = « j'ai fini de parler » ; pendant la relecture = valider. */
+    /** Un appui : pendant l'écoute = « j'ai fini de parler » ; pendant la relecture et les 5 s = ANNULER (essai 34 : c'est noté tout seul). */
     private void appui() {
         if (etape == 0) { try { if (reco != null) reco.stopListening(); } catch (Exception ignored) {} h.postDelayed(this::finEcoute, 1500); return; }
-        if (etape == 1) valider();
+        if (etape == 1) annuler("annulée");
     }
 
     // ---------------- Écoute ----------------
@@ -165,7 +165,7 @@ public class DicteeRepas extends Activity {
         try { reco.startListening(i); } catch (Exception e) { Bug.note(this, "Dictée repas", "ERREUR au démarrage : " + e); finEcoute(); }
     }
 
-    /** Fin de l'écoute : on comprend la phrase, on relit, puis on attend le 2e appui. */
+    /** Fin de l'écoute : on comprend la phrase, on relit ; sans appui dans les 5 s qui suivent, c'est noté (essai 34). */
     private void finEcoute() {
         if (etape != 0) return;
         etape = 1;
@@ -174,11 +174,11 @@ public class DicteeRepas extends Activity {
         try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
         if (entendu.isEmpty()) { etat.setText("Je n'ai rien entendu."); dire("Je n'ai rien entendu."); noterJournal("rien entendu"); fermerDans(2500); return; }
         JSONObject cfg = favoris(this);
-        res = Dictee.comprendre(entendu, liste(cfg.optJSONArray("favs")));
-        if (res.items.isEmpty()) {
-            etat.setText("« " + entendu + " »\n\n❓ Je n'ai reconnu aucun de tes favoris.");
-            dire("Je n'ai pas compris. Rien n'est noté.");
-            noterJournal("rien compris"); fermerDans(4000); return;
+        res = Dictee.analyser(entendu, liste(cfg.optJSONArray("favs")));
+        if (res.items.isEmpty() && res.sante.isEmpty()) {
+            etat.setText("« " + entendu + " »\n\n❓ Je n'ai rien compris à noter." + (res.incompris.isEmpty() ? "" : "\n" + String.join("\n", res.incompris)));
+            dire((res.incompris.size() == 1 && res.incompris.get(0).contains(" : ") ? res.incompris.get(0).replace(" : ", ", ") + ". " : "Je n'ai pas compris. ") + "Rien n'est noté.");
+            noterJournal("rien compris"); fermerDans(4500); return;
         }
         Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
         if (res.heure != null) { k.set(Calendar.HOUR_OF_DAY, Integer.parseInt(res.heure.substring(0, 2))); k.set(Calendar.MINUTE, Integer.parseInt(res.heure.substring(3))); }   // essai 33 : heure dite
@@ -186,23 +186,30 @@ public class DicteeRepas extends Activity {
         boolean deja = cfg.optBoolean("deja", false) && Dictee.aujourdhui(k).equals(cfg.optString("date"));
         String repas = Dictee.repas(min, !deja);
         StringBuilder ecrit = new StringBuilder(), oral = new StringBuilder();
+        for (Dictee.Sante x : res.sante) { ecrit.append(x.ecrit).append("\n"); oral.append(x.oral).append(". "); }
         for (Dictee.Item it : res.items) {
             ecrit.append("• ").append(it.nom).append(" ").append(Dictee.qte(it, false)).append(it.defaut ? " (par défaut)" : "").append("\n");
             oral.append(it.nom).append(" ").append(Dictee.qte(it, true)).append(", ");
         }
         String heure = String.format(Locale.FRANCE, "%d h %02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE));
-        oral.append(heure.replace(" h 00", " heures")).append(", ").append(repas).append(". ");
+        if (!res.items.isEmpty()) oral.append(repas).append(", ");
+        if (res.heure != null || !res.items.isEmpty()) oral.append(heure.replace(" h 00", " heures")).append(". ");
         if (!res.incompris.isEmpty()) {
-            ecrit.append("\n❓ Pas compris : « ").append(String.join(" », « ", res.incompris)).append(" »\n");
-            oral.append(res.incompris.size() == 1 ? "Je n'ai pas compris « " + res.incompris.get(0) + " ». " : "Il y a " + res.incompris.size() + " passages que je n'ai pas compris. ");
+            ecrit.append("\n❓ Pas compris :\n");
+            int n = 0;
+            for (String x : res.incompris) {
+                boolean phrase = x.contains(" : ");
+                ecrit.append(phrase ? "• " + x : "• « " + x + " »").append("\n");
+                if (n++ < 3) oral.append(phrase ? x.replace(" : ", ", ") + ". " : "Je n'ai pas compris « " + x + " ». ");
+            }
         }
-        String quoi = lettre.isEmpty() ? "Appuie" : "Appuie sur " + lettre;
-        oral.append(res.items.size() > 1 ? quoi + " pour valider les " + res.items.size() + "." : quoi + " pour valider.");
-        etat.setText("« " + entendu + " »\n\n" + ecrit.toString().trim() + "\n\n🕒 " + heure + " · " + repas);
-        bValider.setText(lettre.isEmpty() ? "✅ Valider (réappuie sur 🎙️)" : "✅ Valider (réappuie sur 🔵 " + lettre + ")");
+        oral.append(lettre.isEmpty() ? "Appuie pour annuler." : "Appuie sur " + lettre + " pour annuler.");
+        etat.setText("« " + entendu + " »\n\n" + ecrit.toString().trim() + "\n\n🕒 " + heure + (res.items.isEmpty() ? "" : " · " + repas));
+        bValider.setVisibility(android.view.View.VISIBLE); bValider.setText("✅ Noter tout de suite");
+        bAnnuler.setText(lettre.isEmpty() ? "❌ Annuler (ou réappuie sur 🎙️)" : "❌ Annuler (ou 🔵 " + lettre + ")");
         compte.setText("");
         dire(oral.toString(), "relecture");
-        h.postDelayed(this::lancerCompte, 15000);   // si la voix ne répond pas
+        h.postDelayed(this::lancerCompte, 20000);   // si la voix ne répond pas
     }
 
     private void lancerCompte() {
@@ -212,8 +219,8 @@ public class DicteeRepas extends Activity {
 
     private void tic() {
         if (etape != 1) return;
-        if (reste <= 0) { compte.setText(""); etat.append("\n\n⏱ Pas validé : rien n'est noté."); dire("Pas validé."); noterJournal("pas validée (5 s)"); etape = 2; fermerDans(2500); return; }
-        compte.setText("⏱ " + reste + " s pour valider");
+        if (reste <= 0) { compte.setText(""); valider(); return; }
+        compte.setText("⏱ Noté dans " + reste + " s — appuie pour annuler");
         reste--;
         h.postDelayed(this::tic, 1000);
     }
@@ -222,6 +229,8 @@ public class DicteeRepas extends Activity {
         if (etape != 1 || res == null) return;
         etape = 2;
         h.removeCallbacksAndMessages(null);
+        Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
+        String hm = res.heure != null ? res.heure : String.format(Locale.ROOT, "%02d:%02d", k.get(Calendar.HOUR_OF_DAY), k.get(Calendar.MINUTE));
         int n = 0;
         for (Dictee.Item it : res.items) {
             try {
@@ -231,10 +240,19 @@ public class DicteeRepas extends Activity {
                 if (RappelEau.noter(this, o.toString())) n++;
             } catch (Exception e) { Bug.note(this, "Dictée repas", "ERREUR en notant " + it.nom + " : " + e); }
         }
-        noterJournal("validée");
+        for (Dictee.Sante x : res.sante) {   // 🩺 essai 34 : même chemin que 🩺 Santé du Journal (le carnet range)
+            try {
+                JSONObject o = new JSONObject().put("ts", ts).put("vts", ts).put("type", x.type).put("heure", hm);
+                if (x.type.equals("tension")) { o.put("sys", (int) x.sys).put("dia", (int) x.dia).put("note", "Noté à la voix"); if (x.pouls > 0) o.put("pouls", (int) x.pouls); }
+                else if (x.type.equals("poids")) o.put("kg", x.kg).put("note", "Noté à la voix");
+                else o.put("id", "").put("zone", x.zone).put("niveau", (int) x.niveau).put("note", x.note).put("fini", x.fini);
+                if (RappelEau.noter(this, o.toString())) n++;
+            } catch (Exception e) { Bug.note(this, "Dictée repas", "ERREUR en notant " + x.type + " : " + e); }
+        }
+        noterJournal("notée");
         sonner(2);
         compte.setText("");
-        etat.setText("✅ Noté dans le carnet :\n" + n + " prise" + (n > 1 ? "s" : "") + ".");
+        etat.setText("✅ Noté dans le carnet : " + n + " élément" + (n > 1 ? "s" : "") + ".");
         bValider.setVisibility(android.view.View.GONE); bAnnuler.setVisibility(android.view.View.GONE);
         dire("C'est noté.");
         MainActivity.carnetRanger();
@@ -262,6 +280,7 @@ public class DicteeRepas extends Activity {
             JSONArray its = new JSONArray(), inc = new JSONArray();
             if (res != null) {
                 for (Dictee.Item it : res.items) its.put(new JSONObject().put("fid", it.id).put("nom", it.nom).put("q", it.q).put("txt", it.nom + " " + Dictee.qte(it, false)).put("dit", it.dit).put("defaut", it.defaut));
+                for (Dictee.Sante x : res.sante) its.put(new JSONObject().put("sante", x.type).put("nom", x.ecrit).put("txt", x.ecrit));
                 for (String s : res.incompris) inc.put(s);
             }
             o.put("items", its).put("incompris", inc);

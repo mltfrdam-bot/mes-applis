@@ -155,7 +155,7 @@ public class NoteVocale extends Activity {
         if (t.isEmpty()) { etat.setText("Rien n'a été noté." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Rien noté."); h.postDelayed(this::finish, 2500); return; }
         String repas = "claude".equals(cat) ? debutAlimentation(t) : null;
         if (repas != null) {   // 🎙️ (essai 33) note qui commence par « alimentation » : elle part dans la dictée du carnet (relecture + 2e appui en 5 s)
-            Bug.note(this, "Note vocale", "« alimentation » entendu : dictée du carnet");
+            Bug.note(this, "Note vocale", "mot-code entendu : dictée du carnet et de la santé");
             try { startActivity(new Intent(this, DicteeRepas.class).putExtra("texte", repas).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
             catch (Exception e) { Bug.note(this, "Note vocale", "ERREUR ouverture de la dictée : " + e); garder(t); }
             h.postDelayed(this::finish, 300);
@@ -177,10 +177,11 @@ public class NoteVocale extends Activity {
         h.postDelayed(this::finish, 3000);
     }
 
-    /** Note qui commence par « alimentation » : renvoie la suite (ce qu'il a mangé ou bu), ou null. */
+    /** Note qui commence par un mot-code (alimentation, tension, douleur, poids) : renvoie la phrase pour la dictée, ou null. */
     static String debutAlimentation(String t) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)^[\\s,.]*(?:alimentation|alimentations|aliments?)\\b[\\s,.:;!-]*").matcher(t);
-        return m.find() ? t.substring(m.end()).trim() : null;
+        // essai 34 : aussi « tension », « douleur », « poids » (la phrase entière part dans la dictée, qui sait les enchaîner)
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iU)^[\\s,.]*(?:ma\\s+|mon\\s+|une\\s+)?(?:alimentations?|aliments?|tensions?|douleurs?|poids)\\b").matcher(t);
+        return m.find() ? t.trim() : null;
     }
 
     /** Fin « envoyer à Claude » (et ses variantes mal entendues) : renvoie le texte sans ces mots, ou null si la note ne finit pas ainsi. */

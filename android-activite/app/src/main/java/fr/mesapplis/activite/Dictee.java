@@ -26,11 +26,137 @@ public class Dictee {
 
     static class Item { String id, nom, u, dit = ""; double q; boolean defaut, eau; }
     static class Fav { final String id, nom, u, codes; final double q; final boolean eau; Fav(String id, String nom, String u, double q, String codes, boolean eau) { this.id = id; this.nom = nom; this.u = u == null || u.isEmpty() ? "portion" : u; this.q = q; this.codes = codes == null ? "" : codes; this.eau = eau; } }
-    static class Resultat { final List<Item> items = new ArrayList<>(); final List<String> incompris = new ArrayList<>(); String heure = null; }
+    static class Resultat { final List<Item> items = new ArrayList<>(); final List<String> incompris = new ArrayList<>(); final List<Sante> sante = new ArrayList<>(); String heure = null; }
+
+    /** 🩺 Mesure de santé dictée (essai 34) : tension, douleur ou poids. */
+    static class Sante { String type, zone = "", note = ""; double sys, dia, pouls, kg, niveau; boolean fini; String ecrit, oral; }
+
+    private static final java.util.regex.Pattern MOT_CODE = java.util.regex.Pattern.compile("(?iU)\\b(alimentations?|aliments?|tensions?|douleurs?|poids)\\b");
+
+    /**
+     * Note complète (essai 34) : plusieurs mots-codes à la suite — « poids 62,3, tension 13 8, alimentation eau 20 cl ».
+     * Sans mot-code, toute la phrase est de l'alimentation (bouton 🎙️ du carnet).
+     */
+    static Resultat analyser(String phrase, List<Fav> favs) {
+        Resultat r = new Resultat();
+        String t = oterHeureBrute(phrase == null ? "" : phrase, r);
+        java.util.regex.Matcher m = MOT_CODE.matcher(t);
+        List<int[]> pos = new ArrayList<>(); List<String> quoi = new ArrayList<>();
+        while (m.find()) { pos.add(new int[]{m.start(), m.end()}); String w = m.group(1).toLowerCase(Locale.FRANCE); quoi.add(w.startsWith("tension") ? "tension" : w.startsWith("douleur") ? "douleur" : w.startsWith("poids") ? "poids" : "alimentation"); }
+        String avant = pos.isEmpty() ? t : t.substring(0, pos.get(0)[0]);
+        if (!avant.replaceAll("[\\s,.;:!?-]", "").isEmpty()) fusion(r, comprendre(avant, favs));
+        for (int k = 0; k < pos.size(); k++) {
+            String seg = t.substring(pos.get(k)[1], k + 1 < pos.size() ? pos.get(k + 1)[0] : t.length()).replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "");
+            switch (quoi.get(k)) {
+                case "tension": tension(seg, r); break;
+                case "douleur": douleur(seg, r); break;
+                case "poids": poids(seg, r); break;
+                default: fusion(r, comprendre(seg, favs));
+            }
+        }
+        return r;
+    }
+
+    static void fusion(Resultat r, Resultat a) { r.items.addAll(a.items); r.incompris.addAll(a.incompris); if (r.heure == null) r.heure = a.heure; }
+
+    /** Heure dite, ôtée du texte d'origine (accents gardés pour la zone de la douleur). */
+    static String oterHeureBrute(String t, Resultat r) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iU)(?:(?<![\\w])(?:à|a|vers)\\s+)?(?<![\\w,.])(\\d{1,2})\\s*(?:h|heures?)(?![\\w])(?:\\s*(\\d{1,2})(?![\\w,.])(?!\\s*(?:\\d|(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?|kilos?)(?![\\w]))))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l['’ ]?apr[eè]s[- ]midi|cet apr[eè]s[- ]midi))?").matcher(t);
+        if (m.find()) {
+            int hh = Integer.parseInt(m.group(1)), mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+            String moment = m.group(3) == null ? "" : m.group(3).toLowerCase(Locale.FRANCE);
+            if (hh < 12 && (moment.contains("soir") || moment.contains("midi"))) hh += 12;
+            if (hh <= 23 && mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", hh, mm); return t.substring(0, m.start()) + " , " + t.substring(m.end()); }
+        }
+        m = java.util.regex.Pattern.compile("(?iU)(?:(?<![\\w])(?:à|a|vers)\\s+)?(?<![\\w])(midi|minuit)(?![\\w])(?:\\s*(\\d{1,2})(?![\\w,.])(?!\\s*(?:cl|ml|l|g|kg|gr)(?![\\w])))?").matcher(t);
+        if (m.find()) {
+            int mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+            if (mm <= 59) { r.heure = String.format(Locale.ROOT, "%02d:%02d", m.group(1).equalsIgnoreCase("midi") ? 12 : 0, mm); return t.substring(0, m.start()) + " , " + t.substring(m.end()); }
+        }
+        return t;
+    }
+
+    /** Tous les nombres d'un texte (déjà mis en forme par norm), avec la position du mot qui suit chacun. */
+    static List<double[]> nombres(String[] mots) {
+        List<double[]> l = new ArrayList<>();
+        for (int i = 0; i < mots.length; ) { double[] n = lireNombre(mots, i, true); if (n == null) { i++; continue; } l.add(new double[]{n[0], i, n[1]}); i = (int) n[1]; }
+        return l;
+    }
+
+    /** « 13 8 », « 13 sur 8 », « 13/8 », « 130 80 », « 138 », « pouls 62 ». 13 → 130 mmHg (comme l'appareil le dit souvent). */
+    static void tension(String seg, Resultat r) {
+        String[] mots = norm(seg.replace('/', ' ')).split(" ");
+        Double sys = null, dia = null, pouls = null; boolean apresPouls = false;
+        for (int i = 0; i < mots.length; ) {
+            if (mots[i].startsWith("pouls") || mots[i].equals("pulsations") || mots[i].equals("cardiaque") || mots[i].equals("battements")) { apresPouls = true; i++; continue; }
+            double[] n = lireNombre(mots, i, true);
+            if (n == null) { i++; continue; }
+            if (apresPouls && pouls == null) pouls = n[0];
+            else if (sys == null) sys = n[0];
+            else if (dia == null) dia = n[0];
+            else if (pouls == null) pouls = n[0];
+            i = (int) n[1];
+        }
+        if (sys != null && dia == null && sys >= 90 && sys <= 209 && sys == Math.rint(sys) && ((int) (sys % 10)) >= 5) { double s0 = sys; sys = Math.floor(s0 / 10); dia = s0 % 10; }   // « 138 » = 13/8
+        if (sys == null || dia == null) { r.incompris.add("tension" + (seg.isEmpty() ? "" : " « " + seg + " »") + " : il me faut les 2 chiffres"); return; }
+        if (sys < 30) sys = sys * 10; if (dia < 20) dia = dia * 10;
+        if (sys < 70 || sys > 260 || dia < 30 || dia > 160 || dia >= sys) { r.incompris.add("tension « " + seg + " » : chiffres pas plausibles"); return; }
+        if (pouls != null && (pouls < 25 || pouls > 230)) { r.incompris.add("pouls « " + nb(pouls) + " »"); pouls = null; }
+        Sante x = new Sante(); x.type = "tension"; x.sys = Math.round(sys); x.dia = Math.round(dia); x.pouls = pouls == null ? 0 : Math.round(pouls);
+        x.ecrit = "🩺 Tension " + nb(x.sys) + "/" + nb(x.dia) + (x.pouls > 0 ? ", pouls " + nb(x.pouls) : "");
+        x.oral = "Tension " + nb(x.sys / 10) + " " + nb(x.dia / 10) + (x.pouls > 0 ? ", pouls " + nb(x.pouls) : "");
+        r.sante.add(x);
+    }
+
+    /** « 62,3 », « 62 kilos 300 », « soixante deux virgule trois ». */
+    static void poids(String seg, Resultat r) {
+        String[] mots = norm(seg).replace("kilogrammes", "kg").replace("kilos", "kg").replace("kilo", "kg").split(" ");
+        List<double[]> l = nombres(mots);
+        if (l.isEmpty()) { r.incompris.add("poids : je n'ai pas entendu le chiffre"); return; }
+        double kg = l.get(0)[0];
+        if (l.size() > 1 && kg == Math.rint(kg)) { double d = l.get(1)[0]; int ix = (int) l.get(0)[2];   // « 62 kg 300 » ou « 62 virgule 3 »
+            if (ix < mots.length && (mots[ix].equals("kg") || mots[ix].equals("virgule")) && d == Math.rint(d)) kg += d < 10 ? d / 10 : d < 100 ? d / 100 : d / 1000; }
+        if (kg < 30 || kg > 250) { r.incompris.add("poids « " + seg + " » : chiffre pas plausible"); return; }
+        Sante x = new Sante(); x.type = "poids"; x.kg = Math.round(kg * 10) / 10.0;
+        x.ecrit = "⚖️ Poids " + nb(x.kg).replace('.', ',') + " kg"; x.oral = "Poids " + nb(x.kg).replace('.', ',') + " kilos";
+        r.sante.add(x);
+    }
+
+    /** « genou droit 4 », « genou droit 4 sur 10, après le tennis », « genou droit finie ». */
+    static void douleur(String seg, Resultat r) {
+        String t = seg;
+        boolean fini = false;
+        java.util.regex.Matcher mf = java.util.regex.Pattern.compile("(?iU)(?<![\\w])(finie?s?|termin[ée]e?s?|disparue?s?|partie?s?|pass[ée]e?s?|guérie?s?|plus mal)(?![\\w])").matcher(t);
+        if (mf.find()) { fini = true; t = t.substring(0, mf.start()) + " " + t.substring(mf.end()); }
+        // niveau : un nombre de 0 à 10, en chiffres ou en lettres, éventuellement suivi de « sur 10 »
+        java.util.regex.Matcher mn = java.util.regex.Pattern.compile("(?iU)(?<![\\w,.])(10|\\d|zéro|zero|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)(?![\\w,.])(\\s*(?:sur|/)\\s*10)?").matcher(t);
+        Integer niv = null; int a = -1, b = -1;
+        while (mn.find()) {
+            String w = mn.group(1).toLowerCase(Locale.FRANCE);
+            boolean article = (w.equals("un") || w.equals("une")) && mn.group(2) == null && t.substring(mn.end()).trim().matches("(?sU)^\\p{L}.*");
+            if (article) continue;
+            Double v = w.matches("\\d+") ? Double.valueOf(w) : NOMBRES.get(norm(w));
+            if (v == null) continue;
+            niv = (int) Math.round(v); a = mn.start(); b = mn.end();
+            if (mn.group(2) != null) break;
+        }
+        String zone, note = "";
+        if (niv != null) { zone = t.substring(0, a); note = t.substring(b); } else { zone = t; }
+        zone = zone.replaceAll("(?iU)(?<![\\w])(niveau|note|intensit[ée]|a|à|au|de|du|la|le|les|mon|ma|mes|j'ai|j ai|mal)(?![\\w])\\s*$", "").replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "").replaceAll("\\s+", " ");
+        zone = zone.replaceAll("(?iU)^(au|à la|à l'|a la|a l|à|a|de la|du|mon|ma|mes|le|la|les)\\s+", "").trim();
+        note = note.replaceAll("^[\\s,.;:!?-]+|[\\s,.;:!?-]+$", "").replaceAll("\\s+", " ");
+        if (zone.isEmpty()) { r.incompris.add("douleur : je n'ai pas compris où"); return; }
+        if (niv == null && !fini) { r.incompris.add("douleur " + zone + " : je n'ai pas compris le niveau de 0 à 10"); return; }
+        if (niv != null && (niv < 0 || niv > 10)) { r.incompris.add("douleur " + zone + " : le niveau va de 0 à 10"); return; }
+        Sante x = new Sante(); x.type = "douleur"; x.zone = zone.substring(0, 1).toUpperCase(Locale.FRANCE) + zone.substring(1); x.niveau = niv == null ? 0 : niv; x.fini = fini; x.note = note;
+        x.ecrit = "😣 Douleur " + x.zone + (niv != null ? " " + niv + "/10" : "") + (fini ? " · finie ✅" : "") + (note.isEmpty() ? "" : " · " + note);
+        x.oral = "Douleur " + x.zone + (niv != null ? ", " + niv + " sur 10" : "") + (fini ? ", finie" : "");
+        r.sante.add(x);
+    }
 
     /** Heure dite (« à 5 h du matin », « 12 h 30 », « 7 heures », « à midi ») : ôtée de la phrase, rangée dans r.heure (« HH:MM »). */
     static String oterHeure(String n, Resultat r) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:\\b(?:a|vers)\\s+)?\\b(\\d{1,2})\\s*(?:h|heure|heures)\\b(?:\\s*(\\d{1,2})\\b(?!\\s*(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?)\\b))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l apres midi|cet apres midi))?").matcher(n);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:\\b(?:a|vers)\\s+)?\\b(\\d{1,2})\\s*(?:h|heure|heures)\\b(?:\\s*(\\d{1,2})\\b(?!\\s*(?:\\d|(?:cl|ml|l|g|kg|gr|centilitres?|millilitres?|litres?|grammes?)\\b)))?(?:\\s+(du matin|ce matin|du soir|ce soir|de l apres midi|cet apres midi))?").matcher(n);
         if (m.find()) {
             int hh = Integer.parseInt(m.group(1)), mm = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
             String moment = m.group(3) == null ? "" : m.group(3);
@@ -86,6 +212,38 @@ public class Dictee {
     /** Morceaux de la phrase : Q (quantité, avec ou sans unité), F (favori), S (séparateur), X (mot inconnu). */
     static class Morceau { char k; double v; String u; Item f; String txt; boolean pris; Morceau(char k) { this.k = k; } }
 
+    /** Lit un nombre à la position i (« 62,3 », « 20 », « deux cent cinquante », « un demi », « 13 et demi »).
+        Renvoie {valeur, position suivante} ou null. « un » / « une » seuls ne comptent que si toutUn (sinon ce sont des articles). */
+    static double[] lireNombre(String[] mots, int i, boolean toutUn) {
+        if (i >= mots.length) return null;
+        String w = mots[i];
+        if (w.matches("\\d+([.,]\\d+)?")) {
+            double v = Double.parseDouble(w.replace(',', '.')); int j = i + 1;
+            if (j + 1 < mots.length && mots[j].equals("et") && mots[j + 1].equals("demi")) { v += 0.5; j += 2; }
+            else if (j + 1 < mots.length && mots[j].equals("virgule") && mots[j + 1].matches("\\d+")) { v += Double.parseDouble("0." + mots[j + 1]); j += 2; }
+            return new double[]{v, j};
+        }
+        boolean un = w.equals("un") || w.equals("une");
+        if (!NOMBRES.containsKey(w) || (un && !toutUn && !(i + 1 < mots.length && (UNITES.containsKey(mots[i + 1]) || mots[i + 1].equals("demi"))))) return null;
+        double tot = 0, cur = 0; int j = i;
+        while (j < mots.length && (NOMBRES.containsKey(mots[j]) || (mots[j].equals("et") && j + 1 < mots.length && NOMBRES.containsKey(mots[j + 1]) && j > i))) {
+            String x = mots[j];
+            if (x.equals("et")) { j++; continue; }
+            double n = NOMBRES.get(x);
+            if (x.equals("demi")) cur = (cur == 1 && !mots[j - 1].equals("et")) ? 0.5 : cur + 0.5;   // « un demi » = 0,5 ; « deux et demi » = 2,5
+            else if (n == 100) cur = (cur == 0 ? 1 : cur) * 100;
+            else if (n == 1000) { tot += (cur == 0 ? 1 : cur) * 1000; cur = 0; }
+            else if (x.equals("vingt") && cur == 4) cur = 80;          // quatre-vingt
+            else if (cur == 60 && n >= 10 && n < 20) cur += n;          // soixante-dix…
+            else if (cur == 80 && n < 20) cur += n;
+            else if (cur > 0 && cur < 10 && n < 10 && !x.equals("demi")) break;   // « treize huit » = deux nombres
+            else if (cur >= 10 && cur % 10 != 0 && n < 100) break;
+            else cur += n;
+            j++;
+        }
+        return new double[]{tot + cur, j};
+    }
+
     static Resultat comprendre(String phrase, List<Fav> favs) {
         Resultat r = new Resultat();
         String[] mots = oterHeure(norm(phrase), r).replaceAll("\\s+", " ").trim().split(" ");
@@ -103,25 +261,8 @@ public class Dictee {
             if (w.isEmpty()) { i++; continue; }
             if (SEPARE.contains(w) && !(w.equals("et") && i + 1 < mots.length && mots[i + 1].equals("demi"))) { m.add(new Morceau('S')); i++; continue; }
             // nombre (chiffres ou lettres)
-            Double v = null; int j = i;
-            if (w.matches("\\d+([.,]\\d+)?")) { v = Double.parseDouble(w.replace(',', '.')); j = i + 1; if (j + 1 < mots.length && mots[j].equals("et") && mots[j + 1].equals("demi")) { v += 0.5; j += 2; } }
-            else if (NOMBRES.containsKey(w) && !(w.equals("un") || w.equals("une")) || ((w.equals("un") || w.equals("une")) && i + 1 < mots.length && (UNITES.containsKey(mots[i + 1]) || mots[i + 1].equals("demi")))) {
-                double tot = 0, cur = 0; j = i;
-                while (j < mots.length && (NOMBRES.containsKey(mots[j]) || (mots[j].equals("et") && j + 1 < mots.length && NOMBRES.containsKey(mots[j + 1]) && j > i))) {
-                    String x = mots[j];
-                    if (x.equals("et")) { j++; continue; }
-                    double n = NOMBRES.get(x);
-                    if (x.equals("demi")) cur = (cur == 1 && !mots[j - 1].equals("et")) ? 0.5 : cur + 0.5;   // « un demi » = 0,5 ; « deux et demi » = 2,5
-                    else if (n == 100) cur = (cur == 0 ? 1 : cur) * 100;
-                    else if (n == 1000) { tot += (cur == 0 ? 1 : cur) * 1000; cur = 0; }
-                    else if (x.equals("vingt") && cur == 4) cur = 80;          // quatre-vingt
-                    else if (cur == 60 && n >= 10 && n < 20) cur += n;          // soixante-dix…
-                    else if (cur == 80 && n < 20) cur += n;
-                    else cur += n;
-                    j++;
-                }
-                v = tot + cur;
-            }
+            double[] nb = lireNombre(mots, i, false);
+            Double v = nb == null ? null : nb[0]; int j = nb == null ? i : (int) nb[1];
             if (v != null) {
                 Morceau q = new Morceau('Q'); q.v = v; q.txt = String.join(" ", java.util.Arrays.copyOfRange(mots, i, j));
                 if (j < mots.length && UNITES.containsKey(mots[j])) { q.u = UNITES.get(mots[j]); q.txt += " " + mots[j]; j++; }
