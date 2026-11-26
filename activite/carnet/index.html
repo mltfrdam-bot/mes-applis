@@ -7745,6 +7745,14 @@ table.pa td.ac { color: var(--accent); }
         cur.mesures_tension = (cur.mesures_tension || []).concat([{ heure: h, sys: x.sys, dia: x.dia, pouls: x.pouls || null }]);
         cur.note = (cur.note ? cur.note + " " : "") + "Tension à " + h + " : " + x.sys + "/" + x.dia + (x.pouls ? ", pouls " + x.pouls : "") + "." + (x.note ? " " + x.note : "") + " (Journal)";
         await ref.set(cur); return; }
+      if (x.type === "tensionModif" || x.type === "tensionSuppr") {   /* corriger ou supprimer une mesure (Journal → 🩺 Santé) */
+        var ref0 = db.collection("sante").doc(dayId(x.ancDate)), sn = await ref0.get(); if (!sn.exists) return;
+        var c0 = Object.assign({}, sn.data()), ms = (c0.mesures_tension || []).slice(), i = ms.findIndex(function (m) { return (m.heure || "") === (x.ancHeure || "") && Number(m.sys) === Number(x.ancSys) && Number(m.dia) === Number(x.ancDia); });
+        if (i >= 0) ms.splice(i, 1); else if (!ms.length && Number(c0.tension_sys) === Number(x.ancSys) && Number(c0.tension_dia) === Number(x.ancDia)) { delete c0.tension_sys; delete c0.tension_dia; delete c0.pouls_soir; }
+        if (c0.mesures_tension) { c0.mesures_tension = ms; var der = ms[ms.length - 1]; if (der) { c0.tension_sys = der.sys; c0.tension_dia = der.dia; if (der.pouls) c0.pouls_soir = der.pouls; } else { delete c0.tension_sys; delete c0.tension_dia; delete c0.pouls_soir; } }
+        await ref0.set(c0);
+        if (x.type === "tensionModif") await rangerSante({ type: "tension", date: x.date, t: x.t, sys: x.sys, dia: x.dia, pouls: x.pouls, note: "corrigée" });
+        return; }
       if (x.type === "douleur") { var niv = Number(x.niveau) || 0, intens = niv >= 7 ? "Forte" : niv >= 4 ? "Moyenne" : "Légère", ligne = { date: d, heure: h, niveau: niv, note: x.note || null };
         var p = x.id ? (pains || []).find(function (q) { return q.id === x.id; }) : null;
         if (p) { var dd = Object.assign({}, p); delete dd.id; dd.suivi = (Array.isArray(p.suivi) ? p.suivi.slice() : []).concat([ligne]); dd.intensite = intens;

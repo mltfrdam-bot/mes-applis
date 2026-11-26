@@ -286,6 +286,7 @@ public class RappelEau extends BroadcastReceiver {
             if (o.has("n")) x.put("n", o.optInt("n"));
             x.put("type", o.optString("type", "eau")).put("note", o.optString("note", ""));
             if (o.optString("heure", "").matches("\\d{2}:\\d{2}")) x.put("t", o.getString("heure"));
+            if (o.optString("jour", "").matches("\\d{4}-\\d{2}-\\d{2}")) x.put("date", o.getString("jour"));   // mesure d'un autre jour
             JSONArray l = new JSONArray(prefs(c).getString("attente", "[]"));
             l.put(x);
             SharedPreferences.Editor ed = prefs(c).edit().putString("attente", l.toString());
