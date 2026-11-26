@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.12";
+const VERSION = "2.13";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -851,6 +851,7 @@ const actions = {
   "b-sansfil": ouvrirSansFil,
   "sf-lancer": lancerSansFil,
   "sf-cle": exporterCle,
+  "r-donner-cle": exporterCle,
   "btn-usb": () => { apresPassage = false; connecter(false, true); },
   "c-sansfil": lancerSansFil,
   "c-deverrouiller": ouvrirDeverrouillage,
