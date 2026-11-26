@@ -284,6 +284,8 @@ public class RappelEau extends BroadcastReceiver {
             if (ml > 0) x.put("ml", ml);
             if (o.has("g")) x.put("g", o.optDouble("g"));
             if (o.has("n")) x.put("n", o.optInt("n"));
+            if (o.has("fid")) x.put("fid", o.optString("fid")).put("nom", o.optString("nom")).put("q", o.optDouble("q"));   // 🎙️ aliment dicté (essai 31)
+            if (o.has("vts")) x.put("vts", o.optLong("vts"));
             x.put("type", o.optString("type", "eau")).put("note", o.optString("note", ""));
             if (o.optString("heure", "").matches("\\d{2}:\\d{2}")) x.put("t", o.getString("heure"));
             if (o.optString("jour", "").matches("\\d{4}-\\d{2}-\\d{2}")) x.put("date", o.getString("jour"));   // mesure d'un autre jour

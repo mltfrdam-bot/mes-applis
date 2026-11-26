@@ -157,6 +157,13 @@ public class MainActivity extends Activity {
     private WebView web;
     /** Essai n° 4 : le carnet a sa propre page, gardée en mémoire à côté du Journal (passage instantané, sans rechargement). */
     private WebView webCarnet;
+    /** 🎙️ (essai 31) La dictée de l'alimentation demande au carnet de ranger tout de suite ce qui vient d'être validé. */
+    private static java.lang.ref.WeakReference<MainActivity> courante = new java.lang.ref.WeakReference<>(null);
+    static void carnetRanger() {
+        MainActivity m = courante.get();
+        if (m == null || m.webCarnet == null) return;
+        m.runOnUiThread(() -> { try { m.webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null); } catch (Exception ignored) {} });
+    }
     private FrameLayout cadre;
     private WebViewAssetLoader chargeurPages;
     static final String URL_JOURNAL = "https://appassets.androidplatform.net/assets/www/index.html";
@@ -169,6 +176,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        courante = new java.lang.ref.WeakReference<>(this);
         dossier = new File(getFilesDir(), "donnees");
         if (!dossier.exists()) dossier.mkdirs();
         try { sauvegardeDuJour(); } catch (Exception ignored) {}
@@ -906,6 +914,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void santeEtat(String json) { RappelEau.prefs(MainActivity.this).edit().putString("sante", json).apply(); }
         @JavascriptInterface public String santeLire() { return RappelEau.prefs(MainActivity.this).getString("sante", "{}"); }
         @JavascriptInterface public boolean santeNoter(String json) { boolean ok = RappelEau.noter(MainActivity.this, json); if (webCarnet != null) runOnUiThread(() -> webCarnet.evaluateJavascript("window.dispatchEvent && window.dispatchEvent(new Event('apk-visible'))", null)); return ok; }
+        /* 🎙️ Dictée de l'alimentation (essai 31) */
+        @JavascriptInterface public void favorisVoix(String json) { RappelEau.prefs(MainActivity.this).edit().putString("favorisVoix", json == null ? "{}" : json).apply(); }
+        @JavascriptInterface public void dicteeRepas() { runOnUiThread(() -> { try { startActivity(new Intent(MainActivity.this, DicteeRepas.class)); } catch (Exception e) { Bug.note(MainActivity.this, "Dictée repas", "ERREUR ouverture : " + e); } }); }
+        @JavascriptInterface public String dicteesRepas() { return RappelEau.prefs(MainActivity.this).getString("dictees", "[]"); }
         @JavascriptInterface public String eauEnAttente() { return RappelEau.prefs(MainActivity.this).getString("attente", "[]"); }
         @JavascriptInterface public void eauVider() { RappelEau.prefs(MainActivity.this).edit().putString("attente", "[]").apply(); }
         @JavascriptInterface public String eauReglages() { return RappelEau.reglages(MainActivity.this).toString(); }

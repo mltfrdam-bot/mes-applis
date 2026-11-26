@@ -153,10 +153,63 @@ public class NoteVocale extends Activity {
         muet(false);
         sonner(2);
         if (t.isEmpty()) { etat.setText("Rien n'a été noté." + (rateErr.isEmpty() ? "" : "\n(" + rateErr + ")")); dire("Rien noté."); h.postDelayed(this::finish, 2500); return; }
+        String sansEnvoi = "claude".equals(cat) ? finEnvoi(t) : null;
+        if (sansEnvoi != null) {   // 🎙️ (essai 31) note finie par « envoyer à Claude » : on garde la note PUIS on ouvre l'appli Claude
+            final String txt = sansEnvoi.isEmpty() ? t : sansEnvoi;
+            final long ts = garder(txt);
+            Bug.note(this, "Note vocale", "« envoyer à Claude » entendu : ouverture de l'appli Claude");
+            etat.setText("✅ Noté :\n« " + txt + " »\n\n🤖 J'ouvre Claude…");
+            dire("Noté. J'ouvre Claude.");
+            h.postDelayed(() -> envoyerAClaude(txt, ts), 1500);
+            return;
+        }
         garder(t);
         etat.setText("✅ Noté :\n« " + t + " »");
         dire("Noté.");
         h.postDelayed(this::finish, 3000);
+    }
+
+    /** Fin « envoyer à Claude » (et ses variantes mal entendues) : renvoie le texte sans ces mots, ou null si la note ne finit pas ainsi. */
+    static String finEnvoi(String t) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?iu)[\\s,.;!-]*(?:et\\s+)?(?:envoie|envoies|envoyer|envoyé|envoyez|envoi|envoye)\\s+(?:à|a|au)\\s+(?:claude|clode|clôde|glaude|cloud|clod|claud|klaude|claudes)[\\s.!]*$").matcher(t);
+        return m.find() ? t.substring(0, m.start()).trim() : null;
+    }
+
+    /** Ouvre l'appli Claude (menu Partager d'Android) avec la note déjà écrite ; il reste à appuyer sur Envoyer. */
+    private void envoyerAClaude(String txt, long ts) {
+        java.util.Calendar k = java.util.Calendar.getInstance(); k.setTimeInMillis(ts > 0 ? ts : System.currentTimeMillis());
+        String[] jours = { "dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam." };
+        String corps = String.format(Locale.FRANCE, "🤖 NOTE POUR CLAUDE — %s %02d/%02d, %02d:%02d 🎙️\n%s", jours[k.get(java.util.Calendar.DAY_OF_WEEK) - 1], k.get(java.util.Calendar.DAY_OF_MONTH), k.get(java.util.Calendar.MONTH) + 1, k.get(java.util.Calendar.HOUR_OF_DAY), k.get(java.util.Calendar.MINUTE), txt);
+        Runnable lancer = () -> {
+            Intent s = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, corps).setPackage("com.anthropic.claude").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            boolean ok = false;
+            try { startActivity(s); ok = true; Bug.note(this, "Note vocale", "appli Claude ouverte"); }
+            catch (Exception e) {
+                Bug.note(this, "Note vocale", "appli Claude introuvable (" + e.getClass().getSimpleName() + ") : menu Partager");
+                try { startActivity(Intent.createChooser(new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, corps), "Envoyer la note à…").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); ok = true; } catch (Exception e2) { Bug.note(this, "Note vocale", "ERREUR partage : " + e2); }
+            }
+            if (ok) marquerEnvoyee(ts); else { etat.setText("✅ Noté, mais je n'ai pas pu ouvrir Claude.\nLa note attend dans « Pour Claude »."); dire("Je n'ai pas pu ouvrir Claude. La note est gardée."); }
+            h.postDelayed(this::finish, ok ? 500 : 3500);
+        };
+        android.app.KeyguardManager km = (android.app.KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        if (km != null && km.isKeyguardLocked()) {
+            etat.setText("🔓 Déverrouille la tablette pour ouvrir Claude.\n(La note est déjà gardée.)");
+            km.requestDismissKeyguard(this, new android.app.KeyguardManager.KeyguardDismissCallback() {
+                @Override public void onDismissSucceeded() { lancer.run(); }
+                @Override public void onDismissCancelled() { Bug.note(NoteVocale.this, "Note vocale", "déverrouillage annulé : note gardée sans envoi"); h.postDelayed(NoteVocale.this::finish, 1500); }
+                @Override public void onDismissError() { Bug.note(NoteVocale.this, "Note vocale", "déverrouillage impossible : note gardée sans envoi"); h.postDelayed(NoteVocale.this::finish, 1500); }
+            });
+        } else lancer.run();
+    }
+
+    /** La note envoyée passera en « ✅ traitée » quand le Journal la rangera. */
+    private void marquerEnvoyee(long ts) {
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
+            JSONArray l = new JSONArray(p.getString("notesVocales", "[]"));
+            for (int i = 0; i < l.length(); i++) { JSONObject o = l.getJSONObject(i); if (o.optLong("ts") == ts) o.put("envoyee", true); }
+            p.edit().putString("notesVocales", l.toString()).apply();
+        } catch (Exception ignored) {}
     }
 
     /** 🔇 (essai 27) Coupe les sons du système pendant la dictée (les bips de la reconnaissance de Google), puis les remet. */
@@ -183,14 +236,16 @@ public class NoteVocale extends Activity {
 
     private void dire(String t) { try { if (voix != null) voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "note"); } catch (Exception ignored) {} }
 
-    private void garder(String txt) {
+    private long garder(String txt) {
+        long ts = System.currentTimeMillis();
         try {
             android.content.SharedPreferences p = getSharedPreferences("reglages", MODE_PRIVATE);
             JSONArray l = new JSONArray(p.getString("notesVocales", "[]"));
-            l.put(new JSONObject().put("ts", System.currentTimeMillis()).put("t", txt).put("cat", cat).put("ctx", ctx));
+            l.put(new JSONObject().put("ts", ts).put("t", txt).put("cat", cat).put("ctx", ctx));
             p.edit().putString("notesVocales", l.toString()).apply();
             Bug.note(this, "Note vocale", "note gardée (" + l.length() + " en attente de rangement)");
         } catch (Exception ignored) {}
+        return ts;
     }
 
     @Override protected void onDestroy() {

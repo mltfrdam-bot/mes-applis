@@ -13,4 +13,5 @@
     <TextView android:id="@+id/weB2" style="@style/BoutonWidget" />
     <TextView android:id="@+id/weB3" style="@style/BoutonWidget" />
     <TextView android:id="@+id/weAutre" style="@style/BoutonWidget" android:text="+…" />
+    <TextView android:id="@+id/weVoix" style="@style/BoutonWidget" android:text="🎙️" />
 </LinearLayout>

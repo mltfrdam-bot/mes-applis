@@ -11,4 +11,5 @@
     <TextView android:id="@+id/neB2" style="@style/BoutonNotif" />
     <TextView android:id="@+id/neB3" style="@style/BoutonNotif" />
     <TextView android:id="@+id/neAutre" style="@style/BoutonNotif" android:text="+…" />
+    <TextView android:id="@+id/neVoix" style="@style/BoutonNotif" android:text="🎙️" />
 </LinearLayout>

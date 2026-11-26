@@ -1223,6 +1223,7 @@ table.pa td.ac { color: var(--accent); }
         <div class="cq-in"><input id="cq-q" type="text" autocomplete="off" autocapitalize="off" enterkeyhint="search" placeholder="Chercher ou créer un aliment : croissant…" aria-label="Chercher un aliment dans tes favoris et la table Ciqual"><button type="button" id="cq-x" aria-label="Effacer" hidden>×</button></div>
         <div class="cq-res" id="cq-res" role="list" hidden></div>
       </div>
+      <div id="dictee-row" class="qrow" hidden style="justify-content:flex-start;gap:10px;flex-wrap:wrap;margin:6px 0"><button type="button" class="btn" id="dictee-go">🎙️ Dicter ce que je mange ou bois</button><button type="button" class="link" id="dictee-rap">📋 Copier le rapport des dictées</button></div>
       <div class="chips" id="chips" role="group" aria-label="Tes favoris"></div>
       <p class="qcalc">« − » et « + » règlent la quantité · touche le nom pour l'ajouter · « h+ » pour choisir l'heure · appui long pour changer l'heure ou le repas.</p>
       <div id="sugg" class="sugg" hidden></div>
@@ -1248,6 +1249,10 @@ table.pa td.ac { color: var(--accent); }
         </div>
         <div class="field" id="q-famrow"><label for="q-fam">Famille</label>
           <select id="q-fam"><option value="boissons">Boissons</option><option value="repas">Repas</option><option value="autres">Fruits et autres</option></select></div>
+        <div class="field" id="q-voixrow" hidden><label for="q-voixq">🎙️ Dictée : quantité si je ne la dis pas</label>
+          <div class="qrow" style="justify-content:flex-start;gap:8px"><input id="q-voixq" type="number" inputmode="decimal" min="0" step="1" style="width:96px"><span class="qcalc" id="q-voixu"></span></div>
+          <label for="q-voixc" style="margin-top:6px">🎙️ Mots-codes (autres façons de le dire, séparées par des virgules)</label>
+          <input id="q-voixc" type="text" autocomplete="off" placeholder="ex. lait, pain"></div>
         <div class="qrow" id="q-prixrow"><label for="q-prix" class="qcalc" style="font-weight:600">Prix</label><input id="q-prix" type="number" inputmode="decimal" step="0.01" min="0" style="width:96px" placeholder="—"><span class="qcalc" id="q-prixu"></span></div>
         <p class="qcalc" id="q-calc"></p>
         <div class="qnut" id="q-nut"></div>
@@ -1917,6 +1922,11 @@ table.pa td.ac { color: var(--accent); }
     var u = sortList(usesOf(f)).filter(function (e) { return num(e.quantite) !== null; });
     return u.length ? u[0].quantite : (num(f.defaut) !== null ? f.defaut : 1);
   }
+  /* 🎙️ Dictée (APK) : quantité prise quand Frédéric ne la dit pas — réglée dans la fiche du favori, sinon ses valeurs du 26/11, sinon la dernière prise */
+  var DEF_VOIX = [[/^eau$/, "ml", 200], [/^lait de vache/, "ml", 200], [/^baguette/, "g", 125], [/^ratatouille/, "g", 90], [/^riz\b/, "g", 90]];
+  function qVoix(f) { if (!f) return 1; if (num(f.qVoix) !== null && num(f.qVoix) > 0) return num(f.qVoix); var n = normTxt(f.nom);
+    for (var i = 0; i < DEF_VOIX.length; i++) if (DEF_VOIX[i][0].test(n) && f.unite === DEF_VOIX[i][1]) return DEF_VOIX[i][2];
+    return lastQty(f); }
   function unitLabel(f) { return f.unite === "portion" ? "portion" : f.unite; }
   function fmtQty(f, q) {
     if (f.unite === "ml") return q >= 10 && q % 10 === 0 ? fr(q / 10, 0) + " cl" : fr(q, 0) + " ml";
@@ -2294,6 +2304,9 @@ table.pa td.ac { color: var(--accent); }
     $("#q-prixrow").hidden = true; $("#q-prixtog").hidden = !f;
     if (!f && e) { qNutRender(e, e.micro || {}, e.description || "cette prise"); } else if (!f) { $("#q-nut").hidden = true; }
     $("#q-famrow").hidden = !f || !!e; $("#q-hide").hidden = !f || !!e;
+    $("#q-voixrow").hidden = !f || !!e || !(window.AndroidApp && window.AndroidApp.dicteeRepas);
+    if (f) { var qv = num(f.qVoix) !== null && num(f.qVoix) > 0; $("#q-voixq").value = qv ? f.qVoix : ""; $("#q-voixq").placeholder = String(qVoix(f));
+      $("#q-voixu").textContent = unitLabel(f) + " — " + (qv ? "= " + fmtQty(f, num(f.qVoix)) : "vide : " + fmtQty(f, qVoix(f))); $("#q-voixc").value = f.codes || ""; }
     if (f) { $("#q-fam").value = famOf(f); $("#q-hide").textContent = f.cache ? "Réafficher dans l'ajout rapide" : "Masquer de l'ajout rapide"; }
     if (f) { var tp = priceAt(f, e ? e.date : todayStr()); $("#q-prix").value = tp !== null ? tp : ""; $("#q-prix").disabled = !!e; $("#q-prixu").textContent = prixUnit(f) + (e && tp !== null ? " (tarif de ce jour-là)" : ""); }
     $("#qpanel").hidden = false; $("#qback").hidden = false;
@@ -2482,6 +2495,10 @@ table.pa td.ac { color: var(--accent); }
       $("#q-heure").focus(); });
     $("#q-heure").addEventListener("change", function () { if (!editE && sel && $("#q-heure").value) $("#q-repas").value = repasFor(sel, $("#q-heure").value); });
     $("#q-jour").addEventListener("change", function () { if ($("#q-jour").value > todayStr()) $("#q-jour").value = todayStr(); });
+    $("#q-voixq").addEventListener("change", function () { if (!sel) return; var v = parseFloat(String($("#q-voixq").value).replace(",", ".")), ok = v > 0;
+      patchFav({ qVoix: ok ? v : null }, "🎙️ " + sel.nom + " : " + (ok ? fmtQty(sel, v) : "quantité par défaut " + fmtQty(sel, qVoix(Object.assign({}, sel, { qVoix: null })))) + " si tu ne la dis pas.").then(function () { $("#q-voixu").textContent = unitLabel(sel) + " — " + (ok ? "= " + fmtQty(sel, v) : "vide : " + fmtQty(sel, qVoix(sel))); try { window.dispatchEvent(new Event("apk-visible")); } catch (e) {} }); });
+    $("#q-voixc").addEventListener("change", function () { if (!sel) return; var v = String($("#q-voixc").value || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean).join(", ");
+      $("#q-voixc").value = v; patchFav({ codes: v || null }, "🎙️ Mots-codes de " + sel.nom + (v ? " : " + v : " effacés") + ".").then(function () { try { window.dispatchEvent(new Event("apk-visible")); } catch (e) {} }); });
     $("#q-fam").addEventListener("change", function () { var v = $("#q-fam").value; patchFav({ famille: v }, sel.nom + " rangé dans " + FAMLBL[v] + "."); });
     $("#q-hide").addEventListener("click", async function () {
       if (!sel) return; var off = !sel.cache, nm = sel.nom;
@@ -7770,19 +7787,56 @@ table.pa td.ac { color: var(--accent); }
     async function favApk(ty) { var M = FAV_APK[ty]; if (!M) return null; var ex = (favs || []).find(function (x) { return x.id === "fav-apk-" + ty; }) || (favs || []).find(function (x) { return M.re.test(normTxt(x.nom)); }); if (ex) return ex;
       var d = Object.assign({ nom: M.nom }, M.data); try { await db.collection("favoris").doc("fav-apk-" + ty).set(d); } catch (e) {} d.id = "fav-apk-" + ty; return d; }
     async function ranger() { if (enCours || !db || state.alimentation === null) return; enCours = true;
-      try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0;
+      try { var l = JSON.parse(A.eauEnAttente() || "[]"); if (l.length) { var f = asEau(), n = 0, nv = 0;
           for (var i = 0; i < l.length; i++) { var x = l[i], ty = x.type || "eau";
             if (ty === "tension" || ty === "douleur" || ty === "tensionModif" || ty === "tensionSuppr") { try { await rangerSante(x); } catch (e) {} continue; }
+            if (ty === "fav") { var fv = (favs || []).find(function (z) { return z.id === x.fid; }) || (favs || []).find(function (z) { return normTxt(z.nom) === normTxt(x.nom || ""); }), qv = Number(x.q) || 0;
+              if (!fv || !(qv > 0)) continue;
+              var dv = Object.assign({ date: x.date, heure: x.t, repas: repasFor(fv, x.t), description: descFor(fv, qv), fav: fv.id, quantite: qv, unite: fv.unite }, calcFor(fv, qv));
+              dv.saisi = Date.now(); dv.note = x.note || "Noté à la voix"; if (x.vts) { dv.voix = x.vts; dv.voixQ = qv; }
+              await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(dv); n++; nv++; continue; }
             var ff = ty === "eau" ? f : await favApk(ty), q = ff && ff.unite === "g" ? Math.round((Number(x.g) || 0) * 10) / 10 : Math.round(Number(x.ml) || 0); if (!(q > 0)) continue;
             var doc = ff ? Object.assign({ date: x.date, heure: x.t, repas: ty === "eau" ? repasFor(ff, x.t) : (ff.repas || "Pendant l'effort"), description: descFor(ff, q) + (x.n ? " (" + x.n + ")" : ""), fav: ff.id, quantite: q, unite: ff.unite }, calcFor(ff, q)) : { date: x.date, heure: x.t, repas: "Boisson", description: "Eau " + (q / 10) + " cl", boisson_ml: q, kcal: 0 };
-            doc.saisi = Date.now(); doc.note = x.note || "Noté depuis la notification";
+            doc.saisi = Date.now(); doc.note = x.note || "Noté depuis la notification"; if (x.vts) { doc.voix = x.vts; doc.voixQ = q; }
             if (x.kcal != null) { doc.kcal = x.kcal; if (x.glucides != null) doc.glucides_g = x.glucides; }   /* dosage réel de la gourde */ await db.collection("alimentation").doc("n" + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5)).set(doc); n++; }
-          A.eauVider(); if (n) toast("💧 " + n + " boisson" + (n > 1 ? "s" : "") + " de la notification rangée" + (n > 1 ? "s" : "") + " dans le carnet."); } } catch (e) {}
+          A.eauVider(); if (n) toast(nv ? "🎙️ " + n + " prise" + (n > 1 ? "s" : "") + " dictée" + (n > 1 ? "s" : "") + " rangée" + (n > 1 ? "s" : "") + " dans le carnet." : "💧 " + n + " boisson" + (n > 1 ? "s" : "") + " de la notification rangée" + (n > 1 ? "s" : "") + " dans le carnet."); } } catch (e) {}
       enCours = false; setTimeout(publier, 1500); }
-    setInterval(function () { ranger(); publier(); }, 60000);
+    /* 🎙️ Dictée de l'alimentation (essai 31) : Android reçoit la liste des favoris (nom, unité, quantité par défaut, mots-codes) */
+    var dernierFavs = "";
+    function publierFavs() { try { if (!A.favorisVoix || !favs || state.alimentation === null) return; var e = asEau(), d = todayStr();
+      var t = JSON.stringify({ date: d, deja: (state.alimentation || []).some(function (x) { return x && x.date === d; }),
+        favs: favs.filter(function (x) { return x && x.nom; }).map(function (x) { return { id: x.id, nom: x.nom, u: x.unite || "portion", q: qVoix(x), codes: String(x.codes || ""), eau: !!(e && x.id === e.id) }; }) });
+      if (t !== dernierFavs) { dernierFavs = t; A.favorisVoix(t); } } catch (e2) {} }
+    (function dictee() { var row = document.getElementById("dictee-row"); if (!row || !A.dicteeRepas) return; row.hidden = false;
+      document.getElementById("dictee-go").addEventListener("click", function () { publierFavs(); A.dicteeRepas(); });
+      document.getElementById("dictee-rap").addEventListener("click", function () { var t = rapportDictees(); if (A.copier && A.copier(t)) toast("📋 Rapport des dictées copié : colle-le dans la conversation avec Claude."); else toast("Copie impossible.", null, true); }); })();
+    function rapportDictees() { var l = []; try { l = JSON.parse(A.dicteesRepas() || "[]"); } catch (e) {}
+      var lim = Date.now() - 7 * 86400000; l = l.filter(function (x) { return x && x.ts >= lim; });
+      function quand(ts) { var dt = new Date(ts); return dt.toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit" }) + " " + pad(dt.getHours()) + ":" + pad(dt.getMinutes()); }
+      var st = {}, corr = 0, mots = {}, recon = {}, lignes = [];
+      l.forEach(function (x) { st[x.statut] = (st[x.statut] || 0) + 1;
+        (x.incompris || []).forEach(function (m) { mots[m] = (mots[m] || 0) + 1; });
+        (x.items || []).forEach(function (it) { recon[it.nom] = (recon[it.nom] || 0) + 1; });
+        var suite = "";
+        if (x.statut === "validée") { var ent = (state.alimentation || []).filter(function (e) { return e && e.voix === x.ts; });
+          (x.items || []).forEach(function (it) { var e = ent.find(function (z) { return z.fav === it.fid; });
+            if (!e) { if (Date.now() - x.ts > 600000) { corr++; suite += " · 🗑 " + it.nom + " supprimé(e) ou changé(e) d'aliment ensuite"; } }
+            else if (num(e.quantite) !== null && Math.abs(num(e.quantite) - it.q) > 0.01) { corr++; suite += " · ✏️ " + it.nom + " corrigé(e) : " + it.txt + " → " + (e.description || ""); } }); }
+        lignes.push("- " + quand(x.ts) + " — entendu « " + (x.entendu || "") + " » → " + ((x.items || []).map(function (it) { return it.txt + (it.defaut ? " (quantité par défaut)" : ""); }).join(", ") || "rien") +
+          ((x.incompris || []).length ? " · non compris : « " + x.incompris.join(" », « ") + " »" : "") + " · " + (x.statut || "?") + suite); });
+      var t = "🎙️ RAPPORT DES DICTÉES — carnet (7 derniers jours)\n" + l.length + " dictée" + (l.length > 1 ? "s" : "") + " : " + (Object.keys(st).map(function (k) { return st[k] + " " + k; }).join(", ") || "aucune") + ".\n";
+      t += "Corrigées ou supprimées ensuite : " + corr + ".\n";
+      var mm = Object.keys(mots).sort(function (a, b) { return mots[b] - mots[a]; });
+      t += "\nMots pas compris :\n" + (mm.length ? mm.slice(0, 20).map(function (m) { return "- « " + m + " » (" + mots[m] + " fois)"; }).join("\n") : "- aucun") + "\n";
+      var rr = Object.keys(recon).sort(function (a, b) { return recon[b] - recon[a]; });
+      t += "\nFavoris reconnus : " + (rr.length ? rr.map(function (m) { return m + " (" + recon[m] + ")"; }).join(", ") : "aucun") + "\n";
+      var cd = (favs || []).filter(function (x) { return x && x.codes; }); t += "Mots-codes réglés : " + (cd.length ? cd.map(function (x) { return x.nom + " = " + x.codes; }).join(" ; ") : "aucun") + "\n";
+      t += "\nDétail :\n" + (lignes.length ? lignes.reverse().join("\n") : "- aucune dictée") + "\n";
+      return t; }
+    setInterval(function () { ranger(); publier(); publierFavs(); }, 60000);
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { ranger(); publier(); } });
-    window.addEventListener("apk-visible", function () { ranger(); publier(); });   /* carnet remis à l'écran par l'APK */
-    setTimeout(function () { ranger(); publier(); }, 3000);
+    window.addEventListener("apk-visible", function () { ranger(); publier(); publierFavs(); });   /* carnet remis à l'écran par l'APK */
+    setTimeout(function () { ranger(); publier(); publierFavs(); }, 3000);
   })();
 })();
 </script>

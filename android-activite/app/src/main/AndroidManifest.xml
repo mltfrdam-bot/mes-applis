@@ -30,6 +30,8 @@
 
     <queries>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <!-- 🎙️ « envoyer à Claude » : ouvrir l'appli Claude avec la note déjà écrite -->
+        <package android:name="com.anthropic.claude" />
     </queries>
 
     <application
@@ -75,6 +77,10 @@
         <service android:name=".ServiceTelecommande" android:exported="false" android:foregroundServiceType="connectedDevice" />
         <activity android:name=".NoteVocale" android:exported="false" android:excludeFromRecents="true" android:taskAffinity=".note"
             android:showWhenLocked="true" android:turnScreenOn="true" android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar" />
+
+        <!-- 🎙️ Dictée de l'alimentation (essai 31) : par-dessus le verrouillage ; un 2e appui sur 🎙️ arrive ici (onNewIntent) -->
+        <activity android:name=".DicteeRepas" android:exported="false" android:excludeFromRecents="true" android:taskAffinity=".dictee"
+            android:launchMode="singleTask" android:showWhenLocked="true" android:turnScreenOn="true" android:theme="@android:style/Theme.Material.Light.Dialog.NoActionBar" />
 
         <receiver android:name=".WidgetEau" android:exported="false" android:label="💧 Eau du jour">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
