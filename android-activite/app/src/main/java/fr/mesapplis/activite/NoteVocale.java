@@ -49,9 +49,15 @@ public class NoteVocale extends Activity {
         TextView t = new TextView(this); t.setText("btp".equals(cat) ? "🏗️ Note pour 4B BTP" : "seance".equals(cat) ? "🏃 Note de séance" : "🤖 Note pour Claude"); t.setTextSize(24); t.setTypeface(Typeface.DEFAULT_BOLD); t.setTextColor(0xFF1F6FB2); t.setGravity(Gravity.CENTER);
         etat = new TextView(this); etat.setTextSize(20); etat.setTextColor(0xFF1b1f23); etat.setGravity(Gravity.CENTER); etat.setPadding(0, (int) (16 * d), 0, (int) (16 * d));
         Button fermer = new Button(this); fermer.setText("✅ Terminer"); fermer.setAllCaps(false); fermer.setTextSize(20); fermer.setOnClickListener(v -> { if (actif == this) terminer(); else finish(); });
-        l.addView(t); l.addView(etat); l.addView(fermer);
+        Button annul = new Button(this); annul.setText("❌ Annuler la note"); annul.setAllCaps(false); annul.setTextSize(20); annul.setOnClickListener(v -> { if (actif == this) annuler(); else finish(); });   // essai 36
+        l.addView(t); l.addView(etat); l.addView(annul); l.addView(fermer);
         setContentView(l);
         voix = new TextToSpeech(this, s -> { try { voix.setLanguage(Locale.FRANCE); } catch (Exception ignored) {} });
+        voix.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {   // essai 36 : fin de la relecture → fenêtre de 3 s
+            @Override public void onStart(String id) { }
+            @Override public void onDone(String id) { if ("relecture".equals(id)) h.post(NoteVocale.this::ouvrirFenetre); }
+            @Override public void onError(String id) { if ("relecture".equals(id)) h.post(NoteVocale.this::ouvrirFenetre); }
+        });
         Bug.note(this, "Note vocale", "écran ouvert (Android " + android.os.Build.VERSION.SDK_INT + ", " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + ")");
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) {
             Bug.note(this, "Note vocale", "micro non autorisé : demande envoyée");
@@ -92,12 +98,19 @@ public class NoteVocale extends Activity {
                 ArrayList<String> l = r.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 String txt = l != null && !l.isEmpty() ? l.get(0).trim() : "";
                 Bug.note(NoteVocale.this, "Note vocale", "morceau : " + (txt.isEmpty() ? "VIDE" : "« " + txt + " »"));
+                h.removeCallbacks(arretCode);
+                if (gardee) return;
+                if (enFenetre) { traiterFenetre(txt); return; }
+                partiel = ""; erreursSuivies = 0;
+                if (!finir && traiterCode(txt)) return;   // essai 36 : terminé / lire / effacer
                 if (!txt.isEmpty()) { if (texte.length() > 0) texte.append(' '); texte.append(txt); }
-                partiel = ""; erreursSuivies = 0; afficher();
+                afficher();
                 if (finir) garderEtFermer(); else h.postDelayed(NoteVocale.this::demarrer, 120);
             }
             @Override public void onError(int e) {
                 Bug.note(NoteVocale.this, "Note vocale", "ERREUR " + Bug.erreurVoix(e));
+                if (gardee || enRelecture) return;
+                if (enFenetre) { parleFenetre = false; if (e != 6 && e != 7) h.postDelayed(NoteVocale.this::demarrer, 300); return; }   // la fenêtre de 3 s continue
                 if ((e == 12 || e == 13) && horsLigne) { horsLigne = false; h.postDelayed(() -> { nouveauReco(); demarrer(); }, 300); return; }   // français pas téléchargé : on passe par internet
                 if (finir) { garderEtFermer(); return; }
                 if (e == 6 || e == 7) { erreursSuivies = 0; h.postDelayed(NoteVocale.this::demarrer, 120); return; }   // silence = tu réfléchis : on continue d'écouter
@@ -106,17 +119,25 @@ public class NoteVocale extends Activity {
                 h.postDelayed(NoteVocale.this::demarrer, 600);
             }
             @Override public void onReadyForSpeech(Bundle p) { }
-            @Override public void onBeginningOfSpeech() { }
+            @Override public void onBeginningOfSpeech() { if (enFenetre) { parleFenetre = true; etat.setText("🎙️ Je t'écoute…"); } }
             @Override public void onRmsChanged(float v) { }
             @Override public void onBufferReceived(byte[] b) { }
             @Override public void onEndOfSpeech() { }
-            @Override public void onPartialResults(Bundle b) { ArrayList<String> l = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION); partiel = l != null && !l.isEmpty() ? l.get(0) : ""; afficher(); }
+            @Override public void onPartialResults(Bundle b) {
+                ArrayList<String> l = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION); String p = l != null && !l.isEmpty() ? l.get(0) : "";
+                if (gardee || enRelecture) return;
+                // essai 36 : un mot-code à la fin puis ~1 s sans rien de nouveau → on arrête l'écoute pour l'appliquer tout de suite
+                h.removeCallbacks(arretCode);
+                if (CodesVoix.code(p) != CodesVoix.AUCUN) h.postDelayed(arretCode, 1000);
+                if (enFenetre) { if (!p.isEmpty()) etat.setText("🎙️ « " + p + " »"); return; }
+                partiel = p; afficher();
+            }
             @Override public void onEvent(int t, Bundle b) { }
         });
     }
 
     private void demarrer() {
-        if (finir || reco == null) return;
+        if (finir || reco == null || enRelecture) return;
         Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
@@ -132,11 +153,12 @@ public class NoteVocale extends Activity {
 
     private void afficher() {
         String t = (texte + (partiel.isEmpty() ? "" : (texte.length() > 0 ? " " : "") + partiel)).trim();
-        etat.setText(finir ? "J'écris…" : "🎙️ Je t'écoute… prends ton temps.\nPour finir : " + nomLettre() + " ou « ✅ Terminer ».\n\n" + (t.isEmpty() ? "" : "« " + t + " »"));
+        etat.setText(finir ? "J'écris…" : (efface ? "🗑 Effacé : recommence ta note.\n" : "🎙️ Je t'écoute… prends ton temps.\n") + "Finis par « terminé » (ou « relire »). « effacer » = tout recommencer.\n" + nomLettre() + " = annuler.\n\n" + (t.isEmpty() ? "" : "« " + t + " »"));
     }
 
     /** 🔵 Y appuyé à nouveau, ou bouton « Terminer » : on récupère le dernier morceau puis on garde la note. */
     void terminer() {
+        if (enRelecture || enFenetre) { garderEtFermer(); return; }
         if (finir) return;
         finir = true; afficher();
         Bug.note(this, "Note vocale", "fin demandée");
@@ -146,7 +168,7 @@ public class NoteVocale extends Activity {
 
     private void garderEtFermer() {
         if (gardee) return;
-        gardee = true; finir = true; actif = null;
+        gardee = true; finir = true; actif = null; enRelecture = false; enFenetre = false;
         h.removeCallbacksAndMessages(null);
         String t = (texte + (partiel.isEmpty() ? "" : (texte.length() > 0 ? " " : "") + partiel)).trim();
         try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
@@ -157,7 +179,7 @@ public class NoteVocale extends Activity {
         try { repas = "claude".equals(cat) ? debutAlimentation(t) : null; } catch (Throwable e) { Bug.note(this, "Note vocale", "ERREUR mot-code : " + e); }
         if (repas != null) {   // 🎙️ (essai 33) note qui commence par « alimentation » : elle part dans la dictée du carnet (relecture + 2e appui en 5 s)
             Bug.note(this, "Note vocale", "mot-code entendu : dictée du carnet et de la santé");
-            try { startActivity(new Intent(this, DicteeRepas.class).putExtra("texte", repas).putExtra("lettre", lettre).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+            try { startActivity(new Intent(this, DicteeRepas.class).putExtra("texte", repas).putExtra("lettre", lettre).putExtra("fin", modeFin).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
             catch (Exception e) { Bug.note(this, "Note vocale", "ERREUR ouverture de la dictée : " + e); garder(t); }
             h.postDelayed(this::finish, 300);
             return;
@@ -177,6 +199,97 @@ public class NoteVocale extends Activity {
         etat.setText("✅ Noté :\n« " + t + " »");
         dire("Noté.");
         h.postDelayed(this::finish, 3000);
+    }
+
+    // ---------- 🎙️ Mots-codes (essai 36) : « terminé » valide sans relecture, « lire » / « relire » relit puis valide 3 s après,
+    // « effacer » vide la note (micro ouvert) ; la lettre de la télécommande (ou ❌) annule tout. ----------
+    private boolean enRelecture = false, enFenetre = false, parleFenetre = false, efface = false;
+    private String modeFin = "";
+    private int resteFenetre = 3;
+    private final Runnable arretCode = () -> { try { if (reco != null) reco.stopListening(); } catch (Exception ignored) {} };
+
+    private String texteComplet() { return (texte + (partiel.isEmpty() ? "" : (texte.length() > 0 ? " " : "") + partiel)).trim(); }
+
+    /** Morceau entendu pendant la dictée : true si un mot-code a été appliqué. */
+    private boolean traiterCode(String txt) {
+        int c = CodesVoix.code(txt);
+        if (c == CodesVoix.AUCUN) { efface = false; return false; }
+        String reste = CodesVoix.sans(txt);
+        if (c == CodesVoix.EFFACER) {
+            Bug.note(this, "Note vocale", "« effacer » : note vidée, on recommence");
+            texte.setLength(0); partiel = ""; efface = true;
+            sonnerLibre(1); afficher();
+            h.postDelayed(this::demarrer, 120);
+            return true;
+        }
+        efface = false;
+        if (!reste.isEmpty()) { if (texte.length() > 0) texte.append(' '); texte.append(reste); }
+        afficher();
+        if (c == CodesVoix.TERMINE) { Bug.note(this, "Note vocale", "« terminé » : validée sans relecture"); modeFin = "termine"; garderEtFermer(); return true; }
+        Bug.note(this, "Note vocale", "« relire » : relecture à voix haute");
+        modeFin = "lire";
+        String t = texte.toString().trim();
+        if ("claude".equals(cat) && debutAlimentation(t) != null) { garderEtFermer(); return true; }   // la dictée du carnet relit ce qu'elle a compris
+        relire();
+        return true;
+    }
+
+    /** Relit la note à voix haute (sons remis), puis ouvre la fenêtre de 3 s. */
+    private void relire() {
+        String t = texte.toString().trim();
+        if (t.isEmpty()) { afficher(); h.postDelayed(this::demarrer, 120); return; }
+        enRelecture = true; enFenetre = false;
+        try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
+        muet(false);
+        etat.setText("🔊 Je relis :\n« " + t + " »\n\n" + nomLettre() + " = annuler.");
+        try { voix.speak(t, TextToSpeech.QUEUE_FLUSH, null, "relecture"); } catch (Exception e) { h.post(this::ouvrirFenetre); }
+        h.postDelayed(this::ouvrirFenetre, 4000 + t.length() * 90L);   // si la voix ne répond pas
+    }
+
+    /** Après la relecture : micro rouvert 3 s ; « effacer » = recommencer, rien = noté. */
+    private void ouvrirFenetre() {
+        if (!enRelecture || gardee) return;
+        enRelecture = false; enFenetre = true; parleFenetre = false; resteFenetre = 3;
+        sonner(1);
+        h.postDelayed(() -> { if (!enFenetre) return; muet(true); nouveauReco(); demarrer(); }, 250);
+        h.postDelayed(this::ticFenetre, 400);
+    }
+
+    private void ticFenetre() {
+        if (!enFenetre || gardee) return;
+        if (parleFenetre) { h.postDelayed(this::ticFenetre, 300); return; }   // il parle : on attend ce qu'il dit
+        if (resteFenetre <= 0) { Bug.note(this, "Note vocale", "relue, rien dit : validée"); garderEtFermer(); return; }
+        etat.setText("« " + texte.toString().trim() + " »\n\n⏱ Noté dans " + resteFenetre + " s\n« effacer » = recommencer · " + nomLettre() + " = annuler");
+        resteFenetre--;
+        h.postDelayed(this::ticFenetre, 1000);
+    }
+
+    /** Ce qui est dit pendant la fenêtre de 3 s. */
+    private void traiterFenetre(String txt) {
+        enFenetre = false; parleFenetre = false;
+        if (txt.isEmpty()) { garderEtFermer(); return; }
+        if (CodesVoix.code(txt) == CodesVoix.EFFACER) { traiterCode(txt); return; }
+        if (traiterCode(txt)) return;   // « terminé » ou « relire » avec un complément
+        if (texte.length() > 0) texte.append(' ');   // autre chose : il complète sa note, la dictée continue
+        texte.append(txt); afficher();
+        h.postDelayed(this::demarrer, 120);
+    }
+
+    /** Bip audible même quand les sons sont coupés (on les remet le temps du bip). */
+    private void sonnerLibre(int n) { muet(false); sonner(n); h.postDelayed(() -> { if (!gardee && !enRelecture) muet(true); }, 300); }
+
+    /** 🔵 La lettre de la télécommande (ou ❌) : la note est annulée entièrement, rien n'est gardé (essai 36). */
+    void annuler() {
+        if (gardee) return;
+        gardee = true; finir = true; actif = null; enRelecture = false; enFenetre = false;
+        h.removeCallbacksAndMessages(null);
+        try { if (reco != null) reco.cancel(); } catch (Exception ignored) {}
+        try { if (voix != null) voix.stop(); } catch (Exception ignored) {}
+        muet(false);
+        Bug.note(this, "Note vocale", "ANNULÉE (" + texteComplet().length() + " lettres jetées)");
+        etat.setText("❌ Note annulée.");
+        dire("Annulé.");
+        h.postDelayed(this::finish, 1200);
     }
 
     /** Note qui commence par un mot-code (alimentation, tension, douleur, poids) : renvoie la phrase pour la dictée, ou null. */

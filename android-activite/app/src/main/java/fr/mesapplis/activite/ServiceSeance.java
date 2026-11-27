@@ -572,7 +572,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     @Override public void bouton(String nom) {
         if (enr == null) return;
         NoteVocale nv = NoteVocale.actif;
-        if (nv != null) { if (nom.equals(nv.lettre)) { vibrer(new long[]{0, 60, 100, 60}); nv.runOnUiThread(nv::terminer); } return; }   // pendant une note : seul le même bouton la termine
+        if (nv != null) { if (nom.equals(nv.lettre)) { vibrer(new long[]{0, 60, 100, 60}); nv.runOnUiThread(nv::annuler); } return; }   // pendant une note : seul le même bouton l'annule (essai 36)
         org.json.JSONObject c = cfgManettes();
         String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "note" : "rien";
         String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
