@@ -16,5 +16,19 @@ test("réponses du home-trainer en phrases simples", () => {
 test("enregistrement à la seconde, gardé après appli tuée (même résumé relu dans le fichier)", () => {
   const v = e[20], rl = e[21]; assert.strictEqual(v.pMoy, 170); assert.strictEqual(v.pMax, 210); assert.strictEqual(v.cadMoy, 85); assert.strictEqual(v.vitMoy, 36); assert.strictEqual(v.dist, 30);
   assert.deepStrictEqual(v.l, [[0, 150, 85, 360, 1, 1500], [1, 150, 85, 360, 1, 1500], [2, 210, 85, 360, 2, 60]], "une seule ligne par seconde"); assert.deepStrictEqual(rl, v); assert.strictEqual(e[22], 2); assert.strictEqual(e[23], 6); });
+/* essai 37 : 🚲 Mon VTT (Braquets.java) */
+execFileSync("javac", ["-encoding", "UTF-8", "-d", path.join(tmp, "classes"), path.join(src, "Braquets.java"), path.join(racine, "android-activite/tests/EssaiBraquets.java")], { env, stdio: "inherit" });
+const rb = spawnSync("java", ["-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiBraquets"], { env, encoding: "utf8" });
+const b = JSON.parse((rb.stdout || "").trim() || "null"); assert.ok(b, rb.stderr);
+test("Mon VTT : réglages par défaut = Rockrider 30 × 46-11, départ sur le 21, 15,7 km/h à 80 tr/min", () => {
+  assert.deepStrictEqual(b.slice(0, 4), [21, 30, 3.271, 15.7]); assert.ok(b[4] > 55 && b[4] < 85, "plat, 21, 80 tr/min : " + b[4] + " W"); assert.strictEqual(b[5], 0, "arrêt ou roue libre : 0 W"); });
+test("Mon VTT : butées (5 crans jusqu'au 46, presque dans le vide ; 9 crans jusqu'au 11, dur), un seul plateau", () => {
+  assert.deepStrictEqual(b.slice(6, 8), [5, 46]); assert.ok(b[8] < 25, "46 à 80 tr/min : " + b[8] + " W"); assert.deepStrictEqual(b.slice(9, 11), [9, 11]); assert.ok(b[11] > 400, "11 à 90 tr/min : " + b[11] + " W");
+  assert.strictEqual(b[12], false); assert.strictEqual(b[13], "Pignon 11"); });
+test("Mon VTT : pente de la route (5 % plus dur, descente = 0 W), code gardé dans la séance (3021 = 30×21)", () => {
+  assert.ok(b[14] > 200 && b[14] < 260, "5 % : " + b[14] + " W"); assert.strictEqual(b[15], 0); assert.strictEqual(b[16], 3021); });
+test("Mon VTT : autre vélo (3 plateaux, pignons dans le désordre), rapport relu après appli tuée, réglages abîmés", () => {
+  assert.deepStrictEqual(b.slice(17, 21), [36, 11, 18, 22]); assert.strictEqual(b[21], "Plateau 32, pignon 15"); assert.strictEqual(b[22], 3215);
+  assert.strictEqual(b[23], 15); assert.strictEqual(b[24], 15); assert.deepStrictEqual(b.slice(25), [10, 30, 21]); });
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("\n" + n + " tests réussis.");

@@ -12,8 +12,8 @@ final class Ftms {
     private Ftms() {}
 
     /** Les modes de pilotage. */
-    static final int LIBRE = 0, ERG = 1, PENTE = 2, RESISTANCE = 3;
-    static final String[] NOMS = {"libre", "ERG", "pente", "résistance"};
+    static final int LIBRE = 0, ERG = 1, PENTE = 2, RESISTANCE = 3, VTT = 4;   // VTT : vitesses de mon vélo imitées (Braquets), envoyées en ERG
+    static final String[] NOMS = {"libre", "ERG", "pente", "résistance", "Mon VTT"};
 
     /** Dernières mesures connues (le home-trainer peut les envoyer en plusieurs morceaux). */
     static final class Mesure {

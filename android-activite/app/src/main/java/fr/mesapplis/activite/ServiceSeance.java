@@ -89,6 +89,11 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     private LienKickr kickr;
     private volatile Velo velo;
     private static final Ftms.Mesure SANS_MESURE = new Ftms.Mesure();   // 1.13 : voix et prévision, coupables pendant la course
+    // essai 37 : 🚲 « Mon VTT », les vitesses du vrai vélo imitées (watts recalculés chaque seconde, envoyés en ERG)
+    private volatile Braquets vtt;
+    private volatile double penteRoute = 0;
+    private volatile int vttCible = 0, vttEnvoye = -1;
+    private long vttEnvoyeT = 0;
     private long annonceRang = -1;
     private File dossier;
     private PowerManager.WakeLock verrou;
@@ -574,7 +579,8 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
         NoteVocale nv = NoteVocale.actif;
         if (nv != null) { if (nom.equals(nv.lettre)) { vibrer(new long[]{0, 60, 100, 60}); nv.runOnUiThread(nv::annuler); } return; }   // pendant une note : seul le même bouton l'annule (essai 36)
         org.json.JSONObject c = cfgManettes();
-        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "note" : "rien";
+        String def = "Y".equals(nom) ? "boisson" : "Z".equals(nom) ? "fantome" : "A".equals(nom) ? "etat" : "B".equals(nom) ? "conseil" : "PLUS".equals(nom) ? "note"
+                : "HAUT".equals(nom) ? "vttDur" : "BAS".equals(nom) ? "vttFacile" : "DROITE".equals(nom) ? "vttPlatPlus" : "GAUCHE".equals(nom) ? "vttPlatMoins" : "rien";
         String action = c.optJSONObject("b") != null ? c.optJSONObject("b").optString(nom, def) : def;
         long now = System.currentTimeMillis();
         if (c.optBoolean("bip", false) && !"rien".equals(action)) { try { if (son != null) son.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120); } catch (Exception ignored) {} }
@@ -593,6 +599,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
                 break;
             }
             case "tour": tour(); break;
+            case "vttDur": vttChanger("dur"); break;            // 🚲 Mon VTT (essai 37) : seulement pendant une séance de home-trainer
+            case "vttFacile": vttChanger("facile"); break;
+            case "vttPlatPlus": vttChanger("platPlus"); break;
+            case "vttPlatMoins": vttChanger("platMoins"); break;
             case "note": vibrer(new long[]{0, 80}); ServiceTelecommande.ouvrirNote(this, "seance", nom, contexte()); break;
             case "fantome": parler(phraseFantome()); break;
             case "etat": parler(phraseEtat(c)); break;
@@ -775,7 +785,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
                 suivreFantome(maintenant);
             }
             Velo v = velo;
-            if (v != null && e != null) { Ftms.Mesure m = kickr.frais() ? kickr.mesure() : SANS_MESURE; synchronized (m) { v.seconde((int) ((maintenant - e.debut) / 1000), m); } }
+            if (v != null && e != null) { Ftms.Mesure m = kickr.frais() ? kickr.mesure() : SANS_MESURE; synchronized (m) { v.seconde((int) ((maintenant - e.debut) / 1000), v.mode() == Ftms.VTT ? vttSeconde(m, maintenant) : m); } }
             if (maintenant - dernierTaux >= 2000) { accTaux = (int) Math.round(accCompte * 1000.0 / Math.max(1, maintenant - dernierTaux)); accCompte = 0; dernierTaux = maintenant; }
             if (++compteur % 5 == 0) majNotification(false);
             if (e != null && compteur % 60 == 0) eauSeance(e.debut);
@@ -884,8 +894,10 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
                 sb.append(",\"ht\":{\"etat\":").append(kickr.etat()).append(",\"texte\":").append(Json.texte(texteKickr())).append(",\"nom\":").append(Json.texte(kickr.nom()))
                   .append(",\"message\":").append(Json.texte(kickr.message())).append(",\"ok\":").append(ok)
                   .append(",\"w\":").append(ok ? m.puissance : -1).append(",\"cad\":").append(ok && m.cadence >= 0 ? Math.round(m.cadence) : -1)
-                  .append(",\"vit\":").append(ok && m.vitesse >= 0 ? String.format(Locale.ROOT, "%.1f", m.vitesse) : "-1")
-                  .append(",\"dist\":").append(Math.round(v.distance())).append(",\"mode\":").append(v.mode()).append(",\"val\":").append(String.format(Locale.ROOT, "%.1f", v.consigne())).append('}');
+                  .append(",\"vit\":").append(v.mode() == Ftms.VTT && vtt != null ? (ok && m.cadence >= 0 ? String.format(Locale.ROOT, "%.1f", vtt.vitesse(m.cadence)) : "-1") : ok && m.vitesse >= 0 ? String.format(Locale.ROOT, "%.1f", m.vitesse) : "-1")
+                  .append(",\"dist\":").append(Math.round(v.distance())).append(",\"mode\":").append(v.mode()).append(",\"val\":").append(String.format(Locale.ROOT, "%.1f", v.consigne()));
+                if (v.mode() == Ftms.VTT && vtt != null) sb.append(",\"vtt\":").append(vtt.etatJson(penteRoute, vttCible));
+                sb.append('}');
             }
         }
         sb.append(",\"enr\":").append(e == null ? "null" : e.etatJson(maintenant)).append('}');
@@ -898,9 +910,89 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
     boolean reglerKickr(int mode, double valeur) {
         Velo v = velo;
         if (v == null) return false;
+        if (mode == Ftms.VTT) { vttActiver(v, false); return true; }
         v.regler(mode, valeur);
         h.post(() -> { kickr.regler(mode, valeur); majNotification(true); });
         return true;
+    }
+
+    // ---------- 🚲 Mon VTT (essai 37) ----------
+
+    private Braquets vttLire() { return Braquets.lire(getSharedPreferences("reglages", MODE_PRIVATE).getString("vtt", "")); }
+
+    /** Passe en mode « Mon VTT » (rapport gardé s'il y en avait déjà un, sinon le pignon de départ). */
+    private void vttActiver(Velo v, boolean dire) {
+        if (vtt == null) vtt = vttLire();
+        v.regler(Ftms.VTT, vtt.code());
+        vttEnvoye = -1;
+        h.post(() -> { vttEnvoyer(true); majNotification(true); });
+        if (dire) parler("Mon VTT. " + vtt.phrase());
+    }
+
+    /** Réglages changés dans ⚙️ pendant la séance : relus tout de suite, en gardant le rapport engagé s'il existe encore. */
+    void vttRecharger() {
+        Braquets b = vttLire(), a = vtt;
+        if (a != null) b.depuisCode(a.code());
+        vtt = b;
+        Velo v = velo;
+        if (v != null && v.mode() == Ftms.VTT) { v.regler(Ftms.VTT, b.code()); h.post(() -> vttEnvoyer(true)); }
+    }
+
+    /** Une seconde en mode VTT : watts du vrai vélo envoyés au home-trainer, vitesse du vrai vélo gardée dans la séance. */
+    private Ftms.Mesure vttSeconde(Ftms.Mesure m, long maintenant) {
+        Velo v = velo;
+        if (vtt == null) { vtt = vttLire(); if (v != null) vtt.depuisCode((int) Math.round(v.consigne())); }
+        vttEnvoyer(false);
+        Ftms.Mesure x = new Ftms.Mesure();
+        x.puissance = m.puissance; x.cadence = m.cadence; x.distance = m.distance; x.fc = m.fc;
+        x.vitesse = m.cadence < 0 ? -1 : vtt.vitesse(m.cadence);
+        return x;
+    }
+
+    /** Calcule et envoie la cible (au plus une fois par seconde ; tout de suite au changement de vitesse). */
+    private void vttEnvoyer(boolean forcer) {
+        Braquets b = vtt; if (b == null) return;
+        double cad = kickr.frais() ? kickr.mesure().cadence : -1;
+        int w = b.watts(cad, penteRoute);
+        vttCible = w;
+        long t = System.currentTimeMillis();
+        if (!forcer && t - vttEnvoyeT < 900) return;
+        if (!forcer && Math.abs(w - vttEnvoye) < 2 && t - vttEnvoyeT < 5000) return;
+        vttEnvoye = w; vttEnvoyeT = t;
+        kickr.regler(Ftms.ERG, w);
+    }
+
+    /** Changement de vitesse (manette ou écran) : « dur », « facile », « platPlus », « platMoins », « pentePlus », « penteMoins ». */
+    boolean vttChanger(String quoi) {
+        if (velo == null) return false;
+        h.post(() -> vttChangerIci(quoi));                // toujours sur le fil principal (voix, home-trainer)
+        return true;
+    }
+
+    private void vttChangerIci(String quoi) {
+        Velo v = velo;
+        if (v == null) return;
+        boolean etaitVtt = v.mode() == Ftms.VTT;
+        if (vtt == null) vtt = vttLire();
+        Braquets b = vtt;
+        boolean ok;
+        String butee;
+        switch (quoi) {
+            case "dur": ok = !etaitVtt || b.plusDur(); butee = "Déjà le plus dur"; break;
+            case "facile": ok = !etaitVtt || b.plusFacile(); butee = "Déjà le plus facile"; break;
+            case "platPlus": ok = !etaitVtt || b.plateauPlus(); butee = b.plusieursPlateaux() ? "Déjà le grand plateau" : "Un seul plateau"; break;
+            case "platMoins": ok = !etaitVtt || b.plateauMoins(); butee = b.plusieursPlateaux() ? "Déjà le petit plateau" : "Un seul plateau"; break;
+            case "pentePlus": penteRoute = Math.min(20, penteRoute + 0.5); ok = true; butee = ""; break;
+            case "penteMoins": penteRoute = Math.max(-10, penteRoute - 0.5); ok = true; butee = ""; break;
+            default: return;
+        }
+        if (!ok) { vibrer(new long[]{0, 200}); parler(butee); return; }
+        vibrer(new long[]{0, 50});
+        if (!etaitVtt) { vttActiver(v, true); return; }
+        v.regler(Ftms.VTT, b.code());
+        h.post(() -> { vttEnvoyer(true); majNotification(true); });
+        if (quoi.startsWith("pente")) parler("Pente " + String.format(Locale.FRANCE, "%.1f", penteRoute).replace(",0", "") + " pour cent");
+        else parler(b.phrase());
     }
 
     private String texteKickr() {
@@ -920,6 +1012,7 @@ public class ServiceSeance extends Service implements LienH10.Ecoute, LienKickr.
             case Ftms.ERG: return "ERG " + Math.round(val) + " W";
             case Ftms.PENTE: return "pente " + String.format(Locale.FRANCE, "%.1f", val) + " %";
             case Ftms.RESISTANCE: return "résistance " + Math.round(val) + " %";
+            case Ftms.VTT: { int c = (int) Math.round(val); return "VTT " + (c / 100) + "×" + (c % 100); }
             default: return "libre";
         }
     }

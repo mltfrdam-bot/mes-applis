@@ -888,12 +888,12 @@ function rapportPeriode(base, sante, nb, maintenant) { const now = maintenant ||
   return T.join("\n"); }
 
 /* ===== 🚲 Home-trainer (1.14) : R.velo = {pMoy, pMax, cadMoy, vitMoy, dist, kj, l: [[s, W, cadence, vitesse×10, mode, consigne×10]]} ===== */
-const VELO_MODES = ["libre", "ERG", "pente", "résistance"];
+const VELO_MODES = ["libre", "ERG", "pente", "résistance", "VTT"];
 function veloResume(V) { const t = []; if (V.pMoy != null) t.push("⚡ " + V.pMoy + " W moy · max " + V.pMax); if (V.cadMoy != null) t.push(V.cadMoy + " tr/min"); if (V.dist) t.push(kmTxt(V.dist)); if (V.kj) t.push(V.kj + " kJ"); return t.length ? t : ["home-trainer : aucune mesure"]; }
 /* tableau par tranches de 5 minutes (watts, cadence, vitesse, cardio, mode le plus utilisé) */
 function veloTranches(R, pas) { const V = R.velo, L = (V && V.l) || [], fc = {}, T = []; pas = pas || 300; (R.l || []).forEach(x => { if (x[1] > 0) fc[x[0]] = x[1]; });
   for (let d = 0; d <= (L.length ? L[L.length - 1][0] : -1); d += pas) { const q = L.filter(x => x[0] >= d && x[0] < d + pas); if (!q.length) continue; const w = q.filter(x => x[1] >= 0).map(x => x[1]), c = q.filter(x => x[2] > 0).map(x => x[2]), v = q.filter(x => x[3] >= 0).map(x => x[3] / 10), f = q.map(x => fc[x[0]]).filter(Boolean), modes = {};
-    q.forEach(x => { const k = x[4] ? VELO_MODES[x[4]] + (x[4] === 1 ? " " + Math.round(x[5] / 10) + " W" : x[4] === 2 ? " " + (x[5] / 10).toLocaleString("fr-FR") + " %" : " " + Math.round(x[5] / 10) + " %") : "libre"; modes[k] = (modes[k] || 0) + 1; });
+    q.forEach(x => { const k = x[4] ? VELO_MODES[x[4]] + (x[4] === 1 ? " " + Math.round(x[5] / 10) + " W" : x[4] === 2 ? " " + (x[5] / 10).toLocaleString("fr-FR") + " %" : x[4] === 4 ? " " + Math.floor(Math.round(x[5] / 10) / 100) + "×" + (Math.round(x[5] / 10) % 100) : " " + Math.round(x[5] / 10) + " %") : "libre"; modes[k] = (modes[k] || 0) + 1; });
     const moy = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null; T.push({ debut: d, sec: q.length, w: moy(w), wMax: w.length ? Math.max(...w) : null, cad: moy(c), vit: v.length ? Math.round(v.reduce((x, y) => x + y, 0) / v.length * 10) / 10 : null, fc: moy(f), mode: Object.keys(modes).sort((a, b) => modes[b] - modes[a])[0] }); }
   return T; }
 function lignesVelo(R) { const V = R.velo; if (!V) return []; const T = ["", "HOME-TRAINER : " + veloResume(V).join(" · ") + (V.vitMoy != null ? " · " + String(V.vitMoy).replace(".", ",") + " km/h moy" : ""), "Tranche | Watts moy / max | Cadence | Vitesse | FC moy | Mode"];
