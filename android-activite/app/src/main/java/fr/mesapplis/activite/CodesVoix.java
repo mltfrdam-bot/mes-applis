@@ -8,17 +8,19 @@ import java.util.regex.Pattern;
  * Un mot-code ne compte que s'il est le DERNIER mot dit, suivi d'un petit silence :
  *  « terminé »          → la note est validée tout de suite, sans relecture ;
  *  « lire » / « relire » → la note est relue à voix haute, puis validée 3 s après (sauf « effacer » ou ✕) ;
- *  « effacer »          → toute la note est effacée, le micro reste ouvert pour recommencer.
+ *  « effacer »          → toute la note est effacée, le micro reste ouvert pour recommencer ;
+ *  « copier »           → comme « terminé », et le texte est en plus copié dans le presse-papier (essai 38).
  * Les mots-codes ne sont jamais écrits dans la note. Pas de drapeau U (refusé par Android).
  */
 public final class CodesVoix {
-    public static final int AUCUN = 0, TERMINE = 1, LIRE = 2, EFFACER = 3;
+    public static final int AUCUN = 0, TERMINE = 1, LIRE = 2, EFFACER = 3, COPIER = 4;
 
     private static final String AVANT = "(?<![\\p{L}\\p{N}_])";
     private static final Pattern FIN = Pattern.compile("(?iu)[\\s,.;:!?-]*" + AVANT
             + "(?:(re)?lire(?:[\\s,.;:!?-]+termin(?:é|ée|er|e|és|ées))?|relis|relit"
             + "|termin(?:é|ée|er|e|és|ées)"
-            + "|effac(?:er|e|é|ée|és|ez))[\\s.!?]*$");
+            + "|effac(?:er|e|é|ée|és|ez)"
+            + "|copi(?:er|e|é|ée|és|ez))[\\s.!?]*$");
 
     private CodesVoix() { }
 
@@ -29,6 +31,7 @@ public final class CodesVoix {
         if (!m.find()) return AUCUN;
         String c = m.group().toLowerCase(java.util.Locale.ROOT).replaceAll("[\\s,.;:!?-]", "");
         if (c.startsWith("effac")) return EFFACER;
+        if (c.startsWith("copi")) return COPIER;
         if (c.startsWith("termin")) return TERMINE;
         return LIRE;
     }

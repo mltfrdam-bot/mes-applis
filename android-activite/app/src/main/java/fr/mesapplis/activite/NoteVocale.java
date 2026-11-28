@@ -196,8 +196,8 @@ public class NoteVocale extends Activity {
             return;
         }
         garder(t);
-        etat.setText("✅ Noté :\n« " + t + " »");
-        dire("Noté.");
+        etat.setText((copiee ? "✅ Noté et 📋 copié :\n« " : "✅ Noté :\n« ") + t + " »");
+        dire(copiee ? "Noté et copié." : "Noté.");
         h.postDelayed(this::finish, 3000);
     }
 
@@ -226,6 +226,7 @@ public class NoteVocale extends Activity {
         if (!reste.isEmpty()) { if (texte.length() > 0) texte.append(' '); texte.append(reste); }
         afficher();
         if (c == CodesVoix.TERMINE) { Bug.note(this, "Note vocale", "« terminé » : validée sans relecture"); modeFin = "termine"; garderEtFermer(); return true; }
+        if (c == CodesVoix.COPIER) { copier(texte.toString().trim()); modeFin = "copier"; garderEtFermer(); return true; }   // essai 38
         Bug.note(this, "Note vocale", "« relire » : relecture à voix haute");
         modeFin = "lire";
         String t = texte.toString().trim();
@@ -274,6 +275,17 @@ public class NoteVocale extends Activity {
         texte.append(txt); afficher();
         h.postDelayed(this::demarrer, 120);
     }
+
+    /** 📋 « copier » (essai 38) : le texte de la note va dans le presse-papier (la note est aussi gardée). */
+    private void copier(String t) {
+        try {
+            android.content.ClipboardManager cb = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("Note", t));
+            copiee = true;
+            Bug.note(this, "Note vocale", "« copier » : " + t.length() + " lettres copiées");
+        } catch (Exception e) { Bug.note(this, "Note vocale", "copier : erreur " + e); }
+    }
+    private boolean copiee = false;
 
     /** Bip audible même quand les sons sont coupés (on les remet le temps du bip). */
     private void sonnerLibre(int n) { muet(false); sonner(n); h.postDelayed(() -> { if (!gardee && !enRelecture) muet(true); }, 300); }

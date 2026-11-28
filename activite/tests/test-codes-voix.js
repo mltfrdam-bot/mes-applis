@@ -1,4 +1,5 @@
 // 🎙️ Mots-codes de fin de dictée (essai 36) : « terminé », « lire » / « relire », « effacer », seulement en DERNIER mot.
+// essai 38 : « copier » = comme « terminé » + presse-papier.
 const { execFileSync } = require("child_process"), fs = require("fs"), path = require("path"), os = require("os");
 const racine = path.join(__dirname, "..", ".."), src = path.join(racine, "android-activite/app/src/main/java/fr/mesapplis/activite"), tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codes-"));
 execFileSync("javac", ["-encoding", "UTF-8", "-d", path.join(tmp, "classes"), path.join(src, "CodesVoix.java"), path.join(racine, "android-activite/tests/EssaiCodesVoix.java")], { stdio: "inherit" });
@@ -19,6 +20,10 @@ const cas = [
   ["c'est du délire", "aucun | c'est du délire"],
   ["l'effacement", "aucun | l'effacement"],
   ["poids 62,3 envoyer à Claude terminé", "terminé | poids 62,3 envoyer à Claude"],
+  ["rendez-vous avec Serge lundi copier", "copier | rendez-vous avec Serge lundi"],
+  ["eau 20 cl, copié.", "copier | eau 20 cl"],
+  ["copier le plan pour Dani", "aucun | copier le plan pour Dani"],
+  ["la photocopie", "aucun | la photocopie"],
 ];
 fs.writeFileSync(path.join(tmp, "p.txt"), cas.map(c => c[0]).join("\n") + "\n");
 const sortie = execFileSync("java", ["-cp", path.join(tmp, "classes"), "fr.mesapplis.activite.EssaiCodesVoix", path.join(tmp, "p.txt")], { encoding: "utf8" }).trim().split("\n");

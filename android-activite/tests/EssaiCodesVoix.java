@@ -8,7 +8,7 @@ import java.nio.file.Paths;
 public class EssaiCodesVoix {
     public static void main(String[] a) throws Exception {
         System.setOut(new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, "UTF-8"));
-        String[] noms = { "aucun", "terminé", "lire", "effacer" };
+        String[] noms = { "aucun", "terminé", "lire", "effacer", "copier" };
         for (String p : Files.readAllLines(Paths.get(a[0]), StandardCharsets.UTF_8)) System.out.println(noms[CodesVoix.code(p)] + " | " + CodesVoix.sans(p));
     }
 }

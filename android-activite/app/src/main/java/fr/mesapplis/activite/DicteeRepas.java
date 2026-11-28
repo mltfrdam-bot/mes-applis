@@ -98,7 +98,8 @@ public class DicteeRepas extends Activity {
             Bug.note(this, "Dictée repas", "phrase reçue d'une note : « " + texteDonne + " »");
             entendu = texteDonne.trim();
             bValider.setVisibility(android.view.View.VISIBLE);
-            finEcoute("termine".equals(fin));   // essai 36 : « terminé » = noté sans relecture
+            copiee = "copier".equals(fin);   // essai 38 : déjà copié par la note
+            finEcoute("termine".equals(fin) || copiee);   // essai 36 : « terminé » = noté sans relecture
             return;
         }
         if (checkSelfPermission("android.permission.RECORD_AUDIO") != PackageManager.PERMISSION_GRANTED) {
@@ -145,6 +146,7 @@ public class DicteeRepas extends Activity {
                 String sc = CodesVoix.sans(t);
                 if (!sc.isEmpty()) entendu = (entendu + " " + sc).trim();
                 if (c == CodesVoix.TERMINE) { Bug.note(DicteeRepas.this, "Dictée repas", "« terminé »"); finEcoute(true); return; }
+                if (c == CodesVoix.COPIER) { copier(entendu); finEcoute(true); return; }   // essai 38
                 if (c == CodesVoix.LIRE) { Bug.note(DicteeRepas.this, "Dictée repas", "« relire »"); finEcoute(false); return; }
                 afficherEcoute(false);
                 h.postDelayed(DicteeRepas.this::demarrer, 120);   // pas de mot-code : on continue d'écouter
@@ -195,6 +197,17 @@ public class DicteeRepas extends Activity {
         bAnnuler.setText(lettre.isEmpty() ? "❌ Annuler (ou réappuie sur 🎙️)" : "❌ Annuler (ou 🔵 " + lettre + ")");
     }
 
+    /** 📋 « copier » (essai 38) : la phrase dite va dans le presse-papier, et elle est notée comme avec « terminé ». */
+    private boolean copiee = false;
+    private void copier(String t) {
+        try {
+            android.content.ClipboardManager cb = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("Dictée", t));
+            copiee = true;
+            Bug.note(this, "Dictée repas", "« copier » : " + t.length() + " lettres copiées");
+        } catch (Exception e) { Bug.note(this, "Dictée repas", "copier : erreur " + e); }
+    }
+
     /** « effacer » : tout est vidé, le micro reste ouvert (essai 36). */
     private void recommencer() {
         Bug.note(this, "Dictée repas", "« effacer » : on recommence");
@@ -220,6 +233,7 @@ public class DicteeRepas extends Activity {
         String r = CodesVoix.sans(t);
         if (!r.isEmpty()) entendu = (entendu + " " + r).trim();
         if (c == CodesVoix.TERMINE) { finEcoute(true); return; }
+        if (c == CodesVoix.COPIER) { copier(entendu); finEcoute(true); return; }
         if (c == CodesVoix.LIRE) { finEcoute(false); return; }
         h.removeCallbacksAndMessages(null);
         bValider.setText("✅ Noter (sans relecture)");
@@ -241,7 +255,7 @@ public class DicteeRepas extends Activity {
         catch (Throwable e) { Bug.note(this, "Dictée repas", "ERREUR compréhension : " + e); res = new Dictee.Resultat(); res.incompris.add("erreur de l'appli : rien n'est noté"); }
         if (res.items.isEmpty() && res.sante.isEmpty()) {
             etat.setText("« " + entendu + " »\n\n❓ Je n'ai rien compris à noter." + (res.incompris.isEmpty() ? "" : "\n" + String.join("\n", res.incompris)));
-            dire((res.incompris.size() == 1 && res.incompris.get(0).contains(" : ") ? res.incompris.get(0).replace(" : ", ", ") + ". " : "Je n'ai pas compris. ") + "Rien n'est noté.");
+            dire((res.incompris.size() == 1 && res.incompris.get(0).contains(" : ") ? res.incompris.get(0).replace(" : ", ", ") + ". " : "Je n'ai pas compris. ") + "Rien n'est noté." + (copiee ? " Mais c'est copié." : ""));
             noterJournal("rien compris"); fermerDans(4500); return;
         }
         Calendar k = Calendar.getInstance(); k.setTimeInMillis(ts);
@@ -323,13 +337,13 @@ public class DicteeRepas extends Activity {
         noterJournal("notée");
         sonner(2);
         compte.setText("");
-        etat.setText("✅ Noté dans le carnet : " + n + " élément" + (n > 1 ? "s" : "") + ".");
+        etat.setText("✅ Noté dans le carnet : " + n + " élément" + (n > 1 ? "s" : "") + "." + (copiee ? "\n📋 Copié." : ""));
         bValider.setVisibility(android.view.View.GONE); bAnnuler.setVisibility(android.view.View.GONE);
         if (direct && !res.incompris.isEmpty()) {   // noté sans relecture : on dit quand même ce qui n'a pas été compris
             String x = res.incompris.get(0);
             etat.setText(etat.getText() + "\n\n❓ Pas compris :\n• " + String.join("\n• ", res.incompris));
-            dire("Noté. " + (x.contains(" : ") ? x.replace(" : ", ", ") : "Pas compris : " + x) + ".");
-        } else dire("C'est noté.");
+            dire((copiee ? "Noté et copié. " : "Noté. ") + (x.contains(" : ") ? x.replace(" : ", ", ") : "Pas compris : " + x) + ".");
+        } else dire(copiee ? "Noté et copié." : "C'est noté.");
         MainActivity.carnetRanger();
         fermerDans(1800);
     }
