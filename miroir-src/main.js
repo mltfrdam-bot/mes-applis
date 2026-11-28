@@ -19,7 +19,7 @@ import {
   BitmapVideoFrameRenderer,
 } from "@yume-chan/scrcpy-decoder-webcodecs";
 
-const VERSION = "2.13";
+const VERSION = "2.14";
 // Dans l'appli Android « Miroir » (sans fil), la page dispose du pont MiroirApp.
 const APPLI = typeof window.MiroirApp !== "undefined";
 const LIEN_APK = "https://github.com/mltfrdam-bot/mes-applis/releases/download/miroir/Miroir.apk";
@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Réglages gardés sur la tablette ----------
-const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "auto", memoCode: false, code: "", autoConnexion: true, adresseTel: "", deverrAuto: true };
+const REGLAGES_DEFAUT = { ecranEteint: false, qualite: "auto", memoCode: false, code: "", autoConnexion: true, adresseTel: "", deverrAuto: true, derniereIp: "" };
 let reglages = { ...REGLAGES_DEFAUT };
 try { reglages = { ...REGLAGES_DEFAUT, ...JSON.parse(localStorage.getItem("miroir-reglages") || "{}") }; } catch {}
 function sauverReglages() { try { localStorage.setItem("miroir-reglages", JSON.stringify(reglages)); } catch {} }
@@ -132,7 +132,17 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // ---------- Sans fil : liaison ADB par le relais de l'appli Android ----------
 function adresseTelephone() {
   if (reglages.adresseTel) return reglages.adresseTel.trim();
-  try { return window.MiroirApp.passerelle() || ""; } catch { return ""; }
+  let g = ""; try { g = window.MiroirApp.passerelle() || ""; } catch {}
+  return g || reglages.derniereIp || "";
+}
+// Recherche du téléphone sur les réseaux de cet appareil : Wi-Fi du téléphone (cas habituel)
+// OU point d'accès de cet appareil (cas où c'est le Xiaomi qui partage, avec la SIM, et le S23 qui s'y connecte).
+function chercherTelephone() {
+  return new Promise((ok) => {
+    const t = setTimeout(() => { window.miroirTelephoneTrouve = null; ok(""); }, 15000);
+    window.miroirTelephoneTrouve = (ip) => { clearTimeout(t); window.miroirTelephoneTrouve = null; ok(ip || ""); };
+    try { window.MiroirApp.chercherTelephone(reglages.derniereIp || ""); } catch { clearTimeout(t); ok(adresseTelephone()); }
+  });
 }
 // Autorisation Android d'utiliser le câble (fenêtre « Autoriser Miroir à accéder à… »)
 function autorisationUsb() {
@@ -186,9 +196,18 @@ function appareilRelais(suffixe, serie, nom, parCable) {
 let apresPassage = false;
 let momentPassage = 0;   // le téléphone vient de passer en sans fil : ne plus utiliser le câble
 let modeCable = false;
-async function telephoneConnu() {
+async function telephoneConnu(chercher = false) {
   if (APPLI && !apresPassage && usbBranche()) return appareilCable();
-  if (APPLI) { const ip = adresseTelephone(); return ip ? appareilSansFil(ip) : null; }
+  if (APPLI) {
+    if (chercher && !reglages.adresseTel) {
+      message("🔎 Recherche du téléphone…");
+      const ip = await chercherTelephone();
+      if (!ip) return null;
+      if (ip !== reglages.derniereIp) { reglages.derniereIp = ip; sauverReglages(); }
+      return appareilSansFil(ip);
+    }
+    const ip = adresseTelephone(); return ip ? appareilSansFil(ip) : null;
+  }
   if (!manager) return null;
   const liste = await manager.getDevices();
   return liste[0] || null;
@@ -238,10 +257,10 @@ async function connecter(choisirNouveau = false, manuel = true) {
   $("btn-connecter").disabled = false;
   const maxEssais = manuel ? 2 : 5;
   try {
-    let tel = choisirNouveau ? null : await telephoneConnu();
+    let tel = choisirNouveau ? null : await telephoneConnu(true);
     let nouveau = false;
     if (!tel && APPLI) {
-      if (manuel) message("Je ne trouve pas le téléphone. Connecte d'abord la tablette au point d'accès Wi-Fi du téléphone, ou tape l'adresse du téléphone ci-dessous.", "erreur");
+      if (manuel) message("Je ne trouve pas le téléphone. Vérifie que les deux appareils sont sur le même réseau : cet appareil connecté au point d'accès du téléphone, OU le téléphone connecté au point d'accès de cet appareil. Sinon, tape l'adresse du téléphone ci-dessous.", "erreur");
       return;
     }
     if (!tel) {

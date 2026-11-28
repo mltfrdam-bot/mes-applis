@@ -2,6 +2,8 @@ package fr.mesapplis.miroir;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.hardware.usb.UsbDevice;
@@ -14,6 +16,7 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -75,6 +78,26 @@ public class Relais implements Runnable {
         return null;
     }
 
+    /** L'adresse fait-elle partie du réseau Wi-Fi donné ? */
+    private boolean surReseau(Network n, String hote) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            LinkProperties lp = cm.getLinkProperties(n);
+            if (lp == null) return true;
+            byte[] h = InetAddress.getByName(hote).getAddress();
+            for (LinkAddress la : lp.getLinkAddresses()) {
+                if (!(la.getAddress() instanceof Inet4Address)) continue;
+                byte[] a = la.getAddress().getAddress();
+                int lg = la.getPrefixLength(), i = 0;
+                boolean ok = true;
+                for (; lg >= 8 && ok; lg -= 8, i++) ok = a[i] == h[i];
+                if (ok && lg > 0) { int m = (0xff << (8 - lg)) & 0xff; ok = (a[i] & m) == (h[i] & m); }
+                if (ok) return true;
+            }
+            return false;
+        } catch (Exception e) { return true; }
+    }
+
     private static String lireLigne(InputStream in) throws IOException {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         int c;
@@ -122,8 +145,10 @@ public class Relais implements Runnable {
             if (hote == null || cle == null) { refuser(out, "400 Bad Request"); client.close(); return; }
 
             // 2) Connexion au téléphone, par le Wi-Fi
+            // Par le Wi-Fi seulement si le téléphone est sur CE Wi-Fi ; sinon (le téléphone est
+            // connecté au point d'accès de cet appareil), connexion directe.
             Network wifi = reseauWifi();
-            tel = wifi != null ? wifi.getSocketFactory().createSocket() : new Socket();
+            tel = (wifi != null && surReseau(wifi, hote)) ? wifi.getSocketFactory().createSocket() : new Socket();
             try {
                 tel.connect(new InetSocketAddress(hote, port), 5000);
             } catch (IOException e) {

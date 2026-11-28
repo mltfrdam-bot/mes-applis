@@ -20,6 +20,15 @@ import android.net.NetworkCapabilities;
 import android.net.RouteInfo;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import java.net.InetSocketAddress;
+import java.net.InterfaceAddress;
+import java.net.NetworkInterface;
+import java.net.Socket;
+import java.util.Collections;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -239,6 +248,50 @@ public class MainActivity extends Activity {
         if (focus) appliquerPleinEcran();
     }
 
+
+    /** Le téléphone répond-il sur le port ADB sans fil ? */
+    private static boolean portOuvert(String ip, int delai) {
+        try (Socket s = new Socket()) { s.connect(new InetSocketAddress(ip, 5555), delai); return true; } catch (Exception e) { return false; }
+    }
+
+    /**
+     * Cherche le téléphone : d'abord les adresses connues (dernière adresse, passerelle Wi-Fi),
+     * puis tous les appareils des réseaux locaux de cet appareil — y compris SON PROPRE point
+     * d'accès (cas où c'est le Xiaomi / la tablette qui partage la connexion et le S23 qui s'y connecte).
+     */
+    private String chercherTelephoneSync(String indices) {
+        List<String> connues = new ArrayList<>();
+        for (String x : (indices == null ? "" : indices).split(",")) { x = x.trim(); if (!x.isEmpty() && !connues.contains(x)) connues.add(x); }
+        String g = passerelleWifi(); if (!g.isEmpty() && !connues.contains(g)) connues.add(g);
+        for (String ip : connues) if (portOuvert(ip, 600)) return ip;
+        // Balayage des réseaux locaux (Wi-Fi client et point d'accès), en parallèle
+        List<String> moi = new ArrayList<>();
+        List<String> cibles = new ArrayList<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String nom = ni.getName();
+                if (nom.startsWith("rmnet") || nom.startsWith("ccmni") || nom.startsWith("dummy") || nom.startsWith("tun") || nom.startsWith("ims")) continue;
+                for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    if (!(ia.getAddress() instanceof Inet4Address) || !ia.getAddress().isSiteLocalAddress()) continue;
+                    byte[] b = ia.getAddress().getAddress();
+                    moi.add(ia.getAddress().getHostAddress());
+                    String base = (b[0] & 0xff) + "." + (b[1] & 0xff) + "." + (b[2] & 0xff) + ".";
+                    for (int i = 1; i < 255; i++) { String ip = base + i; if (!cibles.contains(ip)) cibles.add(ip); }
+                }
+            }
+        } catch (Exception ignored) {}
+        cibles.removeAll(moi); cibles.removeAll(connues);
+        if (cibles.isEmpty()) return "";
+        AtomicReference<String> trouve = new AtomicReference<>("");
+        ExecutorService pool = Executors.newFixedThreadPool(64);
+        for (String ip : cibles) pool.execute(() -> { if (trouve.get().isEmpty() && portOuvert(ip, 400)) trouve.compareAndSet("", ip); });
+        pool.shutdown();
+        try { pool.awaitTermination(8, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        pool.shutdownNow();
+        return trouve.get();
+    }
+
     /** Adresse du point d'accès (= le téléphone) vue depuis le Wi-Fi de la tablette. */
     private String passerelleWifi() {
         try {
@@ -267,6 +320,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean estAppli() { return true; }
         @JavascriptInterface public String relais() { return relais != null ? relais.adresse() : ""; }
         @JavascriptInterface public String passerelle() { return passerelleWifi(); }
+        @JavascriptInterface public void chercherTelephone(String indices) {
+            new Thread(() -> {
+                String ip = chercherTelephoneSync(indices);
+                String js = "window.miroirTelephoneTrouve && miroirTelephoneTrouve(" + JSONObject.quote(ip) + ")";
+                if (web != null) web.post(() -> web.evaluateJavascript(js, null));
+            }, "recherche-tel").start();
+        }
 
         /** Un téléphone avec le débogage USB est-il branché par câble ? */
         @JavascriptInterface public boolean usbPresent() { return usb != null && UsbAdb.trouverTelephone(usb) != null; }
